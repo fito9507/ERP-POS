@@ -727,6 +727,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <button class="act" onclick="navTo_ven('ventas',this)">Registro ventas</button>
   <button onclick="navTo_ven('comisiones',this)">Comisiones</button>
   <button id="btn-liq-nav" onclick="navTo_ven('liquidacion',this)">Liquidación semanal</button>
+  <button id="btn-micaja-nav" onclick="navTo_ven('micaja',this)" style="display:none">💰 Mi Caja</button>
 </div>
 
 <!-- ══ REGISTRO VENTAS ══ -->
@@ -858,6 +859,12 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <table><thead><tr><th>Semana</th><th>Almacén</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Cuenta</th><th>Estado</th><th></th></tr></thead>
     <tbody id="liq-hist"></tbody></table>
   </div>
+</div>
+
+
+<!-- ══ MI CAJA ══ -->
+<div class="page" id="micaja">
+  <div id="micaja-root"></div>
 </div>
 
 <!-- ══ NUEVA VENTA ══ -->
@@ -1554,6 +1561,7 @@ async function supaInit() {
 <script>
 
 
+
 function goMod(id,title,btn){
   // Check permission
   const modKey = id.replace('mod-','');
@@ -1580,6 +1588,7 @@ function goMod(id,title,btn){
     renderVentas();
   }catch(e){}}
   if(id==='mod-ig'&&typeof renderLibro==='function'){try{renderLibro();}catch(e){}}
+  if(id==='mod-ig'&&typeof renderCajas==='function'){try{renderCajas();}catch(e){}}
   if(id==='mod-cli'&&typeof renderLista==='function'){try{renderLista();}catch(e){}}
   if(id==='mod-admin'&&typeof renderAdmin==='function'){try{renderAdmin();}catch(e){console.error('renderAdmin error:',e);}}
   if(id==='mod-stock'&&typeof renderStock==='function'){try{renderStock();}catch(e){}}
@@ -2138,6 +2147,7 @@ renderSteps(0);
 
 
 
+
 </script>rSteps(0);
 
 ('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
@@ -2167,6 +2177,7 @@ renderSteps(0);
 
 <script>
 
+
 const COM_DEF={Keiler:{Habana:4,Placetas:1.5},Padre:{Habana:4,Placetas:1.5}};
 let liquidaciones=(function(){try{const d=localStorage.getItem('erp_liquidaciones');return d?JSON.parse(d):[];}catch(e){return [];}})();
 
@@ -2188,6 +2199,8 @@ function navTo_ven(pg,btn){
   if(pg==='comisiones')renderCom();
   if(pg==='liquidacion'){setRangeLiq();renderLiq();refreshLiqHist();var hw=document.getElementById('liq-hist-wrap');if(hw&&liquidaciones.length)hw.style.display='block';}
   if(pg==='nueva'){document.getElementById('nv-fecha').value=today();updNvCom();}
+
+  if(pg==='micaja') renderMiCaja();
 }
 
 // ── FECHAS ────────────────────────────────────────────────
@@ -2245,6 +2258,10 @@ function filtrar_ven(){
 
 // ── RENDER VENTAS ─────────────────────────────────────────
 function renderVentas(){
+  // Show Mi Caja tab only for vendedor
+  var _mc = document.getElementById('btn-micaja-nav');
+  if(_mc) _mc.style.display = (typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor') ? '' : 'none';
+
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
 
@@ -2626,9 +2643,77 @@ document.getElementById('c-hasta').value='2026-12-31';
 setRangeLiq();
 initChkAll();
 renderVentas();
+
+function renderMiCaja() {
+  var el = document.getElementById('micaja-root');
+  if (!el) return;
+  var user = typeof S !== 'undefined' ? S.user : '';
+  var alm  = USERS[user] ? USERS[user].almacen : '';
+  if (!alm) { el.innerHTML = '<div style="padding:20px;text-align:center">Sin almacén asignado</div>'; return; }
+
+  var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+
+  // Get all cajas for this almacen
+  var misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm) >= 0; });
+
+  // Build saldos cards
+  var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
+    var cta = entry[0], v = entry[1];
+    var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
+    var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
+    var saldo = (v.ingV||0) + (v.ingIG||0) + igIng - (v.gasIG||0) - igGas;
+    var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+    var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
+    return '<div class="card" style="text-align:center">'
+      + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">' + cta + '</div>'
+      + '<div style="font-size:22px;font-weight:700;color:'+col+'">' + fN(saldo,dec) + '</div>'
+      + '<div style="font-size:11px;color:var(--color-text-secondary)">' + v.mon + '</div>'
+      + '</div>';
+  }).join('') + '</div>';
+
+  // Build movimientos — ventas de este almacen + I/G movs de estas cajas
+  var ctaNames = misCajas.map(function(e){ return e[0]; });
+
+  // Ventas como movimientos
+  var ventaMov = VENTAS.filter(function(v){ return v.alm === alm; }).map(function(v){
+    return { fecha: v.fecha, desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
+             monto: fN(v.totalUSD) + ' USD', tipo: 'venta', sentido: 'ingreso' };
+  });
+
+  // I/G movimientos de sus cajas
+  var igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta) >= 0; }).map(function(m){
+    return { fecha: m.fecha, desc: m.desc + ' (' + m.cta + ')',
+             monto: fN(m.monto, (m.mon==='CUP'||m.mon==='CUPT')?0:2) + ' ' + m.mon,
+             tipo: 'ig', sentido: m.sentido };
+  });
+
+  var allMovs = ventaMov.concat(igMov).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+
+  var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
+    + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
+      '<div style="display:flex;flex-direction:column;gap:4px">'
+      + allMovs.map(function(m){
+          var col = m.sentido==='ingreso' ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+          var sign = m.sentido==='ingreso' ? '+' : '−';
+          return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary)">'
+            + '<div><div style="font-size:12px">' + m.desc + '</div>'
+            + '<div style="font-size:10px;color:var(--color-text-tertiary)">' + fD(m.fecha) + '</div></div>'
+            + '<div style="font-size:13px;font-weight:600;color:'+col+';flex-shrink:0;margin-left:10px">' + sign + m.monto + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>')
+    + '</div>';
+
+  el.innerHTML = '<div style="margin-bottom:8px"><h2 style="margin:0">Mi Caja — ' + alm + '</h2>'
+    + '<div style="font-size:12px;color:var(--color-text-secondary)">Saldos y movimientos de ' + user + '</div></div>'
+    + cardsHtml + movsHtml;
+}
+
 </script>
 
 <script>
+
+
 
 
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
@@ -2866,7 +2951,15 @@ function eliminar(id){
 // ── CAJAS ─────────────────────────────────────────────────
 function renderCajas(){
   const RATES_USD={USD:1,EUR:1/RATES.EUR,CUP:1/RATES.CUP,CUPT:1/RATES.CUPT};
-  const cajas=Object.entries(CUENTAS_BASE).map(([cta,v])=>{
+  // Filter cajas by user almacen (admin sees all)
+  var isAdmin = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  var userAlm  = typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+  var entries  = Object.entries(CUENTAS_BASE).filter(function(e){
+    if(isAdmin||!userAlm) return true;
+    // Vendedor: show only cajas that contain their almacen name
+    return e[0].indexOf(userAlm)>=0;
+  });
+  const cajas=entries.map(([cta,v])=>{
     // sumar movimientos I/G
     const igIng=MOVS.filter(m=>m.cta===cta&&m.sentido==='ingreso').reduce((a,m)=>a+m.monto,0);
     const igGas=MOVS.filter(m=>m.cta===cta&&m.sentido==='gasto').reduce((a,m)=>a+m.monto,0);
@@ -2981,6 +3074,19 @@ function exportCSV(){
 document.getElementById('l-desde').value='2025-01-01';
 document.getElementById('l-hasta').value='2026-12-31';
 renderLibro();
+
+
+function renderGestionCajasWrap() {
+  var el = document.getElementById('ig-cajas-mgmt');
+  if (!el) return;
+  var isAdmin = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  if (!isAdmin) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">Solo el administrador puede gestionar cajas</div>';
+    return;
+  }
+  if (typeof renderGestionCajas === 'function') renderGestionCajas();
+}
+
 
 </script>
 
