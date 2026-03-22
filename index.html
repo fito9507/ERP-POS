@@ -40,7 +40,7 @@ input,select,textarea,button{font-family:var(--font-sans)}
 #ham{display:none;width:32px;height:32px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:16px;align-items:center;justify-content:center;flex-shrink:0}
 #modules{flex:1;overflow:hidden;position:relative}
 .module{display:none;height:100%;overflow-y:auto}.module.act{display:block}
-.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px)}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5)}#ham{display:flex!important}.ham-btn{display:flex!important}#topbar{display:flex!important}#mod-pos .topbar{display:none!important}.module{overflow-y:auto!important;-webkit-overflow-scrolling:touch}.wrap{overflow-y:auto!important}}
+.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px);display:flex;flex-direction:column}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5);overflow:hidden}#ham{display:flex!important}.ham-btn{display:flex!important}#topbar{display:flex!important}#mod-pos .topbar{display:none!important}.module{overflow-y:auto!important;-webkit-overflow-scrolling:touch}.wrap{overflow-y:auto!important}}
 </style>
 <style>/* POS — global (no scope needed, loads first) */
 
@@ -1562,6 +1562,7 @@ async function supaInit() {
 
 
 
+
 function goMod(id,title,btn){
   // Check permission
   const modKey = id.replace('mod-','');
@@ -1596,6 +1597,7 @@ function goMod(id,title,btn){
   if(id==='mod-prestamos'&&typeof renderPrestamos==='function'){try{renderPrestamos();}catch(e){}}
 }
 function erpSetUser(name,bg,tc){
+  if(typeof renderSteps==="function") try{renderSteps(S.step||0);}catch(e){}
   const av=document.getElementById('sb-av');if(av){av.textContent=name[0];av.style.background=bg;av.style.color=tc;}
   const un=document.getElementById('sb-uname');if(un)un.textContent=name;
   buildSidebar(name);
@@ -1748,7 +1750,9 @@ function setCartMon(m,btn){
 }
 function getP(p){return S.tipo==='Minorista'?(p.min??p.maj??0):(p.maj??p.min??0);}
 function stkDisp(p){
-  const res=S.reservas.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
+  // Block stock reserved by ANY user globally
+  var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
+  const res=allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
   const base=S.alm&&p.stk_alm&&p.stk_alm[S.alm]!=null?p.stk_alm[S.alm]:(p.stk||0);
   return base-res;
 }
@@ -1892,6 +1896,10 @@ function reservar(){
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   updResBadge();S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
+}
+function syncReservasGlobal(){
+  RESERVAS_GLOBAL=S.reservas.slice();
+  try{localStorage.setItem("erp_reservas_global",JSON.stringify(RESERVAS_GLOBAL));}catch(e){}
 }
 function updResBadge(){
   const n=S.reservas.filter(r=>r.activa).length;
@@ -2148,6 +2156,7 @@ function otraVentaMismoAlmacen(){
   goStep('pg-prod',2);
 }
 renderSteps(0);
+
 
 
 
