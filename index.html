@@ -40,7 +40,7 @@ input,select,textarea,button{font-family:var(--font-sans)}
 #ham{display:none;width:32px;height:32px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:16px;align-items:center;justify-content:center;flex-shrink:0}
 #modules{flex:1;overflow:hidden;position:relative}
 .module{display:none;height:100%;overflow-y:auto}.module.act{display:block}
-.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#topbar{display:flex!important}#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px)}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5)}#ham{display:flex!important}.ham-btn{display:flex!important}}
+.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#topbar{display:flex!important}body.pos-mode #topbar{display:none!important}#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px)}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5)}#ham{display:flex!important}.ham-btn{display:flex!important}}
 </style>
 <style>/* POS — global (no scope needed, loads first) */
 
@@ -515,6 +515,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   .pbp{font-size:10px!important}
 }
 </style>
+<script>document.body && document.body.classList.add("pos-mode");</script>
 </head>
 <body>
 <div id="erp-shell">
@@ -1554,6 +1555,8 @@ async function supaInit() {
 <script>
 
 
+
+
 function goMod(id,title,btn){
   // Check permission
   const modKey = id.replace('mod-','');
@@ -1570,8 +1573,9 @@ function goMod(id,title,btn){
   if(btn)btn.classList.add('act');
   document.getElementById('tb-title').textContent=title;
   document.getElementById('sidebar').classList.remove('mob-open');
+  document.body.classList.remove('pos-mode');
   var _gtb=document.getElementById('topbar');
-  if(_gtb)_gtb.style.display=(id==='mod-pos')?'none':'';
+  if(_gtb&&window.innerWidth>640)_gtb.style.display=(id==='mod-pos')?'none':'';
   if(id==='mod-ventas'&&typeof renderVentas==='function'){try{
     // Auto-filter for vendedor
     if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor'){
@@ -1672,7 +1676,7 @@ function goStep(pg,idx){
   if(pg==='pg-prod'){renderProds();renderCart();renderCartCtx();}
   if(pg==='pg-pago')initPago();
   document.getElementById('sidebar').classList.remove('mob-open');
-  var _gtb2=document.getElementById('topbar');if(_gtb2)_gtb2.style.display='none';
+  document.body.classList.add('pos-mode');
 }
 function selUser(u,el){
   pendingUser=u;pinBuf='';
@@ -2135,6 +2139,8 @@ function otraVentaMismoAlmacen(){
   goStep('pg-prod',2);
 }
 renderSteps(0);
+
+
 
 
 
