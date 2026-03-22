@@ -546,7 +546,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div id="modules">
     <div class="module act" id="mod-pos"><div class="app">
 <div class="topbar">
-  <button id="ham-pos" onclick="document.getElementById('sidebar').classList.toggle('mob-open')" class="ham-btn">☰</button>
+  <button id="ham-pos" onclick="document.getElementById('sidebar').classList.toggle('mob-open')" class="ham-btn" style="flex-shrink:0">☰</button>
   <span class="topbar-logo">POS</span>
   <div class="step-bar" id="step-bar" style="flex:1"></div>
   <div id="user-chip" style="display:none" class="user-chip" onclick="logout()">
@@ -1557,6 +1557,7 @@ async function supaInit() {
 
 
 
+
 function goMod(id,title,btn){
   // Check permission
   const modKey = id.replace('mod-','');
@@ -1574,8 +1575,9 @@ function goMod(id,title,btn){
   document.getElementById('tb-title').textContent=title;
   document.getElementById('sidebar').classList.remove('mob-open');
   document.body.classList.remove('pos-mode');
+  // Desktop only: hide #topbar on POS
   var _gtb=document.getElementById('topbar');
-  if(_gtb&&window.innerWidth>640)_gtb.style.display=(id==='mod-pos')?'none':'';
+  if(_gtb) _gtb.style.display=(id==='mod-pos'&&window.innerWidth>640)?'none':'';
   if(id==='mod-ventas'&&typeof renderVentas==='function'){try{
     // Auto-filter for vendedor
     if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor'){
@@ -2139,6 +2141,7 @@ function otraVentaMismoAlmacen(){
   goStep('pg-prod',2);
 }
 renderSteps(0);
+
 
 
 
