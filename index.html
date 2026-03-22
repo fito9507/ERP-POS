@@ -615,6 +615,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- PRODUCTOS -->
 <div class="page" id="pg-prod">
+<div id="res-banner" style="display:none;background:var(--color-background-info);border-bottom:1px solid var(--color-border-info);padding:8px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;flex-shrink:0" onclick="openRes()"><span style="font-size:12px;font-weight:600;color:var(--color-text-info)">📋 Reservas activas</span><span id="res-banner-n" style="font-size:11px;color:var(--color-text-info)">0 reservas</span></div>
 <div class="prod-layout">
   <div class="prod-panel">
     <div class="card" style="padding:10px">
@@ -1679,6 +1680,8 @@ function renderSteps(active){
   document.getElementById('res-btn').style.display=_rd;
   var _rbt=document.getElementById('res-btn-top');if(_rbt)_rbt.style.display=_rd;
   var _rnt=document.getElementById('res-n-top');if(_rnt)_rnt.textContent=_rn;
+  var _rb=document.getElementById('res-banner');if(_rb)_rb.style.display=_rn>0?'flex':'none';
+  var _rbn=document.getElementById('res-banner-n');if(_rbn)_rbn.textContent=_rn+' reserva'+(_rn===1?'':'s');
 }
 function goStep(pg,idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
