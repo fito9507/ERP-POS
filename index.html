@@ -40,7 +40,7 @@ input,select,textarea,button{font-family:var(--font-sans)}
 #ham{display:none;width:32px;height:32px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:16px;align-items:center;justify-content:center;flex-shrink:0}
 #modules{flex:1;overflow:hidden;position:relative}
 .module{display:none;height:100%;overflow-y:auto}.module.act{display:block}
-.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#topbar{display:flex!important}body.pos-mode #topbar{display:none!important}#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px)}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5)}#ham{display:flex!important}.ham-btn{display:flex!important}}
+.ham-btn{display:none;width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:transparent;color:var(--color-text-secondary);cursor:pointer;font-size:18px;align-items:center;justify-content:center;flex-shrink:0}@media(max-width:640px){#topbar{display:flex!important}#sidebar{position:fixed;top:0;left:0;height:100vh;z-index:1000;transform:translateX(-188px)}#sidebar.mob-open{transform:translateX(0);box-shadow:4px 0 20px rgba(0,0,0,.5)}#ham{display:flex!important}.ham-btn{display:flex!important}}
 </style>
 <style>/* POS — global (no scope needed, loads first) */
 
@@ -538,25 +538,14 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 </div>
 
 <div id="content">
-  <div id="topbar" style="display:none">
+  <div id="topbar">
     <button id="ham" onclick="document.getElementById('sidebar').classList.toggle('mob-open')" class="ham-btn">☰</button>
     <div id="tb-title" style="flex:1">POS</div>
     <div style="display:flex;align-items:center;gap:5px;margin-right:4px"><span id="sync-dot" style="width:8px;height:8px;border-radius:50%;background:#606060;display:inline-block"></span><span id="sync-lbl" style="font-size:11px;color:var(--color-text-tertiary)">Offline</span></div>
   </div>
   <div id="modules">
     <div class="module act" id="mod-pos"><div class="app">
-<div class="topbar">
-  <button id="ham-pos" onclick="document.getElementById('sidebar').classList.toggle('mob-open')" class="ham-btn" style="flex-shrink:0">☰</button>
-  <span class="topbar-logo">POS</span>
-  <div class="step-bar" id="step-bar" style="flex:1"></div>
-  <div id="user-chip" style="display:none" class="user-chip" onclick="logout()">
-    <div class="dot" id="chip-dot"></div>
-    <span id="chip-name"></span>
-    <span style="color:var(--color-text-tertiary);font-size:10px;margin-left:2px">Salir</span>
-  </div>
-  <span class="badge ba" id="res-btn" style="display:none;cursor:pointer;font-size:10px;padding:2px 8px;border-radius:100px" onclick="openRes()">Reservas <span id="res-n">0</span></span>
-  <div style="display:flex;align-items:center;gap:5px;flex-shrink:0"><span id="pos-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#606060;display:inline-block"></span><span id="pos-sync-lbl" style="font-size:11px;color:var(--color-text-tertiary)">Offline</span></div>
-</div>
+
 
 <!-- LOGIN -->
 <div class="page act" id="pg-login">
