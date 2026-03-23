@@ -5615,7 +5615,7 @@ async function fetchTasasElToque() {
   try {
     // Cache: only fetch once per 30 min
     var now = Date.now();
-    if (_tasasLoaded && (now - _tasasTs) < 1800000) return;
+    if (_tasasLoaded && (now - _tasasTs) < 3600000) return;
 
     var url = 'https://tasas.eltoque.com/v1/trmi';
     var r = await fetch(url, {
@@ -5714,7 +5714,7 @@ _loadRatesCache();
 // Auto-refresh: fetch on load + every 30 minutes
 window.addEventListener('load', function() {
   setTimeout(fetchTasasElToque, 2000);
-  setInterval(fetchTasasElToque, 1800000);
+  setInterval(fetchTasasElToque, 3600000);
 });
 
 </script>
