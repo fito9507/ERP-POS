@@ -4224,10 +4224,10 @@ function renderAdminTasas() {
   el.innerHTML = '<div style="max-width:560px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
     + '<h3 style="margin:0">💱 Tasas de cambio</h3>'
-    + '<button class="adm-btn adm-btn-p" onclick="fetchTasasElToque().then(function(){renderAdminTasas();})" style="font-size:12px">🔄 Actualizar elToque</button>'
+    + '<button class="adm-btn adm-btn-p" onclick="fetchTasasElToque(true).then(function(){renderAdminTasas();})" style="font-size:12px">🔄 Actualizar elToque</button>'
     + '</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:16px">'
-    + 'TRMI elToque · auto cada 30 min' + (age ? ' · hace <b>' + age + '</b>' : '') + '</div>'
+    + 'TRMI elToque · auto cada 1 hora' + (age ? ' · hace <b>' + age + '</b>' : '') + '</div>'
     + _tasaRow('USD / CUP', mUSD,  'CUP por 1 USD',  'usd',  aUSD,  mUSD  + aUSD)
     + _tasaRow('EUR / CUP', mEUR,  'CUP por 1 EUR',  'eur',  aEUR,  mEUR  + aEUR)
     + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
@@ -5611,11 +5611,11 @@ var ELTOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsIm
 var _tasasLoaded = false;
 var _tasasTs = 0;
 
-async function fetchTasasElToque() {
+async function fetchTasasElToque(force) {
   try {
-    // Cache: only fetch once per 30 min
+    // Cache: only fetch once per 1 hour
     var now = Date.now();
-    if (_tasasLoaded && (now - _tasasTs) < 3600000) return;
+    if (!force && _tasasLoaded && (now - _tasasTs) < 3600000) return;
 
     var url = 'https://tasas.eltoque.com/v1/trmi';
     var r = await fetch(url, {
