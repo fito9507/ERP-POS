@@ -1659,7 +1659,9 @@ const PRODS=[
   {n:"Varillas E6013 3.2x350mm",min:9.2,maj:8,stk:500},{n:"Silicona Neutra (Blanca)",min:null,maj:1.7,stk:320},
   {n:"Silicona Neutra (Transp.)",min:null,maj:1.7,stk:280},
 ];
-let S={user:'',alm:'',tipo:'Minorista',cli:'',cart:[],pagos:[],vueltos:[],cartMon:'USD',reservas:[]};
+function _loadReservas(){try{return JSON.parse(localStorage.getItem('erp_reservas')||'[]');}catch(e){return[];}}
+function _saveReservas(){try{localStorage.setItem('erp_reservas',JSON.stringify(S.reservas));}catch(e){}}
+let S={user:'',alm:'',tipo:'Minorista',cli:'',cart:[],pagos:[],vueltos:[],cartMon:'USD',reservas:_loadReservas()};
 let pinBuf='',pendingUser='';
 
 function rUp(n,m){return m==='CUP'||m==='CUPT'?Math.ceil(n):parseFloat(n.toFixed(2));}
@@ -1689,6 +1691,7 @@ function goStep(pg,idx){
   renderSteps(idx);
   if(pg==='pg-prod'){renderProds();renderCart();renderCartCtx();}
   if(pg==='pg-pago')initPago();
+  updResBadge();
   document.getElementById('sidebar').classList.remove('mob-open');
   var _gtb2=document.getElementById('topbar');if(_gtb2)_gtb2.style.display='none';
 }
@@ -1898,7 +1901,8 @@ function reservar(){
   S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli,
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
-  updResBadge();S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
+  _saveReservas();
+  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
 }
 function syncReservasGlobal(){
   RESERVAS_GLOBAL=S.reservas.slice();
@@ -1906,8 +1910,12 @@ function syncReservasGlobal(){
 }
 function updResBadge(){
   const n=S.reservas.filter(r=>r.activa).length;
-  document.getElementById('res-n').textContent=n;
-  document.getElementById('res-btn').style.display=n>0&&S.alm?'inline':'none';
+  var rn=document.getElementById('res-n');if(rn)rn.textContent=n;
+  var rb=document.getElementById('res-btn');if(rb)rb.style.display=n>0&&S.alm?'inline':'none';
+  var rbt=document.getElementById('res-btn-top');if(rbt)rbt.style.display=n>0?'':'none';
+  var rnt=document.getElementById('res-n-top');if(rnt)rnt.textContent=n;
+  var rbanner=document.getElementById('res-banner');if(rbanner)rbanner.style.display=n>0?'flex':'none';
+  var rbannern=document.getElementById('res-banner-n');if(rbannern)rbannern.textContent=n+' reserva'+(n===1?'':'s');
 }
 function openRes(){
   const act=S.reservas.filter(r=>r.activa);
