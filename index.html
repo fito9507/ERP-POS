@@ -3709,6 +3709,7 @@ renderColores();renderLista();
 
 
 
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -4197,6 +4198,14 @@ function admGuardarTasas() {
 function renderAdminTasas() {
   var el = document.getElementById('admin-content');
   if (!el) return;
+  // If no market cache, fetch now then re-render
+  var _hasMkt = false;
+  try { var _tm = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt = !!_tm.CUP; } catch(e) {}
+  if (!_hasMkt && typeof fetchTasasElToque === 'function') {
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--color-text-tertiary)">⏳ Obteniendo tasas de elToque...</div>';
+    fetchTasasElToque(true).then(function(){ renderAdminTasas(); });
+    return;
+  }
 
   // Load saved adjustments
   var adj = {};
@@ -4306,6 +4315,7 @@ function admGuardarTasas() {
 
   showToast('✓ USD/CUP: ' + fN(finUSD,0) + ' · EUR/CUP: ' + fN(finEUR,0) + ' · MLC/CUP: ' + fN(finCUPT,0));
 }
+
 
 </script>
 
@@ -5672,8 +5682,11 @@ async function fetchTasasElToque(force) {
     if (updated.length) {
       showToast('📈 Tasas actualizadas: ' + updated.join(' · '));
       updOnlineDot();
-      // Re-render if ventas or stock is open
       if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
+      // Re-render tasas panel if open
+      if (typeof adminTab !== 'undefined' && adminTab === 'tasas' && typeof renderAdminTasas === 'function') {
+        try { renderAdminTasas(); } catch(e) {}
+      }
     }
     console.log('elToque rates:', RATES);
   } catch(e) {
