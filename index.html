@@ -3701,6 +3701,10 @@ renderColores();renderLista();
 
 
 
+
+
+
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -3767,6 +3771,7 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'productos' ? ' act' : '') + '" onclick="setAdminTab(\'productos\')">📦 Productos y Stock</button>'
     + '<button class="adm-tab' + (adminTab === 'usuarios'   ? ' act' : '') + '" onclick="setAdminTab(\'usuarios\')">👤 Usuarios</button>'
     + '<button class="adm-tab' + (adminTab === 'categorias' ? ' act' : '') + '" onclick="setAdminTab(\'categorias\')">🏷️ Categorías</button>'
+    + '<button class="adm-tab' + (adminTab === 'tasas' ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -4115,6 +4120,109 @@ function admDelCat(i) {
 }
 
 
+
+
+
+
+
+
+function admGuardarTasas() {
+  var cup  = parseFloat(document.getElementById('t-cup').value);
+  var eur  = parseFloat(document.getElementById('t-eur').value);
+  var cupt = parseFloat(document.getElementById('t-cupt').value);
+  if (cup > 0)  RATES.CUP  = cup;
+  if (eur > 0)  RATES.EUR  = eur;
+  if (cupt > 0) RATES.CUPT = cupt;
+  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1, EUR:RATES.EUR, CUP:RATES.CUP, CUPT:RATES.CUPT, ts:Date.now()})); } catch(e) {}
+  showToast('✓ Tasas guardadas');
+  renderAdminTasas();
+}
+
+
+function renderAdminTasas() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  var age = '';
+  try {
+    var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
+    if (cached.ts) age = Math.round((Date.now()-cached.ts)/60000) + ' min';
+  } catch(e) {}
+
+  function adjBtn(id, delta) {
+    return '<button onclick="var e=document.getElementById(\'' + id + '\');e.value=parseFloat((parseFloat(e.value)||0)+(' + delta + ')).toFixed(2);admPreviewTasas()" '
+      + 'style="width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);cursor:pointer;font-size:16px">'
+      + (delta > 0 ? '+' : '−') + '</button>';
+  }
+
+  el.innerHTML = '<div style="max-width:560px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    + '<h3 style="margin:0">💱 Tasas de cambio</h3>'
+    + '<button class="adm-btn adm-btn-p" onclick="fetchTasasElToque().then(function(){renderAdminTasas();})">🔄 Actualizar desde elToque</button>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:20px">'
+    + 'Fuente: elToque TRMI · Auto-actualización cada 30 min'
+    + (age ? ' · Última hace <strong>' + age + '</strong>' : '') + '</div>'
+
+    // USD/CUP
+    + '<div class="card" style="margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div><div style="font-weight:600">USD / CUP</div><div style="font-size:11px;color:var(--color-text-secondary)">Pesos cubanos por 1 dólar</div></div>'
+    + '<div style="font-size:22px;font-weight:700" id="prev-cup">' + fN(RATES.CUP,0) + '</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + adjBtn('t-cup', -5) + adjBtn('t-cup', -1)
+    + '<input type="number" id="t-cup" value="' + RATES.CUP + '" oninput="admPreviewTasas()" style="flex:1;text-align:center;font-size:18px;font-weight:600">'
+    + adjBtn('t-cup', 1) + adjBtn('t-cup', 5)
+    + '</div></div>'
+
+    // EUR/CUP
+    + '<div class="card" style="margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div><div style="font-weight:600">EUR / CUP</div><div style="font-size:11px;color:var(--color-text-secondary)">Pesos cubanos por 1 euro</div></div>'
+    + '<div style="font-size:22px;font-weight:700" id="prev-eur">' + fN(RATES.CUP / RATES.EUR, 0) + '</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + adjBtn('t-eur-cup', -5) + adjBtn('t-eur-cup', -1)
+    + '<input type="number" id="t-eur-cup" value="' + fN(RATES.CUP/RATES.EUR,0) + '" oninput="admPreviewTasas()" style="flex:1;text-align:center;font-size:18px;font-weight:600">'
+    + adjBtn('t-eur-cup', 1) + adjBtn('t-eur-cup', 5)
+    + '</div></div>'
+
+    // MLC/CUP
+    + '<div class="card" style="margin-bottom:20px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div><div style="font-weight:600">MLC / CUP</div><div style="font-size:11px;color:var(--color-text-secondary)">Pesos cubanos por 1 MLC</div></div>'
+    + '<div style="font-size:22px;font-weight:700" id="prev-cupt">' + fN(RATES.CUPT,0) + '</div>'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + adjBtn('t-cupt', -5) + adjBtn('t-cupt', -1)
+    + '<input type="number" id="t-cupt" value="' + RATES.CUPT + '" oninput="admPreviewTasas()" style="flex:1;text-align:center;font-size:18px;font-weight:600">'
+    + adjBtn('t-cupt', 1) + adjBtn('t-cupt', 5)
+    + '</div></div>'
+
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px">💾 Guardar tasas</button>'
+    + '</div>';
+}
+
+function admPreviewTasas() {
+  var cup  = parseFloat(document.getElementById('t-cup')?.value) || RATES.CUP;
+  var eurC = parseFloat(document.getElementById('t-eur-cup')?.value) || (RATES.CUP/RATES.EUR);
+  var cupt = parseFloat(document.getElementById('t-cupt')?.value) || RATES.CUPT;
+  var pe = document.getElementById('prev-cup'); if(pe) pe.textContent = fN(cup,0);
+  var pe2 = document.getElementById('prev-eur'); if(pe2) pe2.textContent = fN(eurC,0);
+  var pe3 = document.getElementById('prev-cupt'); if(pe3) pe3.textContent = fN(cupt,0);
+}
+
+function admGuardarTasas() {
+  var cup  = parseFloat(document.getElementById('t-cup')?.value);
+  var eurC = parseFloat(document.getElementById('t-eur-cup')?.value);
+  var cupt = parseFloat(document.getElementById('t-cupt')?.value);
+  if (cup  > 0) RATES.CUP  = cup;
+  if (eurC > 0) RATES.EUR  = parseFloat((cup / eurC).toFixed(6));
+  if (cupt > 0) RATES.CUPT = cupt;
+  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
+  showToast('✓ Tasas guardadas — USD/CUP: ' + fN(RATES.CUP,0) + ' · EUR/CUP: ' + fN(RATES.CUP/RATES.EUR,0));
+  renderAdminTasas();
+}
 
 
 
@@ -4943,6 +5051,7 @@ function eliminarPrestamo(id) {
 
 
 
+
 //<script>
 
 
@@ -5001,6 +5110,25 @@ function registrarMovStock(data) {
   if (!applyStockMov(mov)) { showToast('Producto no encontrado'); return false; }
   STOCK_MOVS.unshift(mov);
   saveStockMovs();
+  // Save to Supabase
+  if (_supaOnline) {
+    supaReq('POST','stock_movimientos',{
+      fecha: mov.fecha,
+      tipo: mov.tipo,
+      producto: mov.producto,
+      almacen: mov.almacen,
+      almacen_dest: mov.almacenDest||'',
+      cantidad: mov.cantidad,
+      motivo: mov.motivo||'',
+      usuario: mov.usuario
+    }).catch(function(e){console.warn('mov supabase:',e);});
+  } else {
+    enqueue({method:'POST',path:'stock_movimientos',body:{
+      fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
+      almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
+      cantidad:mov.cantidad,motivo:mov.motivo||'',usuario:mov.usuario
+    }});
+  }
   // Sync stock to Supabase
   var p = PRODS.find(function(x){ return x.n === mov.producto; });
   if (p && _supaOnline) {
@@ -5174,6 +5302,7 @@ function _updMovAlmDest() {
   var dest = document.getElementById('smov-dest-wrap');
   if (dest) dest.style.display = tipo === 'traslado' ? '' : 'none';
 }
+
 
 
 
@@ -5389,6 +5518,107 @@ function offlineLoadClientes() {
     return true;
   } catch(e) { console.warn('offlineLoadClientes:', e); return false; }
 }
+
+</script>
+
+<script>
+
+// ═══════════════════════════════════════════════════════════════
+// TASAS ELTOQUE — Auto actualización de tasas de cambio
+// ═══════════════════════════════════════════════════════════════
+var ELTOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0NjYzMzg5OCwianRpIjoiYmZjMGZiZDMtY2Y1NC00NjQ5LTk1MGUtMzBlYWUwNjVlNTY2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY4MGU4ODU0MzhkNzU2MWQyMWM2Nzg2ZiIsIm5iZiI6MTc0NjYzMzg5OCwiZXhwIjoxNzc4MTY5ODk4fQ.frJxUfZ9oPzGOGVBPDXCZ0c3Za8umObbDVLLhfAEihQ';
+var _tasasLoaded = false;
+var _tasasTs = 0;
+
+async function fetchTasasElToque() {
+  try {
+    // Cache: only fetch once per 30 min
+    var now = Date.now();
+    if (_tasasLoaded && (now - _tasasTs) < 1800000) return;
+
+    var today = new Date();
+    var dd = String(today.getDate()).padStart(2,'0');
+    var mm = String(today.getMonth()+1).padStart(2,'0');
+    var yyyy = today.getFullYear();
+    var dateStr = yyyy + '-' + mm + '-' + dd;
+
+    var url = 'https://tasas.eltoque.com/v1/trmi?date_from=' + dateStr + '&date_to=' + dateStr;
+    var r = await fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + ELTOQUE_TOKEN,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!r.ok) {
+      console.warn('elToque API error:', r.status);
+      return;
+    }
+    var data = await r.json();
+    // Response: {tasas: {USD: 515, ECU: 580, MLC: 420}, date: "2026-03-23"}
+    var tasas = data.tasas || data;
+    var updated = [];
+
+    if (tasas.USD) {
+      RATES.CUP = parseFloat(tasas.USD);
+      updated.push('USD/CUP: ' + RATES.CUP);
+    }
+    if (tasas.ECU) {
+      var eurCup = parseFloat(tasas.ECU);
+      RATES.EUR = parseFloat((RATES.CUP / eurCup).toFixed(6));
+      updated.push('EUR/CUP: ' + eurCup);
+    }
+    if (tasas.MLC) {
+      RATES.CUPT = parseFloat(tasas.MLC);
+      updated.push('MLC/CUP: ' + RATES.CUPT);
+    } else if (RATES.CUP) {
+      RATES.CUPT = parseFloat((RATES.CUP * 1.05).toFixed(2));
+    }
+
+    // Save to localStorage for offline use
+    try {
+      localStorage.setItem('erp_rates', JSON.stringify({
+        USD: 1, EUR: RATES.EUR, CUP: RATES.CUP, CUPT: RATES.CUPT, ts: now
+      }));
+    } catch(e) {}
+
+    _tasasLoaded = true;
+    _tasasTs = now;
+
+    if (updated.length) {
+      showToast('📈 Tasas actualizadas: ' + updated.join(' · '));
+      updOnlineDot();
+      // Re-render if ventas or stock is open
+      if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
+    }
+    console.log('elToque rates:', RATES);
+  } catch(e) {
+    console.warn('fetchTasasElToque error:', e);
+    // Load from cache if available
+    _loadRatesCache();
+  }
+}
+
+function _loadRatesCache() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
+    if (cached.CUP && cached.CUP > 0) {
+      if (cached.EUR) RATES.EUR = cached.EUR;
+      if (cached.CUP) RATES.CUP = cached.CUP;
+      if (cached.CUPT) RATES.CUPT = cached.CUPT;
+      var age = cached.ts ? Math.round((Date.now()-cached.ts)/60000) : '?';
+      console.log('Rates loaded from cache (' + age + ' min old)');
+    }
+  } catch(e) {}
+}
+
+// Load cached rates immediately on startup (before network call)
+_loadRatesCache();
+
+// Auto-refresh: fetch on load + every 30 minutes
+window.addEventListener('load', function() {
+  setTimeout(fetchTasasElToque, 2000);
+  setInterval(fetchTasasElToque, 1800000);
+});
 
 </script>
 </body>
