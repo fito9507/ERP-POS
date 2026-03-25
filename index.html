@@ -3710,6 +3710,7 @@ renderColores();renderLista();
 
 
 
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -4198,13 +4199,17 @@ function admGuardarTasas() {
 function renderAdminTasas() {
   var el = document.getElementById('admin-content');
   if (!el) return;
-  // If no market cache, fetch now then re-render
+  // Try to fetch fresh rates in background (non-blocking)
   var _hasMkt = false;
   try { var _tm = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt = !!_tm.CUP; } catch(e) {}
   if (!_hasMkt && typeof fetchTasasElToque === 'function') {
-    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--color-text-tertiary)">⏳ Obteniendo tasas de elToque...</div>';
-    fetchTasasElToque(true).then(function(){ renderAdminTasas(); });
-    return;
+    fetchTasasElToque(true).then(function(){ 
+      var _hasMkt2 = false;
+      try { var _tm2 = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt2=!!_tm2.CUP; } catch(e) {}
+      if (_hasMkt2) renderAdminTasas();
+    }).catch(function(){});
+    // Show with current RATES while waiting
+    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP:RATES.CUP,EUR:RATES.EUR,CUPT:RATES.CUPT})); } catch(e) {}
   }
 
   // Load saved adjustments
@@ -4315,6 +4320,7 @@ function admGuardarTasas() {
 
   showToast('✓ USD/CUP: ' + fN(finUSD,0) + ' · EUR/CUP: ' + fN(finEUR,0) + ' · MLC/CUP: ' + fN(finCUPT,0));
 }
+
 
 
 </script>
@@ -5398,7 +5404,9 @@ function _updMovAlmDest() {
 
 
 
-</script>ction _closeVentaModal(){
+</script>
+<script>
+function _closeVentaModal(){
   var mo=document.getElementById('venta-detail-modal');
   if(mo) mo.style.display='none';
 }
@@ -5452,6 +5460,8 @@ function verVenta(id){
 
 </script>
 
+
+</script>
 <script>
 
 // ═══════════════════════════════════════════════════════════════
@@ -5631,11 +5641,12 @@ async function fetchTasasElToque(force) {
     var r = await fetch(url, {
       headers: {
         'Authorization': 'Bearer ' + ELTOQUE_TOKEN,
-        'Content-Type': 'application/json'
+        'accept': '*/*'
       }
     });
     if (!r.ok) {
       console.warn('elToque API error:', r.status);
+      _loadRatesCache();
       return;
     }
     var data = await r.json();
