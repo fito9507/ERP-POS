@@ -3711,6 +3711,7 @@ renderColores();renderLista();
 
 
 
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -4238,7 +4239,7 @@ function renderAdminTasas() {
   el.innerHTML = '<div style="max-width:560px">'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
     + '<h3 style="margin:0">💱 Tasas de cambio</h3>'
-    + '<button class="adm-btn adm-btn-p" onclick="fetchTasasElToque(true).then(function(){renderAdminTasas();})" style="font-size:12px">🔄 Actualizar elToque</button>'
+    + '<button class="adm-btn adm-btn-p" onclick="fetchElToqueAndSave()" style="font-size:12px">🔄 Actualizar elToque</button>'
     + '</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:16px">'
     + 'TRMI elToque · auto cada 1 hora' + (age ? ' · hace <b>' + age + '</b>' : '') + '</div>'
@@ -4318,8 +4319,18 @@ function admGuardarTasas() {
   try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD:aUSD,EUR:aEUR,CUPT:aCUPT})); } catch(e) {}
   try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
 
+  // Save to Supabase
+  if (_supaOnline) {
+    var rows2 = [
+      {moneda:'USD', tasa_mkt: mUSD,  ajuste: aUSD,  valor: finUSD},
+      {moneda:'EUR', tasa_mkt: mEURc, ajuste: aEUR,  valor: finEUR},
+      {moneda:'MLC', tasa_mkt: mCUPT, ajuste: aCUPT, valor: finCUPT}
+    ];
+    rows2.forEach(function(row){ supaReq('POST','tasas?on_conflict=moneda',row).catch(function(e){console.warn(e);}); });
+  }
   showToast('✓ USD/CUP: ' + fN(finUSD,0) + ' · EUR/CUP: ' + fN(finEUR,0) + ' · MLC/CUP: ' + fN(finCUPT,0));
 }
+
 
 
 
@@ -5624,6 +5635,7 @@ function offlineLoadClientes() {
 
 <script>
 
+
 // ═══════════════════════════════════════════════════════════════
 // TASAS ELTOQUE — Auto actualización de tasas de cambio
 // ═══════════════════════════════════════════════════════════════
@@ -5633,77 +5645,85 @@ var _tasasTs = 0;
 
 async function fetchTasasElToque(force) {
   try {
-    // Cache: only fetch once per 1 hour
     var now = Date.now();
     if (!force && _tasasLoaded && (now - _tasasTs) < 3600000) return;
 
-    var url = 'https://tasas.eltoque.com/v1/trmi';
-    var r = await fetch(url, {
-      headers: {
-        'Authorization': 'Bearer ' + ELTOQUE_TOKEN,
-        'accept': '*/*'
-      }
-    });
-    if (!r.ok) {
-      console.warn('elToque API error:', r.status);
-      _loadRatesCache();
-      return;
-    }
-    var data = await r.json();
-    // Response: {tasas: {USD: 515, ECU: 580, MLC: 420}, date: "2026-03-23"}
-    var tasas = data.tasas || data;
+    // Load from Supabase tasas table (no CORS issues)
+    if (!_supaOnline) { _loadRatesCache(); return; }
+
+    var r = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste,updated_at');
+    if (!r.ok) { console.warn('tasas load error:', r.status); _loadRatesCache(); return; }
+    var rows = await r.json();
+    if (!rows || !rows.length) { _loadRatesCache(); return; }
+
     var updated = [];
+    var mktMap = {}, finMap = {}, adjMap = {};
+    rows.forEach(function(row) {
+      mktMap[row.moneda]  = parseFloat(row.tasa_mkt || row.valor);
+      finMap[row.moneda]  = parseFloat(row.valor);
+      adjMap[row.moneda]  = parseFloat(row.ajuste || 0);
+    });
 
-    if (tasas.USD) {
-      RATES.CUP = parseFloat(tasas.USD);
-      updated.push('USD/CUP: ' + RATES.CUP);
-    }
-    if (tasas.ECU) {
-      var eurCup = parseFloat(tasas.ECU);
-      RATES.EUR = parseFloat((RATES.CUP / eurCup).toFixed(6));
-      updated.push('EUR/CUP: ' + eurCup);
-    }
-    if (tasas.MLC) {
-      RATES.CUPT = parseFloat(tasas.MLC);
-      updated.push('MLC/CUP: ' + RATES.CUPT);
-    } else if (RATES.CUP) {
-      RATES.CUPT = parseFloat((RATES.CUP * 1.05).toFixed(2));
-    }
+    if (finMap.USD) { RATES.CUP  = finMap.USD;  updated.push('USD/CUP: ' + finMap.USD); }
+    if (finMap.EUR) { RATES.EUR  = parseFloat((finMap.USD / finMap.EUR).toFixed(6)); updated.push('EUR/CUP: ' + finMap.EUR); }
+    if (finMap.MLC) { RATES.CUPT = finMap.MLC;  updated.push('MLC/CUP: ' + finMap.MLC); }
 
-    // Save to localStorage for offline use
-    try {
-      localStorage.setItem('erp_rates', JSON.stringify({
-        USD: 1, EUR: RATES.EUR, CUP: RATES.CUP, CUPT: RATES.CUPT, ts: now
-      }));
-    } catch(e) {}
+    // Save market rates cache for the tasas panel
+    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP: mktMap.USD||RATES.CUP, EUR_CUP: mktMap.EUR||0, CUPT: mktMap.MLC||RATES.CUPT})); } catch(e) {}
+    try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD: adjMap.USD||0, EUR: adjMap.EUR||0, CUPT: adjMap.MLC||0})); } catch(e) {}
+    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1, EUR:RATES.EUR, CUP:RATES.CUP, CUPT:RATES.CUPT, ts:now})); } catch(e) {}
 
     _tasasLoaded = true;
     _tasasTs = now;
 
-    // Save pure market rates before adjustment
-    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP:RATES.CUP, EUR:RATES.EUR, CUPT:RATES.CUPT})); } catch(e) {}
-    // Re-apply saved adjustments on top of new market rates
-    try {
-      var _adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}');
-      if (_adj.USD  || 0)  RATES.CUP  = RATES.CUP  + (_adj.USD  || 0);
-      if (_adj.CUPT || 0)  RATES.CUPT = RATES.CUPT + (_adj.CUPT || 0);
-      if (_adj.EUR  || 0)  { var _eurCupAdj = (RATES.CUP / RATES.EUR) + (_adj.EUR || 0); RATES.EUR = parseFloat((RATES.CUP / _eurCupAdj).toFixed(6)); }
-    } catch(e) {}
-
     if (updated.length) {
-      showToast('📈 Tasas actualizadas: ' + updated.join(' · '));
+      showToast('📈 Tasas: ' + updated.join(' · '));
       updOnlineDot();
       if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
-      // Re-render tasas panel if open
       if (typeof adminTab !== 'undefined' && adminTab === 'tasas' && typeof renderAdminTasas === 'function') {
         try { renderAdminTasas(); } catch(e) {}
       }
     }
-    console.log('elToque rates:', RATES);
   } catch(e) {
     console.warn('fetchTasasElToque error:', e);
-    // Load from cache if available
     _loadRatesCache();
+  }
+}
+
+// Fetch from elToque API and save to Supabase (called from Admin panel)
+async function fetchElToqueAndSave() {
+  if (!_supaOnline) { showToast('Sin conexión'); return; }
+  try {
+    showToast('⏳ Consultando elToque...');
+    var r = await fetch('https://tasas.eltoque.com/v1/trmi', {
+      headers: { 'Authorization': 'Bearer ' + ELTOQUE_TOKEN, 'accept': '*/*' }
+    });
+    if (!r.ok) { showToast('Error elToque: ' + r.status); return; }
+    var data = await r.json();
+    var tasas = data.tasas || data;
+    if (!tasas.USD) { showToast('Sin datos de elToque'); return; }
+
+    // Load current adjustments
+    var adj = {};
+    try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
+
+    var rows = [
+      { moneda:'USD', tasa_mkt: tasas.USD,      ajuste: adj.USD||0,  valor: tasas.USD      + (adj.USD||0)  },
+      { moneda:'EUR', tasa_mkt: tasas.ECU||0,   ajuste: adj.EUR||0,  valor: (tasas.ECU||0) + (adj.EUR||0)  },
+      { moneda:'MLC', tasa_mkt: tasas.MLC||0,   ajuste: adj.CUPT||0, valor: (tasas.MLC||0) + (adj.CUPT||0) }
+    ];
+
+    // Upsert each row
+    for (var row of rows) {
+      await supaReq('POST', 'tasas?on_conflict=moneda', row);
+    }
+
+    showToast('✓ Tasas guardadas en Supabase');
+    await fetchTasasElToque(true);
+    if (typeof renderAdminTasas === 'function') renderAdminTasas();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+    console.error('fetchElToqueAndSave:', e);
   }
 }
 
@@ -5740,6 +5760,7 @@ window.addEventListener('load', function() {
   setTimeout(fetchTasasElToque, 2000);
   setInterval(fetchTasasElToque, 3600000);
 });
+
 
 </script>
 </body>
