@@ -1536,7 +1536,7 @@ async function supaInit() {
     });}
   }catch(e){}
   try{
-    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.EURUSD');
+    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
     if(reu.ok){var reud=await reu.json();if(reud&&reud[0])RATES_EURUSD=parseFloat(reud[0].valor);}
   }catch(e){}
     if (okV || okP) {
@@ -3740,6 +3740,9 @@ renderColores();renderLista();
 
 
 
+
+
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -4276,9 +4279,25 @@ function renderAdminTasas() {
     + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
     + '<div class="card" style="margin-top:12px">'
-    + '<div style="font-size:13px;font-weight:600;margin-bottom:10px">EUR / USD <span style="font-size:11px;color:var(--color-text-tertiary)">(auto: '+fN(parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)),2)+')</span></div>'
-    + '<input type="number" id="tadj-eurusd" value="'+(RATES_EURUSD>0?RATES_EURUSD:parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)))+'" step="0.01" style="width:120px;text-align:center;font-size:18px;font-weight:600;height:40px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">USD / EUR</div>'
+    + '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+    + '<div style="text-align:center;min-width:80px">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">CALCULADO</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--color-text-secondary)">'+fN(parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(4)),4)+'</div>'
     + '</div>'
+    + '<div style="font-size:16px;color:var(--color-text-tertiary)">→</div>'
+    + '<div style="text-align:center;flex:1">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">VALOR A USAR (2 decimales)</div>'
+    + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
+    + '<button onclick="var e=document.getElementById(\'tadj-eurusd\');e.value=(parseFloat(e.value)-0.01).toFixed(2);" style="width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:16px">−</button>'
+    + '<input type="number" id="tadj-eurusd" value="'+(RATES_EURUSD>0?fN(RATES_EURUSD,2):parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)))+'" step="0.01" style="width:90px;text-align:center;font-size:20px;font-weight:700;height:40px">'
+    + '<button onclick="var e=document.getElementById(\'tadj-eurusd\');e.value=(parseFloat(e.value)+0.01).toFixed(2);" style="width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:16px">+</button>'
+    + '</div></div>'
+    + '<div style="text-align:center;min-width:80px">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">EN USO</div>'
+    + '<div style="font-size:22px;font-weight:800;color:var(--color-text-success)">'+fN(RATES_EURUSD>0?RATES_EURUSD:parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)),2)+'</div>'
+    + '</div>'
+    + '</div></div>'
     + '<h3 style="margin:16px 0 10px">Ajustes por almacén</h3>'
     + _renderAlmAdjTable()
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarAjustesAlm()" style="width:100%;padding:10px;margin-top:8px">💾 Guardar ajustes almacén</button>'
@@ -4352,6 +4371,7 @@ function admGuardarTasas() {
   RATES.CUPT = finCUPT;
 
   try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD:aUSD,EUR:aEUR,CUPT:aCUPT})); } catch(e) {}
+  console.log('Adjustments saved:', {USD:aUSD,EUR:aEUR,CUPT:aCUPT});
   try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
 
   // Save to Supabase
@@ -4373,20 +4393,53 @@ function admGuardarTasas() {
 function _renderAlmAdjTable() {
   var alms = ['Habana','Placetas','Xportprise'];
   var mons = ['USD','EUR','MLC'];
+
+  // Base rates (TRMI + global adj)
+  var mkt = {};
+  try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
+  var adj = {};
+  try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
+  var baseUSD  = (mkt.CUP  || RATES.CUP)  + (adj.USD  || 0);
+  var baseEUR  = (mkt.EUR  ? parseFloat((mkt.CUP/mkt.EUR).toFixed(2)) : parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
+  var baseMLC  = (mkt.CUPT || RATES.CUPT) + (adj.CUPT || 0);
+  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC};
+
   var h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-    + '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--color-text-tertiary)">Almacén</th>'
-    + mons.map(function(m){return '<th style="text-align:center;padding:6px 8px;color:var(--color-text-tertiary)">+/- '+m+'/CUP</th>';}).join('')
-    + '</tr></thead><tbody>';
+    + '<thead><tr>'
+    + '<th style="text-align:left;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)">Almacén</th>'
+    + mons.map(function(m){
+        return '<th style="text-align:center;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)" colspan="2">'
+          + m + '/CUP<br><span style="font-size:10px;font-weight:400">base: '+fN(base[m],0)+'</span></th>';
+      }).join('')
+    + '</tr>'
+    + '<tr>'
+    + '<th></th>'
+    + mons.map(function(){ return '<th style="font-size:10px;color:var(--color-text-tertiary);padding:2px 4px;font-weight:400">+/−</th><th style="font-size:10px;color:var(--color-text-success);padding:2px 4px;font-weight:600">FINAL</th>'; }).join('')
+    + '</tr>'
+    + '</thead><tbody>';
+
   alms.forEach(function(alm){
-    h += '<tr><td style="padding:6px 8px;font-weight:500">'+alm+'</td>';
+    h += '<tr style="border-bottom:1px solid var(--color-border-tertiary)">';
+    h += '<td style="padding:8px;font-weight:600">'+alm+'</td>';
     mons.forEach(function(mon){
-      var val=(RATES_ALM[alm]&&RATES_ALM[alm][mon])||0;
-      h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+val+'" step="1" style="width:80px;text-align:center;font-size:14px;height:36px"></td>';
+      var almAdj = (RATES_ALM[alm]&&RATES_ALM[alm][mon])||0;
+      var final  = base[mon] + almAdj;
+      h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
+        + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\','+base[mon]+')"'
+        + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
+      h += '<td id="alm-fin-'+alm+'-'+mon+'" style="padding:4px 8px;text-align:center;font-weight:700;color:var(--color-text-success);font-size:15px">'+fN(final,0)+'</td>';
     });
     h += '</tr>';
   });
+
   h += '</tbody></table></div>';
   return h;
+}
+
+function _updAlmFinal(alm, mon, base) {
+  var inp = document.getElementById('alm-adj-'+alm+'-'+mon);
+  var fin = document.getElementById('alm-fin-'+alm+'-'+mon);
+  if(inp && fin) fin.textContent = fN(base + (parseFloat(inp.value)||0), 0);
 }
 
 async function admGuardarAjustesAlm() {
@@ -4405,7 +4458,7 @@ async function admGuardarAjustesAlm() {
   if(euEl){
     RATES_EURUSD=parseFloat(euEl.value)||0;
     try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){}
-    if(_supaOnline) supaReq('POST','tasas?on_conflict=moneda',{moneda:'EURUSD',valor:RATES_EURUSD,tasa_mkt:RATES_EURUSD,ajuste:0}).catch(function(e){});
+    if(_supaOnline) supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:RATES_EURUSD,ajuste:0}).catch(function(e){});
   }
   if(_supaOnline){
     for(var i=0;i<rows.length;i++){
@@ -4417,6 +4470,9 @@ async function admGuardarAjustesAlm() {
     showToast('Ajustes guardados localmente');
   }
 }
+
+
+
 
 </script>
 
@@ -5721,6 +5777,7 @@ function offlineLoadClientes() {
 
 
 
+
 // ═══════════════════════════════════════════════════════════════
 // TASAS ELTOQUE — Auto actualización de tasas de cambio
 // ═══════════════════════════════════════════════════════════════
@@ -5791,8 +5848,26 @@ async function fetchElToqueAndSave() {
     if (!r.ok) { showToast('Error: ' + r.status); return; }
     var data = await r.json();
     if (!data.ok) { showToast('Error en Edge Function'); return; }
+    // Re-apply saved adjustments (edge function resets them to 0)
+    var _adj={};
+    try{_adj=JSON.parse(localStorage.getItem('erp_rates_adj')||'{}');}catch(e){}
+    var _adjRows=[
+      {moneda:'USD',ajuste:_adj.USD||0},
+      {moneda:'EUR',ajuste:_adj.EUR||0},
+      {moneda:'MLC',ajuste:_adj.CUPT||0}
+    ];
+    // Update valor = tasa_mkt + ajuste in Supabase
+    for(var _ar of _adjRows){
+      if(_ar.ajuste!==0){
+        var _tr=await supaReq('GET','tasas?select=tasa_mkt&moneda=eq.'+_ar.moneda);
+        if(_tr.ok){var _td=await _tr.json();
+          if(_td&&_td[0]){
+            var _mkt=parseFloat(_td[0].tasa_mkt);
+            await supaReq('POST','tasas?on_conflict=moneda',{moneda:_ar.moneda,ajuste:_ar.ajuste,valor:_mkt+_ar.ajuste});
+          }}
+      }
+    }
     showToast('✓ Tasas actualizadas desde elToque');
-    // Reload from Supabase
     await fetchTasasElToque(true);
     if (typeof renderAdminTasas === 'function') renderAdminTasas();
   } catch(e) {
@@ -5834,6 +5909,7 @@ window.addEventListener('load', function() {
   setTimeout(fetchTasasElToque, 2000);
   setInterval(fetchTasasElToque, 3600000);
 });
+
 
 
 
