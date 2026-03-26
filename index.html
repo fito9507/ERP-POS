@@ -5636,6 +5636,7 @@ function offlineLoadClientes() {
 <script>
 
 
+
 // ═══════════════════════════════════════════════════════════════
 // TASAS ELTOQUE — Auto actualización de tasas de cambio
 // ═══════════════════════════════════════════════════════════════
@@ -5695,30 +5696,18 @@ async function fetchElToqueAndSave() {
   if (!_supaOnline) { showToast('Sin conexión'); return; }
   try {
     showToast('⏳ Consultando elToque...');
-    var r = await fetch('https://tasas.eltoque.com/v1/trmi', {
-      headers: { 'Authorization': 'Bearer ' + ELTOQUE_TOKEN, 'accept': '*/*' }
+    var r = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/update-tasas', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json'
+      }
     });
-    if (!r.ok) { showToast('Error elToque: ' + r.status); return; }
+    if (!r.ok) { showToast('Error: ' + r.status); return; }
     var data = await r.json();
-    var tasas = data.tasas || data;
-    if (!tasas.USD) { showToast('Sin datos de elToque'); return; }
-
-    // Load current adjustments
-    var adj = {};
-    try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
-
-    var rows = [
-      { moneda:'USD', tasa_mkt: tasas.USD,      ajuste: adj.USD||0,  valor: tasas.USD      + (adj.USD||0)  },
-      { moneda:'EUR', tasa_mkt: tasas.ECU||0,   ajuste: adj.EUR||0,  valor: (tasas.ECU||0) + (adj.EUR||0)  },
-      { moneda:'MLC', tasa_mkt: tasas.MLC||0,   ajuste: adj.CUPT||0, valor: (tasas.MLC||0) + (adj.CUPT||0) }
-    ];
-
-    // Upsert each row
-    for (var row of rows) {
-      await supaReq('POST', 'tasas?on_conflict=moneda', row);
-    }
-
-    showToast('✓ Tasas guardadas en Supabase');
+    if (!data.ok) { showToast('Error en Edge Function'); return; }
+    showToast('✓ Tasas actualizadas desde elToque');
+    // Reload from Supabase
     await fetchTasasElToque(true);
     if (typeof renderAdminTasas === 'function') renderAdminTasas();
   } catch(e) {
@@ -5760,6 +5749,7 @@ window.addEventListener('load', function() {
   setTimeout(fetchTasasElToque, 2000);
   setInterval(fetchTasasElToque, 3600000);
 });
+
 
 
 </script>
