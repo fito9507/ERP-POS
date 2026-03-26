@@ -1808,7 +1808,7 @@ function renderProds(){
   }).map(p=>{
     const pr=getP(p);if(!pr)return'';
     const stk=stkDisp(p);const ns=stk<=0;
-    const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m),dFor(m))} ${m}</div>`:'';
+    const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
     return `<button class="pb${ns?' no-stk':''}" onclick="${ns?'':` addCart('${p.n}')`}">
       <div class="pbn">${p.n}</div><div class="pbp">${fN(pr)} USD</div>${alt}
       <div class="pbs">${ns?'Sin stock':'Stk:'+stk}</div>
@@ -1860,9 +1860,9 @@ function renderCartCtx(){
 function renderCartTotalsOnly(){
   const m=S.cartMon;
   const totUSD=S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0);
-  const elM=document.getElementById('cart-tot-main');if(elM)elM.textContent=fN(fromUSD(totUSD,m),dFor(m))+' '+m;
+  const elM=document.getElementById('cart-tot-main');if(elM)elM.textContent=fN(fromUSD(totUSD,m,S.alm),dFor(m))+' '+m;
   const elA=document.getElementById('cart-tot-alts');
-  if(elA)elA.innerHTML=MONEDAS.filter(x=>x!==m).map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x),dFor(x))} ${x}</span>`).join('');
+  if(elA)elA.innerHTML=MONEDAS.filter(x=>x!==m).map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x,S.alm),dFor(x))} ${x}</span>`).join('');
 }
 function renderCart(){
   const el=document.getElementById('cart-list');if(!el)return;
@@ -1875,10 +1875,10 @@ function renderCart(){
   let totUSD=0;
   el.innerHTML=S.cart.map((c,i)=>{
     const subUSD=c.precioUSD*c.q;totUSD+=subUSD;
-    const subMon=fromUSD(subUSD,m);
-    const precMon=fromUSD(c.precioUSD,m);
+    const subMon=fromUSD(subUSD,m,S.alm);
+    const precMon=fromUSD(c.precioUSD,m,S.alm);
     const altMon=m==='USD'?'CUP':'USD';
-    const altVal=m==='USD'?fromUSD(subUSD,'CUP'):subUSD;
+    const altVal=m==='USD'?fromUSD(subUSD,'CUP',S.alm):subUSD;
     const stk=stkDisp(PRODS.find(x=>x.n===c.n)||{stk:9999});
     const tipoCls=c.tipo==='Mayorista'?'ba':'bb';
     return `<div class="cart-item">
@@ -1922,9 +1922,9 @@ function renderCart(){
 
     </div>`;
   }).join('');
-  document.getElementById('cart-tot-main').textContent=fN(fromUSD(totUSD,m),dFor(m))+' '+m;
+  document.getElementById('cart-tot-main').textContent=fN(fromUSD(totUSD,m,S.alm),dFor(m))+' '+m;
   document.getElementById('cart-tot-alts').innerHTML=MONEDAS.filter(x=>x!==m)
-    .map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x),dFor(x))} ${x}</span>`).join('');
+    .map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x,S.alm),dFor(x))} ${x}</span>`).join('');
 }
 function reservar(){
   if(!S.cart.length)return;
@@ -2154,7 +2154,7 @@ function confirmar(){
     +'</span></div>'
     +'<div class="res-line"><span>Total</span><strong>'+fN(totalUSD)+' USD</strong></div>'
     +'<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'
-    +MONEDAS.filter(function(m){return m!=='USD';}).map(function(m){return fN(fromUSD(totalUSD,m),dFor(m))+' '+m;}).join(' · ')
+    +MONEDAS.filter(function(m){return m!=='USD';}).map(function(m){return fN(fromUSD(totalUSD,m,S.alm),dFor(m))+' '+m;}).join(' · ')
     +'</span></div>'
     +'<div class="res-line"><span>Cobrado</span><span>'+cobDesc+'</span></div>'
     +(vueltoDesc?'<div class="res-line"><span>Vuelto</span><span>'+vueltoDesc+'</span></div>':'')
@@ -5909,6 +5909,7 @@ function _updMovAlmDest() {
 
 </script>
 <script>
+
 function _closeVentaModal(){
   var mo=document.getElementById('venta-detail-modal');
   if(mo) mo.style.display='none';
@@ -5925,7 +5926,7 @@ function buildReceiptHtml(v){
   h+='<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+v.vend+' &middot; '+v.alm+' &middot; '+(v.cli||'Walk-in')+'</div>';
   h+='<div class="res-line"><span>Productos</span><span style="text-align:right;font-size:12px;line-height:1.7">'+v.prods.split(', ').join('<br>')+'</span></div>';
   h+='<div class="res-line"><span>Total</span><strong>'+fN(v.totalUSD)+' USD</strong></div>';
-  h+='<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'+['EUR','CUP','CUPT'].map(function(m){return fN(fromUSD(v.totalUSD,m),dFor(m))+' '+m;}).join(' &middot; ')+'</span></div>';
+  h+='<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'+['EUR','CUP','CUPT'].map(function(m){return fN(fromUSD(v.totalUSD,m,v.alm),dFor(m))+' '+m;}).join(' &middot; ')+'</span></div>';
   h+='<div class="res-line"><span>Cobrado</span><span>'+cobDesc+'</span></div>';
   if(vueltoDesc) h+='<div class="res-line"><span>Vuelto</span><span>'+vueltoDesc+'</span></div>';
   if(ck.length){
@@ -5960,6 +5961,7 @@ function verVenta(id){
     +'</div>';
   mo.style.display='flex';
 }
+
 
 </script>
 
