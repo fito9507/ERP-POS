@@ -5697,11 +5697,12 @@ async function fetchElToqueAndSave() {
   try {
     showToast('⏳ Consultando elToque...');
     var r = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/update-tasas', {
-      method: 'GET',
+      method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + SUPA_KEY,
         'Content-Type': 'application/json'
-      }
+      },
+      body: '{}'
     });
     if (!r.ok) { showToast('Error: ' + r.status); return; }
     var data = await r.json();
