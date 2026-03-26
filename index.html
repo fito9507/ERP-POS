@@ -3745,6 +3745,7 @@ renderColores();renderLista();
 
 
 
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -3811,7 +3812,8 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'productos' ? ' act' : '') + '" onclick="setAdminTab(\'productos\')">📦 Productos y Stock</button>'
     + '<button class="adm-tab' + (adminTab === 'usuarios'   ? ' act' : '') + '" onclick="setAdminTab(\'usuarios\')">👤 Usuarios</button>'
     + '<button class="adm-tab' + (adminTab === 'categorias' ? ' act' : '') + '" onclick="setAdminTab(\'categorias\')">🏷️ Categorías</button>'
-    + '<button class="adm-tab' + (adminTab === 'tasas' ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
+    + '<button class="adm-tab' + (adminTab === 'tasas'  ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
+    + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -4492,6 +4494,336 @@ function _updEurUsd() {
   var adj  = parseFloat(document.getElementById('eurusd-adj')?.value||'0');
   var fin  = document.getElementById('eurusd-fin');
   if(fin) fin.textContent = fN(parseFloat((auto+adj).toFixed(2)),2);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO CAJAS ADMIN
+// ═══════════════════════════════════════════════════════════════
+var _cajasData = [];   // loaded from Supabase
+var _cajasMovs = [];   // loaded from Supabase
+var _cajasTab  = 'movimiento'; // 'movimiento' | 'historial' | 'gestionar'
+
+async function loadCajasData() {
+  try {
+    var rc = await supaReq('GET', 'cajas?order=almacen.asc,moneda.asc&activa=eq.true');
+    if (rc.ok) _cajasData = await rc.json() || [];
+    var rm = await supaReq('GET', 'mov_cajas?order=created_at.desc&limit=200');
+    if (rm.ok) _cajasMovs = await rm.json() || [];
+  } catch(e) { console.warn('loadCajasData:', e); }
+}
+
+async function renderAdminCajas() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Cargando cajas...</div>';
+  await loadCajasData();
+
+  var tabs = '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
+    + ['movimiento','historial','gestionar'].map(function(t){
+        var labels = {movimiento:'➕ Nuevo movimiento', historial:'📋 Historial', gestionar:'⚙️ Gestionar cajas'};
+        return '<button class="adm-tab'+(_cajasTab===t?' act':'')+'" onclick="_setCajasTab(\''+t+'\')">'+labels[t]+'</button>';
+      }).join('')
+    + '</div>';
+
+  var content = '';
+  if (_cajasTab === 'movimiento') content = _renderNuevoMovCaja();
+  else if (_cajasTab === 'historial') content = _renderHistorialMovCajas();
+  else content = _renderGestionarCajas();
+
+  el.innerHTML = tabs + content;
+}
+
+function _setCajasTab(tab) {
+  _cajasTab = tab;
+  renderAdminCajas();
+}
+
+function _getCajaNombres() {
+  return _cajasData.length ? _cajasData.map(function(c){return c.nombre;}) :
+    Object.keys(CUENTAS_BASE || {});
+}
+
+function _getMonedaFromCaja(nombre) {
+  var c = _cajasData.find(function(x){return x.nombre===nombre;});
+  return c ? c.moneda : (nombre.split(' ')[0] || 'USD');
+}
+
+function _getTasaDefault(monOrig, monDest) {
+  // Returns the rate to convert 1 unit of monOrig to monDest
+  if (monOrig === monDest) return 1;
+  // To CUP
+  if (monDest === 'CUP') {
+    if (monOrig === 'USD') return RATES.CUP;
+    if (monOrig === 'EUR') return parseFloat((RATES.CUP/RATES.EUR).toFixed(2));
+    if (monOrig === 'CUPT') return RATES.CUPT;
+  }
+  // From CUP
+  if (monOrig === 'CUP') {
+    if (monDest === 'USD') return parseFloat((1/RATES.CUP).toFixed(6));
+    if (monDest === 'EUR') return parseFloat((RATES.EUR/RATES.CUP).toFixed(6));
+  }
+  // USD <> EUR
+  if (monOrig === 'USD' && monDest === 'EUR') return RATES.EUR;
+  if (monOrig === 'EUR' && monDest === 'USD') return parseFloat((1/RATES.EUR).toFixed(4));
+  return 1;
+}
+
+function _renderNuevoMovCaja() {
+  var cajas = _getCajaNombres();
+  var opts  = cajas.map(function(n){return '<option>'+n+'</option>';}).join('');
+  var bS    = 'width:36px;height:36px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:16px';
+
+  return '<div class="card" style="max-width:560px">'
+    + '<div style="display:grid;gap:12px">'
+    // Tipo
+    + '<div><label class="adm-lbl-f">Tipo de movimiento</label>'
+    + '<select class="adm-inp" id="mc-tipo" onchange="_onMcTipoChange()">'
+    + '<option value="transferencia">🔄 Transferencia (entre cajas)</option>'
+    + '<option value="cambio">💱 Cambio de divisa</option>'
+    + '<option value="deposito">📥 Depósito externo</option>'
+    + '<option value="retiro">📤 Retiro</option>'
+    + '</select></div>'
+    // Caja origen
+    + '<div id="mc-origen-wrap"><label class="adm-lbl-f" id="mc-origen-lbl">Caja origen</label>'
+    + '<select class="adm-inp" id="mc-origen" onchange="_onMcCajaChange()">'+opts+'</select></div>'
+    // Caja destino
+    + '<div id="mc-destino-wrap"><label class="adm-lbl-f">Caja destino</label>'
+    + '<select class="adm-inp" id="mc-destino" onchange="_onMcCajaChange()">'+opts+'</select></div>'
+    // Monto origen
+    + '<div><label class="adm-lbl-f" id="mc-monto-lbl">Monto</label>'
+    + '<div style="display:flex;align-items:center;gap:8px">'
+    + '<input class="adm-inp" type="number" id="mc-monto" step="0.01" oninput="_calcMcDestino()" style="flex:1">'
+    + '<span id="mc-mon-orig" style="font-size:13px;font-weight:600;min-width:40px">USD</span>'
+    + '</div></div>'
+    // Tasa
+    + '<div id="mc-tasa-wrap"><label class="adm-lbl-f">Tasa de cambio <span style="font-size:10px;color:var(--color-text-tertiary)" id="mc-tasa-hint"></span></label>'
+    + '<div style="display:flex;align-items:center;gap:6px">'
+    + '<button style="'+bS+'" onclick="var e=document.getElementById(\'mc-tasa\');e.value=(parseFloat(e.value)||0)-1;_calcMcDestino()">−</button>'
+    + '<input class="adm-inp" type="number" id="mc-tasa" step="0.01" oninput="_calcMcDestino()" style="flex:1;text-align:center">'
+    + '<button style="'+bS+'" onclick="var e=document.getElementById(\'mc-tasa\');e.value=(parseFloat(e.value)||0)+1;_calcMcDestino()">+</button>'
+    + '</div></div>'
+    // Monto destino
+    + '<div id="mc-dest-monto-wrap"><label class="adm-lbl-f">Monto destino <span id="mc-mon-dest" style="color:var(--color-text-success)"></span></label>'
+    + '<input class="adm-inp" type="number" id="mc-monto-dest" step="0.01" oninput="_onMcDestManual()" style="font-weight:600">'
+    + '</div>'
+    // Fecha y notas
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div><label class="adm-lbl-f">Fecha</label><input class="adm-inp" type="date" id="mc-fecha" value="'+today()+'"></div>'
+    + '<div><label class="adm-lbl-f">Notas</label><input class="adm-inp" type="text" id="mc-notas" placeholder="Referencia..."></div>'
+    + '</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="admRegistrarMovCaja()" style="padding:12px;font-size:14px">✓ Registrar movimiento</button>'
+    + '</div></div>';
+}
+
+function _onMcTipoChange() {
+  var tipo = document.getElementById('mc-tipo')?.value;
+  var dw = document.getElementById('mc-destino-wrap');
+  var tw = document.getElementById('mc-tasa-wrap');
+  var ddw = document.getElementById('mc-dest-monto-wrap');
+  var ol = document.getElementById('mc-origen-lbl');
+  if (!tipo) return;
+  if (tipo === 'deposito') {
+    if(dw) dw.style.display='none';
+    if(tw) tw.style.display='none';
+    if(ddw) ddw.style.display='none';
+    if(ol) ol.textContent='Caja destino';
+  } else if (tipo === 'retiro') {
+    if(dw) dw.style.display='none';
+    if(tw) tw.style.display='none';
+    if(ddw) ddw.style.display='none';
+    if(ol) ol.textContent='Caja origen';
+  } else {
+    if(dw) dw.style.display='';
+    if(tipo==='cambio') { if(tw) tw.style.display=''; if(ddw) ddw.style.display=''; }
+    else { if(tw) tw.style.display='none'; if(ddw) ddw.style.display='none'; }
+    if(ol) ol.textContent='Caja origen';
+  }
+  _onMcCajaChange();
+}
+
+function _onMcCajaChange() {
+  var tipo  = document.getElementById('mc-tipo')?.value;
+  var orig  = document.getElementById('mc-origen')?.value;
+  var dest  = document.getElementById('mc-destino')?.value;
+  var monOrig = _getMonedaFromCaja(orig);
+  var monDest = _getMonedaFromCaja(dest);
+  var moEl = document.getElementById('mc-mon-orig');
+  var mdEl = document.getElementById('mc-mon-dest');
+  if(moEl) moEl.textContent = monOrig;
+  if(mdEl) mdEl.textContent = monDest;
+  if (tipo === 'cambio') {
+    var tasa = _getTasaDefault(monOrig, monDest);
+    var tasaEl = document.getElementById('mc-tasa');
+    var hintEl = document.getElementById('mc-tasa-hint');
+    if(tasaEl) tasaEl.value = tasa;
+    if(hintEl) hintEl.textContent = '(1 '+monOrig+' = '+tasa+' '+monDest+')';
+  }
+  _calcMcDestino();
+}
+
+function _calcMcDestino() {
+  var tipo   = document.getElementById('mc-tipo')?.value;
+  var monto  = parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var tasa   = parseFloat(document.getElementById('mc-tasa')?.value)||1;
+  var destEl = document.getElementById('mc-monto-dest');
+  if (tipo === 'cambio' && destEl) {
+    destEl.value = parseFloat((monto * tasa).toFixed(2));
+  } else if (tipo === 'transferencia' && destEl) {
+    destEl.value = monto;
+  }
+}
+
+function _onMcDestManual() {
+  // If user edits dest manually, recalc tasa
+  var monto     = parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var montoDest = parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var tasaEl    = document.getElementById('mc-tasa');
+  if (monto > 0 && tasaEl) {
+    tasaEl.value = parseFloat((montoDest/monto).toFixed(6));
+    var hintEl = document.getElementById('mc-tasa-hint');
+    var orig = _getMonedaFromCaja(document.getElementById('mc-origen')?.value||'');
+    var dest = _getMonedaFromCaja(document.getElementById('mc-destino')?.value||'');
+    if(hintEl) hintEl.textContent = '(1 '+orig+' = '+tasaEl.value+' '+dest+')';
+  }
+}
+
+async function admRegistrarMovCaja() {
+  var tipo       = document.getElementById('mc-tipo')?.value;
+  var orig       = document.getElementById('mc-origen')?.value;
+  var dest       = document.getElementById('mc-destino')?.value;
+  var monto      = parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var montoDest  = parseFloat(document.getElementById('mc-monto-dest')?.value)||monto;
+  var tasa       = parseFloat(document.getElementById('mc-tasa')?.value)||null;
+  var fecha      = document.getElementById('mc-fecha')?.value || today();
+  var notas      = document.getElementById('mc-notas')?.value || '';
+  var usuario    = (typeof S!=='undefined'&&S.user)||'Admin';
+
+  if (!monto) { showToast('Introduce el monto'); return; }
+
+  var row = {
+    tipo:          tipo,
+    caja_origen:   (tipo==='deposito') ? null : orig,
+    caja_destino:  (tipo==='retiro')   ? null : (tipo==='deposito'?orig:dest),
+    monto_origen:  monto,
+    monto_destino: (tipo==='transferencia')?monto:(tipo==='cambio'?montoDest:(tipo==='deposito'?monto:monto)),
+    tasa_usada:    tasa,
+    fecha:         fecha,
+    notas:         notas,
+    usuario:       usuario
+  };
+
+  // Update CUENTAS_BASE locally
+  var monOrig = _getMonedaFromCaja(row.caja_origen||'');
+  var monDest = _getMonedaFromCaja(row.caja_destino||'');
+  if (row.caja_origen && CUENTAS_BASE[row.caja_origen]) {
+    CUENTAS_BASE[row.caja_origen].ingV = (CUENTAS_BASE[row.caja_origen].ingV||0) - monto;
+  }
+  if (row.caja_destino && CUENTAS_BASE[row.caja_destino]) {
+    CUENTAS_BASE[row.caja_destino].ingV = (CUENTAS_BASE[row.caja_destino].ingV||0) + row.monto_destino;
+  }
+
+  if (_supaOnline) {
+    var r = await supaReq('POST', 'mov_cajas', row);
+    if (r.ok) {
+      showToast('✓ Movimiento registrado');
+      _cajasMovs.unshift(row);
+      // Reset form
+      ['mc-monto','mc-monto-dest','mc-notas'].forEach(function(id){
+        var e=document.getElementById(id); if(e) e.value='';
+      });
+    } else {
+      showToast('Error al guardar');
+    }
+  } else {
+    showToast('✓ Guardado localmente (sin conexión)');
+  }
+}
+
+function _renderHistorialMovCajas() {
+  if (!_cajasMovs.length) {
+    return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos registrados</div>';
+  }
+  var tipoIcon = {transferencia:'🔄',cambio:'💱',deposito:'📥',retiro:'📤'};
+  var tipoColor = {transferencia:'var(--color-text-info)',cambio:'var(--color-text-warning)',deposito:'var(--color-text-success)',retiro:'var(--color-text-danger)'};
+
+  return '<div style="display:flex;flex-direction:column;gap:8px">'
+    + _cajasMovs.slice(0,100).map(function(m){
+        return '<div class="card" style="padding:10px 14px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<span style="font-size:18px">'+tipoIcon[m.tipo]+'</span>'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:600;color:'+tipoColor[m.tipo]+'">'+m.tipo.charAt(0).toUpperCase()+m.tipo.slice(1)+'</div>'
+          + '<div style="font-size:11px;color:var(--color-text-secondary)">'
+          + (m.caja_origen?m.caja_origen:'—')
+          + (m.caja_destino?' → '+m.caja_destino:'')
+          + '</div>'
+          + (m.notas?'<div style="font-size:11px;color:var(--color-text-tertiary)">📝 '+m.notas+'</div>':'')
+          + '</div></div>'
+          + '<div style="text-align:right;flex-shrink:0">'
+          + '<div style="font-size:14px;font-weight:700">'+fN(m.monto_origen,2)
+          + (m.tipo==='cambio'?' → '+fN(m.monto_destino,2):'')+'</div>'
+          + (m.tasa_usada?'<div style="font-size:10px;color:var(--color-text-tertiary)">tasa: '+m.tasa_usada+'</div>':'')
+          + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+(m.fecha||'')+(m.usuario?' · '+m.usuario:'')+'</div>'
+          + '</div></div></div>';
+      }).join('')
+    + '</div>';
+}
+
+function _renderGestionarCajas() {
+  var cajas = _cajasData;
+  return '<div>'
+    + '<div class="card" style="margin-bottom:12px">'
+    + '<h3 style="margin-bottom:12px">➕ Nueva caja</h3>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">'
+    + '<div><label class="adm-lbl-f">Nombre</label><input class="adm-inp" id="nc-nombre" placeholder="Ej: USD Oficina"></div>'
+    + '<div><label class="adm-lbl-f">Moneda</label><select class="adm-inp" id="nc-moneda"><option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option></select></div>'
+    + '<div><label class="adm-lbl-f">Almacén</label><select class="adm-inp" id="nc-almacen"><option>Habana</option><option>Placetas</option><option>Xportprise</option><option>General</option></select></div>'
+    + '</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="admCrearCaja()">Crear caja</button>'
+    + '</div>'
+    + '<div class="card">'
+    + '<h3 style="margin-bottom:12px">Cajas activas</h3>'
+    + '<div style="display:flex;flex-direction:column;gap:6px">'
+    + cajas.map(function(c){
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+          + '<div>'
+          + '<span style="font-weight:500">'+c.nombre+'</span>'
+          + '<span style="margin-left:8px;font-size:11px;color:var(--color-text-tertiary)">'+c.moneda+' · '+c.almacen+'</span>'
+          + '</div>'
+          + '<button class="btn-sm" onclick="admDesactivarCaja('+c.id+')" style="color:var(--color-text-danger)">Archivar</button>'
+          + '</div>';
+      }).join('')
+    + '</div></div></div>';
+}
+
+async function admCrearCaja() {
+  var nombre  = document.getElementById('nc-nombre')?.value.trim();
+  var moneda  = document.getElementById('nc-moneda')?.value;
+  var almacen = document.getElementById('nc-almacen')?.value;
+  if (!nombre) { showToast('Introduce el nombre'); return; }
+  if (_supaOnline) {
+    var r = await supaReq('POST', 'cajas', {nombre:nombre, moneda:moneda, almacen:almacen, activa:true});
+    if (r.ok) {
+      showToast('✓ Caja creada: ' + nombre);
+      // Add to CUENTAS_BASE
+      CUENTAS_BASE[nombre] = {ingV:0, ingIG:0, gasIG:0, mon:moneda};
+      await loadCajasData();
+      renderAdminCajas();
+    } else {
+      var err = await r.text();
+      showToast('Error: ' + (err.includes('unique')? 'Ya existe una caja con ese nombre' : err));
+    }
+  } else { showToast('Sin conexión'); }
+}
+
+async function admDesactivarCaja(id) {
+  if (!confirm('¿Archivar esta caja?')) return;
+  if (_supaOnline) {
+    var r = await supaReq('PATCH', 'cajas?id=eq.'+id, {activa:false});
+    if (r.ok) { showToast('Caja archivada'); await loadCajasData(); renderAdminCajas(); }
+  }
 }
 
 </script>
