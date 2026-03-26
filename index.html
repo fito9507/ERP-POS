@@ -1176,10 +1176,23 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <script>
 
+
 // ═══ SHARED GLOBALS ═══
 const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
+var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
+var RATES_EURUSD=0;
 function toUSD(m,mon){return mon==='USD'?m:m/RATES[mon];}
-function fromUSD(u,mon){return mon==='USD'?u:u*RATES[mon];}
+function fromUSD(u,mon,alm){
+  if(mon==='USD') return u;
+  var almAdj=alm&&RATES_ALM[alm]&&RATES_ALM[alm][mon==='CUPT'?'MLC':mon]?RATES_ALM[alm][mon==='CUPT'?'MLC':mon]:0;
+  if(mon==='CUP') return parseFloat((u*(RATES.CUP+almAdj)).toFixed(0));
+  if(mon==='CUPT') return parseFloat((u*(RATES.CUPT+almAdj)).toFixed(0));
+  if(mon==='EUR'){
+    var eurCup=RATES.CUP/RATES.EUR;
+    return parseFloat((u*(RATES.CUP/(eurCup+almAdj))).toFixed(2));
+  }
+  return u*RATES[mon];
+}
 function fN(n,d=2){if(n==null||isNaN(n))return'—';return parseFloat(n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function dFor(m){return m==='CUP'||m==='CUPT'?0:2;}
 
@@ -1207,8 +1220,10 @@ function _dRender(fn, delay) {
   _renderTimers[key] = setTimeout(function() { fn(); }, delay);
 }
 
+
 </script>
 <script>
+
 
 
 
@@ -1513,6 +1528,17 @@ async function supaInit() {
     (function(){var _d=document.getElementById('sync-dot'),_l=document.getElementById('sync-lbl');if(_d)_d.style.background='#fbbf24';if(_l)_l.textContent='⏳ Sincronizando...';})();
     await flushQueue();
     var [okP, okV] = await Promise.all([syncLoadProductos(), syncLoadVentas()]);
+  try{
+    var ra=await supaReq('GET','tasas_almacen?select=almacen,moneda,ajuste');
+    if(ra.ok){(await ra.json()||[]).forEach(function(r){
+      if(!RATES_ALM[r.almacen])RATES_ALM[r.almacen]={};
+      RATES_ALM[r.almacen][r.moneda]=parseFloat(r.ajuste||0);
+    });}
+  }catch(e){}
+  try{
+    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.EURUSD');
+    if(reu.ok){var reud=await reu.json();if(reud&&reud[0])RATES_EURUSD=parseFloat(reud[0].valor);}
+  }catch(e){}
     if (okV || okP) {
       _supaOnline = true; updOnlineDot();
       offlineSaveVentas(); offlineSaveProds(); offlineSaveClientes();
@@ -1550,6 +1576,7 @@ async function supaInit() {
     }
   }, 30000);
 }
+
 
 
 
@@ -3712,6 +3739,7 @@ renderColores();renderLista();
 
 
 
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -4247,6 +4275,13 @@ function renderAdminTasas() {
     + _tasaRow('EUR / CUP', mEUR,  'CUP por 1 EUR',  'eur',  aEUR,  mEUR  + aEUR)
     + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
+    + '<div class="card" style="margin-top:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:10px">EUR / USD <span style="font-size:11px;color:var(--color-text-tertiary)">(auto: '+fN(parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)),2)+')</span></div>'
+    + '<input type="number" id="tadj-eurusd" value="'+(RATES_EURUSD>0?RATES_EURUSD:parseFloat((RATES.CUP/(RATES.CUP/RATES.EUR)).toFixed(2)))+'" step="0.01" style="width:120px;text-align:center;font-size:18px;font-weight:600;height:40px">'
+    + '</div>'
+    + '<h3 style="margin:16px 0 10px">Ajustes por almacén</h3>'
+    + _renderAlmAdjTable()
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarAjustesAlm()" style="width:100%;padding:10px;margin-top:8px">💾 Guardar ajustes almacén</button>'
     + '</div>';
 }
 
@@ -4333,6 +4368,55 @@ function admGuardarTasas() {
 
 
 
+
+
+function _renderAlmAdjTable() {
+  var alms = ['Habana','Placetas','Xportprise'];
+  var mons = ['USD','EUR','MLC'];
+  var h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    + '<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--color-text-tertiary)">Almacén</th>'
+    + mons.map(function(m){return '<th style="text-align:center;padding:6px 8px;color:var(--color-text-tertiary)">+/- '+m+'/CUP</th>';}).join('')
+    + '</tr></thead><tbody>';
+  alms.forEach(function(alm){
+    h += '<tr><td style="padding:6px 8px;font-weight:500">'+alm+'</td>';
+    mons.forEach(function(mon){
+      var val=(RATES_ALM[alm]&&RATES_ALM[alm][mon])||0;
+      h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+val+'" step="1" style="width:80px;text-align:center;font-size:14px;height:36px"></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+async function admGuardarAjustesAlm() {
+  var alms=['Habana','Placetas','Xportprise'], mons=['USD','EUR','MLC'];
+  var rows=[];
+  alms.forEach(function(alm){
+    mons.forEach(function(mon){
+      var el=document.getElementById('alm-adj-'+alm+'-'+mon);
+      var adj=el?parseFloat(el.value)||0:0;
+      if(!RATES_ALM[alm])RATES_ALM[alm]={};
+      RATES_ALM[alm][mon]=adj;
+      rows.push({almacen:alm,moneda:mon,ajuste:adj});
+    });
+  });
+  var euEl=document.getElementById('tadj-eurusd');
+  if(euEl){
+    RATES_EURUSD=parseFloat(euEl.value)||0;
+    try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){}
+    if(_supaOnline) supaReq('POST','tasas?on_conflict=moneda',{moneda:'EURUSD',valor:RATES_EURUSD,tasa_mkt:RATES_EURUSD,ajuste:0}).catch(function(e){});
+  }
+  if(_supaOnline){
+    for(var i=0;i<rows.length;i++){
+      await supaReq('POST','tasas_almacen?on_conflict=almacen,moneda',rows[i]).catch(function(e){console.warn(e);});
+    }
+    showToast('Ajustes por almacén guardados');
+  } else {
+    try{localStorage.setItem('erp_rates_alm',JSON.stringify(RATES_ALM));}catch(e){}
+    showToast('Ajustes guardados localmente');
+  }
+}
 
 </script>
 
