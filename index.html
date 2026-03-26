@@ -2769,6 +2769,7 @@ function renderMiCaja() {
 
 
 
+
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
 const CUENTAS_BASE={
   'USD Habana':{ingV:99432.52,ingIG:42197.04,gasIG:145468.60,mon:'USD'},
@@ -3003,53 +3004,78 @@ function eliminar(id){
 
 // ── CAJAS ─────────────────────────────────────────────────
 function renderCajas(){
-  const RATES_USD={USD:1,EUR:1/RATES.EUR,CUP:1/RATES.CUP,CUPT:1/RATES.CUPT};
-  // Filter cajas by user almacen (admin sees all)
   var isAdmin = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
-  var userAlm  = typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
-  var entries  = Object.entries(CUENTAS_BASE).filter(function(e){
-    if(isAdmin||!userAlm) return true;
-    // Vendedor: show only cajas that contain their almacen name
-    return e[0].indexOf(userAlm)>=0;
+  var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+
+  // Use shared _cajasData from Admin module if available, else fallback to CUENTAS_BASE
+  var cajas = [];
+  var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    // Use Supabase cajas with calculated saldos
+    cajas = _cajasData
+      .filter(function(c){ return isAdmin || !userAlm || c.almacen === userAlm; })
+      .map(function(c){
+        var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+        var equivUSD = saldo * (RATES_USD[c.moneda]||1);
+        return { cta:c.nombre, mon:c.moneda, almacen:c.almacen, saldo:saldo, equivUSD:equivUSD };
+      });
+  } else {
+    // Fallback: CUENTAS_BASE + MOVS
+    var entries = Object.entries(CUENTAS_BASE).filter(function(e){
+      if(isAdmin||!userAlm) return true;
+      return e[0].indexOf(userAlm)>=0;
+    });
+    cajas = entries.map(function(entry){
+      var cta=entry[0], v=entry[1];
+      var igIng=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='ingreso';}).reduce(function(a,m){return a+m.monto;},0);
+      var igGas=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='gasto';}).reduce(function(a,m){return a+m.monto;},0);
+      var saldo=(v.ingV||0)+(v.ingIG||0)+igIng-(v.gasIG||0)-igGas;
+      var equivUSD=saldo*(RATES_USD[v.mon]||1);
+      return {cta:cta, mon:v.mon, almacen:'', saldo:saldo, equivUSD:equivUSD};
+    });
+  }
+
+  // Load from Supabase if not loaded yet
+  if (typeof _cajasData !== 'undefined' && !_cajasData.length && _supaOnline) {
+    loadCajasData && loadCajasData().then(function(){ renderCajas(); });
+  }
+
+  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
+  var maxAbs = Math.max.apply(null, cajas.map(function(c){return Math.abs(c.saldo);})||[1]);
+  if (maxAbs===0) maxAbs=1;
+
+  // Group by almacen
+  var byAlm = {};
+  cajas.forEach(function(c){
+    var k = c.almacen||'General';
+    if(!byAlm[k]) byAlm[k]=[];
+    byAlm[k].push(c);
   });
-  const cajas=entries.map(([cta,v])=>{
-    // sumar movimientos I/G
-    const igIng=MOVS.filter(m=>m.cta===cta&&m.sentido==='ingreso').reduce((a,m)=>a+m.monto,0);
-    const igGas=MOVS.filter(m=>m.cta===cta&&m.sentido==='gasto').reduce((a,m)=>a+m.monto,0);
-    const saldo=(v.ingV||0)+(v.ingIG||0)+igIng-(v.gasIG||0)-igGas;
-    const equivUSD=saldo*RATES_USD[v.mon];
-    return{cta,mon:v.mon,ingV:v.ingV,ingIG:v.ingIG+igIng,gasIG:v.gasIG+igGas,saldo,equivUSD};
+
+  var html = '';
+  Object.keys(byAlm).forEach(function(alm){
+    if (Object.keys(byAlm).length > 1) {
+      html += '<div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;padding:0 4px">'+alm+'</div>';
+    }
+    html += byAlm[alm].map(function(c){
+      var pos = c.saldo >= 0;
+      var pct = Math.min(100, Math.round(Math.abs(c.saldo)/maxAbs*100));
+      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.mon]||'';
+      return '<div class="caja-card">'
+        + '<div class="caja-name">'+c.cta+'</div>'
+        + '<div class="caja-saldo" style="color:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'">'+monIcon+' '+fN(c.saldo,2)+' '+c.mon+'</div>'
+        + '<div class="caja-bar-bg"><div class="caja-bar" style="width:'+pct+'%;background:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'"></div></div>'
+        + '<div class="caja-equiv">≈ '+fN(c.equivUSD,2)+' USD</div>'
+        + '</div>';
+    }).join('');
   });
-  const totUSD=cajas.reduce((a,c)=>a+c.equivUSD,0);
-  // grid de tarjetas
-  const maxAbs=Math.max(...cajas.map(c=>Math.abs(c.saldo)),1);
-  document.getElementById('cajas-grid').innerHTML=cajas.map(c=>{
-    const pos=c.saldo>=0;
-    const pct=Math.min(100,Math.round(Math.abs(c.saldo)/maxAbs*100));
-    return `<div class="caja-card">
-      <div class="caja-name">${c.cta}</div>
-      <div class="caja-saldo" style="color:${pos?'var(--color-text-success)':'var(--color-text-danger)'}">
-        ${c.saldo>=0?'':'-'}${fN(Math.abs(c.saldo),c.mon==='CUP'||c.mon==='CUPT'?0:2)} ${c.mon}
-      </div>
-      <div class="caja-sub">≈ ${fN(c.equivUSD)} USD</div>
-      <div class="caja-bar"><div class="caja-bar-fill" style="width:${pct}%;background:${pos?'var(--color-text-success)':'var(--color-text-danger)'}"></div></div>
-    </div>`;
-  }).join('');
-  // tabla detalle
-  document.getElementById('cajas-table').innerHTML=cajas.map(c=>`<tr>
-    <td style="font-weight:500">${c.cta}</td>
-    <td style="text-align:right;color:var(--color-text-success)">${fN(c.ingV,c.mon==='CUP'?0:2)}</td>
-    <td style="text-align:right;color:var(--color-text-success)">${fN(c.ingIG,c.mon==='CUP'?0:2)}</td>
-    <td style="text-align:right;color:var(--color-text-danger)">${fN(c.gasIG,c.mon==='CUP'?0:2)}</td>
-    <td style="text-align:right;font-weight:500;color:${c.saldo>=0?'var(--color-text-success)':'var(--color-text-danger)'}">
-      ${fN(c.saldo,c.mon==='CUP'?0:2)} ${c.mon}
-    </td>
-    <td style="text-align:right">${fN(c.equivUSD)}</td>
-  </tr>`).join('');
-  document.getElementById('cajas-foot').innerHTML=`<tr class="sum-row">
-    <td colspan="5">Total equiv. USD</td>
-    <td style="text-align:right;color:${totUSD>=0?'var(--color-text-success)':'var(--color-text-danger)'}"><strong>${fN(totUSD)}</strong></td>
-  </tr>`;
+
+  var el = document.getElementById('cajas-grid');
+  if (el) el.innerHTML = html;
+
+  var totEl = document.getElementById('cajas-total');
+  if (totEl) totEl.innerHTML = 'Total <span style="color:var(--color-text-success);font-weight:700">'+fN(totUSD,2)+' USD</span>';
 }
 
 // ── DEUDAS ────────────────────────────────────────────────
@@ -3139,6 +3165,7 @@ function renderGestionCajasWrap() {
   }
   if (typeof renderGestionCajas === 'function') renderGestionCajas();
 }
+
 
 
 </script>
@@ -3746,6 +3773,8 @@ renderColores();renderLista();
 
 
 
+
+
 var CATS = JSON.parse(localStorage.getItem('erp_cats')||'["Chapas","Perfiles","Soldadura","Accesorios"]');
 function saveCats(){try{localStorage.setItem('erp_cats',JSON.stringify(CATS));}catch(e){}}
 
@@ -3829,9 +3858,10 @@ function setAdminTab(tab) {
 }
 
 function renderAdminContent() {
-  if (adminTab === 'productos') renderAdminProductos();
-  else if (adminTab === 'usuarios') renderAdminUsuarios();
-  else if (adminTab === 'tasas') renderAdminTasas();
+  if      (adminTab === 'productos') renderAdminProductos();
+  else if (adminTab === 'usuarios')  renderAdminUsuarios();
+  else if (adminTab === 'tasas')     renderAdminTasas();
+  else if (adminTab === 'cajas')     renderAdminCajas();
   else if (adminTab === 'categorias') {
     var el=document.getElementById('admin-content');if(!el)return;
     el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:12px">🏷️ Categorías</div><div id="cat-manager-content"></div>';
@@ -4862,6 +4892,8 @@ async function admDesactivarCaja(id) {
     if (r.ok) { _cajasData=_cajasData.filter(function(c){return c.id!=id;}); showToast('Caja archivada'); renderAdminCajas(); }
   }
 }
+
+
 
 </script> admin data on page load
   if(typeof adminInit==='function'){try{adminInit();}catch(e){}}
