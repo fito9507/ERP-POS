@@ -2770,7 +2770,6 @@ function renderMiCaja() {
 
 
 
-
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
 const CUENTAS_BASE={
   'USD Habana':{ingV:99432.52,ingIG:42197.04,gasIG:145468.60,mon:'USD'},
@@ -3007,78 +3006,76 @@ function eliminar(id){
 function renderCajas(){
   var isAdmin = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+
+  // Use shared _cajasData from Admin module if available, else fallback to CUENTAS_BASE
+  var cajas = [];
   var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
 
-  // Load cajas
-  var cajas = [];
   if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    // Use Supabase cajas with calculated saldos
     cajas = _cajasData
-      .filter(function(c){ return c.activa && (isAdmin || !userAlm || c.almacen === userAlm); })
+      .filter(function(c){ return isAdmin || !userAlm || c.almacen === userAlm; })
       .map(function(c){
-        var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
-        return { cta:c.nombre, mon:c.moneda, almacen:c.almacen||'General', saldo:saldo, equivUSD:saldo*(RATES_USD[c.moneda]||1) };
+        var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+        var equivUSD = saldo * (RATES_USD[c.moneda]||1);
+        return { cta:c.nombre, mon:c.moneda, almacen:c.almacen, saldo:saldo, equivUSD:equivUSD };
       });
   } else {
-    // Fallback CUENTAS_BASE
-    cajas = Object.entries(CUENTAS_BASE).filter(function(e){
-      return isAdmin||!userAlm||e[0].indexOf(userAlm)>=0;
-    }).map(function(entry){
+    // Fallback: CUENTAS_BASE + MOVS
+    var entries = Object.entries(CUENTAS_BASE).filter(function(e){
+      if(isAdmin||!userAlm) return true;
+      return e[0].indexOf(userAlm)>=0;
+    });
+    cajas = entries.map(function(entry){
       var cta=entry[0], v=entry[1];
       var igIng=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='ingreso';}).reduce(function(a,m){return a+m.monto;},0);
       var igGas=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='gasto';}).reduce(function(a,m){return a+m.monto;},0);
       var saldo=(v.ingV||0)+(v.ingIG||0)+igIng-(v.gasIG||0)-igGas;
-      return {cta:cta, mon:v.mon, almacen:cta.split(' ').slice(1).join(' ')||'General', saldo:saldo, equivUSD:saldo*(RATES_USD[v.mon]||1)};
+      var equivUSD=saldo*(RATES_USD[v.mon]||1);
+      return {cta:cta, mon:v.mon, almacen:'', saldo:saldo, equivUSD:equivUSD};
     });
-    if (typeof _cajasData!=='undefined' && !_cajasData.length && _supaOnline && typeof loadCajasData==='function') {
-      loadCajasData().then(function(){ renderCajas(); });
-    }
   }
 
-  // Order almacenes
-  var almOrder = ['Habana','Placetas','Xportprise','General'];
+  // Load from Supabase if not loaded yet
+  if (typeof _cajasData !== 'undefined' && !_cajasData.length && _supaOnline) {
+    loadCajasData && loadCajasData().then(function(){ renderCajas(); });
+  }
+
+  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
+  var maxAbs = Math.max.apply(null, cajas.map(function(c){return Math.abs(c.saldo);})||[1]);
+  if (maxAbs===0) maxAbs=1;
+
+  // Group by almacen
   var byAlm = {};
   cajas.forEach(function(c){
-    if(!byAlm[c.almacen]) byAlm[c.almacen]=[];
-    byAlm[c.almacen].push(c);
+    var k = c.almacen||'General';
+    if(!byAlm[k]) byAlm[k]=[];
+    byAlm[k].push(c);
   });
-
-  var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'};
-  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
 
   var html = '';
-  almOrder.concat(Object.keys(byAlm).filter(function(a){return almOrder.indexOf(a)<0;})).forEach(function(alm){
-    if (!byAlm[alm] || !byAlm[alm].length) return;
-    var almCajas = byAlm[alm];
-    var almTot = almCajas.reduce(function(a,c){return a+c.equivUSD;},0);
-    html += '<div style="margin-bottom:20px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">'
-      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+alm+'</div>'
-      + '<div style="font-size:11px;color:var(--color-text-secondary)">Total: <b>'+fN(almTot,2)+' USD</b></div>'
-      + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
-    almCajas.forEach(function(c){
+  Object.keys(byAlm).forEach(function(alm){
+    if (Object.keys(byAlm).length > 1) {
+      html += '<div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;padding:0 4px">'+alm+'</div>';
+    }
+    html += byAlm[alm].map(function(c){
       var pos = c.saldo >= 0;
-      var icon = monIcon[c.mon]||'';
-      var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      html += '<div class="card" style="padding:12px;text-align:center">'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;font-weight:500">'+c.mon+'</div>'
-        + '<div style="font-size:20px;font-weight:800;color:'+color+'">'+icon+' '+fN(c.saldo,2)+'</div>'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">≈ '+fN(c.equivUSD,2)+' USD</div>'
+      var pct = Math.min(100, Math.round(Math.abs(c.saldo)/maxAbs*100));
+      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.mon]||'';
+      return '<div class="caja-card">'
+        + '<div class="caja-name">'+c.cta+'</div>'
+        + '<div class="caja-saldo" style="color:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'">'+monIcon+' '+fN(c.saldo,2)+' '+c.mon+'</div>'
+        + '<div class="caja-bar-bg"><div class="caja-bar" style="width:'+pct+'%;background:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'"></div></div>'
+        + '<div class="caja-equiv">≈ '+fN(c.equivUSD,2)+' USD</div>'
         + '</div>';
-    });
-    html += '</div></div>';
+    }).join('');
   });
-
-  // Total general
-  html += '<div style="border-top:1px solid var(--color-border-secondary);padding-top:12px;display:flex;justify-content:space-between;align-items:center">'
-    + '<span style="font-size:13px;color:var(--color-text-secondary)">Total general</span>'
-    + '<span style="font-size:18px;font-weight:800;color:var(--color-text-success)">'+fN(totUSD,2)+' USD</span>'
-    + '</div>';
 
   var el = document.getElementById('cajas-grid');
   if (el) el.innerHTML = html;
+
   var totEl = document.getElementById('cajas-total');
-  if (totEl) totEl.innerHTML = '';
+  if (totEl) totEl.innerHTML = 'Total <span style="color:var(--color-text-success);font-weight:700">'+fN(totUSD,2)+' USD</span>';
 }
 
 // ── DEUDAS ────────────────────────────────────────────────
@@ -3168,7 +3165,6 @@ function renderGestionCajasWrap() {
   }
   if (typeof renderGestionCajas === 'function') renderGestionCajas();
 }
-
 
 
 
