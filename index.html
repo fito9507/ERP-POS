@@ -726,7 +726,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <div class="module" id="mod-ventas" style="padding:12px"><div class="wrap">
 <div class="nav" id="ven-nav">
   <button class="act" onclick="navTo_ven('ventas',this)">Registro ventas</button>
-  <button onclick="navTo_ven('comisiones',this)">Comisiones</button>
+  <button id="btn-com-nav" onclick="navTo_ven('comisiones',this)">Comisiones</button>
   <button id="btn-liq-nav" onclick="navTo_ven('liquidacion',this)">Liquidación semanal</button>
   <button id="btn-micaja-nav" onclick="navTo_ven('micaja',this)" style="display:none">💰 Mi Caja</button>
 </div>
@@ -787,12 +787,11 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <table>
       <thead><tr>
         <th style="width:28px">
-          <!-- checkbox "seleccionar todo" — puro JS, no inline onchange -->
           <input type="checkbox" id="chk-all">
         </th>
         <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
         <th>Tipo</th><th>Productos</th><th>Total USD</th><th>Moneda</th>
-        <th>% Com.</th><th>Comisión USD</th><th>Estado com.</th><th>Nota</th><th></th>
+        <th id="th-com1">% Com.</th><th id="th-com2">Comisión USD</th><th id="th-com3">Estado com.</th><th>Nota</th><th></th>
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot id="v-foot"></tfoot>
@@ -2201,7 +2200,17 @@ renderSteps(0);
 
 
 
-</script><script>
+</script>rSteps(0);
+
+('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
+  document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
+  goStep('pg-prod',2);
+}
+renderSteps(0);
+
+
+
+<script>
 (function(){
   const _pk=pinKey;
   window.pinKey=function(k){
@@ -2304,6 +2313,13 @@ function renderVentas(){
   // Show Mi Caja tab only for vendedor
   var _mc = document.getElementById('btn-micaja-nav');
   if(_mc) _mc.style.display = (typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor') ? '' : 'none';
+  var _bc = document.getElementById('btn-com-nav');
+  if(_bc) _bc.style.display = _isVendRV ? 'none' : '';
+  var _bl = document.getElementById('btn-liq-nav');
+  if(_bl) _bl.style.display = _isVendRV ? 'none' : '';
+  // Hide commission columns for vendedor
+  var _isVendRV = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVendRV?'none':'';});
 
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
@@ -2317,8 +2333,9 @@ function renderVentas(){
     <div class="metric"><div class="lbl">Venta total USD</div><div class="val">${fN(totUSD)}</div><div class="sub">${data.length} ops</div></div>
     <div class="metric"><div class="lbl">Equiv. EUR</div><div class="val">${fN(fromUSD(totUSD,'EUR'))}</div><div class="sub">equiv.</div></div>
     <div class="metric"><div class="lbl">Equiv. CUP</div><div class="val">${fN(fromUSD(totUSD,'CUP'),0)}</div><div class="sub">equiv.</div></div>
-    <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD (con com.)</div></div>
-    <div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD sin liquidar</div></div>`;
+    ${_isVendRV?'':'`+`<div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD (con com.)</div></div>
+    <div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD sin liquidar</div></div>`+`'}
+    `;
 
   document.getElementById('v-count-lbl').textContent=`Ventas filtradas — ${data.length} resultados`;
 
@@ -2335,13 +2352,7 @@ function renderVentas(){
       <td style="font-size:10px;max-width:130px;color:var(--color-text-secondary)">${v.prods}</td>
       <td style="font-weight:500;text-align:right">${fN(v.totalUSD)}</td>
       <td style="font-size:11px">${v.mon}</td>
-      <td>${v.estCom==='No aplica'
-        ?'<span style="font-size:11px;color:var(--color-text-tertiary)">—</span>'
-        :`<input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100"
-           onchange="updComPct(${v.id},this.value)" title="Editar %">&nbsp;<span style="font-size:10px;color:var(--color-text-tertiary)">%</span>`}
-      </td>
-      <td style="text-align:right;font-weight:500;color:${v.estCom==='No aplica'?'var(--color-text-tertiary)':'var(--color-text-warning)'}">${v.estCom==='No aplica'?'—':fN(v.comUSD)}</td>
-      <td>${renderEstComCell(v)}</td>
+      ${_isVendRV?'<td style="display:none"></td><td style="display:none"></td><td style="display:none"></td>':'<td>'+(v.estCom==='No aplica'?'<span style="font-size:11px;color:var(--color-text-tertiary)">—</span>':`<input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %">&nbsp;<span style="font-size:10px;color:var(--color-text-tertiary)">%</span>`)+'</td><td style="text-align:right;font-weight:500;color:'+(v.estCom==="No aplica"?"var(--color-text-tertiary)":"var(--color-text-warning)")+'">'+(v.estCom==="No aplica"?"—":fN(v.comUSD))+'</td><td>'+renderEstComCell(v)+'</td>'}
       <td style="font-size:11px;overflow:hidden;max-width:120px;color:var(--color-text-secondary)">${v.nota||''}</td>
       <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button><button class="btn-sm" onclick="eliminarV(${v.id})" style="color:var(--color-text-danger)">×</button></td>
     </tr>`).join(''):`<tr><td colspan="13" style="text-align:center;color:var(--color-text-tertiary);padding:16px">Sin resultados</td></tr>`;
@@ -4889,7 +4900,112 @@ async function admDesactivarCaja(id) {
 
 
 
-</script><script>
+</script> admin data on page load
+  if(typeof adminInit==='function'){try{adminInit();}catch(e){}}
+})();
+// ═══ MÓDULO STOCK — CONSULTA ═══
+function renderStock() {
+  const el = document.getElementById('stock-root');
+  if (!el) return;
+  // Hide movimientos panel for vendedor
+  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _movPanel = document.getElementById('stock-movs-panel');
+  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
+
+  const alms = ['Habana', 'Placetas', 'Xportprise'];
+  const userAlm = (typeof S !== 'undefined' && S.user && USERS[S.user]) ? USERS[S.user].almacen : '';
+  const isVendedor = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'vendedor';
+
+  // Build filter state
+  const q = (window._stockQ || '').toLowerCase();
+  const catF = window._stockCat || '';
+  const almF = window._stockAlm || '';
+
+  // Stats
+  const activos = PRODS.filter(p => p.activo !== false);
+  const total = activos.reduce((a, p) => a + (p.stk || 0), 0);
+  const bajos = activos.filter(p => (p.stk || 0) <= (p.stk_min || 10)).length;
+  const cats = [...new Set(activos.filter(p => p.cat).map(p => p.cat))].sort();
+
+  // Filter prods
+  const prods = activos.filter(p => {
+    if (q && !p.n.toLowerCase().includes(q)) return false;
+    if (catF && p.cat !== catF) return false;
+    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
+    return true;
+  });
+  var visAlms = almF ? [almF] : alms;
+
+  // Per-almacen totals row
+  const almTotals = alms.map(a => prods.reduce((sum, p) => sum + ((p.stk_alm && p.stk_alm[a]) || 0), 0));
+
+  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
+    + '<div class="adm-card"><div class="adm-lbl">Productos activos</div><div class="adm-val">' + activos.length + '</div></div>'
+    + '<div class="adm-card"><div class="adm-lbl">Unidades totales</div><div class="adm-val">' + fN(total, 0) + '</div></div>';
+  alms.forEach(function(a, i) {
+    const tot = activos.reduce((s, p) => s + ((p.stk_alm && p.stk_alm[a]) || 0), 0);
+    html += '<div class="adm-card"><div class="adm-lbl">' + a + '</div><div class="adm-val" style="font-size:16px">' + fN(tot, 0) + '</div></div>';
+  });
+  html += '</div>';
+
+  // Filters
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
+    + '<input class="adm-inp" id="stk-q" value="' + (window._stockQ||'') + '" placeholder="Buscar producto..." oninput="_dRender(function(){window._stockQ=document.getElementById(\'stk-q\').value;renderStock()})" style="flex:1;max-width:240px">'
+    + '<select class="adm-inp" id="stk-alm" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todos almacenes</option>'
+    + alms.map(a => '<option' + (almF === a ? ' selected' : '') + '>' + a + '</option>').join('')
+    + '</select>'
+    + '<select class="adm-inp" id="stk-cat" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todas categorías</option>'
+    + cats.map(c => '<option' + (catF === c ? ' selected' : '') + '>' + c + '</option>').join('')
+    + '</select>'
+    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">⚠ ' + bajos + ' bajo mínimo</span>' : '')
+    + '</div>';
+
+  // Table
+  html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+    + '<th>Producto</th><th>Cat.</th>'
+    + visAlms.map(a => '<th style="text-align:right">' + a + '</th>').join('')
+    + '<th style="text-align:right">Total</th>'
+    + '<th style="text-align:right">Min/May</th>'
+    + '</tr></thead><tbody>';
+
+  prods.forEach(function(p) {
+    const bajo = (p.stk || 0) <= (p.stk_min || 10);
+    var alm_vals = visAlms.map(a => (p.stk_alm && p.stk_alm[a] != null) ? p.stk_alm[a] : 0);
+    html += '<tr' + (bajo ? ' style="background:rgba(251,191,36,.07)"' : '') + '>'
+      + '<td style="font-size:12px">' + p.n + (bajo ? ' <span style="font-size:9px;color:var(--color-text-warning)">⚠</span>' : '') + '</td>'
+      + '<td style="font-size:11px;color:var(--color-text-tertiary)">' + (p.cat || '—') + '</td>'
+      + alm_vals.map(function(v, i) {
+          const isUserAlm = alms[i] === userAlm;
+          return '<td style="text-align:right;font-weight:' + (isUserAlm ? '700' : '400') + ';color:' + (v <= (p.stk_min || 10) && v > 0 ? 'var(--color-text-warning)' : v === 0 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)') + '">' + fN(v, 0) + '</td>';
+        }).join('')
+      + '<td style="text-align:right;font-weight:600">' + fN(p.stk || 0, 0) + '</td>'
+      + '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'
+        + (p.min != null ? fN(p.min) : '—') + ' / ' + (p.maj != null ? fN(p.maj) : '—')
+      + '</td>'
+      + '</tr>';
+  });
+
+  if (!prods.length) {
+    html += '<tr><td colspan="' + (visAlms.length + 4) + '" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
+  }
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+
+  // Render movements panel
+  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}}
+
+
+
+
+ntos();}catch(e){}}
+
+
+
+
+<script>
 
 // ═══ MÓDULO BACKUP / EXPORT ═══
 
@@ -5605,7 +5721,7 @@ function eliminarPrestamo(id) {
 
 
 
-// ==SCRIPT==
+//<script>
 
 
 
@@ -5919,7 +6035,7 @@ function verVenta(id){
 </script>
 
 
-
+</script>
 <script>
 
 // ═══════════════════════════════════════════════════════════════
@@ -6220,81 +6336,6 @@ window.addEventListener('load', function() {
 
 
 
-</script>
-
-<script>
-function renderStock() {
-  var el = document.getElementById('stock-root');
-  if (!el) return;
-  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  var _movPanel = document.getElementById('stock-movs-panel');
-  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
-  var alms = ['Habana','Placetas','Xportprise'];
-  var q = (window._stockQ||'').toLowerCase();
-  var catF = window._stockCat||'';
-  var almF = window._stockAlm||'';
-  var activos = PRODS.filter(function(p){ return p.activo !== false; });
-  var total = activos.reduce(function(a,p){ return a+(p.stk||0); }, 0);
-  var bajos = activos.filter(function(p){ return (p.stk||0)<=(p.stk_min||10); }).length;
-  var catSet = {};
-  activos.forEach(function(p){ if(p.cat) catSet[p.cat]=1; });
-  var cats = Object.keys(catSet).sort();
-  var prods = activos.filter(function(p){
-    if (q && p.n.toLowerCase().indexOf(q)<0) return false;
-    if (catF && p.cat !== catF) return false;
-    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
-    return true;
-  });
-  var visAlms = almF ? [almF] : alms;
-  var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user] ? USERS[S.user].almacen : '';
-  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
-  h += '<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
-  h += '<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
-  alms.forEach(function(a){
-    var tot = activos.reduce(function(s,p){ return s+((p.stk_alm&&p.stk_alm[a])||0); },0);
-    h += '<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(tot,0)+'</div></div>';
-  });
-  h += '</div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
-    + '<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
-    + '<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todos almacenes</option>'
-    + alms.map(function(a){ return '<option'+(almF===a?' selected':'')+'>'+a+'</option>'; }).join('')
-    + '</select>'
-    + '<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todas cats</option>'
-    + cats.map(function(c){ return '<option'+(catF===c?' selected':'')+'>'+c+'</option>'; }).join('')
-    + '</select>'
-    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>' : '')
-    + '</div>';
-  h += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-    + '<th>Producto</th><th>Cat.</th>'
-    + visAlms.map(function(a){ return '<th style="text-align:right">'+a+'</th>'; }).join('')
-    + '<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th>'
-    + '</tr></thead><tbody>';
-  if (!prods.length) {
-    h += '<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
-  } else {
-    prods.forEach(function(p){
-      var bajo = (p.stk||0) <= (p.stk_min||10);
-      h += '<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'+
-        '<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'+
-        '<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
-      visAlms.forEach(function(a){
-        var v = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
-        var bold = a===userAlm ? '700' : '400';
-        var col = v===0 ? 'var(--color-text-tertiary)' : v<=(p.stk_min||10) ? 'var(--color-text-warning)' : 'var(--color-text-primary)';
-        h += '<td style="text-align:right;font-weight:'+bold+';color:'+col+'">'+fN(v,0)+'</td>';
-      });
-      h += '<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'+
-        '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+
-        (p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
-    });
-  }
-  h += '</tbody></table></div>';
-  el.innerHTML = h;
-  if (typeof renderStockMovimientos==='function') try{renderStockMovimientos();}catch(e){}
-}
 </script>
 </body>
 </html>
