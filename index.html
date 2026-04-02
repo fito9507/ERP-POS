@@ -2201,17 +2201,7 @@ renderSteps(0);
 
 
 
-</script>rSteps(0);
-
-('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
-  document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
-  goStep('pg-prod',2);
-}
-renderSteps(0);
-
-
-
-<script>
+</script><script>
 (function(){
   const _pk=pinKey;
   window.pinKey=function(k){
@@ -2770,6 +2760,7 @@ function renderMiCaja() {
 
 
 
+
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
 const CUENTAS_BASE={
   'USD Habana':{ingV:99432.52,ingIG:42197.04,gasIG:145468.60,mon:'USD'},
@@ -3006,76 +2997,78 @@ function eliminar(id){
 function renderCajas(){
   var isAdmin = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
-
-  // Use shared _cajasData from Admin module if available, else fallback to CUENTAS_BASE
-  var cajas = [];
   var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
 
+  // Load cajas
+  var cajas = [];
   if (typeof _cajasData !== 'undefined' && _cajasData.length) {
-    // Use Supabase cajas with calculated saldos
     cajas = _cajasData
-      .filter(function(c){ return isAdmin || !userAlm || c.almacen === userAlm; })
+      .filter(function(c){ return c.activa && (isAdmin || !userAlm || c.almacen === userAlm); })
       .map(function(c){
-        var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
-        var equivUSD = saldo * (RATES_USD[c.moneda]||1);
-        return { cta:c.nombre, mon:c.moneda, almacen:c.almacen, saldo:saldo, equivUSD:equivUSD };
+        var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+        return { cta:c.nombre, mon:c.moneda, almacen:c.almacen||'General', saldo:saldo, equivUSD:saldo*(RATES_USD[c.moneda]||1) };
       });
   } else {
-    // Fallback: CUENTAS_BASE + MOVS
-    var entries = Object.entries(CUENTAS_BASE).filter(function(e){
-      if(isAdmin||!userAlm) return true;
-      return e[0].indexOf(userAlm)>=0;
-    });
-    cajas = entries.map(function(entry){
+    // Fallback CUENTAS_BASE
+    cajas = Object.entries(CUENTAS_BASE).filter(function(e){
+      return isAdmin||!userAlm||e[0].indexOf(userAlm)>=0;
+    }).map(function(entry){
       var cta=entry[0], v=entry[1];
       var igIng=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='ingreso';}).reduce(function(a,m){return a+m.monto;},0);
       var igGas=MOVS.filter(function(m){return m.cta===cta&&m.sentido==='gasto';}).reduce(function(a,m){return a+m.monto;},0);
       var saldo=(v.ingV||0)+(v.ingIG||0)+igIng-(v.gasIG||0)-igGas;
-      var equivUSD=saldo*(RATES_USD[v.mon]||1);
-      return {cta:cta, mon:v.mon, almacen:'', saldo:saldo, equivUSD:equivUSD};
+      return {cta:cta, mon:v.mon, almacen:cta.split(' ').slice(1).join(' ')||'General', saldo:saldo, equivUSD:saldo*(RATES_USD[v.mon]||1)};
     });
+    if (typeof _cajasData!=='undefined' && !_cajasData.length && _supaOnline && typeof loadCajasData==='function') {
+      loadCajasData().then(function(){ renderCajas(); });
+    }
   }
 
-  // Load from Supabase if not loaded yet
-  if (typeof _cajasData !== 'undefined' && !_cajasData.length && _supaOnline) {
-    loadCajasData && loadCajasData().then(function(){ renderCajas(); });
-  }
-
-  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
-  var maxAbs = Math.max.apply(null, cajas.map(function(c){return Math.abs(c.saldo);})||[1]);
-  if (maxAbs===0) maxAbs=1;
-
-  // Group by almacen
+  // Order almacenes
+  var almOrder = ['Habana','Placetas','Xportprise','General'];
   var byAlm = {};
   cajas.forEach(function(c){
-    var k = c.almacen||'General';
-    if(!byAlm[k]) byAlm[k]=[];
-    byAlm[k].push(c);
+    if(!byAlm[c.almacen]) byAlm[c.almacen]=[];
+    byAlm[c.almacen].push(c);
   });
 
+  var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'};
+  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
+
   var html = '';
-  Object.keys(byAlm).forEach(function(alm){
-    if (Object.keys(byAlm).length > 1) {
-      html += '<div style="font-size:11px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin:12px 0 6px;padding:0 4px">'+alm+'</div>';
-    }
-    html += byAlm[alm].map(function(c){
+  almOrder.concat(Object.keys(byAlm).filter(function(a){return almOrder.indexOf(a)<0;})).forEach(function(alm){
+    if (!byAlm[alm] || !byAlm[alm].length) return;
+    var almCajas = byAlm[alm];
+    var almTot = almCajas.reduce(function(a,c){return a+c.equivUSD;},0);
+    html += '<div style="margin-bottom:20px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+alm+'</div>'
+      + '<div style="font-size:11px;color:var(--color-text-secondary)">Total: <b>'+fN(almTot,2)+' USD</b></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
+    almCajas.forEach(function(c){
       var pos = c.saldo >= 0;
-      var pct = Math.min(100, Math.round(Math.abs(c.saldo)/maxAbs*100));
-      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.mon]||'';
-      return '<div class="caja-card">'
-        + '<div class="caja-name">'+c.cta+'</div>'
-        + '<div class="caja-saldo" style="color:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'">'+monIcon+' '+fN(c.saldo,2)+' '+c.mon+'</div>'
-        + '<div class="caja-bar-bg"><div class="caja-bar" style="width:'+pct+'%;background:'+(pos?'var(--color-text-success)':'var(--color-text-danger)')+'"></div></div>'
-        + '<div class="caja-equiv">≈ '+fN(c.equivUSD,2)+' USD</div>'
+      var icon = monIcon[c.mon]||'';
+      var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+      html += '<div class="card" style="padding:12px;text-align:center">'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:6px;font-weight:500">'+c.mon+'</div>'
+        + '<div style="font-size:20px;font-weight:800;color:'+color+'">'+icon+' '+fN(c.saldo,2)+'</div>'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">≈ '+fN(c.equivUSD,2)+' USD</div>'
         + '</div>';
-    }).join('');
+    });
+    html += '</div></div>';
   });
+
+  // Total general
+  html += '<div style="border-top:1px solid var(--color-border-secondary);padding-top:12px;display:flex;justify-content:space-between;align-items:center">'
+    + '<span style="font-size:13px;color:var(--color-text-secondary)">Total general</span>'
+    + '<span style="font-size:18px;font-weight:800;color:var(--color-text-success)">'+fN(totUSD,2)+' USD</span>'
+    + '</div>';
 
   var el = document.getElementById('cajas-grid');
   if (el) el.innerHTML = html;
-
   var totEl = document.getElementById('cajas-total');
-  if (totEl) totEl.innerHTML = 'Total <span style="color:var(--color-text-success);font-weight:700">'+fN(totUSD,2)+' USD</span>';
+  if (totEl) totEl.innerHTML = '';
 }
 
 // ── DEUDAS ────────────────────────────────────────────────
@@ -3165,6 +3158,7 @@ function renderGestionCajasWrap() {
   }
   if (typeof renderGestionCajas === 'function') renderGestionCajas();
 }
+
 
 
 
@@ -3280,7 +3274,7 @@ function renderFicha(){
 // ── LISTA ─────────────────────────────────────────────────
 function renderLista(){
   const isAdminUser=(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin');
-  const visClientes=isAdminUser?CLIENTES:visClientes.filter(c=>!c.owner||c.owner===S.user);
+  const visClientes=isAdminUser?CLIENTES:CLIENTES.filter(c=>!c.owner||c.owner===S.user);
   const totDeuda=visClientes.reduce((a,c)=>a+totCli(c),0);
   const totPdte=visClientes.reduce((a,c)=>a+pdtCli(c),0);
   const totPag=totDeuda-totPdte;
@@ -4895,112 +4889,7 @@ async function admDesactivarCaja(id) {
 
 
 
-</script> admin data on page load
-  if(typeof adminInit==='function'){try{adminInit();}catch(e){}}
-})();
-// ═══ MÓDULO STOCK — CONSULTA ═══
-function renderStock() {
-  const el = document.getElementById('stock-root');
-  if (!el) return;
-  // Hide movimientos panel for vendedor
-  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  var _movPanel = document.getElementById('stock-movs-panel');
-  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
-
-  const alms = ['Habana', 'Placetas', 'Xportprise'];
-  const userAlm = (typeof S !== 'undefined' && S.user && USERS[S.user]) ? USERS[S.user].almacen : '';
-  const isVendedor = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'vendedor';
-
-  // Build filter state
-  const q = (window._stockQ || '').toLowerCase();
-  const catF = window._stockCat || '';
-  const almF = window._stockAlm || '';
-
-  // Stats
-  const activos = PRODS.filter(p => p.activo !== false);
-  const total = activos.reduce((a, p) => a + (p.stk || 0), 0);
-  const bajos = activos.filter(p => (p.stk || 0) <= (p.stk_min || 10)).length;
-  const cats = [...new Set(activos.filter(p => p.cat).map(p => p.cat))].sort();
-
-  // Filter prods
-  const prods = activos.filter(p => {
-    if (q && !p.n.toLowerCase().includes(q)) return false;
-    if (catF && p.cat !== catF) return false;
-    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
-    return true;
-  });
-  var visAlms = almF ? [almF] : alms;
-
-  // Per-almacen totals row
-  const almTotals = alms.map(a => prods.reduce((sum, p) => sum + ((p.stk_alm && p.stk_alm[a]) || 0), 0));
-
-  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
-    + '<div class="adm-card"><div class="adm-lbl">Productos activos</div><div class="adm-val">' + activos.length + '</div></div>'
-    + '<div class="adm-card"><div class="adm-lbl">Unidades totales</div><div class="adm-val">' + fN(total, 0) + '</div></div>';
-  alms.forEach(function(a, i) {
-    const tot = activos.reduce((s, p) => s + ((p.stk_alm && p.stk_alm[a]) || 0), 0);
-    html += '<div class="adm-card"><div class="adm-lbl">' + a + '</div><div class="adm-val" style="font-size:16px">' + fN(tot, 0) + '</div></div>';
-  });
-  html += '</div>';
-
-  // Filters
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
-    + '<input class="adm-inp" id="stk-q" value="' + (window._stockQ||'') + '" placeholder="Buscar producto..." oninput="_dRender(function(){window._stockQ=document.getElementById(\'stk-q\').value;renderStock()})" style="flex:1;max-width:240px">'
-    + '<select class="adm-inp" id="stk-alm" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todos almacenes</option>'
-    + alms.map(a => '<option' + (almF === a ? ' selected' : '') + '>' + a + '</option>').join('')
-    + '</select>'
-    + '<select class="adm-inp" id="stk-cat" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todas categorías</option>'
-    + cats.map(c => '<option' + (catF === c ? ' selected' : '') + '>' + c + '</option>').join('')
-    + '</select>'
-    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">⚠ ' + bajos + ' bajo mínimo</span>' : '')
-    + '</div>';
-
-  // Table
-  html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-    + '<th>Producto</th><th>Cat.</th>'
-    + visAlms.map(a => '<th style="text-align:right">' + a + '</th>').join('')
-    + '<th style="text-align:right">Total</th>'
-    + '<th style="text-align:right">Min/May</th>'
-    + '</tr></thead><tbody>';
-
-  prods.forEach(function(p) {
-    const bajo = (p.stk || 0) <= (p.stk_min || 10);
-    var alm_vals = visAlms.map(a => (p.stk_alm && p.stk_alm[a] != null) ? p.stk_alm[a] : 0);
-    html += '<tr' + (bajo ? ' style="background:rgba(251,191,36,.07)"' : '') + '>'
-      + '<td style="font-size:12px">' + p.n + (bajo ? ' <span style="font-size:9px;color:var(--color-text-warning)">⚠</span>' : '') + '</td>'
-      + '<td style="font-size:11px;color:var(--color-text-tertiary)">' + (p.cat || '—') + '</td>'
-      + alm_vals.map(function(v, i) {
-          const isUserAlm = alms[i] === userAlm;
-          return '<td style="text-align:right;font-weight:' + (isUserAlm ? '700' : '400') + ';color:' + (v <= (p.stk_min || 10) && v > 0 ? 'var(--color-text-warning)' : v === 0 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)') + '">' + fN(v, 0) + '</td>';
-        }).join('')
-      + '<td style="text-align:right;font-weight:600">' + fN(p.stk || 0, 0) + '</td>'
-      + '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'
-        + (p.min != null ? fN(p.min) : '—') + ' / ' + (p.maj != null ? fN(p.maj) : '—')
-      + '</td>'
-      + '</tr>';
-  });
-
-  if (!prods.length) {
-    html += '<tr><td colspan="' + (visAlms.length + 4) + '" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
-  }
-
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
-
-  // Render movements panel
-  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}}
-
-
-
-
-ntos();}catch(e){}}
-
-
-
-
-<script>
+</script><script>
 
 // ═══ MÓDULO BACKUP / EXPORT ═══
 
@@ -5716,7 +5605,7 @@ function eliminarPrestamo(id) {
 
 
 
-//<script>
+// ==SCRIPT==
 
 
 
@@ -6030,7 +5919,7 @@ function verVenta(id){
 </script>
 
 
-</script>
+
 <script>
 
 // ═══════════════════════════════════════════════════════════════
@@ -6331,6 +6220,81 @@ window.addEventListener('load', function() {
 
 
 
+</script>
+
+<script>
+function renderStock() {
+  var el = document.getElementById('stock-root');
+  if (!el) return;
+  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _movPanel = document.getElementById('stock-movs-panel');
+  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
+  var alms = ['Habana','Placetas','Xportprise'];
+  var q = (window._stockQ||'').toLowerCase();
+  var catF = window._stockCat||'';
+  var almF = window._stockAlm||'';
+  var activos = PRODS.filter(function(p){ return p.activo !== false; });
+  var total = activos.reduce(function(a,p){ return a+(p.stk||0); }, 0);
+  var bajos = activos.filter(function(p){ return (p.stk||0)<=(p.stk_min||10); }).length;
+  var catSet = {};
+  activos.forEach(function(p){ if(p.cat) catSet[p.cat]=1; });
+  var cats = Object.keys(catSet).sort();
+  var prods = activos.filter(function(p){
+    if (q && p.n.toLowerCase().indexOf(q)<0) return false;
+    if (catF && p.cat !== catF) return false;
+    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
+    return true;
+  });
+  var visAlms = almF ? [almF] : alms;
+  var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user] ? USERS[S.user].almacen : '';
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
+  h += '<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
+  h += '<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
+  alms.forEach(function(a){
+    var tot = activos.reduce(function(s,p){ return s+((p.stk_alm&&p.stk_alm[a])||0); },0);
+    h += '<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(tot,0)+'</div></div>';
+  });
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
+    + '<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    + '<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todos almacenes</option>'
+    + alms.map(function(a){ return '<option'+(almF===a?' selected':'')+'>'+a+'</option>'; }).join('')
+    + '</select>'
+    + '<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todas cats</option>'
+    + cats.map(function(c){ return '<option'+(catF===c?' selected':'')+'>'+c+'</option>'; }).join('')
+    + '</select>'
+    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>' : '')
+    + '</div>';
+  h += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+    + '<th>Producto</th><th>Cat.</th>'
+    + visAlms.map(function(a){ return '<th style="text-align:right">'+a+'</th>'; }).join('')
+    + '<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th>'
+    + '</tr></thead><tbody>';
+  if (!prods.length) {
+    h += '<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
+  } else {
+    prods.forEach(function(p){
+      var bajo = (p.stk||0) <= (p.stk_min||10);
+      h += '<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'+
+        '<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'+
+        '<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
+      visAlms.forEach(function(a){
+        var v = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
+        var bold = a===userAlm ? '700' : '400';
+        var col = v===0 ? 'var(--color-text-tertiary)' : v<=(p.stk_min||10) ? 'var(--color-text-warning)' : 'var(--color-text-primary)';
+        h += '<td style="text-align:right;font-weight:'+bold+';color:'+col+'">'+fN(v,0)+'</td>';
+      });
+      h += '<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'+
+        '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+
+        (p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+    });
+  }
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+  if (typeof renderStockMovimientos==='function') try{renderStockMovimientos();}catch(e){}
+}
 </script>
 </body>
 </html>
