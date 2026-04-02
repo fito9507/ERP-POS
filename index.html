@@ -1663,15 +1663,15 @@ const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--c
   try{
     var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');
     var _keys=Object.keys(_su);
-    // Validate: each user must have at least pin and rol
     var _valid=_keys.every(function(k){return _su[k]&&_su[k].pin;});
     if(_keys.length>0&&_valid){
       _keys.forEach(function(k){USERS[k]=_su[k];});
     } else if(_keys.length>0&&!_valid) {
-      // Bad cache — clear it
       localStorage.removeItem('erp_users_cache');
     }
   }catch(e){ localStorage.removeItem('erp_users_cache'); }
+  // Render login cards now that USERS is fully loaded
+  setTimeout(function(){ if(typeof renderLoginCards==='function') renderLoginCards(); }, 0);
 })();
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(nombre,u){
@@ -2241,8 +2241,7 @@ function renderLoginCards(){
       + '</div>';
   }).join('');
 }
-// Render immediately (USERS already loaded from localStorage at this point)
-renderLoginCards();
+// renderLoginCards called after USERS is defined (see below)
 
 
 
