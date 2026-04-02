@@ -562,20 +562,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="login-wrap">
   <div class="login-title">Bienvenido</div>
   <div class="login-sub">¿Quién eres?</div>
-  <div class="user-cards">
-    <div class="user-card" onclick="selUser('Keiler',this)">
-      <div class="user-avatar" style="background:var(--color-background-info);color:var(--color-text-info)">K</div>
-      <div><div style="font-size:15px;font-weight:500">Keiler</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Padre',this)">
-      <div class="user-avatar" style="background:var(--color-background-warning);color:var(--color-text-warning)">P</div>
-      <div><div style="font-size:15px;font-weight:500">Padre</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Admin',this)">
-      <div class="user-avatar" style="background:var(--color-background-success);color:var(--color-text-success)">A</div>
-      <div><div style="font-size:15px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--color-text-secondary)">Administrador</div></div>
-    </div>
-  </div>
+  <div class="user-cards" id="user-cards-list"></div>
   <div id="pin-wrap" style="display:none">
     <div style="text-align:center;font-size:13px;color:var(--color-text-secondary);margin-bottom:10px">PIN de acceso</div>
     <div class="pin-dots" id="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
@@ -1672,7 +1659,20 @@ function erpLogout(){
 }
 
 const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Padre:{pin:'0000',color:'var(--color-background-warning)',tc:'var(--color-text-warning)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos']}};
-(function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){USERS[k]=_su[k];});}catch(e){}})();
+(function(){
+  try{
+    var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');
+    var _keys=Object.keys(_su);
+    // Validate: each user must have at least pin and rol
+    var _valid=_keys.every(function(k){return _su[k]&&_su[k].pin;});
+    if(_keys.length>0&&_valid){
+      _keys.forEach(function(k){USERS[k]=_su[k];});
+    } else if(_keys.length>0&&!_valid) {
+      // Bad cache — clear it
+      localStorage.removeItem('erp_users_cache');
+    }
+  }catch(e){ localStorage.removeItem('erp_users_cache'); }
+})();
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(nombre,u){
   if(typeof supaReq==='undefined') return;
@@ -1693,6 +1693,7 @@ async function syncLoadUsers(){
       USERS[row.nombre]={pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',color:row.color||'',tc:row.tc||'',modulos:row.modulos||[],activo:row.activo!==false,puedeVender:row.puede_vender!==false};
     });
     saveUsers();
+    if(typeof renderLoginCards==='function') renderLoginCards();
     if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
   }catch(e){console.warn('syncLoadUsers:',e);}
 }
@@ -2219,6 +2220,29 @@ function otraVentaMismoAlmacen(){
   goStep('pg-prod',2);
 }
 renderSteps(0);
+
+function renderLoginCards(){
+  var el = document.getElementById('user-cards-list');
+  if(!el) return;
+  var names = Object.keys(USERS);
+  if(!names.length) {
+    el.innerHTML = '<div style="color:var(--color-text-tertiary);text-align:center;padding:20px;font-size:12px">Sin usuarios configurados</div>';
+    return;
+  }
+  el.innerHTML = names.filter(function(k){ return USERS[k] && USERS[k].activo!==false; }).map(function(name){
+    var u = USERS[name];
+    var rol = u.rol==='admin' ? 'Administrador' : 'Vendedor';
+    var bg = u.color || 'var(--color-background-secondary)';
+    var tc = u.tc   || 'var(--color-text-primary)';
+    return '<div class="user-card" onclick="selUser(''+name+'',this)">'
+      + '<div class="user-avatar" style="background:'+bg+';color:'+tc+'">'+name[0].toUpperCase()+'</div>'
+      + '<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
+      + '<div style="font-size:11px;color:var(--color-text-secondary)">'+rol+'</div></div>'
+      + '</div>';
+  }).join('');
+}
+// Render immediately (USERS already loaded from localStorage at this point)
+renderLoginCards();
 
 
 
