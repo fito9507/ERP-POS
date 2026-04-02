@@ -786,10 +786,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th style="width:28px">
-          <!-- checkbox "seleccionar todo" — puro JS, no inline onchange -->
-          <input type="checkbox" id="chk-all">
-        </th>
+        <th style="width:28px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
         <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
         <th>Tipo</th><th>Productos</th><th>Total USD</th><th>Moneda</th>
         <th id="th-com1">% Com.</th><th id="th-com2">Comisión USD</th><th id="th-com3">Estado com.</th><th>Nota</th><th></th>
@@ -1678,7 +1675,8 @@ const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--c
 (function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){USERS[k]=_su[k];});}catch(e){}})();
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(nombre,u){
-  if(typeof supaReq==='undefined'||!_supaOnline)return;
+  if(typeof supaReq==='undefined') return;
+  if(!_supaOnline){ enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:nombre,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false}}); return; }
   try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:nombre,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn('syncSaveUser:',e);}
 }
 async function syncDeleteUser(nombre){
@@ -2335,6 +2333,9 @@ function renderVentas(){
   var _bl=document.getElementById('btn-liq-nav'); if(_bl)_bl.style.display=_isVend?'none':'';
   // Hide commission table headers
   ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVend?'none':'';});
+  // Hide checkbox column and sel-bar for vendedor
+  var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
+  var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
 
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
@@ -2357,7 +2358,7 @@ function renderVentas(){
   const estClsMap={Pagada:'bg',Pendiente:'ba','No aplica':'bn'};
   document.getElementById('v-body').innerHTML=data.length?data.map(v=>`
     <tr id="vrow-${v.id}">
-      <td><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
+      <td style="${_isVend?'display:none':''}"><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
       <td>${fD(v.fecha)}</td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'}">${v.vend}</span></td>
       <td>${v.alm}</td>
