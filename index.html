@@ -562,7 +562,12 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="login-wrap">
   <div class="login-title">Bienvenido</div>
   <div class="login-sub">¿Quién eres?</div>
-  <div class="user-cards" id="user-cards-list"></div>
+  <div class="user-cards" id="user-cards-list">
+    <div class="user-card" onclick="selUser('Admin',this)">
+      <div class="user-avatar" style="background:var(--color-background-success);color:var(--color-text-success)">A</div>
+      <div><div style="font-size:15px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--color-text-secondary)">Administrador</div></div>
+    </div>
+  </div>
   <div id="pin-wrap" style="display:none">
     <div style="text-align:center;font-size:13px;color:var(--color-text-secondary);margin-bottom:10px">PIN de acceso</div>
     <div class="pin-dots" id="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
@@ -1670,8 +1675,7 @@ const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--c
       localStorage.removeItem('erp_users_cache');
     }
   }catch(e){ localStorage.removeItem('erp_users_cache'); }
-  // Render login cards now that USERS is fully loaded
-  setTimeout(function(){ if(typeof renderLoginCards==='function') renderLoginCards(); }, 0);
+
 })();
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(nombre,u){
@@ -2224,12 +2228,8 @@ renderSteps(0);
 function renderLoginCards(){
   var el = document.getElementById('user-cards-list');
   if(!el) return;
-  var names = Object.keys(USERS);
-  if(!names.length) {
-    el.innerHTML = '<div style="color:var(--color-text-tertiary);text-align:center;padding:20px;font-size:12px">Sin usuarios configurados</div>';
-    return;
-  }
-  el.innerHTML = names.filter(function(k){ return USERS[k] && USERS[k].activo!==false; }).map(function(name){
+  var names = Object.keys(USERS).filter(function(k){ return USERS[k] && USERS[k].activo!==false; });
+  el.innerHTML = names.map(function(name){
     var u = USERS[name];
     var rol = u.rol==='admin' ? 'Administrador' : 'Vendedor';
     var bg = u.color || 'var(--color-background-secondary)';
@@ -3791,6 +3791,7 @@ renderColores();renderLista();
 <script>
 (function(){
   // Init Supabase — deferred so sync script loads first
+  if(typeof renderLoginCards==='function') renderLoginCards();
   setTimeout(function(){ if(typeof supaInit==='function') supaInit(); else console.error('supaInit not found'); }, 1200);
   try{var fd=document.getElementById('f-desde');if(fd)fd.value='2025-01-01';var fh=document.getElementById('f-hasta');if(fh)fh.value='2026-12-31';var cd=document.getElementById('c-desde');if(cd)cd.value='2025-01-01';var ch=document.getElementById('c-hasta');if(ch)ch.value='2026-12-31';if(typeof setRangeLiq==='function')setRangeLiq();if(typeof initChkAll==='function')initChkAll();}catch(e){}
   try{var ld=document.getElementById('l-desde');if(ld)ld.value='2025-01-01';var lh=document.getElementById('l-hasta');if(lh)lh.value='2026-12-31';}catch(e){}
