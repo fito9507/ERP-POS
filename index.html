@@ -1660,6 +1660,24 @@ function erpLogout(){
 
 const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Padre:{pin:'0000',color:'var(--color-background-warning)',tc:'var(--color-text-warning)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos']}};
 (function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){if(_su[k]&&_su[k].pin)USERS[k]=_su[k];});}catch(e){}})();
+
+function renderLoginCards(){
+  var el=document.getElementById('user-cards-list');
+  if(!el){setTimeout(renderLoginCards,50);return;}
+  el.innerHTML=Object.keys(USERS).filter(function(k){
+    return USERS[k]&&USERS[k].activo!==false;
+  }).map(function(name){
+    var u=USERS[name];
+    var bg=u.color||'var(--color-background-secondary)';
+    var tc=u.tc||'var(--color-text-primary)';
+    var rol=u.rol==='admin'?'Administrador':'Vendedor';
+    return '<div class="user-card" data-uname="'+name+'" onclick="selUser(this.getAttribute(\'data-uname\'),this)">'
+      +'<div class="user-avatar" style="background:'+bg+';color:'+tc+'">'+name[0].toUpperCase()+'</div>'
+      +'<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
+      +'<div style="font-size:11px;color:var(--color-text-secondary)">'+rol+'</div></div>'
+      +'</div>';
+  }).join('');
+}
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(n,u){
   if(typeof supaReq==='undefined'||!_supaOnline){try{enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false}});}catch(e){}return;}
@@ -1682,17 +1700,6 @@ async function syncLoadUsers(){
     if(typeof renderLoginCards==='function')renderLoginCards();
     if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
   }catch(e){console.warn('syncLoadUsers:',e);}
-}
-function renderLoginCards(){
-  var el=document.getElementById('user-cards-list');if(!el)return;
-  el.innerHTML=Object.keys(USERS).filter(function(k){return USERS[k]&&USERS[k].activo!==false;}).map(function(name){
-    var u=USERS[name];
-    return '<div class="user-card" onclick="selUser(\'' + name + '\',this)">'
-      +'<div class="user-avatar" style="background:'+(u.color||'var(--color-background-secondary)')+';color:'+(u.tc||'var(--color-text-primary)')+'">'+name[0].toUpperCase()+'</div>'
-      +'<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
-      +'<div style="font-size:11px;color:var(--color-text-secondary)">'+(u.rol==='admin'?'Administrador':'Vendedor')+'</div></div>'
-      +'</div>';
-  }).join('');
 }
 const MONEDAS=['USD','EUR','CUP','CUPT'];
 const PRODS=[
