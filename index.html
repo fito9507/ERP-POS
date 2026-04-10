@@ -594,7 +594,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       </div>
     </div>
     <div style="margin-bottom:12px"><label class="lbl">Cliente (opcional)</label>
-      <select id="s-cli"><option value="">Walk-in</option><option>Yano</option><option>Otro</option></select></div>
+      <select id="s-cli"><option value="">Walk-in</option></select></div>
     <button class="btn btn-p" onclick="goProductos()">Continuar →</button>
   </div>
 </div>
@@ -1762,6 +1762,7 @@ function goStep(pg,idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
   document.getElementById(pg).classList.add('act');
   renderSteps(idx);
+  if(pg==='pg-alm'){_poblarClientesPOS();}
   if(pg==='pg-prod'){renderProds();renderCart();renderCartCtx();}
   if(pg==='pg-pago')initPago();
   updResBadge();
@@ -1809,6 +1810,14 @@ function logout(){
   }
 }
 function selAlm(a,el){S.alm=a;document.querySelectorAll('.alm-card').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');}
+function _poblarClientesPOS(){
+  var sel=document.getElementById('s-cli');
+  if(!sel)return;
+  var isAdm=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  var visClis=isAdm?CLIENTES:CLIENTES.filter(function(c){return !c.owner||c.owner===S.user;});
+  sel.innerHTML='<option value="">Walk-in</option>'
+    +visClis.map(function(c){return '<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');
+}
 function goProductos(){
   if(!S.alm){alert('Elige un almacén');return;}
   S.cli=document.getElementById('s-cli').value||'Walk-in';
@@ -3646,6 +3655,17 @@ function registrarAbonoCli(cid){
   document.getElementById('togp-'+cid)?.classList.remove('on');
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
+  // Save clientes to localStorage
+  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  // Sync abono to Supabase
+  if(typeof supaReq!=='undefined'&&typeof _supaOnline!=='undefined'&&_supaOnline){
+    supaReq('POST','clientes_abonos?on_conflict=id',{
+      id:abono.id, cliente_id:cid, folio_id:target.id,
+      fecha:abono.fecha, concepto:abono.concepto, desc:abono.desc,
+      monto:abono.monto, moneda:abono.mon, equiv_usd:abono.equivUSD,
+      en_caja:abono.enCaja, caja:abono.caja||null, caja_tipo:abono.cajaTipo||null
+    }).catch(function(e){console.warn('abono sync:',e);});
+  }
   showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
@@ -3726,8 +3746,19 @@ function crearFolioCli(cid){
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
   const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
   const fid=String(nextFid++).padStart(3,'0');
-  c.folios.push({id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos});
+  var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+  c.folios.push(newFolio);
+  // Discount stock
+  lineas.forEach(function(l){
+    var p=PRODS.find(function(x){return x.n===l.prod;});
+    if(p&&alm){
+      p.stk=Math.max(0,(p.stk||0)-l.q);
+      if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q}],alm);
+    }
+  });
   window['nfl_'+cid]=[];
+  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
 }
