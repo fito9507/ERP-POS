@@ -1633,7 +1633,7 @@ function buildSidebar(userName){
   if(!nav)return;
   const u=USERS[userName];
   if(!u){nav.innerHTML='';return;}
-  const allowed=u.modulos||(u.rol==='admin'?MOD_DEFS.map(m=>m.key):['pos','stock','ventas','clientes']);
+  const allowed=(Array.isArray(u.modulos)&&u.modulos.length>0)?u.modulos:(u.rol==='admin'?MOD_DEFS.map(m=>m.key):['pos','stock','ventas','clientes']);
   let html='',lastSection='';
   MOD_DEFS.forEach(function(m){
     if(!allowed.includes(m.key))return;
@@ -1684,8 +1684,11 @@ async function syncSaveUser(n,u){
   try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn(e);}
 }
 async function syncDeleteUser(n){
-  if(typeof supaReq==='undefined'||!_supaOnline)return;
-  try{await supaReq('DELETE','usuarios?nombre=eq.'+encodeURIComponent(n));}catch(e){}
+  if(typeof supaReq==='undefined'||!_supaOnline){
+    enqueue({method:'PATCH',path:'usuarios?nombre=eq.'+encodeURIComponent(n),body:{activo:false}});
+    return;
+  }
+  try{await supaReq('PATCH','usuarios?nombre=eq.'+encodeURIComponent(n),{activo:false});}catch(e){}
 }
 async function syncLoadUsers(){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
@@ -1693,8 +1696,19 @@ async function syncLoadUsers(){
     var r=await supaReq('GET','usuarios?select=*');
     if(!r.ok)return;
     var rows=await r.json();
-    (rows||[]).forEach(function(row){
-      USERS[row.nombre]={pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',color:row.color||'',tc:row.tc||'',modulos:row.modulos||[],activo:row.activo!==false,puedeVender:row.puede_vender!==false};
+    if(!rows||!rows.length)return;
+    // Clear all non-hardcoded users first, then rebuild from Supabase
+    var hardcoded=['Admin'];
+    Object.keys(USERS).forEach(function(k){
+      if(hardcoded.indexOf(k)<0) delete USERS[k];
+    });
+    rows.forEach(function(row){
+      USERS[row.nombre]={
+        pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',
+        color:row.color||'',tc:row.tc||'',
+        modulos:Array.isArray(row.modulos)?row.modulos:(row.modulos||[]),
+        activo:row.activo!==false,puedeVender:row.puede_vender!==false
+      };
     });
     saveUsers();
     if(typeof renderLoginCards==='function')renderLoginCards();
