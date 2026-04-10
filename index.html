@@ -562,20 +562,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="login-wrap">
   <div class="login-title">Bienvenido</div>
   <div class="login-sub">¿Quién eres?</div>
-  <div class="user-cards">
-    <div class="user-card" onclick="selUser('Keiler',this)">
-      <div class="user-avatar" style="background:var(--color-background-info);color:var(--color-text-info)">K</div>
-      <div><div style="font-size:15px;font-weight:500">Keiler</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Padre',this)">
-      <div class="user-avatar" style="background:var(--color-background-warning);color:var(--color-text-warning)">P</div>
-      <div><div style="font-size:15px;font-weight:500">Padre</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Admin',this)">
-      <div class="user-avatar" style="background:var(--color-background-success);color:var(--color-text-success)">A</div>
-      <div><div style="font-size:15px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--color-text-secondary)">Administrador</div></div>
-    </div>
-  </div>
+  <div class="user-cards" id="user-cards-list"></div>
   <div id="pin-wrap" style="display:none">
     <div style="text-align:center;font-size:13px;color:var(--color-text-secondary);margin-bottom:10px">PIN de acceso</div>
     <div class="pin-dots" id="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
