@@ -4068,7 +4068,7 @@ function renderFormUsuario() {
   if (!el) return;
   var isNew = (editingUser === '__new__');
   var nombre = isNew ? '' : editingUser;
-  var u = isNew ? {pin:'', rol:'vendedor', almacen:'', color:ADMIN_COLORES[0].bg, tc:ADMIN_COLORES[0].tc} : (USERS[nombre] || {});
+  var u = isNew ? {pin:'', rol:'vendedor', almacen:'', color:ADMIN_COLORES[0].bg, tc:ADMIN_COLORES[0].tc, modulos:['pos','stock','ventas','clientes']} : (USERS[nombre] || {});
 
   var coloresHtml = '';
   ADMIN_COLORES.forEach(function(c, i) {
@@ -4122,6 +4122,7 @@ function admGuardarUser(key) {
   var colorDef = ADMIN_COLORES[colorIdx] || ADMIN_COLORES[0];
   var modulos = getSelectedModulos();
   if(rol==='admin') modulos = Object.keys(MOD_LABELS);
+  else if(!modulos.length) modulos = ['pos','stock','ventas','clientes'];
   var puedeVender=document.getElementById('eu-puede-vender')?document.getElementById('eu-puede-vender').checked:true;
   USERS[nombre]={pin:pin,rol:rol,almacen:almacen,color:colorDef.bg,tc:colorDef.tc,activo:true,modulos:modulos,puedeVender:puedeVender};
   saveUsers();syncSaveUser(nombre,USERS[nombre]);renderLoginCards();
