@@ -1580,7 +1580,9 @@ async function supaInit() {
 
 function goMod(id,title,btn){
   // Check permission
-  const modKey = id.replace('mod-','');
+  // Map module id to key using MOD_DEFS
+  var _modDef = typeof MOD_DEFS!=='undefined' ? MOD_DEFS.find(function(m){return m.id===id;}) : null;
+  var modKey = _modDef ? _modDef.key : id.replace('mod-','');
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]){
     const allowed = USERS[S.user].modulos||[];
     if(!allowed.includes(modKey)&&USERS[S.user].rol!=='admin'){
@@ -1684,16 +1686,17 @@ async function syncSaveUser(n,u){
   try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn(e);}
 }
 async function syncDeleteUser(n){
+  // Use activo=false to preserve FK references from ventas table
   if(typeof supaReq==='undefined'||!_supaOnline){
-    enqueue({method:'DELETE',path:'usuarios?nombre=eq.'+encodeURIComponent(n)});
+    enqueue({method:'PATCH',path:'usuarios?nombre=eq.'+encodeURIComponent(n),body:{activo:false}});
     return;
   }
-  try{await supaReq('DELETE','usuarios?nombre=eq.'+encodeURIComponent(n));}catch(e){}
+  try{await supaReq('PATCH','usuarios?nombre=eq.'+encodeURIComponent(n),{activo:false});}catch(e){}
 }
 async function syncLoadUsers(){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
   try{
-    var r=await supaReq('GET','usuarios?select=*');
+    var r=await supaReq('GET','usuarios?select=*&activo=eq.true');
     if(!r.ok)return;
     var rows=await r.json();
     if(!rows||!rows.length)return;
