@@ -1820,7 +1820,10 @@ function _poblarClientesPOS(){
 }
 function goProductos(){
   if(!S.alm){alert('Elige un almacén');return;}
-  S.cli=document.getElementById('s-cli').value||'Walk-in';
+  var _cliSel=document.getElementById('s-cli');
+  var _cliId=_cliSel?_cliSel.value:'';
+  if(_cliId){var _c=CLIENTES.find(function(c){return c.id===_cliId;});S.cli=_c?_c.nombre:'Walk-in';S.cliId=_cliId;}
+  else{S.cli='Walk-in';S.cliId=null;}
   S.cart=[];S.tipo='Minorista';S.cartMon='USD';
   document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
   document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
@@ -3232,35 +3235,19 @@ const ICON={efectivo:'💵',arancel:'📋',flete:'🚛',estiba:'📦',interes:'�
 const HINTS={efectivo:'Cash, transferencia, FM...',arancel:'Aranceles, impuestos aduana',flete:'Flete marítimo o terrestre',estiba:'Carga, descarga',interes:'Intereses de financiación',viaje:'Viajes, desplazamientos',otro:''};
 
 // ── DATOS ─────────────────────────────────────────────────
-let CLIENTES=[
-  {id:'c1',nombre:'Yano',tel:'',alm:'Placetas',color:'info',notas:'Socio — liquidando Container #1',
-   folios:[
-     {id:'001',fecha:'2025-03-23',alm:'Placetas',mon:'USD',desc:'Container #1 — Perfiles y chapas',
-      lineas:[
-        {prod:'Cuadrado S275JR 16',q:151,precio:165,mon:'USD',qO:151,pO:165},
-        {prod:'Perfil Angular 40x40x4',q:70,precio:45,mon:'USD',qO:70,pO:45},
-        {prod:'Chapa galv. 2000x1000x1',q:108,precio:11,mon:'USD',qO:108,pO:11},
-        {prod:'Perfil Angular 25x25x3',q:95,precio:23,mon:'USD',qO:95,pO:23},
-        {prod:'Perfil Angular 30x30x3',q:97,precio:31,mon:'USD',qO:97,pO:31},
-        {prod:'Redondo S275JR 12',q:91,precio:6.17,mon:'USD',qO:91,pO:6.17},
-      ],
-      abonos:[
-        {id:'a1',fecha:'2024-12-12',concepto:'efectivo',desc:'Dinero enviado España',monto:900,mon:'EUR',tasa:null,equivUSD:1034.46,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a2',fecha:'2025-01-31',concepto:'arancel',desc:'Costes Nacionalización',monto:565.7,mon:'USD',tasa:null,equivUSD:565.7,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a3',fecha:'2025-01-31',concepto:'arancel',desc:'Costes Nacionalización #2',monto:226,mon:'USD',tasa:null,equivUSD:226,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a4',fecha:'2025-02-10',concepto:'flete',desc:'Flete Mariel-Placetas',monto:794,mon:'USD',tasa:null,equivUSD:794,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a5',fecha:'2025-02-10',concepto:'estiba',desc:'Descarga + Merienda',monto:156,mon:'USD',tasa:null,equivUSD:156,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a6',fecha:'2025-03-10',concepto:'flete',desc:'Flete Placetas-Habana',monto:65000,mon:'CUP',tasa:347,equivUSD:187.32,enCaja:true,caja:'CUP Placetas',cajaTipo:'ingreso-yano'},
-        {id:'a7',fecha:'2025-03-23',concepto:'efectivo',desc:'Cash Placetas',monto:335301,mon:'CUP',tasa:355,equivUSD:944,enCaja:true,caja:'CUP Placetas',cajaTipo:'ingreso-yano'},
-        {id:'a8',fecha:'2025-03-26',concepto:'efectivo',desc:'Envío Con FM',monto:1916,mon:'EUR',tasa:null,equivUSD:2201.15,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a9',fecha:'2025-03-27',concepto:'arancel',desc:'Pago IMPUESTOS Container #1',monto:425310,mon:'CUP',tasa:355,equivUSD:1197.77,enCaja:true,caja:'CUP Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a10',fecha:'2025-04-16',concepto:'flete',desc:'Flete Habana-Placetas',monto:109.49,mon:'USD',tasa:null,equivUSD:109.49,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-      ]
-     }
-   ]
-  },
-];
-let nextCid=2,nextFid=2,nextAid=200;
+let CLIENTES=[];
+// Load clientes from localStorage
+(function(){
+  try{
+    var _c=JSON.parse(localStorage.getItem('erp_clientes_cache')||'[]');
+    if(_c&&_c.length){ CLIENTES=_c;
+      nextCid=_c.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return Math.max(a,n);},0)+1;
+      nextFid=_c.reduce(function(a,c){return c.folios?c.folios.reduce(function(b,f){var n=parseInt(f.id||'0');return Math.max(b,n);},a):a;},0)+1;
+      nextAid=_c.reduce(function(a,c){return c.folios?c.folios.reduce(function(b,f){return f.abonos?f.abonos.reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return Math.max(d,n);},b):b;},a):a;},0)+1;
+    }
+  }catch(e){}
+})();;
+let nextCid=Date.now(),nextFid=Date.now()+1,nextAid=Date.now()+200;
 let colorSel='info';
 let activoCli=null; // id cliente activo
 let nfLineas=[];
@@ -3666,6 +3653,7 @@ function registrarAbonoCli(cid){
       en_caja:abono.enCaja, caja:abono.caja||null, caja_tipo:abono.cajaTipo||null
     }).catch(function(e){console.warn('abono sync:',e);});
   }
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
   showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
@@ -3745,7 +3733,7 @@ function crearFolioCli(cid){
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
   const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
-  const fid=String(nextFid++).padStart(3,'0');
+  const fid='f'+Date.now();
   var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
   c.folios.push(newFolio);
   // Discount stock
@@ -3780,7 +3768,7 @@ function crearCliente(){
   const nombre=document.getElementById('nc-nombre').value.trim();
   if(!nombre){alert('El nombre es obligatorio');return;}
   CLIENTES.push({
-    id:'c'+(nextCid++),nombre,
+    id:'c'+Date.now(),nombre,
     tel:document.getElementById('nc-tel').value,
     alm:document.getElementById('nc-alm').value,
     color:colorSel,
@@ -6143,126 +6131,16 @@ function offlineLoadClientes() {
     if (!raw) return false;
     var cached = JSON.parse(raw);
     if (!cached || !cached.length) return false;
-    // Merge with existing CLIENTES (don't overwrite hardcoded ones)
-    cached.forEach(function(c) {
-      if (!CLIENTES.find(function(x){ return x.id === c.id; })) {
-        CLIENTES.push(c);
-      } else {
-        // Update existing
-        var idx = CLIENTES.findIndex(function(x){ return x.id === c.id; });
-        if (idx >= 0) CLIENTES[idx] = c;
-      }
-    });
-    console.log('Offline: loaded', cached.length, 'clientes from cache');
+    CLIENTES.length = 0;
+    cached.forEach(function(c) { if(c&&c.id&&c.nombre) CLIENTES.push(c); });
+    // Restore counters
+    nextCid = CLIENTES.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return isNaN(n)?a:Math.max(a,n);},0)+1;
+    nextFid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){var n=parseInt(f.id||'0');return isNaN(n)?b:Math.max(b,n);},a);},0)+1;
+    nextAid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){return (f.abonos||[]).reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return isNaN(n)?d:Math.max(d,n);},b);},a);},0)+1;
+    console.log('Clientes loaded:', CLIENTES.length);
     return true;
   } catch(e) { console.warn('offlineLoadClientes:', e); return false; }
 }
-
-</script>
-
-<script>
-
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// TASAS ELTOQUE — Auto actualización de tasas de cambio
-// ═══════════════════════════════════════════════════════════════
-var ELTOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0NjYzMzg5OCwianRpIjoiYmZjMGZiZDMtY2Y1NC00NjQ5LTk1MGUtMzBlYWUwNjVlNTY2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY4MGU4ODU0MzhkNzU2MWQyMWM2Nzg2ZiIsIm5iZiI6MTc0NjYzMzg5OCwiZXhwIjoxNzc4MTY5ODk4fQ.frJxUfZ9oPzGOGVBPDXCZ0c3Za8umObbDVLLhfAEihQ';
-var _tasasLoaded = false;
-var _tasasTs = 0;
-
-async function fetchTasasElToque(force) {
-  try {
-    var now = Date.now();
-    if (!force && _tasasLoaded && (now - _tasasTs) < 3600000) return;
-
-    // Load from Supabase tasas table (no CORS issues)
-    if (!_supaOnline) { _loadRatesCache(); return; }
-
-    var r = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste,updated_at');
-    if (!r.ok) { console.warn('tasas load error:', r.status); _loadRatesCache(); return; }
-    var rows = await r.json();
-    if (!rows || !rows.length) { _loadRatesCache(); return; }
-
-    var updated = [];
-    var mktMap = {}, finMap = {}, adjMap = {};
-    rows.forEach(function(row) {
-      mktMap[row.moneda]  = parseFloat(row.tasa_mkt || row.valor);
-      finMap[row.moneda]  = parseFloat(row.valor);
-      adjMap[row.moneda]  = parseFloat(row.ajuste || 0);
-    });
-
-    if (finMap.USD) { RATES.CUP  = finMap.USD;  updated.push('USD/CUP: ' + finMap.USD); }
-    if (finMap.EUR) { RATES.EUR  = parseFloat((finMap.USD / finMap.EUR).toFixed(6)); updated.push('EUR/CUP: ' + finMap.EUR); }
-    if (finMap.MLC) { RATES.CUPT = finMap.MLC;  updated.push('MLC/CUP: ' + finMap.MLC); }
-
-    // Save market rates cache for the tasas panel
-    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP: mktMap.USD||RATES.CUP, EUR_CUP: mktMap.EUR||0, CUPT: mktMap.MLC||RATES.CUPT})); } catch(e) {}
-    try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD: adjMap.USD||0, EUR: adjMap.EUR||0, CUPT: adjMap.MLC||0})); } catch(e) {}
-    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1, EUR:RATES.EUR, CUP:RATES.CUP, CUPT:RATES.CUPT, ts:now})); } catch(e) {}
-
-    _tasasLoaded = true;
-    _tasasTs = now;
-
-    if (updated.length) {
-      showToast('📈 Tasas: ' + updated.join(' · '));
-      updOnlineDot();
-      if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
-      if (typeof adminTab !== 'undefined' && adminTab === 'tasas' && typeof renderAdminTasas === 'function') {
-        try { renderAdminTasas(); } catch(e) {}
-      }
-    }
-  } catch(e) {
-    console.warn('fetchTasasElToque error:', e);
-    _loadRatesCache();
-  }
-}
-
-// Fetch from elToque API and save to Supabase (called from Admin panel)
-async function fetchElToqueAndSave() {
-  if (!_supaOnline) { showToast('Sin conexión'); return; }
-  try {
-    showToast('⏳ Consultando elToque...');
-    var r = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/update-tasas', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + SUPA_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: '{}'
-    });
-    if (!r.ok) { showToast('Error: ' + r.status); return; }
-    var data = await r.json();
-    if (!data.ok) { showToast('Error en Edge Function'); return; }
-    // Re-apply saved adjustments (edge function resets them to 0)
-    var _adj={};
-    try{_adj=JSON.parse(localStorage.getItem('erp_rates_adj')||'{}');}catch(e){}
-    var _adjRows=[
-      {moneda:'USD',ajuste:_adj.USD||0},
-      {moneda:'EUR',ajuste:_adj.EUR||0},
-      {moneda:'MLC',ajuste:_adj.CUPT||0}
-    ];
-    // Update valor = tasa_mkt + ajuste in Supabase
-    for(var _ar of _adjRows){
-      if(_ar.ajuste!==0){
-        var _tr=await supaReq('GET','tasas?select=tasa_mkt&moneda=eq.'+_ar.moneda);
-        if(_tr.ok){var _td=await _tr.json();
-          if(_td&&_td[0]){
-            var _mkt=parseFloat(_td[0].tasa_mkt);
-            await supaReq('POST','tasas?on_conflict=moneda',{moneda:_ar.moneda,ajuste:_ar.ajuste,valor:_mkt+_ar.ajuste});
-          }}
-      }
-    }
-    showToast('✓ Tasas actualizadas desde elToque');
-    await fetchTasasElToque(true);
-    if (typeof renderAdminTasas === 'function') renderAdminTasas();
-  } catch(e) {
-    showToast('Error: ' + e.message);
-    console.error('fetchElToqueAndSave:', e);
-  }
-}
-
 function _loadRatesCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
