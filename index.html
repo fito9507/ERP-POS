@@ -1658,7 +1658,7 @@ function erpLogout(){
   if(nav2)nav2.innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary);font-size:12px">Inicia sesión</div>';
 }
 
-const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Padre:{pin:'0000',color:'var(--color-background-warning)',tc:'var(--color-text-warning)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos']}};
+const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes'],activo:true,puedeVender:true},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos'],activo:true,puedeVender:true}};
 (function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){if(_su[k]&&_su[k].pin)USERS[k]=_su[k];});}catch(e){}})();
 
 function renderLoginCards(){
@@ -1685,10 +1685,10 @@ async function syncSaveUser(n,u){
 }
 async function syncDeleteUser(n){
   if(typeof supaReq==='undefined'||!_supaOnline){
-    enqueue({method:'PATCH',path:'usuarios?nombre=eq.'+encodeURIComponent(n),body:{activo:false}});
+    enqueue({method:'DELETE',path:'usuarios?nombre=eq.'+encodeURIComponent(n)});
     return;
   }
-  try{await supaReq('PATCH','usuarios?nombre=eq.'+encodeURIComponent(n),{activo:false});}catch(e){}
+  try{await supaReq('DELETE','usuarios?nombre=eq.'+encodeURIComponent(n));}catch(e){}
 }
 async function syncLoadUsers(){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
@@ -1698,7 +1698,7 @@ async function syncLoadUsers(){
     var rows=await r.json();
     if(!rows||!rows.length)return;
     // Clear all non-hardcoded users first, then rebuild from Supabase
-    var hardcoded=['Admin'];
+    var hardcoded=['Keiler','Admin'];
     Object.keys(USERS).forEach(function(k){
       if(hardcoded.indexOf(k)<0) delete USERS[k];
     });
