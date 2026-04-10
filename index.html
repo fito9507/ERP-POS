@@ -562,7 +562,15 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="login-wrap">
   <div class="login-title">Bienvenido</div>
   <div class="login-sub">¿Quién eres?</div>
-  <div class="user-cards" id="user-cards-list">
+  <div class="user-cards">
+    <div class="user-card" onclick="selUser('Keiler',this)">
+      <div class="user-avatar" style="background:var(--color-background-info);color:var(--color-text-info)">K</div>
+      <div><div style="font-size:15px;font-weight:500">Keiler</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
+    </div>
+    <div class="user-card" onclick="selUser('Padre',this)">
+      <div class="user-avatar" style="background:var(--color-background-warning);color:var(--color-text-warning)">P</div>
+      <div><div style="font-size:15px;font-weight:500">Padre</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
+    </div>
     <div class="user-card" onclick="selUser('Admin',this)">
       <div class="user-avatar" style="background:var(--color-background-success);color:var(--color-text-success)">A</div>
       <div><div style="font-size:15px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--color-text-secondary)">Administrador</div></div>
@@ -1608,7 +1616,7 @@ function goMod(id,title,btn){
     }
     renderVentas();
   }catch(e){}}
-  if(id==='mod-ig'&&typeof renderLibro==='function'){try{var _igAct=document.querySelector('#mod-ig .nav button.act');if(!_igAct){var _igFirst=document.querySelector('#mod-ig .nav button');if(_igFirst)_igFirst.click();}else{renderLibro();}}catch(e){}}
+  if(id==='mod-ig'&&typeof renderLibro==='function'){try{renderLibro();}catch(e){}}
   if(id==='mod-ig'&&typeof renderCajas==='function'){try{renderCajas();}catch(e){}}
   if(id==='mod-cli'&&typeof renderLista==='function'){try{renderLista();}catch(e){}}
   if(id==='mod-admin'&&typeof renderAdmin==='function'){try{renderAdmin();}catch(e){console.error('renderAdmin error:',e);}}
@@ -1664,28 +1672,15 @@ function erpLogout(){
 }
 
 const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Padre:{pin:'0000',color:'var(--color-background-warning)',tc:'var(--color-text-warning)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos']}};
-(function(){
-  try{
-    var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');
-    var _keys=Object.keys(_su);
-    var _valid=_keys.every(function(k){return _su[k]&&_su[k].pin;});
-    if(_keys.length>0&&_valid){
-      _keys.forEach(function(k){USERS[k]=_su[k];});
-    } else if(_keys.length>0&&!_valid) {
-      localStorage.removeItem('erp_users_cache');
-    }
-  }catch(e){ localStorage.removeItem('erp_users_cache'); }
-
-})();
+(function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){if(_su[k]&&_su[k].pin)USERS[k]=_su[k];});}catch(e){}})();
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
-async function syncSaveUser(nombre,u){
-  if(typeof supaReq==='undefined') return;
-  if(!_supaOnline){ enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:nombre,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false}}); return; }
-  try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:nombre,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn('syncSaveUser:',e);}
+async function syncSaveUser(n,u){
+  if(typeof supaReq==='undefined'||!_supaOnline){try{enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false}});}catch(e){}return;}
+  try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn(e);}
 }
-async function syncDeleteUser(nombre){
+async function syncDeleteUser(n){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
-  try{await supaReq('DELETE','usuarios?nombre=eq.'+encodeURIComponent(nombre));}catch(e){}
+  try{await supaReq('DELETE','usuarios?nombre=eq.'+encodeURIComponent(n));}catch(e){}
 }
 async function syncLoadUsers(){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
@@ -1697,9 +1692,20 @@ async function syncLoadUsers(){
       USERS[row.nombre]={pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',color:row.color||'',tc:row.tc||'',modulos:row.modulos||[],activo:row.activo!==false,puedeVender:row.puede_vender!==false};
     });
     saveUsers();
-    if(typeof renderLoginCards==='function') renderLoginCards();
+    if(typeof renderLoginCards==='function')renderLoginCards();
     if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
   }catch(e){console.warn('syncLoadUsers:',e);}
+}
+function renderLoginCards(){
+  var el=document.getElementById('user-cards-list');if(!el)return;
+  el.innerHTML=Object.keys(USERS).filter(function(k){return USERS[k]&&USERS[k].activo!==false;}).map(function(name){
+    var u=USERS[name];
+    return '<div class="user-card" onclick="selUser(\'' + name + '\',this)">'
+      +'<div class="user-avatar" style="background:'+(u.color||'var(--color-background-secondary)')+';color:'+(u.tc||'var(--color-text-primary)')+'">'+name[0].toUpperCase()+'</div>'
+      +'<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
+      +'<div style="font-size:11px;color:var(--color-text-secondary)">'+(u.rol==='admin'?'Administrador':'Vendedor')+'</div></div>'
+      +'</div>';
+  }).join('');
 }
 const MONEDAS=['USD','EUR','CUP','CUPT'];
 const PRODS=[
@@ -1794,7 +1800,6 @@ function logout(){
 function selAlm(a,el){S.alm=a;document.querySelectorAll('.alm-card').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');}
 function goProductos(){
   if(!S.alm){alert('Elige un almacén');return;}
-  if(USERS[S.user]&&USERS[S.user].puedeVender===false){showToast('Sin permiso para realizar ventas');return;}
   S.cli=document.getElementById('s-cli').value||'Walk-in';
   S.cart=[];S.tipo='Minorista';S.cartMon='USD';
   document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
@@ -2225,24 +2230,6 @@ function otraVentaMismoAlmacen(){
 }
 renderSteps(0);
 
-function renderLoginCards(){
-  var el = document.getElementById('user-cards-list');
-  if(!el) return;
-  var names = Object.keys(USERS).filter(function(k){ return USERS[k] && USERS[k].activo!==false; });
-  el.innerHTML = names.map(function(name){
-    var u = USERS[name];
-    var rol = u.rol==='admin' ? 'Administrador' : 'Vendedor';
-    var bg = u.color || 'var(--color-background-secondary)';
-    var tc = u.tc   || 'var(--color-text-primary)';
-    return '<div class="user-card" onclick="selUser(''+name+'',this)">'
-      + '<div class="user-avatar" style="background:'+bg+';color:'+tc+'">'+name[0].toUpperCase()+'</div>'
-      + '<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
-      + '<div style="font-size:11px;color:var(--color-text-secondary)">'+rol+'</div></div>'
-      + '</div>';
-  }).join('');
-}
-// renderLoginCards called after USERS is defined (see below)
-
 
 
 
@@ -2347,16 +2334,11 @@ function filtrar_ven(){
 
 // ── RENDER VENTAS ─────────────────────────────────────────
 function renderVentas(){
-  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  // Show Mi Caja tab only for vendedor
-  var _mc = document.getElementById('btn-micaja-nav');
-  if(_mc) _mc.style.display = _isVend ? '' : 'none';
-  // Hide comisiones + liquidacion tabs for vendedor
-  var _bc=document.getElementById('btn-com-nav'); if(_bc)_bc.style.display=_isVend?'none':'';
-  var _bl=document.getElementById('btn-liq-nav'); if(_bl)_bl.style.display=_isVend?'none':'';
-  // Hide commission table headers
+  var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _mc=document.getElementById('btn-micaja-nav');if(_mc)_mc.style.display=_isVend?'':'none';
+  var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
+  var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
   ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVend?'none':'';});
-  // Hide checkbox column and sel-bar for vendedor
   var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
   var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
 
@@ -2372,8 +2354,8 @@ function renderVentas(){
     <div class="metric"><div class="lbl">Venta total USD</div><div class="val">${fN(totUSD)}</div><div class="sub">${data.length} ops</div></div>
     <div class="metric"><div class="lbl">Equiv. EUR</div><div class="val">${fN(fromUSD(totUSD,'EUR'))}</div><div class="sub">equiv.</div></div>
     <div class="metric"><div class="lbl">Equiv. CUP</div><div class="val">${fN(fromUSD(totUSD,'CUP'),0)}</div><div class="sub">equiv.</div></div>
-    ${_isVend?'':'<div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">'+fN(totCom)+'</div><div class="sub">USD (con com.)</div></div><div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">'+fN(pdte)+'</div><div class="sub">USD sin liquidar</div></div>'}
-    `;
+    <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD (con com.)</div></div>
+    <div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD sin liquidar</div></div>`;
 
   document.getElementById('v-count-lbl').textContent=`Ventas filtradas — ${data.length} resultados`;
 
@@ -2390,12 +2372,8 @@ function renderVentas(){
       <td style="font-size:10px;max-width:130px;color:var(--color-text-secondary)">${v.prods}</td>
       <td style="font-weight:500;text-align:right">${fN(v.totalUSD)}</td>
       <td style="font-size:11px">${v.mon}</td>
-      <td style="${_isVend?'display:none':''}">${v.estCom==='No aplica'
-        ?'<span style="font-size:11px;color:var(--color-text-tertiary)">—</span>'
-        :`<input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100"
-           onchange="updComPct(${v.id},this.value)" title="Editar %">&nbsp;<span style="font-size:10px;color:var(--color-text-tertiary)">%</span>`}
-      </td>
-      <td style="${_isVend?'display:none':''}text-align:right;font-weight:500;color:${v.estCom==='No aplica'?'var(--color-text-tertiary)':'var(--color-text-warning)'}">${v.estCom==='No aplica'?'—':fN(v.comUSD)}</td>
+      <td style="${_isVend?'display:none':''}"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
+      <td style="${_isVend?'display:none':''}text-align:right;font-weight:500">${fN(v.comUSD)}</td>
       <td style="${_isVend?'display:none':''}">${renderEstComCell(v)}</td>
       <td style="font-size:11px;overflow:hidden;max-width:120px;color:var(--color-text-secondary)">${v.nota||''}</td>
       <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger)">×</button>'}</td>
@@ -4136,20 +4114,19 @@ function admGuardarUser(key) {
   var colorDef = ADMIN_COLORES[colorIdx] || ADMIN_COLORES[0];
   var modulos = getSelectedModulos();
   if(rol==='admin') modulos = Object.keys(MOD_LABELS);
-  var puedeVender = document.getElementById('eu-puede-vender') ? document.getElementById('eu-puede-vender').checked : true;
-  USERS[nombre] = {pin:pin, rol:rol, almacen:almacen, color:colorDef.bg, tc:colorDef.tc, activo:true, modulos:modulos, puedeVender:puedeVender};
-  saveUsers(); syncSaveUser(nombre, USERS[nombre]);
-  showToast(isNew ? 'Usuario creado: ' + nombre : 'Actualizado: ' + nombre);
-  editingUser = null;
-  renderAdminUsuarios();
+  var puedeVender=document.getElementById('eu-puede-vender')?document.getElementById('eu-puede-vender').checked:true;
+  USERS[nombre]={pin:pin,rol:rol,almacen:almacen,color:colorDef.bg,tc:colorDef.tc,activo:true,modulos:modulos,puedeVender:puedeVender};
+  saveUsers();syncSaveUser(nombre,USERS[nombre]);renderLoginCards();
+  showToast(isNew?'Usuario creado: '+nombre:'Actualizado: '+nombre);
+  editingUser=null;renderAdminUsuarios();
 }
 
 function admElimUser(nombre) {
   if (nombre === 'Admin') { showToast('No se puede eliminar Admin'); return; }
   if (!confirm('¿Eliminar usuario "' + nombre + '"?')) return;
   delete USERS[nombre];
-  saveUsers(); syncDeleteUser(nombre);
-  showToast('Usuario eliminado: ' + nombre);
+  saveUsers();syncDeleteUser(nombre);renderLoginCards();
+  showToast('Usuario eliminado: '+nombre);
   renderAdminUsuarios();
 }
 
@@ -6358,77 +6335,56 @@ function renderStock() {
 </script>
 
 <script>
-function renderStock() {
-  var el = document.getElementById('stock-root');
-  if (!el) return;
-  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  var _movPanel = document.getElementById('stock-movs-panel');
-  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
-  var alms = ['Habana','Placetas','Xportprise'];
-  var q = (window._stockQ||'').toLowerCase();
-  var catF = window._stockCat||'';
-  var almF = window._stockAlm||'';
-  var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user] ? USERS[S.user].almacen : '';
-  var activos = PRODS.filter(function(p){ return p.activo !== false; });
-  var total = activos.reduce(function(a,p){ return a+(p.stk||0); }, 0);
-  var bajos = activos.filter(function(p){ return (p.stk||0)<=(p.stk_min||10); }).length;
-  var catSet = {};
-  activos.forEach(function(p){ if(p.cat) catSet[p.cat]=1; });
-  var cats = Object.keys(catSet).sort();
-  var prods = activos.filter(function(p){
-    if (q && p.n.toLowerCase().indexOf(q)<0) return false;
-    if (catF && p.cat !== catF) return false;
-    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
+function renderStock(){
+  var el=document.getElementById('stock-root');if(!el)return;
+  var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _mp=document.getElementById('stock-movs-panel');if(_mp)_mp.style.display=_isVend?'none':'';
+  var alms=['Habana','Placetas','Xportprise'];
+  var q=(window._stockQ||'').toLowerCase(),catF=window._stockCat||'',almF=window._stockAlm||'';
+  var userAlm=typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+  var activos=PRODS.filter(function(p){return p.activo!==false;});
+  var total=activos.reduce(function(a,p){return a+(p.stk||0);},0);
+  var bajos=activos.filter(function(p){return(p.stk||0)<=(p.stk_min||10);}).length;
+  var cats=Object.keys(activos.reduce(function(a,p){if(p.cat)a[p.cat]=1;return a;},{})).sort();
+  var prods=activos.filter(function(p){
+    if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
+    if(catF&&p.cat!==catF)return false;
+    if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
     return true;
   });
-  var visAlms = almF ? [almF] : alms;
-  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
-  h += '<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
-  h += '<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
-  alms.forEach(function(a){
-    var tot = activos.reduce(function(s,p){ return s+((p.stk_alm&&p.stk_alm[a])||0); },0);
-    h += '<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(tot,0)+'</div></div>';
-  });
-  h += '</div>';
-  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
-    + '<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
-    + '<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todos almacenes</option>'
-    + alms.map(function(a){ return '<option'+(almF===a?' selected':'')+'>'+a+'</option>'; }).join('')
-    + '</select>'
-    + '<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todas cats</option>'
-    + cats.map(function(c){ return '<option'+(catF===c?' selected':'')+'>'+c+'</option>'; }).join('')
-    + '</select>'
-    + (bajos>0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>' : '')
-    + '</div>';
-  h += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-    + '<th>Producto</th><th>Cat.</th>'
-    + visAlms.map(function(a){ return '<th style="text-align:right">'+a+'</th>'; }).join('')
-    + '<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th>'
-    + '</tr></thead><tbody>';
-  if (!prods.length) {
-    h += '<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
-  } else {
-    prods.forEach(function(p){
-      var bajo = (p.stk||0) <= (p.stk_min||10);
-      h += '<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'+
-        '<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'+
-        '<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
-      visAlms.forEach(function(a){
-        var v = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
-        var bold = a===userAlm ? '700' : '400';
-        var col = v===0 ? 'var(--color-text-tertiary)' : v<=(p.stk_min||10) ? 'var(--color-text-warning)' : 'var(--color-text-primary)';
-        h += '<td style="text-align:right;font-weight:'+bold+';color:'+col+'">'+fN(v,0)+'</td>';
-      });
-      h += '<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'+
-        '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+
-        (p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+  var visAlms=almF?[almF]:alms;
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
+  h+='<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
+  h+='<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
+  alms.forEach(function(a){var t=activos.reduce(function(s,p){return s+((p.stk_alm&&p.stk_alm[a])||0);},0);h+='<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(t,0)+'</div></div>';});
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    +'<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px"><option value="">Todos almacenes</option>'
+    +alms.map(function(a){return'<option'+(almF===a?' selected':'')+'>'+a+'</option>';}).join('')+'</select>'
+    +'<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px"><option value="">Todas cats</option>'
+    +cats.map(function(c){return'<option'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+    +(bajos>0?'<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>':'')
+    +'</div>';
+  h+='<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Producto</th><th>Cat.</th>'
+    +visAlms.map(function(a){return'<th style="text-align:right">'+a+'</th>';}).join('')
+    +'<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th></tr></thead><tbody>';
+  if(!prods.length){h+='<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';}
+  else{prods.forEach(function(p){
+    var bajo=(p.stk||0)<=(p.stk_min||10);
+    h+='<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'
+      +'<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'
+      +'<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
+    visAlms.forEach(function(a){
+      var v=(p.stk_alm&&p.stk_alm[a]!=null)?p.stk_alm[a]:0;
+      h+='<td style="text-align:right;font-weight:'+(a===userAlm?'700':'400')+';color:'+(v===0?'var(--color-text-tertiary)':v<=(p.stk_min||10)?'var(--color-text-warning)':'var(--color-text-primary)')+'">'+fN(v,0)+'</td>';
     });
-  }
-  h += '</tbody></table></div>';
-  el.innerHTML = h;
-  if (typeof renderStockMovimientos==='function') try{renderStockMovimientos();}catch(e){}
+    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'
+      +'<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+(p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+  });}
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}
 }
 </script>
 </body>
