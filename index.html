@@ -1553,7 +1553,11 @@ async function supaInit() {
 
   // Sync every 2 min + save cache every 30s
   setInterval(async function() {
-    if (_supaOnline) { await flushQueue(); await syncLoadVentas(); }
+    if (_supaOnline) { 
+      await flushQueue(); 
+      await syncLoadVentas(); 
+      await syncLoadClientes();
+    }
   }, 120000);
   setInterval(function() {
     if (_supaOnline && VENTAS.length) {
@@ -1761,7 +1765,7 @@ async function syncSaveAbono(cliId, folioId, ab){
 async function syncLoadClientes(){
   if(!_supaOnline||typeof supaReq==='undefined') return;
   try{
-    var rc = await supaReq('GET','clientes?select=*&activo=eq.true&order=nombre.asc');
+    var rc = await supaReq('GET','clientes?select=*&order=nombre.asc');
     if(!rc.ok) return;
     var clis = await rc.json();
     if(!clis||!clis.length) return;
@@ -3763,7 +3767,7 @@ function registrarAbonoCli(cid){
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
   offlineSaveClientes();
-  syncSaveAbono(cid, target.id, abono);
+  (async function(){ await syncSaveAbono(cid, target.id, abono); })();
   // Sync abono to Supabase
   if(typeof supaReq!=='undefined'&&typeof _supaOnline!=='undefined'&&_supaOnline){
     supaReq('POST','clientes_abonos?on_conflict=id',{
@@ -3877,8 +3881,12 @@ function crearFolioCli(cid){
   });
   window['nfl_'+cid]=[];
   offlineSaveClientes();
-  syncSaveCliente(c);
-  syncSaveFolio(c.id, newFolio);
+  (async function(){
+    await syncSaveCliente(c);
+    await syncSaveFolio(c.id, newFolio);
+    // sync abonos iniciales if any
+    for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
+  })();
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
 }
@@ -3920,7 +3928,10 @@ function crearCliente(){
   })(CLIENTES[CLIENTES.length-1]);
   hideModal();renderLista();
   offlineSaveClientes();
-  syncSaveCliente(CLIENTES[CLIENTES.length-1]);
+  (async function(){
+    await syncSaveCliente(CLIENTES[CLIENTES.length-1]);
+    if(_supaOnline) showToast('✓ Cliente guardado en Supabase');
+  })();
   showToast('Cliente '+nombre+' creado');
 }
 
