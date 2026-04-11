@@ -3230,7 +3230,8 @@ const COLORES=[
   {bg:'var(--color-background-danger)',tc:'var(--color-text-danger)',id:'dang'},
   {bg:'var(--color-background-secondary)',tc:'var(--color-text-secondary)',id:'sec'},
 ];
-const PRODS_NAMES = ['Cuadrado S275JR 16','Cuadrado S275JR 14','Cuadrado S275JR 12','Perfil Angular 40x40x4','Perfil Angular 30x30x3','Perfil Angular 25x25x3','Chapa galv. 2000x1000x1','Chapa galv. 2000x1000x0,8','ANG. 30x30x3x6000','ANG. 40x40x4x6000','Redondo S275JR 12','Redondo S275JR 16','T. CUA 40x1.5x6000','T. RECT. 50x30x2.0','Varillas E6013 3.2x350mm'];
+var PRODS_NAMES = [];
+function _getProdNames(){ return PRODS.filter(function(p){return p.activo!==false;}).map(function(p){return p.n;}); }
 const ICON={efectivo:'💵',arancel:'📋',flete:'🚛',estiba:'📦',interes:'📈',viaje:'🚗',otro:'•'};
 const HINTS={efectivo:'Cash, transferencia, FM...',arancel:'Aranceles, impuestos aduana',flete:'Flete marítimo o terrestre',estiba:'Carga, descarga',interes:'Intereses de financiación',viaje:'Viajes, desplazamientos',otro:''};
 
@@ -3491,7 +3492,7 @@ function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.foli
 function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;renderFichaFolios(c);}
 function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);renderFichaFolios(c);}
-function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:PRODS_NAMES[0],q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
+function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
 function elimA(cid,fid,aid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.abonos=f.abonos.filter(a=>a.id!==aid);renderFichaFolios(c);renderFichaCuenta(c);}
 function irAbonar(cid,fid){
@@ -3690,7 +3691,7 @@ function renderFichaNF(c){
 }
 function addNFLCli(cid){
   if(!window['nfl_'+cid])window['nfl_'+cid]=[];
-  window['nfl_'+cid].push({prod:PRODS_NAMES[0],q:1,precio:20,mon:'USD'});
+  window['nfl_'+cid].push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD'});
   renderNFLCli(cid);
 }
 function renderNFLCli(cid){
@@ -3699,7 +3700,7 @@ function renderNFLCli(cid){
   c.innerHTML=lineas.map((l,i)=>`
     <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
       <select style="flex:2;min-width:140px;font-size:11px" onchange="window['nfl_${cid}'][${i}].prod=this.value">
-        ${PRODS_NAMES.map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
+        ${_getProdNames().map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
       <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].q=parseInt(this.value)||1;updNFTotCli('${cid}')">
       <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;updNFTotCli('${cid}')">
