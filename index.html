@@ -3775,6 +3775,16 @@ function registrarAbonoCli(cid){
   const cajaTipo=enCaja?document.getElementById('a-cajatipo-'+cid).value:null;
   if(!monto){alert('Introduce el monto');return;}
   if(!desc){alert('Añade una descripción');return;}
+  // Validate monto doesn't exceed pendiente
+  var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
+  if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
+  if(_targetCheck){
+    var _pdt=pdtF(_targetCheck);
+    var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
+    if(_abonoUSD>_pdt+0.01){
+      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
+    }
+  }
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasa,equivUSD:parseFloat(equivUSD.toFixed(2)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
@@ -3788,19 +3798,23 @@ function registrarAbonoCli(cid){
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
   offlineSaveClientes();
-  // Add to caja if enCaja
+  // Add to caja if enCaja — via mov_cajas
   if(enCaja&&caja){
-    var _cajaNombre=caja;
-    var _cajaObj=CAJAS?CAJAS.find(function(x){return x.nombre===_cajaNombre;}):null;
-    if(_cajaObj){
-      var _cajaMov={id:'cm'+Date.now(),fecha:fecha,desc:'Abono cliente '+c.nombre+' — '+desc,
-        tipo:'ingreso',monto:equivUSD,mon:'USD',caja:_cajaNombre};
-      if(!_cajaObj.movs) _cajaObj.movs=[];
-      _cajaObj.movs.push(_cajaMov);
-      _cajaObj.saldo=(_cajaObj.saldo||0)+equivUSD;
-      if(typeof offlineSaveCajas==='function') offlineSaveCajas();
-      if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+    var _cajaMov={
+      caja_destino:caja,
+      descripcion:'Abono '+c.nombre+' — '+desc,
+      tipo:'ingreso',
+      monto_destino:equivUSD,
+      moneda_destino:'USD',
+      fecha:fecha,
+      created_at:new Date().toISOString()
+    };
+    _cajasMovs.push(_cajaMov);
+    if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+    if(_supaOnline&&typeof supaReq!=='undefined'){
+      supaReq('POST','mov_cajas',_cajaMov).catch(function(e){console.warn('mov_cajas:',e);});
     }
+    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
   }
   (async function(){
     await syncSaveAbono(cid, target.id, abono);
