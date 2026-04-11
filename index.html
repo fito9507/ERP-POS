@@ -1345,25 +1345,38 @@ async function syncSaveVenta(v) {
     notas:        v.nota    || '',
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[]}) : ''
   };
+  // Include supaId if we already have it (for upsert)
+  if(v.supaId) row.id = v.supaId;
+
   if (_supaOnline) {
     try {
-      var r = await supaReq('POST', 'ventas', row);
+      var path = v.supaId ? 'ventas?id=eq.'+v.supaId : 'ventas';
+      var method = v.supaId ? 'PATCH' : 'POST';
+      var r = await supaReq(method, path, row);
       if (r.ok) {
-        var data = await r.json();
-        if (data && data[0] && data[0].id) v.supaId = data[0].id;
-        console.log('Venta guardada en Supabase, id:', data && data[0] && data[0].id);
+        if(!v.supaId){
+          var data = await r.json();
+          if (data && data[0] && data[0].id){
+            v.supaId = data[0].id;
+            // Save back to local with supaId
+            offlineSaveVentas();
+          }
+        }
         showSyncStatus('✓ Guardado');
         return true;
       } else {
         var errText = await r.text();
-        console.error('syncSaveVenta HTTP error:', r.status, errText);
-        showToast('Error guardando venta: ' + r.status);
+        console.error('syncSaveVenta error:', r.status, errText);
+        // Queue for retry
+        enqueue({ method: 'POST', path: 'ventas', body: row });
       }
     } catch(e) {
-      console.error('syncSaveVenta error:', e);
+      console.error('syncSaveVenta:', e);
+      enqueue({ method: 'POST', path: 'ventas', body: row });
     }
+  } else {
+    enqueue({ method: 'POST', path: 'ventas', body: row });
   }
-  enqueue({ method: 'POST', path: 'ventas', body: row });
   return false;
 }
 
@@ -1529,8 +1542,6 @@ async function supaInit() {
       showToast('✓ ' + VENTAS.length + ' ventas · ' + PRODS.length + ' productos');
     await syncLoadUsers();
     await syncLoadClientes();
-    await syncLoadMovs();
-    await syncLoadDeudas();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -1559,7 +1570,6 @@ async function supaInit() {
       await flushQueue(); 
       await syncLoadVentas(); 
       await syncLoadClientes();
-      await syncLoadMovs();
     }
   }, 120000);
   setInterval(function() {
@@ -1824,79 +1834,6 @@ async function syncPushAllClientes(){
   }
   showToast('✓ Clientes sincronizados con Supabase');
 }
-
-// ═══ MOVS + DEUDAS SYNC ═══
-async function syncSaveMov(m){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    await supaReq('POST','movimientos_ig?on_conflict=id',{
-      id:m.id, fecha:m.fecha, tipo:m.tipo, descripcion:m.desc||'',
-      monto:m.monto||0, moneda:m.mon||'USD', equiv_usd:m.equivUSD||0,
-      cuenta:m.cta||'', sentido:m.sentido||'gasto', notas:m.notas||'',
-      vendedor:m.vend||'', acreedor:m.acreedor||''
-    });
-  }catch(e){console.warn('syncSaveMov:',e);}
-}
-
-async function syncLoadMovs(){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    var r=await supaReq('GET','movimientos_ig?select=*&order=fecha.desc');
-    if(!r.ok)return;
-    var rows=await r.json();
-    if(!rows||!rows.length)return;
-    MOVS.length=0;
-    rows.forEach(function(row){
-      MOVS.push({
-        id:row.id, fecha:row.fecha, tipo:row.tipo, desc:row.descripcion||'',
-        monto:parseFloat(row.monto||0), mon:row.moneda||'USD',
-        equivUSD:parseFloat(row.equiv_usd||0), cta:row.cuenta||'',
-        sentido:row.sentido||'gasto', notas:row.notas||'',
-        vend:row.vendedor||'', acreedor:row.acreedor||''
-      });
-    });
-    igNextId=MOVS.reduce(function(a,m){return Math.max(a,m.id||0);},0)+1;
-    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-    if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
-    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
-  }catch(e){console.warn('syncLoadMovs:',e);}
-}
-
-async function syncSaveDeuda(d){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    await supaReq('POST','deudas?on_conflict=id',{
-      id:d.id, acreedor:d.acreedor||'', concepto:d.concepto||'',
-      mon_orig:d.monOrig||'USD', monto_orig:d.montOrig||0,
-      total_usd:d.totalUSD||0, pendiente_usd:d.pendienteUSD||0,
-      cuota_mes:d.cuotaMes||0, activa:d.activa!==false
-    });
-  }catch(e){console.warn('syncSaveDeuda:',e);}
-}
-
-async function syncLoadDeudas(){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    var r=await supaReq('GET','deudas?select=*&order=id.asc');
-    if(!r.ok)return;
-    var rows=await r.json();
-    if(!rows||!rows.length)return;
-    DEUDAS.length=0;
-    rows.forEach(function(row){
-      DEUDAS.push({
-        id:row.id, acreedor:row.acreedor, concepto:row.concepto,
-        monOrig:row.mon_orig, montOrig:parseFloat(row.monto_orig||0),
-        totalUSD:parseFloat(row.total_usd||0),
-        pendienteUSD:parseFloat(row.pendiente_usd||0),
-        cuotaMes:parseFloat(row.cuota_mes||0), activa:row.activa!==false
-      });
-    });
-    try{localStorage.setItem('erp_deudas',JSON.stringify(DEUDAS));}catch(e){}
-    if(typeof renderDeudas==='function')try{renderDeudas();}catch(e){}
-  }catch(e){console.warn('syncLoadDeudas:',e);}
-}
-
-
 
 
 const MONEDAS=['USD','EUR','CUP','CUPT'];
@@ -3011,20 +2948,26 @@ const CUENTAS_BASE={
 };
 
 // ── DEUDAS BASE ───────────────────────────────────────────
-let DEUDAS=[];
-(function(){try{var _d=JSON.parse(localStorage.getItem('erp_deudas')||'[]');if(_d&&_d.length)DEUDAS=_d;}catch(e){}})();
+let DEUDAS=[
+  {id:1,acreedor:'Fito',concepto:'Préstamo Tarjeta Crédito',monOrig:'EUR',montOrig:14600,totalUSD:16781.24,pendienteUSD:16781.24,cuotaMes:280,activa:true},
+  {id:2,acreedor:'Fito',concepto:'Préstamo Empresa',monOrig:'EUR',montOrig:11320,totalUSD:13011.21,pendienteUSD:13011.21,cuotaMes:226.85,activa:true},
+];
 
 // ── MOVIMIENTOS I/G ───────────────────────────────────────
-let MOVS=[];
-(function(){
-  try{
-    var _m=JSON.parse(localStorage.getItem('erp_movs')||'[]');
-    if(_m&&_m.length){
-      MOVS=_m;
-      igNextId=_m.reduce(function(a,m){return Math.max(a,m.id||0);},0)+1;
-    }
-  }catch(e){}
-})();
+let MOVS=[
+  {id:1,fecha:'2025-03-16',tipo:'Comisión vendedor',desc:'Comisión Keiler semana 2-7 mar',vend:'Keiler',alm:'Habana',monto:122855,mon:'CUP',equivUSD:241.10,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:2,fecha:'2025-03-23',tipo:'Comisión vendedor',desc:'Comisión Keiler 23 mar',vend:'Keiler',alm:'Habana',monto:43030,mon:'CUP',equivUSD:84.45,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:3,fecha:'2025-04-01',tipo:'Gasto operativo',desc:'Parrilla Domicilio',monto:50000,mon:'CUP',equivUSD:98.12,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:4,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens 5 Certificaciones',monto:1000,mon:'USD',equivUSD:1000,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:5,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens Cítricos Acreditación',monto:400,mon:'USD',equivUSD:400,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:6,fecha:'2025-08-28',tipo:'Gasto operativo',desc:'Flete Mariel-Habana (Leodan)',monto:80000,mon:'CUP',equivUSD:157,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:7,fecha:'2025-09-01',tipo:'Comisión vendedor',desc:'Comisión Keiler Leodan container',vend:'Keiler',alm:'Habana',monto:700,mon:'USD',equivUSD:700,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:8,fecha:'2025-09-01',tipo:'Gasto operativo',desc:'Comisión Ernes',monto:600,mon:'USD',equivUSD:600,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:9,fecha:'2025-03-15',tipo:'Préstamo recibido',desc:'Préstamo Miguel Á. → Yano',acreedor:'Miguel Á.',monto:4000,mon:'USD',equivUSD:4000,cta:'USD Habana',sentido:'ingreso',notas:''},
+  {id:10,fecha:'2025-03-24',tipo:'Préstamo recibido',desc:'Préstamo Sofi → Xportprise',acreedor:'Sofi',monto:4023,mon:'EUR',equivUSD:4623,cta:'EUR España',sentido:'ingreso',notas:''},
+  {id:11,fecha:'2025-10-15',tipo:'Amortización deuda',desc:'Cuota oct — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 1/94'},
+  {id:12,fecha:'2025-11-15',tipo:'Amortización deuda',desc:'Cuota nov — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 2/94'},
+];
 let igNextId =13;
 
 
@@ -3195,8 +3138,6 @@ function registrar(){
     mov.sentido='gasto';mov.desc=mov.desc+' (salida)';
   }
   MOVS.unshift(mov);
-  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-  if(typeof syncSaveMov==='function')(async function(){await syncSaveMov(mov);})();
   // mostrar en recientes
   const rc=document.getElementById('nuevo-recientes');
   if(rc.children[0]?.style.textAlign==='center')rc.innerHTML='';
@@ -3223,9 +3164,7 @@ function registrar(){
 
 function eliminar(id){
   if(!confirm('¿Eliminar este movimiento?'))return;
-  MOVS=MOVS.filter(m=>m.id!==id);
-  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-  renderLibro();
+  MOVS=MOVS.filter(m=>m.id!==id);renderLibro();
 }
 
 // ── CAJAS ─────────────────────────────────────────────────
@@ -3361,17 +3300,12 @@ function pagarCuota(id){
     desc:`Cuota ${d.concepto}`,acreedor:d.acreedor,monto,mon:'EUR',
     equivUSD:parseFloat(toUSD(monto,'EUR').toFixed(2)),
     cta:'EUR España',sentido:'gasto',notas:''});
-  try{localStorage.setItem('erp_deudas',JSON.stringify(DEUDAS));}catch(e){}
-  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-  if(typeof syncSaveMov==='function')(async function(){await syncSaveMov(MOVS[0]);})();
-  if(typeof syncSaveDeuda==='function')(async function(){var _d=DEUDAS.find(function(x){return x.id===id;});if(_d)await syncSaveDeuda(_d);})();
   renderDeudas();renderCajas();
   showToast(`Cuota registrada — ${fN(monto)} EUR`);
 }
 function liquidarDeuda(id){
   if(!confirm('¿Marcar esta deuda como completamente liquidada?'))return;
   const d=DEUDAS.find(x=>x.id===id);if(d)d.activa=false;
-  try{localStorage.setItem('erp_deudas',JSON.stringify(DEUDAS));}catch(e){}
   renderDeudas();showToast('Deuda liquidada');
 }
 
@@ -3385,7 +3319,7 @@ function exportCSV(){
 
 document.getElementById('l-desde').value='2025-01-01';
 document.getElementById('l-hasta').value='2026-12-31';
-if(MOVS.length) renderLibro();
+renderLibro();
 
 
 function renderGestionCajasWrap() {
@@ -3959,29 +3893,28 @@ function crearFolioCli(cid){
     }
   });
   window['nfl_'+cid]=[];
-  offlineSaveClientes();
-  // Register as venta in VENTAS array too
-  var _ventaFolio = {
-    id: venNextId++,
-    fecha: fecha,
-    vend: (typeof S!=='undefined'&&S.user)||'Admin',
-    alm: alm,
-    cli: c.nombre,
-    tipo: 'Mayorista',
-    mon: mon,
-    prods: lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
-    totalUSD: lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0),
-    comPct: 0, comUSD: 0, estCom: 'No aplica',
-    nota: 'Folio '+fid+' — '+desc,
-    pagos: [], vueltos: []
+  // Register as venta
+  var _ventaFolio={
+    id:venNextId++, fecha:fecha,
+    vend:(typeof S!=='undefined'&&S.user)||'Admin',
+    alm:alm, cli:c.nombre, tipo:'Mayorista', mon:mon,
+    prods:lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
+    totalUSD:lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0),
+    comPct:0, comUSD:0, estCom:'No aplica',
+    nota:'Folio '+fid+' — '+desc,
+    pagos:[], vueltos:[]
   };
   VENTAS.unshift(_ventaFolio);
-  if(typeof offlineSaveVentas==='function') offlineSaveVentas();
+  offlineSaveVentas();
+  offlineSaveClientes();
   (async function(){
-    await syncSaveCliente(c);
-    await syncSaveFolio(c.id, newFolio);
-    for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
-    if(typeof syncSaveVenta==='function') await syncSaveVenta(_ventaFolio);
+    try{
+      await syncSaveCliente(c);
+      await syncSaveFolio(c.id, newFolio);
+      for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
+      await syncSaveVenta(_ventaFolio);
+      offlineSaveVentas();
+    }catch(e){console.warn('folio sync:',e);}
   })();
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
