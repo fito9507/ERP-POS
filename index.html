@@ -1743,11 +1743,14 @@ async function _supaUpsert(table, idCol, idVal, body){
     var r=await supaReq('POST', table, body);
     if(r.ok) return true;
     var txt=await r.text();
-    // On conflict, update existing record
-    if(r.status===409||r.status===400&&txt.indexOf('duplicate')>=0||txt.indexOf('23505')>=0){
-      var r2=await supaReq('PATCH', table+'?'+idCol+'=eq.'+encodeURIComponent(idVal), body);
+    if(r.status===409||txt.indexOf('23505')>=0||txt.indexOf('duplicate')>=0){
+      // Remove id from patch body to avoid conflicts
+      var patchBody=Object.assign({},body);
+      delete patchBody[idCol];
+      var r2=await supaReq('PATCH', table+'?'+idCol+'=eq.'+encodeURIComponent(idVal), patchBody);
       if(r2.ok) return true;
-      console.warn('_supaUpsert PATCH '+table+':', r2.status);
+      var txt2=await r2.text();
+      console.warn('_supaUpsert PATCH '+table+':', r2.status, txt2);
       return false;
     }
     console.warn('_supaUpsert '+table+' error:', r.status, txt);
