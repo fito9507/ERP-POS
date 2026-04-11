@@ -3581,7 +3581,7 @@ function renderFichaFolios(c){
           <div style="padding:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <h4 style="margin:0">Productos</h4>
-              <button class="btn-sm" onclick="addLF('${c.id}','${f.id}')">+ línea</button>
+              <button class="btn-sm" onclick="event.stopPropagation();addLF('${c.id}','${f.id}')">+ línea</button>
             </div>
             <div class="prod-row hdr"><span>Producto</span><span style="text-align:right">Cant.</span><span style="text-align:right">P.unit.</span><span>Mon.</span><span style="text-align:right">Total</span><span></span></div>
             <div id="pl-${c.id}-${f.id}">${renderPL(c,f)}</div>
@@ -3620,8 +3620,8 @@ function renderPL(c,f){
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
       <span style="font-size:11px">${l.prod}</span>
-      <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onchange="updLQ('${c.id}','${f.id}',${i},this.value)"></span>
-      <span><input type="number" class="pi" value="${l.precio}" step="0.01" onchange="updLP('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="pi" value="${l.precio}" step="0.01" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
       <span style="text-align:right;font-weight:500">${fN(toUSD(l.q*l.precio,l.mon))}</span>
       <span>${l.q!==l.qO||l.precio!==l.pO?`<span class="badge ba" style="font-size:9px;cursor:pointer" onclick="restL('${c.id}','${f.id}',${i})">mod</span>`:''}
@@ -3785,17 +3785,26 @@ function registrarAbonoCli(cid){
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
   offlineSaveClientes();
-  (async function(){ await syncSaveAbono(cid, target.id, abono); })();
-  // Sync abono to Supabase
-  if(typeof supaReq!=='undefined'&&typeof _supaOnline!=='undefined'&&_supaOnline){
-    supaReq('POST','clientes_abonos?on_conflict=id',{
-      id:abono.id, cliente_id:cid, folio_id:target.id,
-      fecha:abono.fecha, concepto:abono.concepto, desc:abono.desc,
-      monto:abono.monto, moneda:abono.mon, equiv_usd:abono.equivUSD,
-      en_caja:abono.enCaja, caja:abono.caja||null, caja_tipo:abono.cajaTipo||null
-    }).catch(function(e){console.warn('abono sync:',e);});
+  // Add to caja if enCaja
+  if(enCaja&&caja){
+    var _cajaNombre=caja;
+    var _cajaObj=CAJAS?CAJAS.find(function(x){return x.nombre===_cajaNombre;}):null;
+    if(_cajaObj){
+      var _cajaMov={id:'cm'+Date.now(),fecha:fecha,desc:'Abono cliente '+c.nombre+' — '+desc,
+        tipo:'ingreso',monto:equivUSD,mon:'USD',caja:_cajaNombre};
+      if(!_cajaObj.movs) _cajaObj.movs=[];
+      _cajaObj.movs.push(_cajaMov);
+      _cajaObj.saldo=(_cajaObj.saldo||0)+equivUSD;
+      if(typeof offlineSaveCajas==='function') offlineSaveCajas();
+      if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+    }
   }
-  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  (async function(){
+    await syncSaveAbono(cid, target.id, abono);
+    // Re-sync cliente to keep Supabase in sync
+    await syncSaveCliente(CLIENTES.find(function(x){return x.id===cid;})||{id:cid});
+  })();
+
   showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
