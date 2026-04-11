@@ -3800,20 +3800,24 @@ function registrarAbonoCli(cid){
   offlineSaveClientes();
   // Add to caja if enCaja — via mov_cajas
   if(enCaja&&caja){
+    var _cajaObj2=_cajasData?_cajasData.find(function(x){return x.nombre===caja;}):null;
     var _cajaMov={
       caja_destino:caja,
+      caja_destino_id:_cajaObj2?_cajaObj2.id:null,
       tipo:'ingreso',
       monto_destino:equivUSD,
       notas:'Abono '+c.nombre+' — '+desc,
       usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-      fecha:fecha,
-      created_at:new Date().toISOString()
+      fecha:fecha
     };
     _cajasMovs.push(_cajaMov);
     if(typeof offlineSaveClientes==='function') offlineSaveClientes();
     if(_supaOnline&&typeof supaReq!=='undefined'){
       supaReq('POST','mov_cajas',_cajaMov).catch(function(e){console.warn('mov_cajas:',e);});
     }
+    // Calculate new balance for toast
+    var _newSaldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(caja) : null;
+    if(_newSaldo!==null) showToast('Caja '+caja+': '+fN(_newSaldo)+' (actualizada)');
     if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
   }
   (async function(){
