@@ -867,7 +867,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       </div>
       <div class="g3">
         <div><label class="lbl">Cliente</label>
-          <select id="nv-cli"><option>Walk-in</option><option>Yano</option><option>Otro</option></select></div>
+          <select id="nv-cli"><option>Walk-in</option></select></div>
         <div><label class="lbl">Tipo</label>
           <select id="nv-tipo"><option>Minorista</option><option>Mayorista</option></select></div>
         <div><label class="lbl">Moneda cobro</label>
@@ -1528,6 +1528,7 @@ async function supaInit() {
       hideOfflineBanner();
       showToast('✓ ' + VENTAS.length + ' ventas · ' + PRODS.length + ' productos');
     await syncLoadUsers();
+    await syncLoadClientes();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -1718,6 +1719,106 @@ async function syncLoadUsers(){
     if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
   }catch(e){console.warn('syncLoadUsers:',e);}
 }
+
+// ═══ CLIENTES SYNC ═══
+async function syncSaveCliente(c){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  try{
+    await supaReq('POST','clientes?on_conflict=id',{
+      id:c.id, nombre:c.nombre, telefono:c.tel||'',
+      almacen:c.alm||'', color:c.color||'info',
+      notas:c.notas||'', owner:c.owner||'Admin', activo:true
+    });
+  }catch(e){console.warn('syncSaveCliente:',e);}
+}
+
+async function syncSaveFolio(cliId, f){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  try{
+    await supaReq('POST','folios?on_conflict=id',{
+      id:f.id, cliente_id:cliId, fecha:f.fecha,
+      almacen:f.alm||'', moneda:f.mon||'USD',
+      descripcion:f.desc||'',
+      lineas:JSON.stringify(f.lineas||[])
+    });
+  }catch(e){console.warn('syncSaveFolio:',e);}
+}
+
+async function syncSaveAbono(cliId, folioId, ab){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  try{
+    await supaReq('POST','abonos?on_conflict=id',{
+      id:ab.id, folio_id:folioId, cliente_id:cliId,
+      fecha:ab.fecha, concepto:ab.concepto||'',
+      descripcion:ab.desc||'', monto:ab.monto||0,
+      moneda:ab.mon||'USD', equiv_usd:ab.equivUSD||0,
+      en_caja:ab.enCaja||false, caja:ab.caja||'',
+      caja_tipo:ab.cajaTipo||''
+    });
+  }catch(e){console.warn('syncSaveAbono:',e);}
+}
+
+async function syncLoadClientes(){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  try{
+    var rc = await supaReq('GET','clientes?select=*&activo=eq.true&order=nombre.asc');
+    if(!rc.ok) return;
+    var clis = await rc.json();
+    if(!clis||!clis.length) return;
+
+    var rf = await supaReq('GET','folios?select=*&order=fecha.asc');
+    var foliosRows = rf.ok ? (await rf.json()||[]) : [];
+
+    var ra = await supaReq('GET','abonos?select=*&order=fecha.asc');
+    var abonosRows = ra.ok ? (await ra.json()||[]) : [];
+
+    CLIENTES.length = 0;
+    clis.forEach(function(row){
+      var folios = foliosRows.filter(function(f){return f.cliente_id===row.id;}).map(function(f){
+        var lineas = [];
+        try{ lineas = typeof f.lineas==='string' ? JSON.parse(f.lineas) : (f.lineas||[]); }catch(e){}
+        var abonos = abonosRows.filter(function(a){return a.folio_id===f.id;}).map(function(a){
+          return {id:a.id,fecha:a.fecha,concepto:a.concepto,desc:a.descripcion,
+            monto:parseFloat(a.monto||0),mon:a.moneda,equivUSD:parseFloat(a.equiv_usd||0),
+            enCaja:a.en_caja,caja:a.caja,cajaTipo:a.caja_tipo};
+        });
+        return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
+          desc:f.descripcion,lineas:lineas,abonos:abonos};
+      });
+      CLIENTES.push({
+        id:row.id, nombre:row.nombre, tel:row.telefono||'',
+        alm:row.almacen||'', color:row.color||'info',
+        notas:row.notas||'', owner:row.owner||'Admin',
+        folios:folios
+      });
+    });
+
+    // Update ID counters
+    nextCid = CLIENTES.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return isNaN(n)?a:Math.max(a,n);},0)+1;
+    nextFid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){var n=parseInt(f.id||'0');return isNaN(n)?b:Math.max(b,n);},a);},0)+1;
+    nextAid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){return (f.abonos||[]).reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return isNaN(n)?d:Math.max(d,n);},b);},a);},0)+1;
+
+    offlineSaveClientes();
+    if(typeof renderLista==='function') try{renderLista();}catch(e){}
+    console.log('Clientes loaded from Supabase:', CLIENTES.length);
+  }catch(e){console.warn('syncLoadClientes:',e);}
+}
+
+async function syncPushAllClientes(){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  for(var c of CLIENTES){
+    await syncSaveCliente(c);
+    for(var f of (c.folios||[])){
+      await syncSaveFolio(c.id, f);
+      for(var ab of (f.abonos||[])){
+        await syncSaveAbono(c.id, f.id, ab);
+      }
+    }
+  }
+  showToast('✓ Clientes sincronizados con Supabase');
+}
+
+
 const MONEDAS=['USD','EUR','CUP','CUPT'];
 const PRODS=[
   {n:"Chapa galv. 2000x1000x0,8",min:24,maj:23,stk:120},{n:"Chapa galv. 2000x1000x1",min:33,maj:31,stk:85},
@@ -3299,16 +3400,34 @@ function abrirCliente(cid){
   renderFicha();
 }
 
+function eliminarCliente(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;});
+  if(!c)return;
+  if(!confirm('¿Eliminar cliente "'+c.nombre+'"? Sus folios y abonos también se eliminarán.'))return;
+  CLIENTES=CLIENTES.filter(function(x){return x.id!==cid;});
+  offlineSaveClientes();
+  // Delete from Supabase
+  if(_supaOnline&&typeof supaReq!=='undefined'){
+    supaReq('DELETE','abonos?cliente_id=eq.'+cid).catch(function(e){});
+    supaReq('DELETE','folios?cliente_id=eq.'+cid).catch(function(e){});
+    supaReq('DELETE','clientes?id=eq.'+cid).catch(function(e){});
+  }
+  showToast('Cliente eliminado: '+c.nombre);
+  navTo('lista',document.querySelectorAll('#main-nav button')[0]);
+}
+
 function renderFicha(){
   const c=CLIENTES.find(x=>x.id===activoCli);if(!c)return;
   const col=getColor(c.color);
   // nav de la ficha
+  var _isAdmCli=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   document.getElementById('ficha-nav').innerHTML=`
     <button class="btn-sm" onclick="navTo('lista',document.querySelectorAll('#main-nav button')[0])" style="margin-right:6px">← Clientes</button>
     <button id="fn-cuenta" class="act" onclick="fichaNavTo('f-cuenta')">Cuenta</button>
     <button id="fn-folios" onclick="fichaNavTo('f-folios')">Folios</button>
     <button id="fn-abonar" onclick="fichaNavTo('f-abonar')">+ Abonar</button>
-    <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>`;
+    <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>
+    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger);margin-left:auto">🗑 Eliminar</button>`:''}`;
   fichaNavTo('f-cuenta');
 }
 
@@ -3643,8 +3762,8 @@ function registrarAbonoCli(cid){
   document.getElementById('togp-'+cid)?.classList.remove('on');
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
-  // Save clientes to localStorage
-  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  offlineSaveClientes();
+  syncSaveAbono(cid, target.id, abono);
   // Sync abono to Supabase
   if(typeof supaReq!=='undefined'&&typeof _supaOnline!=='undefined'&&_supaOnline){
     supaReq('POST','clientes_abonos?on_conflict=id',{
@@ -3757,7 +3876,9 @@ function crearFolioCli(cid){
     }
   });
   window['nfl_'+cid]=[];
-  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  offlineSaveClientes();
+  syncSaveCliente(c);
+  syncSaveFolio(c.id, newFolio);
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
 }
@@ -3798,7 +3919,8 @@ function crearCliente(){
     }
   })(CLIENTES[CLIENTES.length-1]);
   hideModal();renderLista();
-  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  offlineSaveClientes();
+  syncSaveCliente(CLIENTES[CLIENTES.length-1]);
   showToast('Cliente '+nombre+' creado');
 }
 
@@ -4988,6 +5110,7 @@ function renderBackup() {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportJSON()">⬇ Descargar JSON</button>'
     + '<button class="adm-btn" onclick="syncTodosProductos()" style="margin-top:6px">🔄 Sincronizar productos con Supabase</button>'
+    + '<button class="adm-btn" onclick="syncPushAllClientes()" style="margin-top:6px">👤 Sincronizar clientes con Supabase</button>'
     + (isAdm ? '<button class="adm-btn" onclick="document.getElementById(\'import-json-input\').click()">⬆ Importar JSON</button>' : '')
     + (isAdm ? '<input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importJSON(this)">' : '')
     + '</div>'
