@@ -1765,7 +1765,7 @@ async function syncSaveFolio(cliId, f){
   if(!_supaOnline||typeof supaReq==='undefined') return;
   var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
     almacen:f.alm||'', moneda:f.mon||'USD',
-    descripcion:f.desc||'', lineas:JSON.stringify(f.lineas||[])};
+    descripcion:f.desc||'', lineas:f.lineas||[]};
   await _supaUpsert('folios','id',f.id,body);
 }
 
@@ -1796,8 +1796,7 @@ async function syncLoadClientes(){
     CLIENTES.length = 0;
     clis.forEach(function(row){
       var folios = foliosRows.filter(function(f){return f.cliente_id===row.id;}).map(function(f){
-        var lineas = [];
-        try{ lineas = typeof f.lineas==='string' ? JSON.parse(f.lineas) : (f.lineas||[]); }catch(e){}
+        var lineas = Array.isArray(f.lineas) ? f.lineas : (typeof f.lineas==='string' ? (function(){try{return JSON.parse(f.lineas);}catch(e){return [];}}()) : []);
         var abonos = abonosRows.filter(function(a){return a.folio_id===f.id;}).map(function(a){
           return {id:a.id,fecha:a.fecha,concepto:a.concepto,desc:a.descripcion,
             monto:parseFloat(a.monto||0),mon:a.moneda,equivUSD:parseFloat(a.equiv_usd||0),
@@ -3370,7 +3369,7 @@ let CLIENTES=[];
     }
   }catch(e){}
 })();;
-let nextCid=Date.now(),nextFid=Date.now()+1,nextAid=Date.now()+200;
+let nextCid=1,nextFid=1,nextAid=1;
 let colorSel='info';
 let activoCli=null; // id cliente activo
 let nfLineas=[];
@@ -3874,7 +3873,7 @@ function crearFolioCli(cid){
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
   const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
-  const fid='f'+Date.now();
+  const fid=String(nextFid++);
   // Validate stock before creating
   var stockError = null;
   lineas.forEach(function(l){
@@ -3941,7 +3940,7 @@ function crearCliente(){
   const nombre=document.getElementById('nc-nombre').value.trim();
   if(!nombre){alert('El nombre es obligatorio');return;}
   CLIENTES.push({
-    id:'c'+Date.now(),nombre,
+    id:'c'+nextCid++,nombre,
     tel:document.getElementById('nc-tel').value,
     alm:document.getElementById('nc-alm').value,
     color:colorSel,
