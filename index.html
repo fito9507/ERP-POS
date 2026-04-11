@@ -1738,16 +1738,27 @@ async function syncLoadUsers(){
 }
 
 // ═══ CLIENTES SYNC ═══
+async function _supaUpsert(table, idCol, idVal, body){
+  // POST first, if conflict (23505) then PATCH
+  try{
+    var r=await supaReq('POST', table, body);
+    if(r.ok) return true;
+    var txt=await r.text();
+    if(r.status===409||txt.indexOf('23505')>=0||txt.indexOf('duplicate')>=0){
+      var r2=await supaReq('PATCH', table+'?'+idCol+'=eq.'+encodeURIComponent(idVal), body);
+      return r2.ok;
+    }
+    console.warn('_supaUpsert '+table+' error:', r.status, txt);
+    return false;
+  }catch(e){console.warn('_supaUpsert '+table+':', e); return false;}
+}
+
 async function syncSaveCliente(c){
   if(!_supaOnline||typeof supaReq==='undefined') return;
   var body={id:c.id, nombre:c.nombre, telefono:c.tel||'',
     almacen:c.alm||'', color:c.color||'info',
     notas:c.notas||'', owner:c.owner||'Admin', activo:true};
-  try{
-    // Try PATCH first (update), then POST (insert) if not found
-    var r=await supaReq('PATCH','clientes?id=eq.'+encodeURIComponent(c.id),body);
-    if(r.ok){var d=await r.json();if(!d||!d.length){await supaReq('POST','clientes',body);}}
-  }catch(e){try{await supaReq('POST','clientes',body);}catch(e2){console.warn('syncSaveCliente:',e2);}}
+  await _supaUpsert('clientes','id',c.id,body);
 }
 
 async function syncSaveFolio(cliId, f){
@@ -1755,10 +1766,7 @@ async function syncSaveFolio(cliId, f){
   var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
     almacen:f.alm||'', moneda:f.mon||'USD',
     descripcion:f.desc||'', lineas:JSON.stringify(f.lineas||[])};
-  try{
-    var r=await supaReq('PATCH','folios?id=eq.'+encodeURIComponent(f.id),body);
-    if(r.ok){var d=await r.json();if(!d||!d.length){await supaReq('POST','folios',body);}}
-  }catch(e){try{await supaReq('POST','folios',body);}catch(e2){console.warn('syncSaveFolio:',e2);}}
+  await _supaUpsert('folios','id',f.id,body);
 }
 
 async function syncSaveAbono(cliId, folioId, ab){
@@ -1768,10 +1776,7 @@ async function syncSaveAbono(cliId, folioId, ab){
     descripcion:ab.desc||'', monto:ab.monto||0,
     moneda:ab.mon||'USD', equiv_usd:ab.equivUSD||0,
     en_caja:ab.enCaja||false, caja:ab.caja||'', caja_tipo:ab.cajaTipo||''};
-  try{
-    var r=await supaReq('PATCH','abonos?id=eq.'+encodeURIComponent(ab.id),body);
-    if(r.ok){var d=await r.json();if(!d||!d.length){await supaReq('POST','abonos',body);}}
-  }catch(e){try{await supaReq('POST','abonos',body);}catch(e2){console.warn('syncSaveAbono:',e2);}}
+  await _supaUpsert('abonos','id',ab.id,body);
 }
 
 async function syncLoadClientes(){
@@ -4502,7 +4507,7 @@ function renderAdminTasas() {
   // Try to fetch fresh rates in background (non-blocking)
   var _hasMkt = false;
   try { var _tm = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt = !!_tm.CUP; } catch(e) {}
-  if (!_hasMkt && typeof fetchTasasElToque === 'function') {
+  if (false && !_hasMkt && typeof fetchTasasElToque === 'function') {
     fetchTasasElToque(true).then(function(){ 
       var _hasMkt2 = false;
       try { var _tm2 = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt2=!!_tm2.CUP; } catch(e) {}
@@ -6344,8 +6349,7 @@ _loadRatesCache();
 
 // Auto-refresh: fetch on load + every 30 minutes
 window.addEventListener('load', function() {
-  setTimeout(fetchTasasElToque, 2000);
-  setInterval(fetchTasasElToque, 3600000);
+  // fetchTasasElToque not available in this build
 });
 
 
