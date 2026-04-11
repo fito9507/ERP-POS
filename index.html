@@ -3960,11 +3960,28 @@ function crearFolioCli(cid){
   });
   window['nfl_'+cid]=[];
   offlineSaveClientes();
+  // Register as venta in VENTAS array too
+  var _ventaFolio = {
+    id: venNextId++,
+    fecha: fecha,
+    vend: (typeof S!=='undefined'&&S.user)||'Admin',
+    alm: alm,
+    cli: c.nombre,
+    tipo: 'Mayorista',
+    mon: mon,
+    prods: lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
+    totalUSD: lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0),
+    comPct: 0, comUSD: 0, estCom: 'No aplica',
+    nota: 'Folio '+fid+' — '+desc,
+    pagos: [], vueltos: []
+  };
+  VENTAS.unshift(_ventaFolio);
+  if(typeof offlineSaveVentas==='function') offlineSaveVentas();
   (async function(){
     await syncSaveCliente(c);
     await syncSaveFolio(c.id, newFolio);
-    // sync abonos iniciales if any
     for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
+    if(typeof syncSaveVenta==='function') await syncSaveVenta(_ventaFolio);
   })();
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
