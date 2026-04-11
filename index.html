@@ -3802,10 +3802,10 @@ function registrarAbonoCli(cid){
   if(enCaja&&caja){
     var _cajaMov={
       caja_destino:caja,
-      descripcion:'Abono '+c.nombre+' — '+desc,
       tipo:'ingreso',
       monto_destino:equivUSD,
-      moneda_destino:'USD',
+      notas:'Abono '+c.nombre+' — '+desc,
+      usuario:(typeof S!=='undefined'&&S.user)||'Admin',
       fecha:fecha,
       created_at:new Date().toISOString()
     };
@@ -3818,8 +3818,6 @@ function registrarAbonoCli(cid){
   }
   (async function(){
     await syncSaveAbono(cid, target.id, abono);
-    // Re-sync cliente to keep Supabase in sync
-    await syncSaveCliente(CLIENTES.find(function(x){return x.id===cid;})||{id:cid});
   })();
 
   showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
