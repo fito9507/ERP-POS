@@ -1594,8 +1594,9 @@ async function supaInit() {
 
 
 function goMod(id,title,btn){
-  // Check permission
-  const modKey = id.replace('mod-','');
+  // Check permission — map module id to key used in modulos[]
+  const _modIdToKey={'mod-cli':'clientes','mod-ig':'ig','mod-pos':'pos','mod-ventas':'ventas','mod-stock':'stock','mod-admin':'admin','mod-backup':'backup','mod-prestamos':'prestamos'};
+  const modKey = _modIdToKey[id] || id.replace('mod-','');
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]){
     const allowed = USERS[S.user].modulos||[];
     if(!allowed.includes(modKey)&&USERS[S.user].rol!=='admin'){
@@ -2141,7 +2142,7 @@ function confirmar(){
   // Sync Supabase
   if(typeof syncSaveVenta==='function') syncSaveVenta(venta);
   if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
-  if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm);
+  if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm); // async, fire-and-forget
   // Save to offline cache immediately
   if(typeof offlineAutoSave==='function') offlineAutoSave();
   if(!_supaOnline && typeof showOfflineBanner==='function') showOfflineBanner(_syncQueue.length);
@@ -2687,74 +2688,65 @@ setRangeLiq();
 initChkAll();
 renderVentas();
 
-async function renderMiCaja() {
+function renderMiCaja() {
   var el = document.getElementById('micaja-root');
   if (!el) return;
   var user = typeof S !== 'undefined' ? S.user : '';
   var alm  = USERS[user] ? USERS[user].almacen : '';
   if (!alm) { el.innerHTML = '<div style="padding:20px;text-align:center">Sin almacén asignado</div>'; return; }
 
-  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando caja...</div>';
+  var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
 
-  // Use same data source as Admin
-  await loadCajasData();
+  // Get all cajas for this almacen
+  var misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm) >= 0; });
 
-  var misCajas = _cajasData.filter(function(c){ return c.almacen === alm; });
+  // Build saldos cards
+  var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
+    var cta = entry[0], v = entry[1];
+    var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
+    var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
+    var saldo = (v.ingV||0) + (v.ingIG||0) + igIng - (v.gasIG||0) - igGas;
+    var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+    var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
+    return '<div class="card" style="text-align:center">'
+      + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">' + cta + '</div>'
+      + '<div style="font-size:22px;font-weight:700;color:'+col+'">' + fN(saldo,dec) + '</div>'
+      + '<div style="font-size:11px;color:var(--color-text-secondary)">' + v.mon + '</div>'
+      + '</div>';
+  }).join('') + '</div>';
 
-  // Cards de saldo — misma lógica que Admin
-  var cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px">';
-  if (misCajas.length === 0) {
-    cardsHtml += '<div style="color:var(--color-text-tertiary);font-size:12px;padding:10px">Sin cajas para ' + alm + '</div>';
-  } else {
-    misCajas.forEach(function(c) {
-      var saldo = _getSaldoCaja(c.nombre);
-      var color = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.moneda]||'';
-      cardsHtml += '<div class="card" style="text-align:center;padding:14px 10px">'
-        + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">'+c.nombre+'</div>'
-        + '<div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:8px">'+monIcon+' '+c.moneda+'</div>'
-        + '<div style="font-size:22px;font-weight:800;color:'+color+'">'+fN(saldo,2)+'</div>'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">saldo actual</div>'
-        + '</div>';
-    });
-  }
-  cardsHtml += '</div>';
+  // Build movimientos — ventas de este almacen + I/G movs de estas cajas
+  var ctaNames = misCajas.map(function(e){ return e[0]; });
 
-  // Historial de movimientos de las cajas de este almacén — misma fuente que Admin
-  var cajaNombres = misCajas.map(function(c){ return c.nombre; });
-  var cajasIds    = misCajas.map(function(c){ return c.id; });
+  // Ventas como movimientos
+  var ventaMov = VENTAS.filter(function(v){ return v.alm === alm; }).map(function(v){
+    return { fecha: v.fecha, desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
+             monto: fN(v.totalUSD) + ' USD', tipo: 'venta', sentido: 'ingreso' };
+  });
 
-  var movsAlm = _cajasMovs.filter(function(m){
-    return cajaNombres.indexOf(m.caja_origen)  >= 0
-        || cajaNombres.indexOf(m.caja_destino) >= 0
-        || cajasIds.indexOf(m.caja_origen_id)  >= 0
-        || cajasIds.indexOf(m.caja_destino_id) >= 0;
-  }).slice(0, 100);
+  // I/G movimientos de sus cajas
+  var igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta) >= 0; }).map(function(m){
+    return { fecha: m.fecha, desc: m.desc + ' (' + m.cta + ')',
+             monto: fN(m.monto, (m.mon==='CUP'||m.mon==='CUPT')?0:2) + ' ' + m.mon,
+             tipo: 'ig', sentido: m.sentido };
+  });
 
-  var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>';
-  if (movsAlm.length === 0) {
-    movsHtml += '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos registrados</div>';
-  } else {
-    movsHtml += '<div style="display:flex;flex-direction:column;gap:4px">';
-    movsAlm.forEach(function(m) {
-      var esOrigen  = cajaNombres.indexOf(m.caja_origen)  >= 0 || cajasIds.indexOf(m.caja_origen_id)  >= 0;
-      var esDestino = cajaNombres.indexOf(m.caja_destino) >= 0 || cajasIds.indexOf(m.caja_destino_id) >= 0;
-      // Si es solo origen → salida; si es solo destino → entrada; si ambos → interno
-      var sentido = (esOrigen && !esDestino) ? 'gasto' : (esDestino && !esOrigen) ? 'ingreso' : 'interno';
-      var col  = sentido === 'ingreso' ? 'var(--color-text-success)' : sentido === 'gasto' ? 'var(--color-text-danger)' : 'var(--color-text-secondary)';
-      var sign = sentido === 'ingreso' ? '+' : sentido === 'gasto' ? '−' : '⇄';
-      var monto = esOrigen ? fN(m.monto_origen||0,2) + ' ' + (m.caja_origen||'') : fN(m.monto_destino||0,2) + ' ' + (m.caja_destino||'');
-      var desc  = m.notas || (m.caja_origen && m.caja_destino ? m.caja_origen + ' → ' + m.caja_destino : 'Movimiento');
-      var fecha = (m.created_at||m.fecha||'').substring(0,10);
-      movsHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary)">'
-        + '<div><div style="font-size:12px">' + desc + '</div>'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary)">' + fD(fecha) + '</div></div>'
-        + '<div style="font-size:13px;font-weight:600;color:'+col+';flex-shrink:0;margin-left:10px">' + sign + monto + '</div>'
-        + '</div>';
-    });
-    movsHtml += '</div>';
-  }
-  movsHtml += '</div>';
+  var allMovs = ventaMov.concat(igMov).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+
+  var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
+    + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
+      '<div style="display:flex;flex-direction:column;gap:4px">'
+      + allMovs.map(function(m){
+          var col = m.sentido==='ingreso' ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+          var sign = m.sentido==='ingreso' ? '+' : '−';
+          return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary)">'
+            + '<div><div style="font-size:12px">' + m.desc + '</div>'
+            + '<div style="font-size:10px;color:var(--color-text-tertiary)">' + fD(m.fecha) + '</div></div>'
+            + '<div style="font-size:13px;font-weight:600;color:'+col+';flex-shrink:0;margin-left:10px">' + sign + m.monto + '</div>'
+            + '</div>';
+        }).join('')
+      + '</div>')
+    + '</div>';
 
   el.innerHTML = '<div style="margin-bottom:8px"><h2 style="margin:0">Mi Caja — ' + alm + '</h2>'
     + '<div style="font-size:12px;color:var(--color-text-secondary)">Saldos y movimientos de ' + user + '</div></div>'
@@ -5356,21 +5348,73 @@ document.addEventListener("click",function(e){
 
 
 <script>
-function updateCajasFromVenta(pagos, vueltos, alm) {
-  // Each pago adds to that currency's cash for this almacen
+async function updateCajasFromVenta(pagos, vueltos, alm) {
+  // Update local CUENTAS_BASE (for legacy fallback rendering)
   pagos.forEach(function(p) {
     var mon = p.mon;
     var k = p.caja || (mon + ' ' + alm);
     if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
     CUENTAS_BASE[k].ingV += (p.m || 0);
   });
-  // Each vuelto subtracts from that currency's cash
   vueltos.forEach(function(v) {
     var mon = v.mon;
     var k = v.caja || (mon + ' ' + alm);
     if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
-    CUENTAS_BASE[k].gasIG += (v.m || 0);  // vuelto = gasto de caja
+    CUENTAS_BASE[k].gasIG += (v.m || 0);
   });
+
+  // Write each pago as a mov_cajas entry in Supabase (deposito externo → caja)
+  if (_supaOnline) {
+    var ts = new Date().toISOString();
+    for (var i = 0; i < pagos.length; i++) {
+      var p = pagos[i];
+      if (!p.m || p.m <= 0) continue;
+      var cajaNombre = p.caja || (p.mon + ' ' + alm);
+      var row = {
+        fecha:          ts.substring(0,10),
+        tipo:           'deposito',
+        caja_origen:    null,
+        caja_destino:   cajaNombre,
+        monto_origen:   null,
+        monto_destino:  p.m,
+        notas:          'Venta POS',
+        usuario:        (typeof S!=='undefined' ? S.user : ''),
+        created_at:     ts
+      };
+      try {
+        var r = await supaReq('POST', 'mov_cajas', row);
+        if (r.ok) {
+          var saved = await r.json();
+          if (saved && saved[0]) _cajasMovs.unshift(saved[0]);
+        }
+      } catch(e) { console.warn('updateCajasFromVenta pago:', e); }
+    }
+    // Write each vuelto as a retiro (caja → null)
+    for (var j = 0; j < vueltos.length; j++) {
+      var v2 = vueltos[j];
+      if (!v2.m || v2.m <= 0) continue;
+      var cajaNombreV = v2.caja || (v2.mon + ' ' + alm);
+      var rowV = {
+        fecha:          ts.substring(0,10),
+        tipo:           'retiro',
+        caja_origen:    cajaNombreV,
+        caja_destino:   null,
+        monto_origen:   v2.m,
+        monto_destino:  null,
+        notas:          'Vuelto POS',
+        usuario:        (typeof S!=='undefined' ? S.user : ''),
+        created_at:     ts
+      };
+      try {
+        var rv = await supaReq('POST', 'mov_cajas', rowV);
+        if (rv.ok) {
+          var savedV = await rv.json();
+          if (savedV && savedV[0]) _cajasMovs.unshift(savedV[0]);
+        }
+      } catch(e) { console.warn('updateCajasFromVenta vuelto:', e); }
+    }
+  }
+
   if (typeof renderCajas === 'function') { try { renderCajas(); } catch(e) {} }
 }
 </script>
