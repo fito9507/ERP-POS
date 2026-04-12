@@ -2891,11 +2891,8 @@ function renderMiCaja() {
   // Build saldos cards
   var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
     var cta = entry[0], v = entry[1];
-    var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
-    var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
-    var ingVentas=VENTAS.filter(function(vv){return vv.alm===alm;}).reduce(function(a,vv){(vv.pagos||[]).forEach(function(p){if((p.caja||(p.mon+' '+alm))===cta)a+=(p.m||0);});return a;},0);
-    var gasVueltos=VENTAS.filter(function(vv){return vv.alm===alm;}).reduce(function(a,vv){(vv.vueltos||[]).forEach(function(vv2){if((vv2.caja||(vv2.mon+' '+alm))===cta)a+=(vv2.m||0);});return a;},0);
-    var saldo = ingVentas + igIng - gasVueltos - igGas;
+    // Use same _getSaldoCaja as Admin for consistency
+    var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(cta) : 0;
     var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
     return '<div class="card" style="text-align:center">'
@@ -2905,38 +2902,30 @@ function renderMiCaja() {
       + '</div>';
   }).join('') + '</div>';
 
-  // Build movimientos — ventas de este almacen + I/G movs de estas cajas
+  // Use _cajasMovs — same source as Admin
   var ctaNames = misCajas.map(function(e){ return e[0]; });
+  var cajaIds = (typeof _cajasData!=='undefined'?_cajasData:[])
+    .filter(function(c){ return ctaNames.indexOf(c.nombre)>=0; })
+    .map(function(c){ return c.id; });
 
-  // Ventas como movimientos
-  var ventaMov = VENTAS.filter(function(v){ return v.alm === alm; }).map(function(v){
-    return { fecha: v.fecha, desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
-             monto: fN(v.totalUSD) + ' USD', tipo: 'venta', sentido: 'ingreso' };
-  });
-
-  // I/G movimientos de sus cajas
-  var igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta) >= 0; }).map(function(m){
-    return { fecha: m.fecha, desc: m.desc + ' (' + m.cta + ')',
-             monto: fN(m.monto, (m.mon==='CUP'||m.mon==='CUPT')?0:2) + ' ' + m.mon,
-             tipo: 'ig', sentido: m.sentido };
-  });
-
-  // Add id to ventas movs for precise sort
-  ventaMov = VENTAS.filter(function(v){ return v.alm===alm; }).map(function(v){
-    return { fecha:v.fecha, _id:v.supaId||v.id||0,
-             desc:'Venta POS — '+(v.cli||'Walk-in')+' — '+String(v.prods||'').substring(0,40),
-             monto:fN(v.totalUSD)+' USD', sentido:'ingreso' };
-  });
-  igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta)>=0; }).map(function(m){
-    return { fecha:m.fecha, _id:m.id||0,
-             desc:m.desc+' ('+m.cta+')',
-             monto:fN(m.monto,(m.mon==='CUP'||m.mon==='CUPT')?0:2)+' '+m.mon,
-             sentido:m.sentido };
-  });
-  var allMovs = ventaMov.concat(igMov).sort(function(a,b){
-    if(b.fecha!==a.fecha) return b.fecha.localeCompare(a.fecha);
-    return (b._id||0)-(a._id||0);
-  });
+  var allMovs = (typeof _cajasMovs!=='undefined'?_cajasMovs:[])
+    .filter(function(m){
+      return ctaNames.indexOf(m.caja_origen)>=0 || ctaNames.indexOf(m.caja_destino)>=0
+          || cajaIds.indexOf(m.caja_origen_id)>=0 || cajaIds.indexOf(m.caja_destino_id)>=0;
+    })
+    .map(function(m){
+      var esDest = ctaNames.indexOf(m.caja_destino)>=0||cajaIds.indexOf(m.caja_destino_id)>=0;
+      var monto = esDest ? parseFloat(m.monto_destino||0) : parseFloat(m.monto_origen||0);
+      var fecha = (m.created_at||m.fecha||'').substring(0,10);
+      return {
+        fecha: fecha,
+        _ts: m.created_at||m.fecha||'',
+        desc: m.notas||m.tipo||'Movimiento',
+        monto: fN(monto,2)+' USD',
+        sentido: esDest?'ingreso':'gasto'
+      };
+    })
+    .sort(function(a,b){ return (b._ts||'').localeCompare(a._ts||''); });
 
   var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
     + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
