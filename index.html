@@ -1073,12 +1073,11 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 </div>
 </div></div>
     <div class="module" id="mod-ig" style="padding:12px"><div class="wrap">
-<div class="nav">
-  <button class="act" onclick="navTo_ig('libro',this)">Libro I/G</button>
+<div class="nav" id="ig-nav">
+  <button class="act" onclick="navTo_ig('libro',this)">📋 Libro</button>
   <button onclick="navTo_ig('nuevo',this)">+ Registrar</button>
-  <button onclick="navTo_ig('cajas',this)">Cajas</button>
-  <button onclick="navTo_ig('deuda',this)">Deudas</button>
-
+  <button id="ig-btn-cajas" onclick="navTo_ig('cajas',this)">💰 Cajas</button>
+  <button id="ig-btn-deuda" onclick="navTo_ig('deuda',this)">🔴 Deudas</button>
 </div>
 
 <!-- ══ LIBRO ══ -->
@@ -1806,8 +1805,26 @@ function goMod(id,title,btn){
     }
     renderVentas();
   }catch(e){}}
-  if(id==='mod-ig'&&typeof renderLibro==='function'){try{renderLibro();}catch(e){}}
-  if(id==='mod-ig'&&typeof renderCajas==='function'){try{renderCajas();}catch(e){}}
+  if(id==='mod-ig'&&typeof renderLibro==='function'){
+    try{
+      // Hide/show admin-only tabs based on role
+      var _igVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+      ['ig-btn-cajas','ig-btn-deuda'].forEach(function(bid){var be=document.getElementById(bid);if(be)be.style.display=_igVend?'none':'';});
+      // Auto-filter cta selector for vendedor
+      if(_igVend&&USERS[S.user]){
+        var _ligAlm=USERS[S.user].almacen;
+        var _ligSel=document.getElementById('l-cta');
+        if(_ligSel&&_ligAlm){
+          // Add alm cajas to filter selector if not there
+          var _ligCajas=_cajasData.filter(function(c){return c.almacen===_ligAlm;});
+          if(_ligCajas.length&&!_ligSel.querySelector('option[value="'+_ligCajas[0].nombre+'"]')){
+            _ligCajas.forEach(function(c){var o=document.createElement('option');o.value=c.nombre;o.textContent=c.nombre;_ligSel.appendChild(o);});
+          }
+        }
+      }
+      renderLibro();
+    }catch(e){}
+  }
   if(id==='mod-cli'&&typeof renderLista==='function'){try{renderLista();}catch(e){}}
   if(id==='mod-admin'&&typeof renderAdmin==='function'){try{renderAdmin();}catch(e){console.error('renderAdmin error:',e);}}
   if(id==='mod-stock'&&typeof renderStock==='function'){try{renderStock();}catch(e){}}
@@ -1861,7 +1878,7 @@ function erpLogout(){
   if(nav2)nav2.innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary);font-size:12px">Inicia sesión</div>';
 }
 
-const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes'],activo:true,puedeVender:true},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos'],activo:true,puedeVender:true}};
+const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes','ig'],activo:true,puedeVender:true},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos'],activo:true,puedeVender:true}};
 (function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){if(_su[k]&&_su[k].pin)USERS[k]=_su[k];});}catch(e){}})();
 
 function renderLoginCards(){
@@ -3248,8 +3265,21 @@ function navTo_ig(pg,btn){
   document.querySelectorAll('#mod-ig .page').forEach(p=>p.classList.remove('act'));
   document.getElementById(pg).classList.add('act');
   document.querySelectorAll('#mod-ig .nav button').forEach(b=>b.classList.remove('act'));
-  btn.classList.add('act');
-  if(pg==='libro')renderLibro();
+  if(btn)btn.classList.add('act');
+  var _isVendIG=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _almIG=_isVendIG&&USERS[S.user]?USERS[S.user].almacen:'';
+  if(pg==='libro'){
+    // Auto-filter by alm for vendedor
+    if(_isVendIG&&_almIG){
+      var lc=document.getElementById('l-cta');
+      // Set cta filter to first caja of their alm if not set
+      if(lc&&!lc.value){
+        var _firstCta=_cajasData.find(function(c){return c.almacen===_almIG;});
+        // Don't force filter, just render — renderLibro filters by alm for vendedor
+      }
+    }
+    renderLibro();
+  }
   if(pg==='cajas'){document.getElementById('cajas-grid').innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando...</div>';renderCajas();}
   if(pg==='cajas-mgmt'){if(typeof renderGestionCajas==='function')renderGestionCajas();}
   if(pg==='deuda')renderDeudas();
@@ -3277,6 +3307,10 @@ function filtrar_ig(){
   const cta=document.getElementById('l-cta').value;
   const sentido=document.getElementById('l-sentido').value;
   const q=(document.getElementById('l-q').value||'').toLowerCase();
+  // Vendedor: filter by their almacen's cajas
+  var _isVendIG=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _almIG=_isVendIG&&USERS[S.user]?USERS[S.user].almacen:'';
+  var _almCtas=_almIG?_cajasData.filter(function(c){return c.almacen===_almIG;}).map(function(c){return c.nombre;}):[]; 
   return MOVS.filter(m=>{
     if(desde&&m.fecha<desde)return false;
     if(hasta&&m.fecha>hasta)return false;
@@ -3284,6 +3318,9 @@ function filtrar_ig(){
     if(cta&&m.cta!==cta)return false;
     if(sentido&&m.sentido!==sentido)return false;
     if(q&&!m.desc.toLowerCase().includes(q)&&!(m.notas||'').toLowerCase().includes(q))return false;
+    // Vendedor only sees their alm's movs
+    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta))return false;
+    if(_almIG&&!_almCtas.length&&m.cta&&!m.cta.includes(_almIG))return false;
     return true;
   });
 }
@@ -3351,6 +3388,28 @@ function renderLibro(){
 
 // ── NUEVO MOVIMIENTO ──────────────────────────────────────
 function updNuevo(){
+  // For vendedor, restrict cta options to their alm
+  var _igVend2=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _igAlm2=_igVend2&&USERS[S.user]?USERS[S.user].almacen:'';
+  var _nCta=document.getElementById('n-cta');
+  if(_nCta&&_igAlm2&&_cajasData.length){
+    var _myCajas=_cajasData.filter(function(c){return c.almacen===_igAlm2;});
+    if(_myCajas.length){
+      _nCta.innerHTML=_myCajas.map(function(c){return '<option>'+c.nombre+'</option>';}).join('');
+    }
+  }
+  // Also hide comision/deuda/prestamo types for vendedor
+  var _nTipo=document.getElementById('n-tipo');
+  if(_nTipo&&_igVend2){
+    Array.from(_nTipo.options).forEach(function(o){
+      var adminOnly=['Comisión vendedor','Amortización deuda','Pago intereses','Aporte socio','Préstamo recibido','Transferencia entre cuentas'];
+      o.style.display=adminOnly.includes(o.value)?'none':'';
+    });
+    if(_nTipo.options[_nTipo.selectedIndex]&&_nTipo.options[_nTipo.selectedIndex].style.display==='none'){
+      _nTipo.value='Gasto operativo';
+    }
+  }
+
   const tipo=document.getElementById('n-tipo').value;
   const monto=parseFloat(document.getElementById('n-monto').value)||0;
   const mon=document.getElementById('n-mon').value;
@@ -3861,10 +3920,11 @@ function renderFichaCuenta(c){
         <div class="abono-row">
           <div class="abono-icon">${ICON[a.concepto]||'•'}</div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:500">${a.desc}
-              ${a.enCaja?`<span class="badge-caja" style="margin-left:4px">🏦 ${a.caja} · ${a.cajaTipo==='ingreso-yano'?'↓ entrada':'↑ gasto'}</span>`:''}
-            </div>
-            <div style="font-size:10px;color:var(--color-text-tertiary)">${fD(a.fecha)} · Folio ${a.folio}${a.tasa?' · tasa '+fN(a.tasa,0):''}
+            <div style="font-size:12px;font-weight:500">${a.desc}</div>
+            <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">
+              ${fD(a.fecha)} · Folio ${a.folio}${a.tasa?' · tasa '+fN(a.tasa,0):''}
+              ${a.cajaTipo==='efectivo'?'· <span style="color:var(--color-text-success)">💵 Efectivo → '+a.caja+'</span>':''}
+              ${a.cajaTipo==='compensacion'?'· <span style="color:var(--color-text-info)">🔄 Compensación ('+a.concepto+')</span>':''}
             </div>
           </div>
           <div style="text-align:right;white-space:nowrap">
@@ -4077,7 +4137,7 @@ function renderFichaAbonar(c){
               </select></div>
             <div id="cajasec-cta-${c.id}"><label class="lbl">Cuenta que recibe</label>
               <select id="a-caja-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                ${(typeof _cajasData!=='undefined'&&_cajasData.length?_cajasData:[{nombre:'CUP Placetas'},{nombre:'USD Placetas'},{nombre:'CUP Habana'},{nombre:'USD Habana'},{nombre:'EUR Habana'},{nombre:'EUR Placetas'},{nombre:'USD España'},{nombre:'EUR España'}]).map(c=>'<option>'+c.nombre+'</option>').join('')}
+                ${_getCajasForMon(document.getElementById('a-mon-${c.id}')?.value||'USD', c.almacen||'').map(k=>'<option>'+k+'</option>').join('')}
               </select></div>
           </div>
           <div style="font-size:11px;margin-top:6px" id="cajaex-${c.id}"></div>
@@ -4108,6 +4168,16 @@ function calcEquivCli(cid){
   let equiv=monto;
   if(mon!=='USD'){const t=parseFloat(tasaEl.value)||RATES[mon];equiv=toUSD(monto,mon);}
   document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(2):'';
+  // Refresh caja options filtered by moneda
+  var cajaSel=document.getElementById('a-caja-'+cid);
+  if(cajaSel){
+    var _cli=CLIENTES.find(x=>x.id===cid);
+    var alm=_cli?_cli.almacen:'';
+    var opts=_getCajasForMon(mon,alm);
+    var cur=cajaSel.value;
+    cajaSel.innerHTML=opts.map(k=>'<option'+(k===cur?' selected':'')+'>'+k+'</option>').join('');
+    if(!opts.includes(cur)&&opts.length)cajaSel.value=opts[0];
+  }
   const c=CLIENTES.find(x=>x.id===cid);const pdt=pdtCli(c);
   const prev=document.getElementById('a-prev-'+cid);
   if(monto>0){
@@ -4148,6 +4218,14 @@ function registrarAbonoCli(cid){
   const caja=enCaja?(document.getElementById('a-caja-'+cid)?.value||null):null;
   if(!monto){alert('Introduce el monto');return;}
   if(!desc){alert('Añade una descripción');return;}
+  // Validate caja moneda matches abono moneda
+  if(enCaja&&caja){
+    var cajaMoneda=caja.split(' ')[0];
+    if(cajaMoneda!==mon){
+      alert('⚠ Error: estás intentando depositar '+mon+' en una caja de '+cajaMoneda+'. Selecciona una cuenta que coincida con la moneda del abono.');
+      return;
+    }
+  }
   // Validate monto doesn't exceed pendiente
   var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
   if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
