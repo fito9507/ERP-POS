@@ -2320,12 +2320,15 @@ function confirmar(){
       if(p.stk_alm&&p.stk_alm[S.alm]!=null) p.stk_alm[S.alm]=Math.max(0,(p.stk_alm[S.alm]||0)-c.q);
     }
   });
-  // Sync Supabase
-  if(typeof syncSaveVenta==='function') syncSaveVenta(venta);
-  if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
-  if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm);
-  // Save to offline cache immediately
-  if(typeof offlineAutoSave==='function') offlineAutoSave();
+  // Save to localStorage immediately (not on timer)
+  if(typeof offlineSaveVentas==='function') offlineSaveVentas();
+  if(typeof offlineSaveProds==='function') offlineSaveProds();
+  // Sync to Supabase async
+  (async function(){
+    if(typeof syncSaveVenta==='function') await syncSaveVenta(venta);
+    if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
+    if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm);
+  })();
   if(!_supaOnline && typeof showOfflineBanner==='function') showOfflineBanner(_syncQueue.length);
   // Mostrar pantalla OK
   document.getElementById('ok-sub').textContent=S.user+' · '+S.alm+' · '+(S.cli||'Walk-in');
