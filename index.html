@@ -2337,11 +2337,25 @@ function getCobUSD(){return S.pagos.reduce((a,p)=>a+toUSD(p.m||0,p.mon),0);}
 function getVueltoUSD(){return S.vueltos.reduce((a,v)=>a+toUSD(v.m||0,v.mon),0);}
 function getPendCobro(){return Math.max(0,getVentaUSD()-getCobUSD());}
 function getPendVuelto(){return (getCobUSD()-getVentaUSD())-getVueltoUSD();}
-function initPago(){S.pagos=[];S.vueltos=[];renderPago();}
+function initPago(){
+  S.pagos=[];S.vueltos=[];
+  // Load cajas so POS selector shows Supabase caja names
+  if(typeof loadCajasData==='function'&&(!_cajasData||!_cajasData.length)){
+    loadCajasData().then(function(){renderPago();});
+  } else {
+    renderPago();
+  }
+}
 function goPago(){if(!S.cart.length)return;goStep('pg-pago',3);}
 function addPago(mon){
   const sug=getPendCobro()>0?rUp(fromUSD(getPendCobro(),mon),mon):0;
-  const cj=mon+' '+(S.alm||'Habana');const id='p'+Date.now();S.pagos.push({id,mon,m:sug,caja:cj});renderPago();
+  const cj=(function(){
+    // Pick the best caja name from Supabase or fallback
+    var opts=_getCajasForMon(mon,S.alm||'Habana');
+    // Prefer exact match almacen
+    var exact=opts.find(function(o){return o.indexOf(S.alm||'Habana')>=0;});
+    return exact||opts[0]||mon+' '+(S.alm||'Habana');
+  })();const id='p'+Date.now();S.pagos.push({id,mon,m:sug,caja:cj});renderPago();
   setTimeout(()=>{const e=document.getElementById('pi-'+id);if(e){e.focus();e.select();}},40);
 }
 function addVuelto(mon){
@@ -2383,7 +2397,7 @@ function renderPago(){
     <div style="display:flex;align-items:center;gap:5px;padding:2px 0 5px;flex-wrap:wrap">
       <span style="font-size:10px;color:var(--color-text-tertiary);min-width:50px">→ Caja</span>
       <select style="flex:1;font-size:11px;padding:3px 6px;border:.5px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-primary)" onchange="S.pagos[${i}].caja=this.value">
-        ${Object.keys(CUENTAS_BASE).filter(k=>k.startsWith(p.mon)).map(k=>`<option ${k===(p.caja||p.mon+' '+S.alm)?'selected':''}>${k}</option>`).join('')}
+        ${_getCajasForMon(p.mon,S.alm).map(k=>`<option ${k===(p.caja||p.mon+' '+S.alm)?'selected':''}>${k}</option>`).join('')}
       </select>
     </div>`;
   }).join('');
@@ -2412,7 +2426,7 @@ function renderPago(){
       <div style="display:flex;align-items:center;gap:5px;padding:2px 0 5px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--color-text-tertiary);min-width:54px">← Caja</span>
         <select style="flex:1;font-size:11px;padding:3px 6px;border:.5px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-primary)" onchange="S.vueltos[${i}].caja=this.value">
-          ${Object.keys(CUENTAS_BASE).filter(k=>k.startsWith(v.mon)).map(k=>`<option ${k===(v.caja||v.mon+' '+S.alm)?'selected':''}>${k}</option>`).join('')}
+          ${_getCajasForMon(v.mon,S.alm).map(k=>`<option ${k===(v.caja||v.mon+' '+S.alm)?'selected':''}>${k}</option>`).join('')}
         </select>
       </div>`;
     }).join('');
@@ -2473,6 +2487,21 @@ function renderPagoTotalsOnly(){
   else if(ok){eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Operación cuadrada ✓';bc.disabled=false;bc.style.opacity='1';}
   else if(pendC>0.01){eb.style.cssText='background:var(--color-background-warning);color:var(--color-text-warning)';eb.textContent='Faltan '+fN(pendC)+' USD por cobrar';bc.disabled=true;bc.style.opacity='.45';}
   else{eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Listo para confirmar ✓';bc.disabled=false;bc.style.opacity='1';}
+}
+
+// Returns caja names for a given moneda, preferring Supabase _cajasData
+function _getCajasForMon(mon, alm) {
+  var preferred = mon + ' ' + (alm || S.alm || '');
+  // Use _cajasData if loaded (Supabase)
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    var opts = _cajasData.filter(function(c){ return c.moneda === mon && c.activa; });
+    if (opts.length) {
+      return opts.map(function(c){ return c.nombre; });
+    }
+  }
+  // Fallback: CUENTAS_BASE keys
+  var keys = Object.keys(CUENTAS_BASE).filter(function(k){ return k.startsWith(mon); });
+  return keys.length ? keys : [preferred];
 }
 
 function confirmar(){
