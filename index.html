@@ -951,7 +951,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <th style="width:28px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
         <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
         <th>Tipo</th><th>Productos</th><th>Total USD</th><th>Moneda</th>
-        <th id="th-com1">% Com.</th><th id="th-com2">Comisión USD</th><th id="th-com3">Estado com.</th><th>Nota</th><th></th>
+        <th id="th-com1">% Com.</th><th id="th-com2">Comisión USD</th><th id="th-com3">Estado com.</th><th>Nota</th><th id="th-cobro">Cobro</th><th></th>
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot id="v-foot"></tfoot>
@@ -2684,11 +2684,11 @@ function filtrar_ven(){
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
     if(tipo&&v.tipo!==tipo)return false;
-    if(mon&&v.mon!==mon)return false;
+    if(mon&&!(v.mon===mon||(v.pagos&&v.pagos.some(function(p){return p.mon===mon;}))))return false;
     if(estcom&&v.estCom!==estcom)return false;
     if(prod&&!v.prods.toLowerCase().includes(prod))return false;
     return true;
-  });
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
 }
 
 // ── RENDER VENTAS ─────────────────────────────────────────
@@ -2730,11 +2730,11 @@ function renderVentas(){
       <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}">${v.tipo}</span></td>
       <td style="font-size:10px;max-width:130px;color:var(--color-text-secondary)">${v.prods}</td>
       <td style="font-weight:500;text-align:right">${fN(v.totalUSD)}</td>
-      <td style="font-size:11px">${v.mon}</td>
       <td style="${_isVend?'display:none':''}"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
       <td style="${_isVend?'display:none':''}text-align:right;font-weight:500">${fN(v.comUSD)}</td>
       <td style="${_isVend?'display:none':''}">${renderEstComCell(v)}</td>
       <td style="font-size:11px;overflow:hidden;max-width:120px;color:var(--color-text-secondary)">${v.nota||''}</td>
+      <td style="font-size:11px;white-space:nowrap">${(function(){var pp=v.pagos&&v.pagos.length?v.pagos:[{mon:v.mon}];var mons=[...new Set(pp.map(function(p){return p.mon;}))];return mons.join(' + ');}())}</td>
       <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger)">×</button>'}</td>
     </tr>`).join(''):`<tr><td colspan="13" style="text-align:center;color:var(--color-text-tertiary);padding:16px">Sin resultados</td></tr>`;
 
@@ -2745,7 +2745,7 @@ function renderVentas(){
     <td style="text-align:right">${fN(totUSD)}</td>
     <td></td><td></td>
     <td style="text-align:right;color:var(--color-text-warning)">${fN(totCom2)}</td>
-    <td colspan="2"></td>
+    <td colspan="3"></td>
   </tr>`:'';
 
   // vincular checkboxes con JS puro (no inline)
