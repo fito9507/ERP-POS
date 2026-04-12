@@ -2919,7 +2919,16 @@ function renderMiCaja() {
     var cta = entry[0], v = entry[1];
     var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
     var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
-    var saldo = (v.ingV||0) + (v.ingIG||0) + igIng - (v.gasIG||0) - igGas;
+    // Calculate income from VENTAS payments for this caja
+    var ingVentas = VENTAS.filter(function(vv){ return vv.alm===alm; }).reduce(function(acc,vv){
+      (vv.pagos||[]).forEach(function(p){ if((p.caja||(p.mon+' '+alm))===cta) acc+=(p.m||0); });
+      return acc;
+    },0);
+    var gasVueltos = VENTAS.filter(function(vv){ return vv.alm===alm; }).reduce(function(acc,vv){
+      (vv.vueltos||[]).forEach(function(vv2){ if((vv2.caja||(vv2.mon+' '+alm))===cta) acc+=(vv2.m||0); });
+      return acc;
+    },0);
+    var saldo = ingVentas + igIng - gasVueltos - igGas;
     var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
     return '<div class="card" style="text-align:center">'
