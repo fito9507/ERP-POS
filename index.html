@@ -3963,7 +3963,62 @@ function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios
 function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);renderFichaFolios(c);}
 function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
-function elimA(cid,fid,aid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.abonos=f.abonos.filter(a=>a.id!==aid);renderFichaFolios(c);renderFichaCuenta(c);}
+async function elimA(cid,fid,aid){
+  const c=CLIENTES.find(x=>x.id===cid);
+  const f=c?.folios.find(x=>x.id===fid);
+  if(!f)return;
+  const abono=f.abonos.find(a=>a.id===aid);
+  if(!confirm('¿Eliminar este abono'+(abono?' de '+fN(abono.monto,dFor(abono.mon))+' '+abono.mon:'')+'?'))return;
+
+  // 1. Remove from local
+  f.abonos=f.abonos.filter(a=>a.id!==aid);
+  offlineSaveClientes();
+
+  // 2. Delete from Supabase abonos table
+  if(_supaOnline&&typeof supaReq!=='undefined'){
+    supaReq('DELETE','abonos?id=eq.'+encodeURIComponent(aid)).catch(function(e){console.warn('delete abono:',e);});
+  }
+
+  // 3. If it was efectivo, reverse the mov_cajas entry
+  if(abono&&abono.enCaja&&abono.caja&&abono.cajaTipo==='efectivo'){
+    // Find matching mov_cajas entry in _cajasMovs
+    var movIdx=_cajasMovs.findIndex(function(m){
+      return m.caja_destino===abono.caja
+        && m.tipo==='deposito'
+        && Math.abs(parseFloat(m.monto_destino||0)-parseFloat(abono.equivUSD||0))<0.02;
+    });
+    if(movIdx>=0){
+      var movId=_cajasMovs[movIdx].id;
+      _cajasMovs.splice(movIdx,1);
+      if(_supaOnline&&movId){
+        supaReq('DELETE','mov_cajas?id=eq.'+movId).catch(function(e){console.warn('delete mov_cajas:',e);});
+      }
+    } else {
+      // No exact match — create a reversal retiro entry
+      var retiro={
+        tipo:'retiro', fecha:today(),
+        notas:'Anulación abono '+c.nombre,
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+        caja_origen:abono.caja,
+        monto_origen:abono.equivUSD,
+        monto_destino:abono.equivUSD,
+        tasa_usada:null
+      };
+      _cajasMovs.unshift(retiro);
+      if(_supaOnline&&typeof supaReq!=='undefined'){
+        supaReq('POST','mov_cajas',retiro).then(async function(r){
+          if(r.ok){var d=await r.json();if(d&&d[0])_cajasMovs[0]=d[0];}
+        }).catch(function(e){console.warn('retiro anulacion:',e);});
+      }
+    }
+    showToast('Abono eliminado — caja actualizada');
+  } else {
+    showToast('Abono eliminado');
+  }
+
+  renderFichaFolios(c);
+  renderFichaCuenta(c);
+}
 function irAbonar(cid,fid){
   fichaNavTo('f-abonar');
   setTimeout(()=>{const s=document.getElementById('a-folio-'+cid);if(s)s.value=fid;},60);
