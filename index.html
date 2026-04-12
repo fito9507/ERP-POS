@@ -562,20 +562,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="login-wrap">
   <div class="login-title">Bienvenido</div>
   <div class="login-sub">¿Quién eres?</div>
-  <div class="user-cards">
-    <div class="user-card" onclick="selUser('Keiler',this)">
-      <div class="user-avatar" style="background:var(--color-background-info);color:var(--color-text-info)">K</div>
-      <div><div style="font-size:15px;font-weight:500">Keiler</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Padre',this)">
-      <div class="user-avatar" style="background:var(--color-background-warning);color:var(--color-text-warning)">P</div>
-      <div><div style="font-size:15px;font-weight:500">Padre</div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor</div></div>
-    </div>
-    <div class="user-card" onclick="selUser('Admin',this)">
-      <div class="user-avatar" style="background:var(--color-background-success);color:var(--color-text-success)">A</div>
-      <div><div style="font-size:15px;font-weight:500">Admin</div><div style="font-size:11px;color:var(--color-text-secondary)">Administrador</div></div>
-    </div>
-  </div>
+  <div class="user-cards" id="user-cards-list"></div>
   <div id="pin-wrap" style="display:none">
     <div style="text-align:center;font-size:13px;color:var(--color-text-secondary);margin-bottom:10px">PIN de acceso</div>
     <div class="pin-dots" id="pin-dots"><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div></div>
@@ -607,7 +594,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       </div>
     </div>
     <div style="margin-bottom:12px"><label class="lbl">Cliente (opcional)</label>
-      <select id="s-cli"><option value="">Walk-in</option><option>Yano</option><option>Otro</option></select></div>
+      <select id="s-cli"><option value="">Walk-in</option></select></div>
     <button class="btn btn-p" onclick="goProductos()">Continuar →</button>
   </div>
 </div>
@@ -726,7 +713,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <div class="module" id="mod-ventas" style="padding:12px"><div class="wrap">
 <div class="nav" id="ven-nav">
   <button class="act" onclick="navTo_ven('ventas',this)">Registro ventas</button>
-  <button onclick="navTo_ven('comisiones',this)">Comisiones</button>
+  <button id="btn-com-nav" onclick="navTo_ven('comisiones',this)">Comisiones</button>
   <button id="btn-liq-nav" onclick="navTo_ven('liquidacion',this)">Liquidación semanal</button>
   <button id="btn-micaja-nav" onclick="navTo_ven('micaja',this)" style="display:none">💰 Mi Caja</button>
 </div>
@@ -786,13 +773,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th style="width:28px">
-          <!-- checkbox "seleccionar todo" — puro JS, no inline onchange -->
-          <input type="checkbox" id="chk-all">
-        </th>
+        <th style="width:28px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
         <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
         <th>Tipo</th><th>Productos</th><th>Total USD</th><th>Moneda</th>
-        <th>% Com.</th><th>Comisión USD</th><th>Estado com.</th><th>Nota</th><th></th>
+        <th id="th-com1">% Com.</th><th id="th-com2">Comisión USD</th><th id="th-com3">Estado com.</th><th>Nota</th><th></th>
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot id="v-foot"></tfoot>
@@ -883,7 +867,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       </div>
       <div class="g3">
         <div><label class="lbl">Cliente</label>
-          <select id="nv-cli"><option>Walk-in</option><option>Yano</option><option>Otro</option></select></div>
+          <select id="nv-cli"><option>Walk-in</option></select></div>
         <div><label class="lbl">Tipo</label>
           <select id="nv-tipo"><option>Minorista</option><option>Mayorista</option></select></div>
         <div><label class="lbl">Moneda cobro</label>
@@ -1361,25 +1345,38 @@ async function syncSaveVenta(v) {
     notas:        v.nota    || '',
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[]}) : ''
   };
+  // Include supaId if we already have it (for upsert)
+  if(v.supaId) row.id = v.supaId;
+
   if (_supaOnline) {
     try {
-      var r = await supaReq('POST', 'ventas', row);
+      var path = v.supaId ? 'ventas?id=eq.'+v.supaId : 'ventas';
+      var method = v.supaId ? 'PATCH' : 'POST';
+      var r = await supaReq(method, path, row);
       if (r.ok) {
-        var data = await r.json();
-        if (data && data[0] && data[0].id) v.supaId = data[0].id;
-        console.log('Venta guardada en Supabase, id:', data && data[0] && data[0].id);
+        if(!v.supaId){
+          var data = await r.json();
+          if (data && data[0] && data[0].id){
+            v.supaId = data[0].id;
+            // Save back to local with supaId
+            offlineSaveVentas();
+          }
+        }
         showSyncStatus('✓ Guardado');
         return true;
       } else {
         var errText = await r.text();
-        console.error('syncSaveVenta HTTP error:', r.status, errText);
-        showToast('Error guardando venta: ' + r.status);
+        console.error('syncSaveVenta error:', r.status, errText);
+        // Queue for retry
+        enqueue({ method: 'POST', path: 'ventas', body: row });
       }
     } catch(e) {
-      console.error('syncSaveVenta error:', e);
+      console.error('syncSaveVenta:', e);
+      enqueue({ method: 'POST', path: 'ventas', body: row });
     }
+  } else {
+    enqueue({ method: 'POST', path: 'ventas', body: row });
   }
-  enqueue({ method: 'POST', path: 'ventas', body: row });
   return false;
 }
 
@@ -1543,6 +1540,8 @@ async function supaInit() {
       offlineSaveVentas(); offlineSaveProds(); offlineSaveClientes();
       hideOfflineBanner();
       showToast('✓ ' + VENTAS.length + ' ventas · ' + PRODS.length + ' productos');
+    await syncLoadUsers();
+    await syncLoadClientes();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -1567,7 +1566,11 @@ async function supaInit() {
 
   // Sync every 2 min + save cache every 30s
   setInterval(async function() {
-    if (_supaOnline) { await flushQueue(); await syncLoadVentas(); }
+    if (_supaOnline) { 
+      await flushQueue(); 
+      await syncLoadVentas(); 
+      await syncLoadClientes();
+    }
   }, 120000);
   setInterval(function() {
     if (_supaOnline && VENTAS.length) {
@@ -1594,9 +1597,10 @@ async function supaInit() {
 
 
 function goMod(id,title,btn){
-  // Check permission — map module id to key used in modulos[]
-  const _modIdToKey={'mod-cli':'clientes','mod-ig':'ig','mod-pos':'pos','mod-ventas':'ventas','mod-stock':'stock','mod-admin':'admin','mod-backup':'backup','mod-prestamos':'prestamos'};
-  const modKey = _modIdToKey[id] || id.replace('mod-','');
+  // Check permission
+  // Map module id to key using MOD_DEFS
+  var _modDef = typeof MOD_DEFS!=='undefined' ? MOD_DEFS.find(function(m){return m.id===id;}) : null;
+  var modKey = _modDef ? _modDef.key : id.replace('mod-','');
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]){
     const allowed = USERS[S.user].modulos||[];
     if(!allowed.includes(modKey)&&USERS[S.user].rol!=='admin'){
@@ -1649,7 +1653,7 @@ function buildSidebar(userName){
   if(!nav)return;
   const u=USERS[userName];
   if(!u){nav.innerHTML='';return;}
-  const allowed=u.modulos||(u.rol==='admin'?MOD_DEFS.map(m=>m.key):['pos','stock','ventas','clientes']);
+  const allowed=(Array.isArray(u.modulos)&&u.modulos.length>0)?u.modulos:(u.rol==='admin'?MOD_DEFS.map(m=>m.key):['pos','stock','ventas','clientes']);
   let html='',lastSection='';
   MOD_DEFS.forEach(function(m){
     if(!allowed.includes(m.key))return;
@@ -1674,7 +1678,172 @@ function erpLogout(){
   if(nav2)nav2.innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary);font-size:12px">Inicia sesión</div>';
 }
 
-const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Padre:{pin:'0000',color:'var(--color-background-warning)',tc:'var(--color-text-warning)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes']},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos']}};
+const USERS={Keiler:{pin:'1234',color:'var(--color-background-info)',tc:'var(--color-text-info)',rol:'vendedor',almacen:'Habana',modulos:['pos','stock','ventas','clientes'],activo:true,puedeVender:true},Admin:{pin:'0000',color:'var(--color-background-success)',tc:'var(--color-text-success)',rol:'admin',almacen:'',modulos:['pos','stock','ventas','clientes','ig','admin','backup','prestamos'],activo:true,puedeVender:true}};
+(function(){try{var _su=JSON.parse(localStorage.getItem('erp_users_cache')||'{}');Object.keys(_su).forEach(function(k){if(_su[k]&&_su[k].pin)USERS[k]=_su[k];});}catch(e){}})();
+
+function renderLoginCards(){
+  var el=document.getElementById('user-cards-list');
+  if(!el){setTimeout(renderLoginCards,50);return;}
+  el.innerHTML=Object.keys(USERS).filter(function(k){
+    return USERS[k]&&USERS[k].activo!==false;
+  }).map(function(name){
+    var u=USERS[name];
+    var bg=u.color||'var(--color-background-secondary)';
+    var tc=u.tc||'var(--color-text-primary)';
+    var rol=u.rol==='admin'?'Administrador':'Vendedor';
+    return '<div class="user-card" data-uname="'+name+'" onclick="selUser(this.getAttribute(\'data-uname\'),this)">'
+      +'<div class="user-avatar" style="background:'+bg+';color:'+tc+'">'+name[0].toUpperCase()+'</div>'
+      +'<div><div style="font-size:15px;font-weight:500">'+name+'</div>'
+      +'<div style="font-size:11px;color:var(--color-text-secondary)">'+rol+'</div></div>'
+      +'</div>';
+  }).join('');
+}
+function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
+async function syncSaveUser(n,u){
+  if(typeof supaReq==='undefined'||!_supaOnline){try{enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false}});}catch(e){}return;}
+  try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false});}catch(e){console.warn(e);}
+}
+async function syncDeleteUser(n){
+  // Use activo=false to preserve FK references from ventas table
+  if(typeof supaReq==='undefined'||!_supaOnline){
+    enqueue({method:'PATCH',path:'usuarios?nombre=eq.'+encodeURIComponent(n),body:{activo:false}});
+    return;
+  }
+  try{await supaReq('PATCH','usuarios?nombre=eq.'+encodeURIComponent(n),{activo:false});}catch(e){}
+}
+async function syncLoadUsers(){
+  if(typeof supaReq==='undefined'||!_supaOnline)return;
+  try{
+    var r=await supaReq('GET','usuarios?select=*&activo=eq.true');
+    if(!r.ok)return;
+    var rows=await r.json();
+    if(!rows||!rows.length)return;
+    // Clear all non-hardcoded users first, then rebuild from Supabase
+    var hardcoded=['Keiler','Admin'];
+    Object.keys(USERS).forEach(function(k){
+      if(hardcoded.indexOf(k)<0) delete USERS[k];
+    });
+    rows.forEach(function(row){
+      USERS[row.nombre]={
+        pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',
+        color:row.color||'',tc:row.tc||'',
+        modulos:Array.isArray(row.modulos)?row.modulos:(row.modulos||[]),
+        activo:row.activo!==false,puedeVender:row.puede_vender!==false
+      };
+    });
+    saveUsers();
+    if(typeof renderLoginCards==='function')renderLoginCards();
+    if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
+  }catch(e){console.warn('syncLoadUsers:',e);}
+}
+
+// ═══ CLIENTES SYNC ═══
+async function _supaUpsert(table, idCol, idVal, body){
+  try{
+    var r=await supaReq('POST', table, body);
+    if(r.ok) return true;
+    var txt=await r.text();
+    if(r.status===409||txt.indexOf('23505')>=0||txt.indexOf('duplicate')>=0){
+      // Remove id from patch body to avoid conflicts
+      var patchBody=Object.assign({},body);
+      delete patchBody[idCol];
+      var r2=await supaReq('PATCH', table+'?'+idCol+'=eq.'+encodeURIComponent(idVal), patchBody);
+      if(r2.ok) return true;
+      var txt2=await r2.text();
+      console.warn('_supaUpsert PATCH '+table+':', r2.status, txt2);
+      return false;
+    }
+    console.warn('_supaUpsert '+table+' error:', r.status, txt);
+    return false;
+  }catch(e){console.warn('_supaUpsert '+table+':', e); return false;}
+}
+
+async function syncSaveCliente(c){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  var body={id:c.id, nombre:c.nombre, telefono:c.tel||'',
+    almacen:c.alm||'', color:c.color||'info',
+    notas:c.notas||'', owner:c.owner||'Admin', activo:true};
+  await _supaUpsert('clientes','id',c.id,body);
+}
+
+async function syncSaveFolio(cliId, f){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
+    almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[]};
+  if(f.mon) body.moneda=f.mon;
+  await _supaUpsert('folios','id',f.id,body);
+}
+
+async function syncSaveAbono(cliId, folioId, ab){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  var body={id:ab.id, folio_id:folioId, cliente_id:cliId,
+    fecha:ab.fecha, concepto:ab.concepto||'',
+    descripcion:ab.desc||'', monto:ab.monto||0,
+    moneda:ab.mon||'USD', equiv_usd:ab.equivUSD||0,
+    en_caja:ab.enCaja||false, caja:ab.caja||'', caja_tipo:ab.cajaTipo||''};
+  await _supaUpsert('abonos','id',ab.id,body);
+}
+
+async function syncLoadClientes(){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  try{
+    var rc = await supaReq('GET','clientes?select=*&order=nombre.asc');
+    if(!rc.ok) return;
+    var clis = await rc.json();
+    if(!clis||!clis.length) return;
+
+    var rf = await supaReq('GET','folios?select=*&order=fecha.asc');
+    var foliosRows = rf.ok ? (await rf.json()||[]) : [];
+
+    var ra = await supaReq('GET','abonos?select=*&order=fecha.asc');
+    var abonosRows = ra.ok ? (await ra.json()||[]) : [];
+
+    CLIENTES.length = 0;
+    clis.forEach(function(row){
+      var folios = foliosRows.filter(function(f){return f.cliente_id===row.id;}).map(function(f){
+        var lineas = Array.isArray(f.lineas) ? f.lineas : (typeof f.lineas==='string' ? (function(){try{return JSON.parse(f.lineas);}catch(e){return [];}}()) : []);
+        var abonos = abonosRows.filter(function(a){return a.folio_id===f.id;}).map(function(a){
+          return {id:a.id,fecha:a.fecha,concepto:a.concepto,desc:a.descripcion,
+            monto:parseFloat(a.monto||0),mon:a.moneda,equivUSD:parseFloat(a.equiv_usd||0),
+            enCaja:a.en_caja,caja:a.caja,cajaTipo:a.caja_tipo};
+        });
+        return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
+          desc:f.descripcion,lineas:lineas,abonos:abonos};
+      });
+      CLIENTES.push({
+        id:row.id, nombre:row.nombre, tel:row.telefono||'',
+        alm:row.almacen||'', color:row.color||'info',
+        notas:row.notas||'', owner:row.owner||'Admin',
+        folios:folios
+      });
+    });
+
+    // Update ID counters
+    nextCid = CLIENTES.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return isNaN(n)?a:Math.max(a,n);},0)+1;
+    nextFid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){var n=parseInt(f.id||'0');return isNaN(n)?b:Math.max(b,n);},a);},0)+1;
+    nextAid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){return (f.abonos||[]).reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return isNaN(n)?d:Math.max(d,n);},b);},a);},0)+1;
+
+    offlineSaveClientes();
+    if(typeof renderLista==='function') try{renderLista();}catch(e){}
+    console.log('Clientes loaded from Supabase:', CLIENTES.length);
+  }catch(e){console.warn('syncLoadClientes:',e);}
+}
+
+async function syncPushAllClientes(){
+  if(!_supaOnline||typeof supaReq==='undefined') return;
+  for(var c of CLIENTES){
+    await syncSaveCliente(c);
+    for(var f of (c.folios||[])){
+      await syncSaveFolio(c.id, f);
+      for(var ab of (f.abonos||[])){
+        await syncSaveAbono(c.id, f.id, ab);
+      }
+    }
+  }
+  showToast('✓ Clientes sincronizados con Supabase');
+}
+
+
 const MONEDAS=['USD','EUR','CUP','CUPT'];
 const PRODS=[
   {n:"Chapa galv. 2000x1000x0,8",min:24,maj:23,stk:120},{n:"Chapa galv. 2000x1000x1",min:33,maj:31,stk:85},
@@ -1719,6 +1888,7 @@ function goStep(pg,idx){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
   document.getElementById(pg).classList.add('act');
   renderSteps(idx);
+  if(pg==='pg-alm'){_poblarClientesPOS();}
   if(pg==='pg-prod'){renderProds();renderCart();renderCartCtx();}
   if(pg==='pg-pago')initPago();
   updResBadge();
@@ -1766,9 +1936,20 @@ function logout(){
   }
 }
 function selAlm(a,el){S.alm=a;document.querySelectorAll('.alm-card').forEach(c=>c.classList.remove('sel'));el.classList.add('sel');}
+function _poblarClientesPOS(){
+  var sel=document.getElementById('s-cli');
+  if(!sel)return;
+  var isAdm=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  var visClis=isAdm?CLIENTES:CLIENTES.filter(function(c){return !c.owner||c.owner===S.user;});
+  sel.innerHTML='<option value="">Walk-in</option>'
+    +visClis.map(function(c){return '<option value="'+c.id+'">'+c.nombre+'</option>';}).join('');
+}
 function goProductos(){
   if(!S.alm){alert('Elige un almacén');return;}
-  S.cli=document.getElementById('s-cli').value||'Walk-in';
+  var _cliSel=document.getElementById('s-cli');
+  var _cliId=_cliSel?_cliSel.value:'';
+  if(_cliId){var _c=CLIENTES.find(function(c){return c.id===_cliId;});S.cli=_c?_c.nombre:'Walk-in';S.cliId=_cliId;}
+  else{S.cli='Walk-in';S.cliId=null;}
   S.cart=[];S.tipo='Minorista';S.cartMon='USD';
   document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
   document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
@@ -2142,7 +2323,7 @@ function confirmar(){
   // Sync Supabase
   if(typeof syncSaveVenta==='function') syncSaveVenta(venta);
   if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
-  if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm); // async, fire-and-forget
+  if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm);
   // Save to offline cache immediately
   if(typeof offlineAutoSave==='function') offlineAutoSave();
   if(!_supaOnline && typeof showOfflineBanner==='function') showOfflineBanner(_syncQueue.length);
@@ -2302,9 +2483,13 @@ function filtrar_ven(){
 
 // ── RENDER VENTAS ─────────────────────────────────────────
 function renderVentas(){
-  // Show Mi Caja tab only for vendedor
-  var _mc = document.getElementById('btn-micaja-nav');
-  if(_mc) _mc.style.display = (typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor') ? '' : 'none';
+  var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _mc=document.getElementById('btn-micaja-nav');if(_mc)_mc.style.display=_isVend?'':'none';
+  var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
+  var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
+  ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVend?'none':'';});
+  var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
+  var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
 
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
@@ -2327,7 +2512,7 @@ function renderVentas(){
   const estClsMap={Pagada:'bg',Pendiente:'ba','No aplica':'bn'};
   document.getElementById('v-body').innerHTML=data.length?data.map(v=>`
     <tr id="vrow-${v.id}">
-      <td><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
+      <td style="${_isVend?'display:none':''}"><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
       <td>${fD(v.fecha)}</td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'}">${v.vend}</span></td>
       <td>${v.alm}</td>
@@ -2336,15 +2521,11 @@ function renderVentas(){
       <td style="font-size:10px;max-width:130px;color:var(--color-text-secondary)">${v.prods}</td>
       <td style="font-weight:500;text-align:right">${fN(v.totalUSD)}</td>
       <td style="font-size:11px">${v.mon}</td>
-      <td>${v.estCom==='No aplica'
-        ?'<span style="font-size:11px;color:var(--color-text-tertiary)">—</span>'
-        :`<input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100"
-           onchange="updComPct(${v.id},this.value)" title="Editar %">&nbsp;<span style="font-size:10px;color:var(--color-text-tertiary)">%</span>`}
-      </td>
-      <td style="text-align:right;font-weight:500;color:${v.estCom==='No aplica'?'var(--color-text-tertiary)':'var(--color-text-warning)'}">${v.estCom==='No aplica'?'—':fN(v.comUSD)}</td>
-      <td>${renderEstComCell(v)}</td>
+      <td style="${_isVend?'display:none':''}"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
+      <td style="${_isVend?'display:none':''}text-align:right;font-weight:500">${fN(v.comUSD)}</td>
+      <td style="${_isVend?'display:none':''}">${renderEstComCell(v)}</td>
       <td style="font-size:11px;overflow:hidden;max-width:120px;color:var(--color-text-secondary)">${v.nota||''}</td>
-      <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button><button class="btn-sm" onclick="eliminarV(${v.id})" style="color:var(--color-text-danger)">×</button></td>
+      <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger)">×</button>'}</td>
     </tr>`).join(''):`<tr><td colspan="13" style="text-align:center;color:var(--color-text-tertiary);padding:16px">Sin resultados</td></tr>`;
 
   // foot totales
@@ -2688,24 +2869,32 @@ setRangeLiq();
 initChkAll();
 renderVentas();
 
-function renderMiCaja() {
+async function renderMiCaja() {
   var el = document.getElementById('micaja-root');
   if (!el) return;
   var user = typeof S !== 'undefined' ? S.user : '';
   var alm  = USERS[user] ? USERS[user].almacen : '';
   if (!alm) { el.innerHTML = '<div style="padding:20px;text-align:center">Sin almacén asignado</div>'; return; }
 
-  var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+  el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando caja...</div>';
+  if (typeof loadCajasData === 'function') await loadCajasData();
+
 
   // Get all cajas for this almacen
-  var misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm) >= 0; });
+  // Use _cajasData if available (same source as Admin cajas), fallback to CUENTAS_BASE
+  var misCajas;
+  if(typeof _cajasData!=='undefined'&&_cajasData.length){
+    misCajas = _cajasData.filter(function(c){ return c.almacen===alm||c.nombre.indexOf(alm)>=0; })
+      .map(function(c){ return [c.nombre,{mon:c.moneda||c.nombre.split(' ')[0]}]; });
+  } else {
+    misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm)>=0; });
+  }
 
   // Build saldos cards
   var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
     var cta = entry[0], v = entry[1];
-    var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
-    var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
-    var saldo = (v.ingV||0) + (v.ingIG||0) + igIng - (v.gasIG||0) - igGas;
+    // Use same _getSaldoCaja as Admin for consistency
+    var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(cta) : 0;
     var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
     return '<div class="card" style="text-align:center">'
@@ -2715,23 +2904,30 @@ function renderMiCaja() {
       + '</div>';
   }).join('') + '</div>';
 
-  // Build movimientos — ventas de este almacen + I/G movs de estas cajas
+  // Use _cajasMovs — same source as Admin
   var ctaNames = misCajas.map(function(e){ return e[0]; });
+  var cajaIds = (typeof _cajasData!=='undefined'?_cajasData:[])
+    .filter(function(c){ return ctaNames.indexOf(c.nombre)>=0; })
+    .map(function(c){ return c.id; });
 
-  // Ventas como movimientos
-  var ventaMov = VENTAS.filter(function(v){ return v.alm === alm; }).map(function(v){
-    return { fecha: v.fecha, desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
-             monto: fN(v.totalUSD) + ' USD', tipo: 'venta', sentido: 'ingreso' };
-  });
-
-  // I/G movimientos de sus cajas
-  var igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta) >= 0; }).map(function(m){
-    return { fecha: m.fecha, desc: m.desc + ' (' + m.cta + ')',
-             monto: fN(m.monto, (m.mon==='CUP'||m.mon==='CUPT')?0:2) + ' ' + m.mon,
-             tipo: 'ig', sentido: m.sentido };
-  });
-
-  var allMovs = ventaMov.concat(igMov).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+  var allMovs = (typeof _cajasMovs!=='undefined'?_cajasMovs:[])
+    .filter(function(m){
+      return ctaNames.indexOf(m.caja_origen)>=0 || ctaNames.indexOf(m.caja_destino)>=0
+          || cajaIds.indexOf(m.caja_origen_id)>=0 || cajaIds.indexOf(m.caja_destino_id)>=0;
+    })
+    .map(function(m){
+      var esDest = ctaNames.indexOf(m.caja_destino)>=0||cajaIds.indexOf(m.caja_destino_id)>=0;
+      var monto = esDest ? parseFloat(m.monto_destino||0) : parseFloat(m.monto_origen||0);
+      var fecha = (m.created_at||m.fecha||'').substring(0,10);
+      return {
+        fecha: fecha,
+        _ts: m.created_at||m.fecha||'',
+        desc: m.notas||m.tipo||'Movimiento',
+        monto: fN(monto,2)+' USD',
+        sentido: esDest?'ingreso':'gasto'
+      };
+    })
+    .sort(function(a,b){ return (b._ts||'').localeCompare(a._ts||''); });
 
   var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
     + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
@@ -2764,37 +2960,23 @@ function renderMiCaja() {
 
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
 const CUENTAS_BASE={
-  'USD Habana':{ingV:99432.52,ingIG:42197.04,gasIG:145468.60,mon:'USD'},
-  'EUR Habana':{ingV:570,ingIG:7225,gasIG:7435,mon:'EUR'},
-  'CUP Habana':{ingV:33782268,ingIG:168624,gasIG:33413912,mon:'CUP'},
-  'USD Placetas':{ingV:58214.39,ingIG:63780.38,gasIG:117955.76,mon:'USD'},
-  'EUR Placetas':{ingV:1916,ingIG:45243.92,gasIG:47159.92,mon:'EUR'},
-  'CUP Placetas':{ingV:3669426,ingIG:8534750,gasIG:12204176,mon:'CUP'},
-  'USD España':{ingV:0,ingIG:167215.37,gasIG:0,mon:'USD'},
-  'EUR España':{ingV:0,ingIG:93797.72,gasIG:450,mon:'EUR'},
+  'USD Habana':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
+  'EUR Habana':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
+  'CUP Habana':{ingV:0,ingIG:0,gasIG:0,mon:'CUP'},
+  'USD Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
+  'EUR Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
+  'CUP Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'CUP'},
+  'USD España':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
+  'EUR España':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
 };
 
 // ── DEUDAS BASE ───────────────────────────────────────────
-let DEUDAS=[
-  {id:1,acreedor:'Fito',concepto:'Préstamo Tarjeta Crédito',monOrig:'EUR',montOrig:14600,totalUSD:16781.24,pendienteUSD:16781.24,cuotaMes:280,activa:true},
-  {id:2,acreedor:'Fito',concepto:'Préstamo Empresa',monOrig:'EUR',montOrig:11320,totalUSD:13011.21,pendienteUSD:13011.21,cuotaMes:226.85,activa:true},
-];
+let DEUDAS=[];
+(function(){try{var _d=JSON.parse(localStorage.getItem('erp_deudas')||'[]');if(_d&&_d.length)DEUDAS=_d;}catch(e){}})();
 
 // ── MOVIMIENTOS I/G ───────────────────────────────────────
-let MOVS=[
-  {id:1,fecha:'2025-03-16',tipo:'Comisión vendedor',desc:'Comisión Keiler semana 2-7 mar',vend:'Keiler',alm:'Habana',monto:122855,mon:'CUP',equivUSD:241.10,cta:'CUP Habana',sentido:'gasto',notas:''},
-  {id:2,fecha:'2025-03-23',tipo:'Comisión vendedor',desc:'Comisión Keiler 23 mar',vend:'Keiler',alm:'Habana',monto:43030,mon:'CUP',equivUSD:84.45,cta:'CUP Habana',sentido:'gasto',notas:''},
-  {id:3,fecha:'2025-04-01',tipo:'Gasto operativo',desc:'Parrilla Domicilio',monto:50000,mon:'CUP',equivUSD:98.12,cta:'CUP Habana',sentido:'gasto',notas:''},
-  {id:4,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens 5 Certificaciones',monto:1000,mon:'USD',equivUSD:1000,cta:'USD Habana',sentido:'gasto',notas:''},
-  {id:5,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens Cítricos Acreditación',monto:400,mon:'USD',equivUSD:400,cta:'USD Habana',sentido:'gasto',notas:''},
-  {id:6,fecha:'2025-08-28',tipo:'Gasto operativo',desc:'Flete Mariel-Habana (Leodan)',monto:80000,mon:'CUP',equivUSD:157,cta:'CUP Habana',sentido:'gasto',notas:''},
-  {id:7,fecha:'2025-09-01',tipo:'Comisión vendedor',desc:'Comisión Keiler Leodan container',vend:'Keiler',alm:'Habana',monto:700,mon:'USD',equivUSD:700,cta:'USD Habana',sentido:'gasto',notas:''},
-  {id:8,fecha:'2025-09-01',tipo:'Gasto operativo',desc:'Comisión Ernes',monto:600,mon:'USD',equivUSD:600,cta:'USD Habana',sentido:'gasto',notas:''},
-  {id:9,fecha:'2025-03-15',tipo:'Préstamo recibido',desc:'Préstamo Miguel Á. → Yano',acreedor:'Miguel Á.',monto:4000,mon:'USD',equivUSD:4000,cta:'USD Habana',sentido:'ingreso',notas:''},
-  {id:10,fecha:'2025-03-24',tipo:'Préstamo recibido',desc:'Préstamo Sofi → Xportprise',acreedor:'Sofi',monto:4023,mon:'EUR',equivUSD:4623,cta:'EUR España',sentido:'ingreso',notas:''},
-  {id:11,fecha:'2025-10-15',tipo:'Amortización deuda',desc:'Cuota oct — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 1/94'},
-  {id:12,fecha:'2025-11-15',tipo:'Amortización deuda',desc:'Cuota nov — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 2/94'},
-];
+let MOVS=[];
+(function(){try{var _m=JSON.parse(localStorage.getItem('erp_movs')||'[]');if(_m&&_m.length){MOVS=_m;igNextId=_m.reduce(function(a,m){return Math.max(a,m.id||0);},0)+1;}}catch(e){}})();
 let igNextId =13;
 
 
@@ -3175,40 +3357,25 @@ const COLORES=[
   {bg:'var(--color-background-danger)',tc:'var(--color-text-danger)',id:'dang'},
   {bg:'var(--color-background-secondary)',tc:'var(--color-text-secondary)',id:'sec'},
 ];
-const PRODS_NAMES = ['Cuadrado S275JR 16','Cuadrado S275JR 14','Cuadrado S275JR 12','Perfil Angular 40x40x4','Perfil Angular 30x30x3','Perfil Angular 25x25x3','Chapa galv. 2000x1000x1','Chapa galv. 2000x1000x0,8','ANG. 30x30x3x6000','ANG. 40x40x4x6000','Redondo S275JR 12','Redondo S275JR 16','T. CUA 40x1.5x6000','T. RECT. 50x30x2.0','Varillas E6013 3.2x350mm'];
+var PRODS_NAMES = [];
+function _getProdNames(){ return PRODS.filter(function(p){return p.activo!==false;}).map(function(p){return p.n;}); }
 const ICON={efectivo:'💵',arancel:'📋',flete:'🚛',estiba:'📦',interes:'📈',viaje:'🚗',otro:'•'};
 const HINTS={efectivo:'Cash, transferencia, FM...',arancel:'Aranceles, impuestos aduana',flete:'Flete marítimo o terrestre',estiba:'Carga, descarga',interes:'Intereses de financiación',viaje:'Viajes, desplazamientos',otro:''};
 
 // ── DATOS ─────────────────────────────────────────────────
-let CLIENTES=[
-  {id:'c1',nombre:'Yano',tel:'',alm:'Placetas',color:'info',notas:'Socio — liquidando Container #1',
-   folios:[
-     {id:'001',fecha:'2025-03-23',alm:'Placetas',mon:'USD',desc:'Container #1 — Perfiles y chapas',
-      lineas:[
-        {prod:'Cuadrado S275JR 16',q:151,precio:165,mon:'USD',qO:151,pO:165},
-        {prod:'Perfil Angular 40x40x4',q:70,precio:45,mon:'USD',qO:70,pO:45},
-        {prod:'Chapa galv. 2000x1000x1',q:108,precio:11,mon:'USD',qO:108,pO:11},
-        {prod:'Perfil Angular 25x25x3',q:95,precio:23,mon:'USD',qO:95,pO:23},
-        {prod:'Perfil Angular 30x30x3',q:97,precio:31,mon:'USD',qO:97,pO:31},
-        {prod:'Redondo S275JR 12',q:91,precio:6.17,mon:'USD',qO:91,pO:6.17},
-      ],
-      abonos:[
-        {id:'a1',fecha:'2024-12-12',concepto:'efectivo',desc:'Dinero enviado España',monto:900,mon:'EUR',tasa:null,equivUSD:1034.46,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a2',fecha:'2025-01-31',concepto:'arancel',desc:'Costes Nacionalización',monto:565.7,mon:'USD',tasa:null,equivUSD:565.7,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a3',fecha:'2025-01-31',concepto:'arancel',desc:'Costes Nacionalización #2',monto:226,mon:'USD',tasa:null,equivUSD:226,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a4',fecha:'2025-02-10',concepto:'flete',desc:'Flete Mariel-Placetas',monto:794,mon:'USD',tasa:null,equivUSD:794,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a5',fecha:'2025-02-10',concepto:'estiba',desc:'Descarga + Merienda',monto:156,mon:'USD',tasa:null,equivUSD:156,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a6',fecha:'2025-03-10',concepto:'flete',desc:'Flete Placetas-Habana',monto:65000,mon:'CUP',tasa:347,equivUSD:187.32,enCaja:true,caja:'CUP Placetas',cajaTipo:'ingreso-yano'},
-        {id:'a7',fecha:'2025-03-23',concepto:'efectivo',desc:'Cash Placetas',monto:335301,mon:'CUP',tasa:355,equivUSD:944,enCaja:true,caja:'CUP Placetas',cajaTipo:'ingreso-yano'},
-        {id:'a8',fecha:'2025-03-26',concepto:'efectivo',desc:'Envío Con FM',monto:1916,mon:'EUR',tasa:null,equivUSD:2201.15,enCaja:false,caja:null,cajaTipo:null},
-        {id:'a9',fecha:'2025-03-27',concepto:'arancel',desc:'Pago IMPUESTOS Container #1',monto:425310,mon:'CUP',tasa:355,equivUSD:1197.77,enCaja:true,caja:'CUP Placetas',cajaTipo:'gasto-pagado'},
-        {id:'a10',fecha:'2025-04-16',concepto:'flete',desc:'Flete Habana-Placetas',monto:109.49,mon:'USD',tasa:null,equivUSD:109.49,enCaja:true,caja:'USD Placetas',cajaTipo:'gasto-pagado'},
-      ]
-     }
-   ]
-  },
-];
-let nextCid=2,nextFid=2,nextAid=200;
+let CLIENTES=[];
+// Load clientes from localStorage
+(function(){
+  try{
+    var _c=JSON.parse(localStorage.getItem('erp_clientes_cache')||'[]');
+    if(_c&&_c.length){ CLIENTES=_c;
+      nextCid=_c.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return Math.max(a,n);},0)+1;
+      nextFid=_c.reduce(function(a,c){return c.folios?c.folios.reduce(function(b,f){var n=parseInt(f.id||'0');return Math.max(b,n);},a):a;},0)+1;
+      nextAid=_c.reduce(function(a,c){return c.folios?c.folios.reduce(function(b,f){return f.abonos?f.abonos.reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return Math.max(d,n);},b):b;},a):a;},0)+1;
+    }
+  }catch(e){}
+})();;
+let nextCid=1,nextFid=1,nextAid=1;
 let colorSel='info';
 let activoCli=null; // id cliente activo
 let nfLineas=[];
@@ -3259,23 +3426,41 @@ function abrirCliente(cid){
   renderFicha();
 }
 
+function eliminarCliente(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;});
+  if(!c)return;
+  if(!confirm('¿Eliminar cliente "'+c.nombre+'"? Sus folios y abonos también se eliminarán.'))return;
+  CLIENTES=CLIENTES.filter(function(x){return x.id!==cid;});
+  offlineSaveClientes();
+  // Delete from Supabase
+  if(_supaOnline&&typeof supaReq!=='undefined'){
+    supaReq('DELETE','abonos?cliente_id=eq.'+cid).catch(function(e){});
+    supaReq('DELETE','folios?cliente_id=eq.'+cid).catch(function(e){});
+    supaReq('DELETE','clientes?id=eq.'+cid).catch(function(e){});
+  }
+  showToast('Cliente eliminado: '+c.nombre);
+  navTo('lista',document.querySelectorAll('#main-nav button')[0]);
+}
+
 function renderFicha(){
   const c=CLIENTES.find(x=>x.id===activoCli);if(!c)return;
   const col=getColor(c.color);
   // nav de la ficha
+  var _isAdmCli=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   document.getElementById('ficha-nav').innerHTML=`
     <button class="btn-sm" onclick="navTo('lista',document.querySelectorAll('#main-nav button')[0])" style="margin-right:6px">← Clientes</button>
     <button id="fn-cuenta" class="act" onclick="fichaNavTo('f-cuenta')">Cuenta</button>
     <button id="fn-folios" onclick="fichaNavTo('f-folios')">Folios</button>
     <button id="fn-abonar" onclick="fichaNavTo('f-abonar')">+ Abonar</button>
-    <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>`;
+    <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>
+    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger);margin-left:auto">🗑 Eliminar</button>`:''}`;
   fichaNavTo('f-cuenta');
 }
 
 // ── LISTA ─────────────────────────────────────────────────
 function renderLista(){
   const isAdminUser=(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin');
-  const visClientes=isAdminUser?CLIENTES:visClientes.filter(c=>!c.owner||c.owner===S.user);
+  const visClientes=isAdminUser?CLIENTES:CLIENTES.filter(c=>!c.owner||c.owner===S.user);
   const totDeuda=visClientes.reduce((a,c)=>a+totCli(c),0);
   const totPdte=visClientes.reduce((a,c)=>a+pdtCli(c),0);
   const totPag=totDeuda-totPdte;
@@ -3400,7 +3585,7 @@ function renderFichaFolios(c){
           <div style="padding:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <h4 style="margin:0">Productos</h4>
-              <button class="btn-sm" onclick="addLF('${c.id}','${f.id}')">+ línea</button>
+              <button class="btn-sm" onclick="event.stopPropagation();addLF('${c.id}','${f.id}')">+ línea</button>
             </div>
             <div class="prod-row hdr"><span>Producto</span><span style="text-align:right">Cant.</span><span style="text-align:right">P.unit.</span><span>Mon.</span><span style="text-align:right">Total</span><span></span></div>
             <div id="pl-${c.id}-${f.id}">${renderPL(c,f)}</div>
@@ -3439,8 +3624,8 @@ function renderPL(c,f){
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
       <span style="font-size:11px">${l.prod}</span>
-      <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onchange="updLQ('${c.id}','${f.id}',${i},this.value)"></span>
-      <span><input type="number" class="pi" value="${l.precio}" step="0.01" onchange="updLP('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="pi" value="${l.precio}" step="0.01" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
       <span style="text-align:right;font-weight:500">${fN(toUSD(l.q*l.precio,l.mon))}</span>
       <span>${l.q!==l.qO||l.precio!==l.pO?`<span class="badge ba" style="font-size:9px;cursor:pointer" onclick="restL('${c.id}','${f.id}',${i})">mod</span>`:''}
@@ -3452,7 +3637,7 @@ function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.foli
 function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;renderFichaFolios(c);}
 function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);renderFichaFolios(c);}
-function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:PRODS_NAMES[0],q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
+function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
 function elimA(cid,fid,aid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.abonos=f.abonos.filter(a=>a.id!==aid);renderFichaFolios(c);renderFichaCuenta(c);}
 function irAbonar(cid,fid){
@@ -3522,8 +3707,8 @@ function renderFichaAbonar(c){
               </select></div>
             <div><label class="lbl">Tipo</label>
               <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option value="ingreso-yano">Entrada de fondos (entrega cash)</option>
-                <option value="gasto-pagado">Gasto pagado directamente</option>
+                <option value="efectivo">Efectivo — entra en caja</option>
+                <option value="compensacion">Compensación gasto — no entra en caja</option>
               </select></div>
           </div>
           <div style="font-size:11px;color:var(--color-text-info);margin-top:6px" id="cajaex-${c.id}"></div>
@@ -3570,10 +3755,17 @@ function toggleCajaCli(cid){
   updCajaExplicaCli(cid);
 }
 function updCajaExplicaCli(cid){
-  const el=document.getElementById('cajaex-'+cid);if(!el)return;
-  const tipo=document.getElementById('a-cajatipo-'+cid)?.value;
-  const caja=document.getElementById('a-caja-'+cid)?.value;
-  el.textContent=tipo==='ingreso-yano'?`El dinero entra a ${caja} — disponible para futuros gastos`:`Gasto ya pagado directamente — salida de ${caja}`;
+  var tipo=document.getElementById('a-cajatipo-'+cid)?.value;
+  var caja=document.getElementById('a-caja-'+cid)?.value;
+  var el=document.getElementById('cajaex-'+cid);
+  if(!el)return;
+  if(tipo==='efectivo'){
+    el.textContent='✓ El dinero entra en '+caja+' y reduce la deuda del folio';
+    el.style.color='var(--color-text-success)';
+  } else {
+    el.textContent='✓ El cliente cubrió un gasto de la empresa. Se registra en I/G y reduce la deuda. No mueve caja física';
+    el.style.color='var(--color-text-info)';
+  }
 }
 function registrarAbonoCli(cid){
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
@@ -3591,6 +3783,16 @@ function registrarAbonoCli(cid){
   const cajaTipo=enCaja?document.getElementById('a-cajatipo-'+cid).value:null;
   if(!monto){alert('Introduce el monto');return;}
   if(!desc){alert('Añade una descripción');return;}
+  // Validate monto doesn't exceed pendiente
+  var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
+  if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
+  if(_targetCheck){
+    var _pdt=pdtF(_targetCheck);
+    var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
+    if(_abonoUSD>_pdt+0.01){
+      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
+    }
+  }
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasa,equivUSD:parseFloat(equivUSD.toFixed(2)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
@@ -3603,6 +3805,33 @@ function registrarAbonoCli(cid){
   document.getElementById('togp-'+cid)?.classList.remove('on');
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
+  offlineSaveClientes();
+  // Add to caja if enCaja — via mov_cajas
+  if(enCaja&&caja){
+    var _cajaObj2=_cajasData?_cajasData.find(function(x){return x.nombre===caja;}):null;
+    var _cajaMov={
+      caja_destino:caja,
+      caja_destino_id:_cajaObj2?_cajaObj2.id:null,
+      tipo:'ingreso',
+      monto_destino:equivUSD,
+      notas:'Abono '+c.nombre+' — '+desc,
+      usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+      fecha:fecha
+    };
+    _cajasMovs.push(_cajaMov);
+    if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+    if(_supaOnline&&typeof supaReq!=='undefined'){
+      supaReq('POST','mov_cajas',_cajaMov).catch(function(e){console.warn('mov_cajas:',e);});
+    }
+    // Calculate new balance for toast
+    var _newSaldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(caja) : null;
+    if(_newSaldo!==null) showToast('Caja '+caja+': '+fN(_newSaldo)+' (actualizada)');
+    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+  }
+  (async function(){
+    await syncSaveAbono(cid, target.id, abono);
+  })();
+
   showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
@@ -3639,7 +3868,7 @@ function renderFichaNF(c){
 }
 function addNFLCli(cid){
   if(!window['nfl_'+cid])window['nfl_'+cid]=[];
-  window['nfl_'+cid].push({prod:PRODS_NAMES[0],q:1,precio:20,mon:'USD'});
+  window['nfl_'+cid].push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD'});
   renderNFLCli(cid);
 }
 function renderNFLCli(cid){
@@ -3648,9 +3877,9 @@ function renderNFLCli(cid){
   c.innerHTML=lineas.map((l,i)=>`
     <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
       <select style="flex:2;min-width:140px;font-size:11px" onchange="window['nfl_${cid}'][${i}].prod=this.value">
-        ${PRODS_NAMES.map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
+        ${_getProdNames().map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
-      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].q=parseInt(this.value)||1;updNFTotCli('${cid}')">
+      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _max=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):9999;var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;updNFTotCli('${cid}')">
       <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;updNFTotCli('${cid}')">
       <select style="width:64px;font-size:11px;padding:4px 6px" onchange="window['nfl_${cid}'][${i}].mon=this.value;updNFTotCli('${cid}')">
         <option>USD</option><option>EUR</option><option>CUP</option>
@@ -3682,9 +3911,52 @@ function crearFolioCli(cid){
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
   const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
-  const fid=String(nextFid++).padStart(3,'0');
-  c.folios.push({id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos});
+  const fid=String(nextFid++);
+  // Validate stock before creating
+  var stockError = null;
+  lineas.forEach(function(l){
+    var p=PRODS.find(function(x){return x.n===l.prod;});
+    if(!p){stockError='Producto no encontrado: '+l.prod;return;}
+    var disponible=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+    if(l.q>disponible) stockError='Stock insuficiente: '+l.prod+' (disponible: '+disponible+', pedido: '+l.q+')';
+  });
+  if(stockError){alert(stockError);return;}
+
+  var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+  c.folios.push(newFolio);
+  // Discount stock
+  lineas.forEach(function(l){
+    var p=PRODS.find(function(x){return x.n===l.prod;});
+    if(p&&alm){
+      p.stk=Math.max(0,(p.stk||0)-l.q);
+      if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q}],alm);
+    }
+  });
   window['nfl_'+cid]=[];
+  // Register as venta
+  var _ventaFolio={
+    id:venNextId++, fecha:fecha,
+    vend:(typeof S!=='undefined'&&S.user)||'Admin',
+    alm:alm, cli:c.nombre, tipo:'Mayorista', mon:mon,
+    prods:lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
+    totalUSD:lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0),
+    comPct:0, comUSD:0, estCom:'No aplica',
+    nota:'Folio '+fid+' — '+desc,
+    pagos:[], vueltos:[]
+  };
+  VENTAS.unshift(_ventaFolio);
+  offlineSaveVentas();
+  offlineSaveClientes();
+  (async function(){
+    try{
+      await syncSaveCliente(c);
+      await syncSaveFolio(c.id, newFolio);
+      for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
+      await syncSaveVenta(_ventaFolio);
+      offlineSaveVentas();
+    }catch(e){console.warn('folio sync:',e);}
+  })();
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
 }
@@ -3706,7 +3978,7 @@ function crearCliente(){
   const nombre=document.getElementById('nc-nombre').value.trim();
   if(!nombre){alert('El nombre es obligatorio');return;}
   CLIENTES.push({
-    id:'c'+(nextCid++),nombre,
+    id:'c'+nextCid++,nombre,
     tel:document.getElementById('nc-tel').value,
     alm:document.getElementById('nc-alm').value,
     color:colorSel,
@@ -3725,7 +3997,11 @@ function crearCliente(){
     }
   })(CLIENTES[CLIENTES.length-1]);
   hideModal();renderLista();
-  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  offlineSaveClientes();
+  (async function(){
+    await syncSaveCliente(CLIENTES[CLIENTES.length-1]);
+    if(_supaOnline) showToast('✓ Cliente guardado en Supabase');
+  })();
   showToast('Cliente '+nombre+' creado');
 }
 
@@ -3737,6 +4013,7 @@ renderColores();renderLista();
 <script>
 (function(){
   // Init Supabase — deferred so sync script loads first
+  if(typeof renderLoginCards==='function') renderLoginCards();
   setTimeout(function(){ if(typeof supaInit==='function') supaInit(); else console.error('supaInit not found'); }, 1200);
   try{var fd=document.getElementById('f-desde');if(fd)fd.value='2025-01-01';var fh=document.getElementById('f-hasta');if(fh)fh.value='2026-12-31';var cd=document.getElementById('c-desde');if(cd)cd.value='2025-01-01';var ch=document.getElementById('c-hasta');if(ch)ch.value='2026-12-31';if(typeof setRangeLiq==='function')setRangeLiq();if(typeof initChkAll==='function')initChkAll();}catch(e){}
   try{var ld=document.getElementById('l-desde');if(ld)ld.value='2025-01-01';var lh=document.getElementById('l-hasta');if(lh)lh.value='2026-12-31';}catch(e){}
@@ -4027,7 +4304,7 @@ function renderFormUsuario() {
   if (!el) return;
   var isNew = (editingUser === '__new__');
   var nombre = isNew ? '' : editingUser;
-  var u = isNew ? {pin:'', rol:'vendedor', almacen:'', color:ADMIN_COLORES[0].bg, tc:ADMIN_COLORES[0].tc} : (USERS[nombre] || {});
+  var u = isNew ? {pin:'', rol:'vendedor', almacen:'', color:ADMIN_COLORES[0].bg, tc:ADMIN_COLORES[0].tc, modulos:['pos','stock','ventas','clientes']} : (USERS[nombre] || {});
 
   var coloresHtml = '';
   ADMIN_COLORES.forEach(function(c, i) {
@@ -4057,6 +4334,7 @@ function renderFormUsuario() {
     + '<select class="adm-inp" id="eu-rol"><option value="vendedor"' + (u.rol !== 'admin' ? ' selected' : '') + '>Vendedor</option><option value="admin"' + (u.rol === 'admin' ? ' selected' : '') + '>Admin</option></select></div>'
     + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Almacén por defecto</label>'
     + '<select class="adm-inp" id="eu-alm">' + almsHtml + '</select></div>'
+    + '<div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:6px 0"><label class="adm-lbl-f" style="margin:0;flex:1">Puede realizar ventas en POS</label><input type="checkbox" id="eu-puede-vender"' + (u.puedeVender!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer"></div>'
     + '<div style="grid-column:1/-1"><label class="adm-lbl-f" style="margin-bottom:8px;display:block">Color</label>'
     + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + coloresHtml + '</div></div>'
     + '</div>'
@@ -4080,17 +4358,20 @@ function admGuardarUser(key) {
   var colorDef = ADMIN_COLORES[colorIdx] || ADMIN_COLORES[0];
   var modulos = getSelectedModulos();
   if(rol==='admin') modulos = Object.keys(MOD_LABELS);
-  USERS[nombre] = {pin:pin, rol:rol, almacen:almacen, color:colorDef.bg, tc:colorDef.tc, activo:true, modulos:modulos};
-  showToast(isNew ? 'Usuario creado: ' + nombre : 'Actualizado: ' + nombre);
-  editingUser = null;
-  renderAdminUsuarios();
+  else if(!modulos.length) modulos = ['pos','stock','ventas','clientes'];
+  var puedeVender=document.getElementById('eu-puede-vender')?document.getElementById('eu-puede-vender').checked:true;
+  USERS[nombre]={pin:pin,rol:rol,almacen:almacen,color:colorDef.bg,tc:colorDef.tc,activo:true,modulos:modulos,puedeVender:puedeVender};
+  saveUsers();syncSaveUser(nombre,USERS[nombre]);renderLoginCards();
+  showToast(isNew?'Usuario creado: '+nombre:'Actualizado: '+nombre);
+  editingUser=null;renderAdminUsuarios();
 }
 
 function admElimUser(nombre) {
   if (nombre === 'Admin') { showToast('No se puede eliminar Admin'); return; }
   if (!confirm('¿Eliminar usuario "' + nombre + '"?')) return;
   delete USERS[nombre];
-  showToast('Usuario eliminado: ' + nombre);
+  saveUsers();syncDeleteUser(nombre);renderLoginCards();
+  showToast('Usuario eliminado: '+nombre);
   renderAdminUsuarios();
 }
 
@@ -4263,7 +4544,7 @@ function renderAdminTasas() {
   // Try to fetch fresh rates in background (non-blocking)
   var _hasMkt = false;
   try { var _tm = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt = !!_tm.CUP; } catch(e) {}
-  if (!_hasMkt && typeof fetchTasasElToque === 'function') {
+  if (false && !_hasMkt && typeof fetchTasasElToque === 'function') {
     fetchTasasElToque(true).then(function(){ 
       var _hasMkt2 = false;
       try { var _tm2 = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt2=!!_tm2.CUP; } catch(e) {}
@@ -4890,111 +5171,7 @@ async function admDesactivarCaja(id) {
 
 
 
-</script>
-<script>
-
-
-// ═══ MÓDULO STOCK — CONSULTA ═══
-function renderStock() {
-  const el = document.getElementById('stock-root');
-  if (!el) return;
-  // Hide movimientos panel for vendedor
-  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  var _movPanel = document.getElementById('stock-movs-panel');
-  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
-
-  const alms = ['Habana', 'Placetas', 'Xportprise'];
-  const userAlm = (typeof S !== 'undefined' && S.user && USERS[S.user]) ? USERS[S.user].almacen : '';
-  const isVendedor = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'vendedor';
-
-  // Build filter state
-  const q = (window._stockQ || '').toLowerCase();
-  const catF = window._stockCat || '';
-  const almF = window._stockAlm || '';
-
-  // Stats
-  const activos = PRODS.filter(p => p.activo !== false);
-  const total = activos.reduce((a, p) => a + (p.stk || 0), 0);
-  const bajos = activos.filter(p => (p.stk || 0) <= (p.stk_min || 10)).length;
-  const cats = [...new Set(activos.filter(p => p.cat).map(p => p.cat))].sort();
-
-  // Filter prods
-  const prods = activos.filter(p => {
-    if (q && !p.n.toLowerCase().includes(q)) return false;
-    if (catF && p.cat !== catF) return false;
-    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
-    return true;
-  });
-  var visAlms = almF ? [almF] : alms;
-
-  // Per-almacen totals row
-  const almTotals = alms.map(a => prods.reduce((sum, p) => sum + ((p.stk_alm && p.stk_alm[a]) || 0), 0));
-
-  let html = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
-    + '<div class="adm-card"><div class="adm-lbl">Productos activos</div><div class="adm-val">' + activos.length + '</div></div>'
-    + '<div class="adm-card"><div class="adm-lbl">Unidades totales</div><div class="adm-val">' + fN(total, 0) + '</div></div>';
-  alms.forEach(function(a, i) {
-    const tot = activos.reduce((s, p) => s + ((p.stk_alm && p.stk_alm[a]) || 0), 0);
-    html += '<div class="adm-card"><div class="adm-lbl">' + a + '</div><div class="adm-val" style="font-size:16px">' + fN(tot, 0) + '</div></div>';
-  });
-  html += '</div>';
-
-  // Filters
-  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
-    + '<input class="adm-inp" id="stk-q" value="' + (window._stockQ||'') + '" placeholder="Buscar producto..." oninput="_dRender(function(){window._stockQ=document.getElementById(\'stk-q\').value;renderStock()})" style="flex:1;max-width:240px">'
-    + '<select class="adm-inp" id="stk-alm" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todos almacenes</option>'
-    + alms.map(a => '<option' + (almF === a ? ' selected' : '') + '>' + a + '</option>').join('')
-    + '</select>'
-    + '<select class="adm-inp" id="stk-cat" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
-    + '<option value="">Todas categorías</option>'
-    + cats.map(c => '<option' + (catF === c ? ' selected' : '') + '>' + c + '</option>').join('')
-    + '</select>'
-    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">⚠ ' + bajos + ' bajo mínimo</span>' : '')
-    + '</div>';
-
-  // Table
-  html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-    + '<th>Producto</th><th>Cat.</th>'
-    + visAlms.map(a => '<th style="text-align:right">' + a + '</th>').join('')
-    + '<th style="text-align:right">Total</th>'
-    + '<th style="text-align:right">Min/May</th>'
-    + '</tr></thead><tbody>';
-
-  prods.forEach(function(p) {
-    const bajo = (p.stk || 0) <= (p.stk_min || 10);
-    var alm_vals = visAlms.map(a => (p.stk_alm && p.stk_alm[a] != null) ? p.stk_alm[a] : 0);
-    html += '<tr' + (bajo ? ' style="background:rgba(251,191,36,.07)"' : '') + '>'
-      + '<td style="font-size:12px">' + p.n + (bajo ? ' <span style="font-size:9px;color:var(--color-text-warning)">⚠</span>' : '') + '</td>'
-      + '<td style="font-size:11px;color:var(--color-text-tertiary)">' + (p.cat || '—') + '</td>'
-      + alm_vals.map(function(v, i) {
-          const isUserAlm = alms[i] === userAlm;
-          return '<td style="text-align:right;font-weight:' + (isUserAlm ? '700' : '400') + ';color:' + (v <= (p.stk_min || 10) && v > 0 ? 'var(--color-text-warning)' : v === 0 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)') + '">' + fN(v, 0) + '</td>';
-        }).join('')
-      + '<td style="text-align:right;font-weight:600">' + fN(p.stk || 0, 0) + '</td>'
-      + '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'
-        + (p.min != null ? fN(p.min) : '—') + ' / ' + (p.maj != null ? fN(p.maj) : '—')
-      + '</td>'
-      + '</tr>';
-  });
-
-  if (!prods.length) {
-    html += '<tr><td colspan="' + (visAlms.length + 4) + '" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
-  }
-
-  html += '</tbody></table></div>';
-  el.innerHTML = html;
-
-  // Render movements panel
-  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}}
-
-
-
-
-
-
-</script>
-<script>
+</script><script>
 
 // ═══ MÓDULO BACKUP / EXPORT ═══
 
@@ -5014,6 +5191,7 @@ function renderBackup() {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportJSON()">⬇ Descargar JSON</button>'
     + '<button class="adm-btn" onclick="syncTodosProductos()" style="margin-top:6px">🔄 Sincronizar productos con Supabase</button>'
+    + '<button class="adm-btn" onclick="syncPushAllClientes()" style="margin-top:6px">👤 Sincronizar clientes con Supabase</button>'
     + (isAdm ? '<button class="adm-btn" onclick="document.getElementById(\'import-json-input\').click()">⬆ Importar JSON</button>' : '')
     + (isAdm ? '<input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importJSON(this)">' : '')
     + '</div>'
@@ -5349,7 +5527,7 @@ document.addEventListener("click",function(e){
 
 <script>
 async function updateCajasFromVenta(pagos, vueltos, alm) {
-  // Update local CUENTAS_BASE (for legacy fallback rendering)
+  // Update local CUENTAS_BASE (legacy fallback)
   pagos.forEach(function(p) {
     var mon = p.mon;
     var k = p.caja || (mon + ' ' + alm);
@@ -5362,59 +5540,33 @@ async function updateCajasFromVenta(pagos, vueltos, alm) {
     if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
     CUENTAS_BASE[k].gasIG += (v.m || 0);
   });
-
-  // Write each pago as a mov_cajas entry in Supabase (deposito externo → caja)
-  if (_supaOnline) {
+  // Write to Supabase mov_cajas so Admin and Mi Caja stay in sync
+  if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
     var ts = new Date().toISOString();
+    var usuario = (typeof S !== 'undefined' ? S.user : '');
     for (var i = 0; i < pagos.length; i++) {
       var p = pagos[i];
       if (!p.m || p.m <= 0) continue;
-      var cajaNombre = p.caja || (p.mon + ' ' + alm);
-      var row = {
-        fecha:          ts.substring(0,10),
-        tipo:           'deposito',
-        caja_origen:    null,
-        caja_destino:   cajaNombre,
-        monto_origen:   null,
-        monto_destino:  p.m,
-        notas:          'Venta POS',
-        usuario:        (typeof S!=='undefined' ? S.user : ''),
-        created_at:     ts
-      };
+      var cajaDest = p.caja || (p.mon + ' ' + alm);
+      var row = { fecha: ts.substring(0,10), tipo: 'deposito', caja_origen: null, caja_destino: cajaDest,
+                  monto_origen: null, monto_destino: p.m, notas: 'Venta POS', usuario: usuario, created_at: ts };
       try {
         var r = await supaReq('POST', 'mov_cajas', row);
-        if (r.ok) {
-          var saved = await r.json();
-          if (saved && saved[0]) _cajasMovs.unshift(saved[0]);
-        }
+        if (r.ok) { var saved = await r.json(); if (saved&&saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(saved[0]); }
       } catch(e) { console.warn('updateCajasFromVenta pago:', e); }
     }
-    // Write each vuelto as a retiro (caja → null)
     for (var j = 0; j < vueltos.length; j++) {
       var v2 = vueltos[j];
       if (!v2.m || v2.m <= 0) continue;
-      var cajaNombreV = v2.caja || (v2.mon + ' ' + alm);
-      var rowV = {
-        fecha:          ts.substring(0,10),
-        tipo:           'retiro',
-        caja_origen:    cajaNombreV,
-        caja_destino:   null,
-        monto_origen:   v2.m,
-        monto_destino:  null,
-        notas:          'Vuelto POS',
-        usuario:        (typeof S!=='undefined' ? S.user : ''),
-        created_at:     ts
-      };
+      var cajaOrig = v2.caja || (v2.mon + ' ' + alm);
+      var rowV = { fecha: ts.substring(0,10), tipo: 'retiro', caja_origen: cajaOrig, caja_destino: null,
+                   monto_origen: v2.m, monto_destino: null, notas: 'Vuelto POS', usuario: usuario, created_at: ts };
       try {
         var rv = await supaReq('POST', 'mov_cajas', rowV);
-        if (rv.ok) {
-          var savedV = await rv.json();
-          if (savedV && savedV[0]) _cajasMovs.unshift(savedV[0]);
-        }
+        if (rv.ok) { var savedV = await rv.json(); if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]); }
       } catch(e) { console.warn('updateCajasFromVenta vuelto:', e); }
     }
   }
-
   if (typeof renderCajas === 'function') { try { renderCajas(); } catch(e) {} }
 }
 </script>
@@ -6220,126 +6372,16 @@ function offlineLoadClientes() {
     if (!raw) return false;
     var cached = JSON.parse(raw);
     if (!cached || !cached.length) return false;
-    // Merge with existing CLIENTES (don't overwrite hardcoded ones)
-    cached.forEach(function(c) {
-      if (!CLIENTES.find(function(x){ return x.id === c.id; })) {
-        CLIENTES.push(c);
-      } else {
-        // Update existing
-        var idx = CLIENTES.findIndex(function(x){ return x.id === c.id; });
-        if (idx >= 0) CLIENTES[idx] = c;
-      }
-    });
-    console.log('Offline: loaded', cached.length, 'clientes from cache');
+    CLIENTES.length = 0;
+    cached.forEach(function(c) { if(c&&c.id&&c.nombre) CLIENTES.push(c); });
+    // Restore counters
+    nextCid = CLIENTES.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return isNaN(n)?a:Math.max(a,n);},0)+1;
+    nextFid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){var n=parseInt(f.id||'0');return isNaN(n)?b:Math.max(b,n);},a);},0)+1;
+    nextAid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){return (f.abonos||[]).reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return isNaN(n)?d:Math.max(d,n);},b);},a);},0)+1;
+    console.log('Clientes loaded:', CLIENTES.length);
     return true;
   } catch(e) { console.warn('offlineLoadClientes:', e); return false; }
 }
-
-</script>
-
-<script>
-
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// TASAS ELTOQUE — Auto actualización de tasas de cambio
-// ═══════════════════════════════════════════════════════════════
-var ELTOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0NjYzMzg5OCwianRpIjoiYmZjMGZiZDMtY2Y1NC00NjQ5LTk1MGUtMzBlYWUwNjVlNTY2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY4MGU4ODU0MzhkNzU2MWQyMWM2Nzg2ZiIsIm5iZiI6MTc0NjYzMzg5OCwiZXhwIjoxNzc4MTY5ODk4fQ.frJxUfZ9oPzGOGVBPDXCZ0c3Za8umObbDVLLhfAEihQ';
-var _tasasLoaded = false;
-var _tasasTs = 0;
-
-async function fetchTasasElToque(force) {
-  try {
-    var now = Date.now();
-    if (!force && _tasasLoaded && (now - _tasasTs) < 3600000) return;
-
-    // Load from Supabase tasas table (no CORS issues)
-    if (!_supaOnline) { _loadRatesCache(); return; }
-
-    var r = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste,updated_at');
-    if (!r.ok) { console.warn('tasas load error:', r.status); _loadRatesCache(); return; }
-    var rows = await r.json();
-    if (!rows || !rows.length) { _loadRatesCache(); return; }
-
-    var updated = [];
-    var mktMap = {}, finMap = {}, adjMap = {};
-    rows.forEach(function(row) {
-      mktMap[row.moneda]  = parseFloat(row.tasa_mkt || row.valor);
-      finMap[row.moneda]  = parseFloat(row.valor);
-      adjMap[row.moneda]  = parseFloat(row.ajuste || 0);
-    });
-
-    if (finMap.USD) { RATES.CUP  = finMap.USD;  updated.push('USD/CUP: ' + finMap.USD); }
-    if (finMap.EUR) { RATES.EUR  = parseFloat((finMap.USD / finMap.EUR).toFixed(6)); updated.push('EUR/CUP: ' + finMap.EUR); }
-    if (finMap.MLC) { RATES.CUPT = finMap.MLC;  updated.push('MLC/CUP: ' + finMap.MLC); }
-
-    // Save market rates cache for the tasas panel
-    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP: mktMap.USD||RATES.CUP, EUR_CUP: mktMap.EUR||0, CUPT: mktMap.MLC||RATES.CUPT})); } catch(e) {}
-    try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD: adjMap.USD||0, EUR: adjMap.EUR||0, CUPT: adjMap.MLC||0})); } catch(e) {}
-    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1, EUR:RATES.EUR, CUP:RATES.CUP, CUPT:RATES.CUPT, ts:now})); } catch(e) {}
-
-    _tasasLoaded = true;
-    _tasasTs = now;
-
-    if (updated.length) {
-      showToast('📈 Tasas: ' + updated.join(' · '));
-      updOnlineDot();
-      if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
-      if (typeof adminTab !== 'undefined' && adminTab === 'tasas' && typeof renderAdminTasas === 'function') {
-        try { renderAdminTasas(); } catch(e) {}
-      }
-    }
-  } catch(e) {
-    console.warn('fetchTasasElToque error:', e);
-    _loadRatesCache();
-  }
-}
-
-// Fetch from elToque API and save to Supabase (called from Admin panel)
-async function fetchElToqueAndSave() {
-  if (!_supaOnline) { showToast('Sin conexión'); return; }
-  try {
-    showToast('⏳ Consultando elToque...');
-    var r = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/update-tasas', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + SUPA_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: '{}'
-    });
-    if (!r.ok) { showToast('Error: ' + r.status); return; }
-    var data = await r.json();
-    if (!data.ok) { showToast('Error en Edge Function'); return; }
-    // Re-apply saved adjustments (edge function resets them to 0)
-    var _adj={};
-    try{_adj=JSON.parse(localStorage.getItem('erp_rates_adj')||'{}');}catch(e){}
-    var _adjRows=[
-      {moneda:'USD',ajuste:_adj.USD||0},
-      {moneda:'EUR',ajuste:_adj.EUR||0},
-      {moneda:'MLC',ajuste:_adj.CUPT||0}
-    ];
-    // Update valor = tasa_mkt + ajuste in Supabase
-    for(var _ar of _adjRows){
-      if(_ar.ajuste!==0){
-        var _tr=await supaReq('GET','tasas?select=tasa_mkt&moneda=eq.'+_ar.moneda);
-        if(_tr.ok){var _td=await _tr.json();
-          if(_td&&_td[0]){
-            var _mkt=parseFloat(_td[0].tasa_mkt);
-            await supaReq('POST','tasas?on_conflict=moneda',{moneda:_ar.moneda,ajuste:_ar.ajuste,valor:_mkt+_ar.ajuste});
-          }}
-      }
-    }
-    showToast('✓ Tasas actualizadas desde elToque');
-    await fetchTasasElToque(true);
-    if (typeof renderAdminTasas === 'function') renderAdminTasas();
-  } catch(e) {
-    showToast('Error: ' + e.message);
-    console.error('fetchElToqueAndSave:', e);
-  }
-}
-
 function _loadRatesCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
@@ -6370,13 +6412,141 @@ _loadRatesCache();
 
 // Auto-refresh: fetch on load + every 30 minutes
 window.addEventListener('load', function() {
-  setTimeout(fetchTasasElToque, 2000);
-  setInterval(fetchTasasElToque, 3600000);
+  // fetchTasasElToque not available in this build
 });
 
 
 
 
+</script>
+
+<script>
+function renderStock() {
+  var el = document.getElementById('stock-root');
+  if (!el) return;
+  var _isVend = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _movPanel = document.getElementById('stock-movs-panel');
+  if (_movPanel) _movPanel.style.display = _isVend ? 'none' : '';
+  var alms = ['Habana','Placetas','Xportprise'];
+  var q = (window._stockQ||'').toLowerCase();
+  var catF = window._stockCat||'';
+  var almF = window._stockAlm||'';
+  var activos = PRODS.filter(function(p){ return p.activo !== false; });
+  var total = activos.reduce(function(a,p){ return a+(p.stk||0); }, 0);
+  var bajos = activos.filter(function(p){ return (p.stk||0)<=(p.stk_min||10); }).length;
+  var catSet = {};
+  activos.forEach(function(p){ if(p.cat) catSet[p.cat]=1; });
+  var cats = Object.keys(catSet).sort();
+  var prods = activos.filter(function(p){
+    if (q && p.n.toLowerCase().indexOf(q)<0) return false;
+    if (catF && p.cat !== catF) return false;
+    if (almF && !((p.stk_alm && p.stk_alm[almF]) > 0)) return false;
+    return true;
+  });
+  var visAlms = almF ? [almF] : alms;
+  var userAlm = typeof S!=='undefined'&&S.user&&USERS[S.user] ? USERS[S.user].almacen : '';
+  var h = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
+  h += '<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
+  h += '<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
+  alms.forEach(function(a){
+    var tot = activos.reduce(function(s,p){ return s+((p.stk_alm&&p.stk_alm[a])||0); },0);
+    h += '<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(tot,0)+'</div></div>';
+  });
+  h += '</div>';
+  h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">'
+    + '<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    + '<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todos almacenes</option>'
+    + alms.map(function(a){ return '<option'+(almF===a?' selected':'')+'>'+a+'</option>'; }).join('')
+    + '</select>'
+    + '<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px">'
+    + '<option value="">Todas cats</option>'
+    + cats.map(function(c){ return '<option'+(catF===c?' selected':'')+'>'+c+'</option>'; }).join('')
+    + '</select>'
+    + (bajos > 0 ? '<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>' : '')
+    + '</div>';
+  h += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+    + '<th>Producto</th><th>Cat.</th>'
+    + visAlms.map(function(a){ return '<th style="text-align:right">'+a+'</th>'; }).join('')
+    + '<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th>'
+    + '</tr></thead><tbody>';
+  if (!prods.length) {
+    h += '<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';
+  } else {
+    prods.forEach(function(p){
+      var bajo = (p.stk||0) <= (p.stk_min||10);
+      h += '<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'+
+        '<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'+
+        '<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
+      visAlms.forEach(function(a){
+        var v = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
+        var bold = a===userAlm ? '700' : '400';
+        var col = v===0 ? 'var(--color-text-tertiary)' : v<=(p.stk_min||10) ? 'var(--color-text-warning)' : 'var(--color-text-primary)';
+        h += '<td style="text-align:right;font-weight:'+bold+';color:'+col+'">'+fN(v,0)+'</td>';
+      });
+      h += '<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'+
+        '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+
+        (p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+    });
+  }
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+  if (typeof renderStockMovimientos==='function') try{renderStockMovimientos();}catch(e){}
+}
+</script>
+
+<script>
+function renderStock(){
+  var el=document.getElementById('stock-root');if(!el)return;
+  var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _mp=document.getElementById('stock-movs-panel');if(_mp)_mp.style.display=_isVend?'none':'';
+  var alms=['Habana','Placetas','Xportprise'];
+  var q=(window._stockQ||'').toLowerCase(),catF=window._stockCat||'',almF=window._stockAlm||'';
+  var userAlm=typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+  var activos=PRODS.filter(function(p){return p.activo!==false;});
+  var total=activos.reduce(function(a,p){return a+(p.stk||0);},0);
+  var bajos=activos.filter(function(p){return(p.stk||0)<=(p.stk_min||10);}).length;
+  var cats=Object.keys(activos.reduce(function(a,p){if(p.cat)a[p.cat]=1;return a;},{})).sort();
+  var prods=activos.filter(function(p){
+    if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
+    if(catF&&p.cat!==catF)return false;
+    if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
+    return true;
+  });
+  var visAlms=almF?[almF]:alms;
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
+  h+='<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
+  h+='<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
+  alms.forEach(function(a){var t=activos.reduce(function(s,p){return s+((p.stk_alm&&p.stk_alm[a])||0);},0);h+='<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(t,0)+'</div></div>';});
+  h+='</div>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    +'<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px"><option value="">Todos almacenes</option>'
+    +alms.map(function(a){return'<option'+(almF===a?' selected':'')+'>'+a+'</option>';}).join('')+'</select>'
+    +'<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px"><option value="">Todas cats</option>'
+    +cats.map(function(c){return'<option'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+    +(bajos>0?'<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>':'')
+    +'</div>';
+  h+='<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Producto</th><th>Cat.</th>'
+    +visAlms.map(function(a){return'<th style="text-align:right">'+a+'</th>';}).join('')
+    +'<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th></tr></thead><tbody>';
+  if(!prods.length){h+='<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';}
+  else{prods.forEach(function(p){
+    var bajo=(p.stk||0)<=(p.stk_min||10);
+    h+='<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'
+      +'<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'
+      +'<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
+    visAlms.forEach(function(a){
+      var v=(p.stk_alm&&p.stk_alm[a]!=null)?p.stk_alm[a]:0;
+      h+='<td style="text-align:right;font-weight:'+(a===userAlm?'700':'400')+';color:'+(v===0?'var(--color-text-tertiary)':v<=(p.stk_min||10)?'var(--color-text-warning)':'var(--color-text-primary)')+'">'+fN(v,0)+'</td>';
+    });
+    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'
+      +'<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+(p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+  });}
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}
+}
 </script>
 </body>
 </html>
