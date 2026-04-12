@@ -5824,30 +5824,59 @@ async function updateCajasFromVenta(pagos, vueltos, alm) {
     if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
     CUENTAS_BASE[k].gasIG += (v.m || 0);
   });
-  // Write to Supabase mov_cajas so Admin and Mi Caja stay in sync
+  // Write to Supabase mov_cajas — same schema as admRegistrarMovCaja (no created_at, no null fields)
   if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
-    var ts = new Date().toISOString();
+    var fecha = today();
     var usuario = (typeof S !== 'undefined' ? S.user : '');
     for (var i = 0; i < pagos.length; i++) {
       var p = pagos[i];
       if (!p.m || p.m <= 0) continue;
       var cajaDest = p.caja || (p.mon + ' ' + alm);
-      var row = { fecha: ts.substring(0,10), tipo: 'deposito', caja_origen: null, caja_destino: cajaDest,
-                  monto_origen: null, monto_destino: p.m, notas: 'Venta POS', usuario: usuario, created_at: ts };
+      var row = {
+        tipo: 'deposito',
+        fecha: fecha,
+        notas: 'Venta POS',
+        usuario: usuario,
+        caja_destino: cajaDest,
+        monto_origen: p.m,
+        monto_destino: p.m,
+        tasa_usada: null
+      };
       try {
         var r = await supaReq('POST', 'mov_cajas', row);
-        if (r.ok) { var saved = await r.json(); if (saved&&saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(saved[0]); }
+        if (!r.ok) {
+          var errText = await r.text();
+          console.warn('mov_cajas pago 400:', errText);
+          showToast('⚠ Error caja: ' + errText.substring(0,80));
+        } else {
+          var saved = await r.json();
+          if (saved&&saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(saved[0]);
+        }
       } catch(e) { console.warn('updateCajasFromVenta pago:', e); }
     }
     for (var j = 0; j < vueltos.length; j++) {
       var v2 = vueltos[j];
       if (!v2.m || v2.m <= 0) continue;
       var cajaOrig = v2.caja || (v2.mon + ' ' + alm);
-      var rowV = { fecha: ts.substring(0,10), tipo: 'retiro', caja_origen: cajaOrig, caja_destino: null,
-                   monto_origen: v2.m, monto_destino: null, notas: 'Vuelto POS', usuario: usuario, created_at: ts };
+      var rowV = {
+        tipo: 'retiro',
+        fecha: fecha,
+        notas: 'Vuelto POS',
+        usuario: usuario,
+        caja_origen: cajaOrig,
+        monto_origen: v2.m,
+        monto_destino: v2.m,
+        tasa_usada: null
+      };
       try {
         var rv = await supaReq('POST', 'mov_cajas', rowV);
-        if (rv.ok) { var savedV = await rv.json(); if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]); }
+        if (!rv.ok) {
+          var errTextV = await rv.text();
+          console.warn('mov_cajas vuelto 400:', errTextV);
+        } else {
+          var savedV = await rv.json();
+          if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]);
+        }
       } catch(e) { console.warn('updateCajasFromVenta vuelto:', e); }
     }
   }
