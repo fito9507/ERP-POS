@@ -3089,75 +3089,115 @@ async function renderMiCaja() {
   if (!alm) { el.innerHTML = '<div style="padding:20px;text-align:center">Sin almacén asignado</div>'; return; }
 
   el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando caja...</div>';
+
+  // Load fresh data — identical to renderCajas
   if (typeof loadCajasData === 'function') await loadCajasData();
 
+  var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+  var monIcon   = {USD:'$', EUR:'€', CUP:'₱', CUPT:'M'};
 
-  // Get all cajas for this almacen
-  // Use _cajasData if available (same source as Admin cajas), fallback to CUENTAS_BASE
-  var misCajas;
-  if(typeof _cajasData!=='undefined'&&_cajasData.length){
-    misCajas = _cajasData.filter(function(c){ return c.almacen===alm||c.nombre.indexOf(alm)>=0; })
-      .map(function(c){ return [c.nombre,{mon:c.moneda||c.nombre.split(' ')[0]}]; });
+  // Build cajas — EXACT same logic as renderCajas but forced to vendedor's alm
+  var cajas = [];
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    cajas = _cajasData
+      .filter(function(c){ return c.activa && c.almacen === alm; })
+      .map(function(c){
+        var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+        // Add POS ventas not yet in mov_cajas (same dedup as renderCajas)
+        var ventasEnCaja = (typeof VENTAS!=='undefined'?VENTAS:[])
+          .filter(function(v){ return v.pagos && v.pagos.some(function(p){ return (p.caja||p.mon+' '+v.alm)===c.nombre; }); })
+          .reduce(function(acc,v){
+            (v.pagos||[]).forEach(function(p){
+              if((p.caja||p.mon+' '+v.alm)===c.nombre){
+                var alreadyCounted = _cajasMovs.some(function(m){
+                  return m.notas==='Venta POS' && m.caja_destino===c.nombre &&
+                    Math.abs(parseFloat(m.monto_destino)-p.m)<0.01;
+                });
+                if(!alreadyCounted) acc += (p.m||0);
+              }
+            });
+            return acc;
+          }, 0);
+        saldo += ventasEnCaja;
+        return { cta:c.nombre, mon:c.moneda, saldo:saldo, equivUSD:saldo*(RATES_USD[c.moneda]||1) };
+      });
   } else {
-    misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm)>=0; });
+    // Fallback offline
+    cajas = Object.entries(CUENTAS_BASE)
+      .filter(function(e){ return e[0].indexOf(alm)>=0; })
+      .map(function(entry){
+        var cta=entry[0], v=entry[1];
+        var saldo=(v.ingV||0)+(v.ingIG||0)-(v.gasIG||0);
+        return {cta:cta, mon:v.mon, saldo:saldo, equivUSD:saldo*(RATES_USD[v.mon]||1)};
+      });
   }
 
-  // Build saldos cards
-  var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
-    var cta = entry[0], v = entry[1];
-    // Use same _getSaldoCaja as Admin for consistency
-    var saldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(cta) : 0;
-    var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-    var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
-    return '<div class="card" style="text-align:center">'
-      + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">' + cta + '</div>'
-      + '<div style="font-size:22px;font-weight:700;color:'+col+'">' + fN(saldo,dec) + '</div>'
-      + '<div style="font-size:11px;color:var(--color-text-secondary)">' + v.mon + '</div>'
+  // Cards — same style as renderCajas
+  var cardsHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:16px">';
+  cajas.forEach(function(c){
+    var pos   = c.saldo >= 0;
+    var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+    var dec   = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
+    var icon  = monIcon[c.mon]||'';
+    cardsHtml += '<div class="card" style="padding:14px 12px;text-align:center">'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px;font-weight:600;letter-spacing:.05em">'+c.mon+'</div>'
+      + '<div style="font-size:22px;font-weight:800;color:'+color+'">'+icon+' '+fN(c.saldo,dec)+'</div>'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:5px">≈ '+fN(c.equivUSD,2)+' USD</div>'
       + '</div>';
-  }).join('') + '</div>';
+  });
+  cardsHtml += '</div>';
 
-  // Use _cajasMovs — same source as Admin
-  var ctaNames = misCajas.map(function(e){ return e[0]; });
-  var cajaIds = (typeof _cajasData!=='undefined'?_cajasData:[])
-    .filter(function(c){ return ctaNames.indexOf(c.nombre)>=0; })
-    .map(function(c){ return c.id; });
+  if (!cajas.length) {
+    cardsHtml = '<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">Sin cajas asignadas a '+alm+'</div>';
+  }
 
+  // Movements — filtered to this alm's cajas
+  var ctaNames = cajas.map(function(c){ return c.cta; });
   var allMovs = (typeof _cajasMovs!=='undefined'?_cajasMovs:[])
     .filter(function(m){
-      return ctaNames.indexOf(m.caja_origen)>=0 || ctaNames.indexOf(m.caja_destino)>=0
-          || cajaIds.indexOf(m.caja_origen_id)>=0 || cajaIds.indexOf(m.caja_destino_id)>=0;
+      return ctaNames.indexOf(m.caja_origen)>=0 || ctaNames.indexOf(m.caja_destino)>=0;
     })
     .map(function(m){
-      var esDest = ctaNames.indexOf(m.caja_destino)>=0||cajaIds.indexOf(m.caja_destino_id)>=0;
-      var monto = esDest ? parseFloat(m.monto_destino||0) : parseFloat(m.monto_origen||0);
-      var fecha = (m.created_at||m.fecha||'').substring(0,10);
+      var esDest  = ctaNames.indexOf(m.caja_destino)>=0;
+      var monto   = esDest ? parseFloat(m.monto_destino||0) : parseFloat(m.monto_origen||0);
+      var cajaNom = esDest ? m.caja_destino : m.caja_origen;
+      var ts      = m.created_at||m.fecha||'';
       return {
-        fecha: fecha,
-        _ts: m.created_at||m.fecha||'',
+        _ts: ts, fecha: ts.substring(0,10),
         desc: m.notas||m.tipo||'Movimiento',
-        monto: fN(monto,2)+' USD',
-        sentido: esDest?'ingreso':'gasto'
+        sub:  cajaNom,
+        monto: fN(monto, cajaNom&&(cajaNom.startsWith('CUP')||cajaNom.startsWith('CUPT'))?0:2),
+        mon:  cajaNom ? cajaNom.split(' ')[0] : '',
+        sentido: esDest ? 'ingreso' : 'gasto'
       };
     })
-    .sort(function(a,b){ return (b._ts||'').localeCompare(a._ts||''); });
+    .sort(function(a,b){ return b._ts.localeCompare(a._ts); });
 
-  var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
-    + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
-      '<div style="display:flex;flex-direction:column;gap:4px">'
-      + allMovs.map(function(m){
-          var col = m.sentido==='ingreso' ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-          var sign = m.sentido==='ingreso' ? '+' : '−';
-          return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary)">'
-            + '<div><div style="font-size:12px">' + m.desc + '</div>'
-            + '<div style="font-size:10px;color:var(--color-text-tertiary)">' + fD(m.fecha) + '</div></div>'
-            + '<div style="font-size:13px;font-weight:600;color:'+col+';flex-shrink:0;margin-left:10px">' + sign + m.monto + '</div>'
-            + '</div>';
-        }).join('')
-      + '</div>')
+  var movsHtml = '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    + '<h3 style="margin:0">Movimientos</h3>'
+    + '<button class="btn-sm" onclick="renderMiCaja()">🔄 Actualizar</button>'
     + '</div>';
+  if (!allMovs.length) {
+    movsHtml += '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos registrados</div>';
+  } else {
+    movsHtml += '<div style="display:flex;flex-direction:column;gap:2px">';
+    allMovs.forEach(function(m){
+      var col  = m.sentido==='ingreso' ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+      var sign = m.sentido==='ingreso' ? '+' : '−';
+      movsHtml += '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary)">'
+        + '<div><div style="font-size:12px">'+m.desc+'</div>'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+fD(m.fecha)+(m.sub?' · '+m.sub:'')+'</div></div>'
+        + '<div style="font-size:13px;font-weight:600;color:'+col+';flex-shrink:0;margin-left:10px">'+sign+m.monto+' '+m.mon+'</div>'
+        + '</div>';
+    });
+    movsHtml += '</div>';
+  }
+  movsHtml += '</div>';
 
-  el.innerHTML = '<div style="margin-bottom:8px"><h2 style="margin:0">Mi Caja — ' + alm + '</h2>'
-    + '<div style="font-size:12px;color:var(--color-text-secondary)">Saldos y movimientos de ' + user + '</div></div>'
+  el.innerHTML = '<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">'
+    + '<div><h2 style="margin:0">Mi Caja — '+alm+'</h2>'
+    + '<div style="font-size:12px;color:var(--color-text-secondary)">'+user+'</div></div>'
+    + '</div>'
     + cardsHtml + movsHtml;
 }
 
