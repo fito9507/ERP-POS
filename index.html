@@ -2879,7 +2879,14 @@ function renderMiCaja() {
   var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
 
   // Get all cajas for this almacen
-  var misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm) >= 0; });
+  // Use _cajasData if available (same source as Admin cajas), fallback to CUENTAS_BASE
+  var misCajas;
+  if(typeof _cajasData!=='undefined'&&_cajasData.length){
+    misCajas = _cajasData.filter(function(c){ return c.almacen===alm||c.nombre.indexOf(alm)>=0; })
+      .map(function(c){ return [c.nombre,{mon:c.moneda||c.nombre.split(' ')[0]}]; });
+  } else {
+    misCajas = Object.entries(CUENTAS_BASE).filter(function(e){ return e[0].indexOf(alm)>=0; });
+  }
 
   // Build saldos cards
   var cardsHtml = '<div class="g4" style="margin-bottom:16px">' + misCajas.map(function(entry) {
@@ -2914,7 +2921,22 @@ function renderMiCaja() {
              tipo: 'ig', sentido: m.sentido };
   });
 
-  var allMovs = ventaMov.concat(igMov).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+  // Add id to ventas movs for precise sort
+  ventaMov = VENTAS.filter(function(v){ return v.alm===alm; }).map(function(v){
+    return { fecha:v.fecha, _id:v.supaId||v.id||0,
+             desc:'Venta POS — '+(v.cli||'Walk-in')+' — '+String(v.prods||'').substring(0,40),
+             monto:fN(v.totalUSD)+' USD', sentido:'ingreso' };
+  });
+  igMov = MOVS.filter(function(m){ return ctaNames.indexOf(m.cta)>=0; }).map(function(m){
+    return { fecha:m.fecha, _id:m.id||0,
+             desc:m.desc+' ('+m.cta+')',
+             monto:fN(m.monto,(m.mon==='CUP'||m.mon==='CUPT')?0:2)+' '+m.mon,
+             sentido:m.sentido };
+  });
+  var allMovs = ventaMov.concat(igMov).sort(function(a,b){
+    if(b.fecha!==a.fecha) return b.fecha.localeCompare(a.fecha);
+    return (b._id||0)-(a._id||0);
+  });
 
   var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
     + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
@@ -3694,8 +3716,8 @@ function renderFichaAbonar(c){
               </select></div>
             <div><label class="lbl">Tipo</label>
               <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option value="ingreso-yano">Entrada de fondos (entrega cash)</option>
-                <option value="gasto-pagado">Gasto pagado directamente</option>
+                <option value="efectivo">Efectivo — entra en caja</option>
+                <option value="compensacion">Compensación gasto — no entra en caja</option>
               </select></div>
           </div>
           <div style="font-size:11px;color:var(--color-text-info);margin-top:6px" id="cajaex-${c.id}"></div>
@@ -3742,10 +3764,17 @@ function toggleCajaCli(cid){
   updCajaExplicaCli(cid);
 }
 function updCajaExplicaCli(cid){
-  const el=document.getElementById('cajaex-'+cid);if(!el)return;
-  const tipo=document.getElementById('a-cajatipo-'+cid)?.value;
-  const caja=document.getElementById('a-caja-'+cid)?.value;
-  el.textContent=tipo==='ingreso-yano'?`El dinero entra a ${caja} — disponible para futuros gastos`:`Gasto ya pagado directamente — salida de ${caja}`;
+  var tipo=document.getElementById('a-cajatipo-'+cid)?.value;
+  var caja=document.getElementById('a-caja-'+cid)?.value;
+  var el=document.getElementById('cajaex-'+cid);
+  if(!el)return;
+  if(tipo==='efectivo'){
+    el.textContent='✓ El dinero entra en '+caja+' y reduce la deuda del folio';
+    el.style.color='var(--color-text-success)';
+  } else {
+    el.textContent='✓ El cliente cubrió un gasto de la empresa. Se registra en I/G y reduce la deuda. No mueve caja física';
+    el.style.color='var(--color-text-info)';
+  }
 }
 function registrarAbonoCli(cid){
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
