@@ -3689,29 +3689,19 @@ function renderFichaAbonar(c){
           <input type="number" id="a-equiv-${c.id}" step="0.01" style="font-size:15px;font-weight:500;padding:8px 10px"
             oninput="window['em_${c.id}']=true">
         </div>
-        <div class="toggle-caja" id="tog-${c.id}" onclick="toggleCajaCli('${c.id}')">
-          <div class="toggle-pill" id="togp-${c.id}"><div class="toggle-knob"></div></div>
-          <div>
-            <div style="font-size:12px;font-weight:500">¿Incluir en caja?</div>
-            <div style="font-size:11px;color:var(--color-text-secondary)" id="togs-${c.id}">Desactivado — solo abona a la deuda</div>
-          </div>
-        </div>
-        <div class="caja-section" id="cajasec-${c.id}" style="display:none">
+        <div class="caja-section" id="cajasec-${c.id}">
           <div class="g2">
-            <div><label class="lbl">Cuenta que recibe</label>
-              <select id="a-caja-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option>CUP Placetas</option><option>USD Placetas</option>
-                <option>CUP Habana</option><option>USD Habana</option>
-                <option>EUR Habana</option><option>EUR Placetas</option>
-                <option>USD España</option><option>EUR España</option>
-              </select></div>
-            <div><label class="lbl">Tipo</label>
+            <div><label class="lbl">Tipo de abono</label>
               <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option value="efectivo">Efectivo — entra en caja</option>
-                <option value="compensacion">Compensación gasto — no entra en caja</option>
+                <option value="efectivo">💵 Efectivo — entra en caja</option>
+                <option value="compensacion">🔄 Compensación — no entra en caja</option>
+              </select></div>
+            <div id="cajasec-cta-${c.id}"><label class="lbl">Cuenta que recibe</label>
+              <select id="a-caja-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
+                ${(typeof _cajasData!=='undefined'&&_cajasData.length?_cajasData:[{nombre:'CUP Placetas'},{nombre:'USD Placetas'},{nombre:'CUP Habana'},{nombre:'USD Habana'},{nombre:'EUR Habana'},{nombre:'EUR Placetas'},{nombre:'USD España'},{nombre:'EUR España'}]).map(c=>'<option>'+c.nombre+'</option>').join('')}
               </select></div>
           </div>
-          <div style="font-size:11px;color:var(--color-text-info);margin-top:6px" id="cajaex-${c.id}"></div>
+          <div style="font-size:11px;margin-top:6px" id="cajaex-${c.id}"></div>
         </div>
         <div id="a-prev-${c.id}" class="prev-bar" style="display:none"></div>
         <button class="btn btn-p" onclick="registrarAbonoCli('${c.id}')">Registrar abono</button>
@@ -3746,24 +3736,20 @@ function calcEquivCli(cid){
     prev.innerHTML=`Abono: <strong>${fN(monto,dFor(mon))} ${mon}</strong> = <strong>${fN(equiv)} USD</strong> · Pdte tras abono: <strong>${fN(Math.max(0,pdt-equiv))} USD</strong>`;
   } else prev.style.display='none';
 }
-function toggleCajaCli(cid){
-  const on=!window['cajaon_'+cid];window['cajaon_'+cid]=on;
-  document.getElementById('tog-'+cid).classList.toggle('on',on);
-  document.getElementById('togp-'+cid).classList.toggle('on',on);
-  document.getElementById('togs-'+cid).textContent=on?'Activado — registra también en caja':'Desactivado — solo abona a la deuda';
-  document.getElementById('cajasec-'+cid).style.display=on?'block':'none';
-  updCajaExplicaCli(cid);
-}
+function toggleCajaCli(cid){ /* legacy no-op */ }
 function updCajaExplicaCli(cid){
   var tipo=document.getElementById('a-cajatipo-'+cid)?.value;
   var caja=document.getElementById('a-caja-'+cid)?.value;
   var el=document.getElementById('cajaex-'+cid);
+  var ctaWrap=document.getElementById('cajasec-cta-'+cid);
   if(!el)return;
   if(tipo==='efectivo'){
-    el.textContent='✓ El dinero entra en '+caja+' y reduce la deuda del folio';
+    if(ctaWrap)ctaWrap.style.display='';
+    el.textContent='✓ El dinero entra en '+caja+' y reduce la deuda. Se registra en I/G como Cobro cliente.';
     el.style.color='var(--color-text-success)';
   } else {
-    el.textContent='✓ El cliente cubrió un gasto de la empresa. Se registra en I/G y reduce la deuda. No mueve caja física';
+    if(ctaWrap)ctaWrap.style.display='none';
+    el.textContent='✓ El cliente cubrió un gasto de la empresa (arancel, flete, etc.). Se registra en I/G y reduce la deuda. No mueve caja física.';
     el.style.color='var(--color-text-info)';
   }
 }
@@ -3778,9 +3764,9 @@ function registrarAbonoCli(cid){
   const tasa=parseFloat(document.getElementById('a-tasa-'+cid).value)||(mon!=='USD'?RATES[mon]:null);
   const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
   const equivUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
-  const enCaja=window['cajaon_'+cid]||false;
-  const caja=enCaja?document.getElementById('a-caja-'+cid).value:null;
-  const cajaTipo=enCaja?document.getElementById('a-cajatipo-'+cid).value:null;
+  const cajaTipo=document.getElementById('a-cajatipo-'+cid)?.value||'efectivo';
+  const enCaja=cajaTipo==='efectivo';
+  const caja=enCaja?(document.getElementById('a-caja-'+cid)?.value||null):null;
   if(!monto){alert('Introduce el monto');return;}
   if(!desc){alert('Añade una descripción');return;}
   // Validate monto doesn't exceed pendiente
@@ -3800,13 +3786,29 @@ function registrarAbonoCli(cid){
   target.abonos.push(abono);
   ['a-monto-','a-desc-','a-tasa-','a-equiv-'].forEach(p=>{const e=document.getElementById(p+cid);if(e)e.value='';});
   document.getElementById('a-prev-'+cid).style.display='none';
-  window['em_'+cid]=false;window['cajaon_'+cid]=false;
-  document.getElementById('tog-'+cid)?.classList.remove('on');
-  document.getElementById('togp-'+cid)?.classList.remove('on');
-  document.getElementById('cajasec-'+cid).style.display='none';
-  document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
+  window['em_'+cid]=false;
   offlineSaveClientes();
-  // Add to caja if enCaja — via mov_cajas
+  // Always create I/G trace regardless of type
+  (function(){
+    var igTipo = cajaTipo==='efectivo' ? 'Cobro cliente' : 'Compensación cliente';
+    var igSentido = 'ingreso';
+    var igCta = caja || (c.almacen ? 'USD '+c.almacen : 'USD Habana');
+    var igMov = {
+      id: igNextId++, fecha: fecha, tipo: igTipo,
+      desc: igTipo+' — '+c.nombre+' — '+desc,
+      monto: equivUSD, mon: 'USD', equivUSD: equivUSD,
+      cta: igCta, sentido: igSentido, notas: ''
+    };
+    MOVS.push(igMov);
+    if(_supaOnline&&typeof supaReq!=='undefined'){
+      supaReq('POST','movimientos_ig',{
+        fecha:fecha,tipo:igTipo,desc:igMov.desc,
+        monto:equivUSD,mon:'USD',equiv_usd:equivUSD,
+        cta:igCta,sentido:igSentido,notas:'',vend:'',alm:c.almacen||''
+      }).catch(function(e){console.warn('I/G abono:',e);});
+    }
+  })();
+  // Add to caja if efectivo — via mov_cajas
   if(enCaja&&caja){
     var _cajaObj2=_cajasData?_cajasData.find(function(x){return x.nombre===caja;}):null;
     var _cajaMov={
@@ -3832,7 +3834,7 @@ function registrarAbonoCli(cid){
     await syncSaveAbono(cid, target.id, abono);
   })();
 
-  showToast(`Abono registrado${enCaja?' + caja':''} — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
+  showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
 
