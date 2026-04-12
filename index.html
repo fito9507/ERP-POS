@@ -4092,27 +4092,33 @@ function registrarAbonoCli(cid){
       }).catch(function(e){console.warn('I/G abono:',e);});
     }
   })();
-  // Add to caja if efectivo — via mov_cajas
+  // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
   if(enCaja&&caja){
-    var _cajaObj2=_cajasData?_cajasData.find(function(x){return x.nombre===caja;}):null;
     var _cajaMov={
-      caja_destino:caja,
-      caja_destino_id:_cajaObj2?_cajaObj2.id:null,
-      tipo:'ingreso',
-      monto_destino:equivUSD,
+      tipo:'deposito',
+      fecha:fecha,
       notas:'Abono '+c.nombre+' — '+desc,
       usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-      fecha:fecha
+      caja_destino:caja,
+      monto_origen:equivUSD,
+      monto_destino:equivUSD,
+      tasa_usada:null
     };
-    _cajasMovs.push(_cajaMov);
-    if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+    _cajasMovs.unshift(_cajaMov);
     if(_supaOnline&&typeof supaReq!=='undefined'){
-      supaReq('POST','mov_cajas',_cajaMov).catch(function(e){console.warn('mov_cajas:',e);});
+      supaReq('POST','mov_cajas',_cajaMov).then(async function(r){
+        if(!r.ok){
+          var errTxt=await r.text();
+          console.warn('mov_cajas abono 400:',errTxt);
+          showToast('⚠ Error caja: '+errTxt.substring(0,80));
+        } else {
+          var saved=await r.json();
+          if(saved&&saved[0]) _cajasMovs[0]=saved[0];
+          var _newSaldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(caja):null;
+          if(_newSaldo!==null) showToast('✓ Caja '+caja+': '+fN(_newSaldo,2));
+        }
+      }).catch(function(e){console.warn('mov_cajas abono:',e);});
     }
-    // Calculate new balance for toast
-    var _newSaldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(caja) : null;
-    if(_newSaldo!==null) showToast('Caja '+caja+': '+fN(_newSaldo)+' (actualizada)');
-    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
   }
   (async function(){
     await syncSaveAbono(cid, target.id, abono);
