@@ -465,56 +465,231 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <style id="mobile-css">
+
+
+<style>
+/* ═══════════════════════════════════════════════
+   MOBILE RESPONSIVE — todos los módulos
+   Breakpoint principal: 640px
+   ═══════════════════════════════════════════════ */
+
+/* ── Touch targets mínimos ── */
 @media(max-width:640px){
+  button,select,input,.adm-btn,.btn,.adm-tab,.sb-item,.pin-btn{
+    min-height:42px;
+  }
+  .adm-btn-sm,.btn-sm,.cat-pill,.mt-btn,.tg-btn,.adm-btn-sm{
+    min-height:32px;
+  }
+
+  /* ── Shell & Layout ── */
+  #erp-shell{flex-direction:column}
+  #modules{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .module{padding:0!important}
+
+  /* ── Topbar ── */
+  #topbar{display:flex!important;position:sticky;top:0;z-index:50}
+
+  /* ── Padding general de módulos ── */
+  #mod-ventas,#mod-stock,#mod-ig,#mod-backup,#mod-prestamos{
+    padding:10px!important;overflow-y:auto;height:100%;
+  }
+  #mod-cli{padding:8px!important;overflow-y:auto;height:100%}
+  #mod-admin{overflow-y:auto;height:100%}
+  #admin-content{padding:10px!important}
+
+  /* ── Grids globales: colapsar todo en 1 col ── */
+  .g2,.g3,.g4,.g5,
+  #mod-ventas .g2,#mod-ventas .g3,#mod-ventas .g4,#mod-ventas .g5,
+  #mod-ig .g2,#mod-ig .g3,#mod-ig .g4,
+  #mod-clientes .g2,#mod-clientes .g3,#mod-clientes .g4{
+    grid-template-columns:1fr!important;
+  }
+  /* Excepciones: 2 cols cuando caben */
+  #mod-clientes .g2.keep2,
+  .abono-g2{grid-template-columns:1fr 1fr!important}
+
+  /* ── Grids inline via style attr ── */
+  div[style*="grid-template-columns:1fr 1fr"],
+  div[style*="grid-template-columns:repeat(2"],
+  div[style*="grid-template-columns:repeat(3"],
+  div[style*="grid-template-columns:repeat(4"],
+  div[style*="grid-template-columns:repeat(5"],
+  div[style*="grid-template-columns:auto"]{
+    grid-template-columns:1fr!important;
+  }
+
+  /* ── max-width wrappers: full width ── */
+  div[style*="max-width:560px"],
+  div[style*="max-width:580px"],
+  div[style*="max-width:600px"],
+  div[style*="max-width:480px"],
+  div[style*="max-width:400px"],
+  div[style*="max-width:420px"],
+  div[style*="max-width:440px"],
+  div[style*="max-width:340px"]{max-width:100%!important}
+
+  /* ── Flex rows → column ── */
+  .frow{flex-wrap:wrap!important;gap:6px!important}
+  .ff{min-width:calc(50% - 4px)!important;flex:unset!important}
+
+  /* ── Cards ── */
+  .card,.adm-card{padding:10px!important}
+  .adm-card .adm-val{font-size:16px!important}
+
+  /* ── Tables: scroll horizontal ── */
+  .adm-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch;border-radius:var(--border-radius-md)}
+  .adm-table{min-width:480px}
+  .adm-table th,.adm-table td{padding:6px 8px!important;font-size:11px!important;white-space:nowrap}
+
+  /* ── Admin tabs: wrap ── */
+  #admin-content > div:first-child,
+  div[style*="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap"]{
+    flex-wrap:wrap!important;gap:4px!important;
+  }
+  .adm-tab{font-size:11px!important;padding:6px 10px!important;min-height:36px!important}
+
+  /* ══ MÓDULO VENTAS ══ */
+  #mod-ventas .adm-table{min-width:560px}
+  #mod-ventas .frow .ff{min-width:calc(50% - 4px)!important}
+  /* Filtros de ventas en 2 cols */
+  #mod-ventas .frow{display:grid!important;grid-template-columns:1fr 1fr!important;gap:6px!important}
+  #mod-ventas .ff{min-width:unset!important}
+  /* Botón exportar full width */
+  #mod-ventas .frow .adm-btn{grid-column:1/-1}
+
+  /* ══ MÓDULO STOCK ══ */
+  #stock-root{padding:0!important}
+  #stock-root > div{padding:10px!important}
+  /* Search bar */
+  #stock-root .tbar{flex-wrap:wrap!important;gap:6px!important}
+  #stock-root .tbar input{width:100%!important;min-width:0!important}
+  /* Stats cards: 2 col */
+  #stock-root .g4{grid-template-columns:1fr 1fr!important}
+  /* Stock table */
+  #stock-root .adm-table{min-width:520px}
+  /* Movimientos panel */
+  #stock-movs-panel .adm-card{padding:10px!important}
+  #stock-movs-panel select,#stock-movs-panel input{font-size:14px!important}
+  #stock-movs-panel > div{flex-direction:column!important}
+
+  /* ══ MÓDULO I/G (Ingresos/Gastos) ══ */
+  #mod-ig{box-sizing:border-box}
+  /* Cajas resumen: 2 cols */
+  #cajas-grid{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  /* Libro I/G table */
+  #ig-tabla-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #ig-tabla{min-width:520px}
+  /* Formulario nuevo movimiento */
+  #ig-form-wrap .g3{grid-template-columns:1fr!important}
+  #ig-form-wrap .g2{grid-template-columns:1fr!important}
+  /* Metrics 2col */
+  #mod-ig .g4{grid-template-columns:1fr 1fr!important}
+
+  /* ══ MÓDULO CLIENTES ══ */
+  #mod-clientes .wrap{padding:8px!important}
+  /* Nav tabs: scroll horizontal */
+  #mod-clientes .nav{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;padding-bottom:4px}
+  #mod-clientes .nav button{white-space:nowrap;min-height:36px!important;font-size:11px!important;padding:5px 10px!important}
+  /* Lista metrics: 2 col */
+  #lista-metrics{grid-template-columns:1fr 1fr!important}
+  /* CLI cards */
+  .cli-card{padding:10px!important}
+  /* Ficha cliente — tabs nav */
+  #ficha-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap!important;padding-bottom:2px}
+  #ficha-nav button{white-space:nowrap;min-height:36px!important;font-size:11px!important}
+  /* Folio header: wrap */
+  .folio-hdr{flex-wrap:wrap!important;gap:6px!important;padding:10px!important}
+  /* Prod-row en folio: simplificar a 3 cols */
+  #mod-clientes .prod-row{
+    grid-template-columns:1fr 48px 70px!important;
+    font-size:11px!important;
+  }
+  #mod-clientes .prod-row .qi{width:44px!important}
+  #mod-clientes .prod-row .pi{width:62px!important}
+  /* Ocultar columna moneda y acción en mobile (menos críticas) */
+  #mod-clientes .prod-row span:nth-child(4),
+  #mod-clientes .prod-row span:nth-child(6){display:none!important}
+  #mod-clientes .prod-row.hdr span:nth-child(4),
+  #mod-clientes .prod-row.hdr span:nth-child(6){display:none!important}
+  /* Abono form */
+  #mod-clientes .g2{grid-template-columns:1fr!important}
+  #mod-clientes .g3{grid-template-columns:1fr!important}
+  /* Métricas ficha 2 col */
+  #mod-clientes .g4{grid-template-columns:1fr 1fr!important}
+  /* Modal: full screen */
+  #mod-clientes .modal{max-width:100%!important;margin:0!important;border-radius:0!important;height:100vh;overflow-y:auto}
+  #mod-clientes .modal-bg{align-items:flex-end!important}
+
+  /* ══ MÓDULO CAJAS (admin) ══ */
+  /* Resumen cajas: 2 col */
+  #admin-content [style*="grid-template-columns:repeat(auto-fill"]{
+    grid-template-columns:1fr 1fr!important;
+  }
+  /* Historial mov_cajas table */
+  #admin-content .adm-table-wrap{overflow-x:auto}
+
+  /* ══ MÓDULO PRÉSTAMOS ══ */
+  #prestamos-root .adm-card{padding:10px!important}
+  #prestamos-root .g2,#prestamos-root .g3{grid-template-columns:1fr!important}
+  #prestamos-root .adm-table{min-width:440px}
+
+  /* ══ MÓDULO BACKUP ══ */
+  #mod-backup .adm-card{padding:10px!important}
+  #mod-backup .g2{grid-template-columns:1fr!important}
+
+  /* ══ Mi CAJA (vendedor) ══ */
+  #micaja-root{padding:10px!important}
+  #micaja-root div[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}
+
+  /* ══ POS ══ */
+  .login-wrap,.setup-wrap{padding:12px!important;max-width:100%!important}
+  .ok-card{padding:14px!important}
+  .step{font-size:10px!important;padding:3px 6px!important}
+  .step-bar{flex-wrap:wrap!important;gap:2px!important}
+  .res-line{font-size:12px!important}
+  /* POS prod grid: 3 col on mobile */
+  .prod-grid{grid-template-columns:repeat(3,1fr)!important;max-height:200px!important}
+  /* Cart: full width below product panel */
   .prod-layout{flex-direction:column!important}
-  .prod-grid{grid-template-columns:repeat(2,1fr)!important;max-height:220px!important}
   .prod-panel,.cart-panel{min-width:unset!important;width:100%!important}
+  .cart-panel{width:100%!important}
+  /* Payment rows */
   .pago-wrap{max-width:100%!important}
   .prow{gap:4px!important;padding:6px 8px!important}
   .prow input[type=number]{min-width:55px!important;max-width:80px!important}
-  .prow select{width:60px!important}
-  /* Caja selector rows — full width on mobile */
-  .prow + div, .vrow + div{padding:2px 8px 6px!important}
-  .prow + div select, .vrow + div select{font-size:12px!important;width:100%!important}
-  /* Stock movements form */
-  #stock-movs-panel .adm-card{padding:10px!important}
-  #stock-movs-panel select, #stock-movs-panel input{font-size:14px!important}
-  /* Prestamos */
-  #prestamos-root .adm-card{padding:10px!important}
-  /* Admin tables */
-  .adm-table th,.adm-table td{padding:5px 6px!important;font-size:11px!important}
-  #stock-root .adm-table-wrap{overflow-x:auto}
-  .g4,.g5{grid-template-columns:repeat(2,1fr)!important}
-  .adm-card .adm-val{font-size:16px!important}
-  .frow{flex-wrap:wrap!important;gap:6px!important}
-  .ff{min-width:calc(50% - 4px)!important;flex:unset!important}
-  .card{padding:12px!important}
-  .setup-wrap,.login-wrap,.ok-card{padding:14px!important}
-  .step{font-size:10px!important;padding:3px 6px!important}
-  .res-line{font-size:12px!important}
-  div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}
-  div[style*="grid-template-columns:repeat(3"]{grid-template-columns:repeat(2,1fr)!important}
-  div[style*="grid-template-columns:repeat(4"]{grid-template-columns:repeat(2,1fr)!important}
-  div[style*="max-width:560px"],div[style*="max-width:480px"],div[style*="max-width:600px"]{max-width:100%!important}
-  /* Liquidaciones */
+  .prow select{width:62px!important}
+
+  /* ── Misc ── */
   #liq-cta-sel{width:100%!important;margin-bottom:6px!important}
-  /* Modulo clientes */
-  .cli-card{padding:10px!important}
+  .step-bar .chevron{display:none!important}
+
+  /* Sticky botones de acción al fondo */
+  .btn.btn-p[onclick*="registrarAbono"],
+  .btn.btn-p[onclick*="crearFolio"],
+  .btn.btn-p[onclick*="confirmar"]{
+    position:sticky;bottom:8px;z-index:10;
+    box-shadow:0 -2px 12px rgba(0,0,0,.4);
+  }
 }
+
+/* ── Pantallas muy pequeñas (≤380px) ── */
 @media(max-width:380px){
   .prow{gap:3px!important}
   .prow input[type=number]{min-width:48px!important}
   .prow select{width:52px!important}
   .bf{font-size:10px!important;padding:4px 5px!important}
   .pbn{font-size:9px!important}
-}
-@media(max-width:400px){
   .prod-grid{grid-template-columns:repeat(2,1fr)!important}
   .pb{padding:6px 4px!important}
   .pbn{font-size:9px!important}
   .pbp{font-size:10px!important}
+  .adm-tab{font-size:10px!important;padding:5px 7px!important}
+  #mod-clientes .nav button{font-size:10px!important;padding:4px 7px!important}
+  #lista-metrics{grid-template-columns:1fr!important}
 }
 </style>
+
 </head>
 <body>
 <div id="erp-shell">
