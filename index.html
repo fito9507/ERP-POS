@@ -929,12 +929,14 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <button class="btn-sm" onclick="setRange('todo')">Todo</button>
       <button class="btn-sm" onclick="limpiarFiltros()">✕ Limpiar</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--color-text-secondary)">% com. global:</span>
-        <input type="number" id="com-global" value="4" min="0" max="100" step="0.5"
-          style="width:58px;font-size:11px;padding:3px 6px">
-        <span style="font-size:11px;color:var(--color-text-secondary)">%</span>
-        <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar a selección</button>
-        <button class="btn-sm" onclick="exportVentasCSV()">Exportar CSV</button>
+        <div id="adm-com-bar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--color-text-secondary)">% com. global:</span>
+          <input type="number" id="com-global" value="4" min="0" max="100" step="0.5"
+            style="width:58px;font-size:11px;padding:3px 6px">
+          <span style="font-size:11px;color:var(--color-text-secondary)">%</span>
+          <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar a selección</button>
+        </div>
+        <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()">Exportar CSV</button>
       </div>
     </div>
   </div>
@@ -2698,10 +2700,10 @@ function renderVentas(){
   var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
   var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
   ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVend?'none':'table-cell';});
-  // Show/hide commission tds in rows
   document.querySelectorAll('.td-com').forEach(function(el){el.style.display=_isVend?'none':'';}); 
   var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
   var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
+  var _admBar=document.getElementById('adm-com-bar');if(_admBar)_admBar.style.display=_isVend?'none':'flex';
 
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
@@ -2715,8 +2717,8 @@ function renderVentas(){
     <div class="metric"><div class="lbl">Venta total USD</div><div class="val">${fN(totUSD)}</div><div class="sub">${data.length} ops</div></div>
     <div class="metric"><div class="lbl">Equiv. EUR</div><div class="val">${fN(fromUSD(totUSD,'EUR'))}</div><div class="sub">equiv.</div></div>
     <div class="metric"><div class="lbl">Equiv. CUP</div><div class="val">${fN(fromUSD(totUSD,'CUP'),0)}</div><div class="sub">equiv.</div></div>
-    <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD (con com.)</div></div>
-    <div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD sin liquidar</div></div>`;
+    ${_isVend?'':'<div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">'+(fN(totCom))+'</div><div class="sub">USD (con com.)</div></div><div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">'+fN(pdte)+'</div><div class="sub">USD sin liquidar</div></div>'}
+  `;
 
   document.getElementById('v-count-lbl').textContent=`Ventas filtradas — ${data.length} resultados`;
 
