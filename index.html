@@ -1711,39 +1711,6 @@ async function syncDeleteUser(n){
   }
   try{await supaReq('PATCH','usuarios?nombre=eq.'+encodeURIComponent(n),{activo:false});}catch(e){}
 }
-async function syncSaveMov(m){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{await supaReq('POST','movimientos_ig',{id:m.id,fecha:m.fecha,tipo:m.tipo,descripcion:m.desc||'',monto:m.monto||0,moneda:m.mon||'USD',equiv_usd:m.equivUSD||0,cuenta:m.cta||'',sentido:m.sentido||'gasto',notas:m.notas||'',vendedor:m.vend||'',acreedor:m.acreedor||''});}catch(e){console.warn('syncSaveMov:',e);}
-}
-async function syncLoadMovs(){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    var r=await supaReq('GET','movimientos_ig?select=*&order=fecha.desc');
-    if(!r.ok)return;
-    var rows=await r.json();if(!rows||!rows.length)return;
-    MOVS.length=0;
-    rows.forEach(function(row){MOVS.push({id:row.id,fecha:row.fecha,tipo:row.tipo,desc:row.descripcion||'',monto:parseFloat(row.monto||0),mon:row.moneda||'USD',equivUSD:parseFloat(row.equiv_usd||0),cta:row.cuenta||'',sentido:row.sentido||'gasto',notas:row.notas||'',vend:row.vendedor||'',acreedor:row.acreedor||''});});
-    igNextId=MOVS.reduce(function(a,m){return Math.max(a,m.id||0);},0)+1;
-    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-    if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
-  }catch(e){console.warn('syncLoadMovs:',e);}
-}
-async function syncSaveDeuda(d){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{await supaReq('POST','deudas',{id:d.id,acreedor:d.acreedor||'',concepto:d.concepto||'',mon_orig:d.monOrig||'USD',monto_orig:d.montOrig||0,total_usd:d.totalUSD||0,pendiente_usd:d.pendienteUSD||0,cuota_mes:d.cuotaMes||0,activa:d.activa!==false});}catch(e){console.warn('syncSaveDeuda:',e);}
-}
-async function syncLoadDeudas(){
-  if(!_supaOnline||typeof supaReq==='undefined')return;
-  try{
-    var r=await supaReq('GET','deudas?select=*&order=id.asc');
-    if(!r.ok)return;
-    var rows=await r.json();if(!rows||!rows.length)return;
-    DEUDAS.length=0;
-    rows.forEach(function(row){DEUDAS.push({id:row.id,acreedor:row.acreedor,concepto:row.concepto,monOrig:row.mon_orig,montOrig:parseFloat(row.monto_orig||0),totalUSD:parseFloat(row.total_usd||0),pendienteUSD:parseFloat(row.pendiente_usd||0),cuotaMes:parseFloat(row.cuota_mes||0),activa:row.activa!==false});});
-    try{localStorage.setItem('erp_deudas',JSON.stringify(DEUDAS));}catch(e){}
-    if(typeof renderDeudas==='function')try{renderDeudas();}catch(e){}
-  }catch(e){console.warn('syncLoadDeudas:',e);}
-}
 async function syncLoadUsers(){
   if(typeof supaReq==='undefined'||!_supaOnline)return;
   try{
@@ -2919,16 +2886,7 @@ function renderMiCaja() {
     var cta = entry[0], v = entry[1];
     var igIng = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='ingreso'; }).reduce(function(a,m){ return a+m.monto; }, 0);
     var igGas = MOVS.filter(function(m){ return m.cta===cta && m.sentido==='gasto';   }).reduce(function(a,m){ return a+m.monto; }, 0);
-    // Calculate income from VENTAS payments for this caja
-    var ingVentas = VENTAS.filter(function(vv){ return vv.alm===alm; }).reduce(function(acc,vv){
-      (vv.pagos||[]).forEach(function(p){ if((p.caja||(p.mon+' '+alm))===cta) acc+=(p.m||0); });
-      return acc;
-    },0);
-    var gasVueltos = VENTAS.filter(function(vv){ return vv.alm===alm; }).reduce(function(acc,vv){
-      (vv.vueltos||[]).forEach(function(vv2){ if((vv2.caja||(vv2.mon+' '+alm))===cta) acc+=(vv2.m||0); });
-      return acc;
-    },0);
-    var saldo = ingVentas + igIng - gasVueltos - igGas;
+    var saldo = (v.ingV||0) + (v.ingIG||0) + igIng - (v.gasIG||0) - igGas;
     var col   = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     var dec   = (v.mon==='CUP'||v.mon==='CUPT') ? 0 : 2;
     return '<div class="card" style="text-align:center">'
@@ -2943,7 +2901,8 @@ function renderMiCaja() {
 
   // Ventas como movimientos
   var ventaMov = VENTAS.filter(function(v){ return v.alm === alm; }).map(function(v){
-    return { fecha: v.fecha, desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
+    return { fecha: v.fecha, ts: v.fecha+(v.id?String(v.id).padStart(6,'0'):''),
+             desc: 'Venta POS — ' + (v.cli||'Walk-in') + ' — ' + v.prods.substring(0,40),
              monto: fN(v.totalUSD) + ' USD', tipo: 'venta', sentido: 'ingreso' };
   });
 
@@ -2954,7 +2913,10 @@ function renderMiCaja() {
              tipo: 'ig', sentido: m.sentido };
   });
 
-  var allMovs = ventaMov.concat(igMov).sort(function(a,b){ return b.fecha.localeCompare(a.fecha); });
+  var allMovs = ventaMov.concat(igMov).sort(function(a,b){
+    var da = (b.ts||b.fecha||''), db = (a.ts||a.fecha||'');
+    return da.localeCompare(db);
+  });
 
   var movsHtml = '<div class="card"><h3 style="margin-bottom:12px">Movimientos</h3>'
     + (allMovs.length === 0 ? '<div style="color:var(--color-text-tertiary);font-size:12px;text-align:center;padding:20px">Sin movimientos</div>' :
@@ -2987,28 +2949,37 @@ function renderMiCaja() {
 
 // ── CUENTAS BASE (del Excel) ──────────────────────────────
 const CUENTAS_BASE={
-  'USD Habana':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
-  'EUR Habana':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
-  'CUP Habana':{ingV:0,ingIG:0,gasIG:0,mon:'CUP'},
-  'USD Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
-  'EUR Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
-  'CUP Placetas':{ingV:0,ingIG:0,gasIG:0,mon:'CUP'},
-  'USD España':{ingV:0,ingIG:0,gasIG:0,mon:'USD'},
-  'EUR España':{ingV:0,ingIG:0,gasIG:0,mon:'EUR'},
+  'USD Habana':{ingV:99432.52,ingIG:42197.04,gasIG:145468.60,mon:'USD'},
+  'EUR Habana':{ingV:570,ingIG:7225,gasIG:7435,mon:'EUR'},
+  'CUP Habana':{ingV:33782268,ingIG:168624,gasIG:33413912,mon:'CUP'},
+  'USD Placetas':{ingV:58214.39,ingIG:63780.38,gasIG:117955.76,mon:'USD'},
+  'EUR Placetas':{ingV:1916,ingIG:45243.92,gasIG:47159.92,mon:'EUR'},
+  'CUP Placetas':{ingV:3669426,ingIG:8534750,gasIG:12204176,mon:'CUP'},
+  'USD España':{ingV:0,ingIG:167215.37,gasIG:0,mon:'USD'},
+  'EUR España':{ingV:0,ingIG:93797.72,gasIG:450,mon:'EUR'},
 };
 
 // ── DEUDAS BASE ───────────────────────────────────────────
-let DEUDAS=[];
-(function(){try{var _d=JSON.parse(localStorage.getItem('erp_deudas')||'[]');if(_d&&_d.length)DEUDAS=_d;}catch(e){}})();
+let DEUDAS=[
+  {id:1,acreedor:'Fito',concepto:'Préstamo Tarjeta Crédito',monOrig:'EUR',montOrig:14600,totalUSD:16781.24,pendienteUSD:16781.24,cuotaMes:280,activa:true},
+  {id:2,acreedor:'Fito',concepto:'Préstamo Empresa',monOrig:'EUR',montOrig:11320,totalUSD:13011.21,pendienteUSD:13011.21,cuotaMes:226.85,activa:true},
+];
 
 // ── MOVIMIENTOS I/G ───────────────────────────────────────
-let MOVS=[];
-(function(){
-  try{
-    var _m=JSON.parse(localStorage.getItem('erp_movs')||'[]');
-    if(_m&&_m.length){MOVS=_m;igNextId=_m.reduce(function(a,m){return Math.max(a,m.id||0);},0)+1;}
-  }catch(e){}
-})();
+let MOVS=[
+  {id:1,fecha:'2025-03-16',tipo:'Comisión vendedor',desc:'Comisión Keiler semana 2-7 mar',vend:'Keiler',alm:'Habana',monto:122855,mon:'CUP',equivUSD:241.10,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:2,fecha:'2025-03-23',tipo:'Comisión vendedor',desc:'Comisión Keiler 23 mar',vend:'Keiler',alm:'Habana',monto:43030,mon:'CUP',equivUSD:84.45,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:3,fecha:'2025-04-01',tipo:'Gasto operativo',desc:'Parrilla Domicilio',monto:50000,mon:'CUP',equivUSD:98.12,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:4,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens 5 Certificaciones',monto:1000,mon:'USD',equivUSD:1000,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:5,fecha:'2025-06-26',tipo:'Gasto operativo',desc:'Pago Torrens Cítricos Acreditación',monto:400,mon:'USD',equivUSD:400,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:6,fecha:'2025-08-28',tipo:'Gasto operativo',desc:'Flete Mariel-Habana (Leodan)',monto:80000,mon:'CUP',equivUSD:157,cta:'CUP Habana',sentido:'gasto',notas:''},
+  {id:7,fecha:'2025-09-01',tipo:'Comisión vendedor',desc:'Comisión Keiler Leodan container',vend:'Keiler',alm:'Habana',monto:700,mon:'USD',equivUSD:700,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:8,fecha:'2025-09-01',tipo:'Gasto operativo',desc:'Comisión Ernes',monto:600,mon:'USD',equivUSD:600,cta:'USD Habana',sentido:'gasto',notas:''},
+  {id:9,fecha:'2025-03-15',tipo:'Préstamo recibido',desc:'Préstamo Miguel Á. → Yano',acreedor:'Miguel Á.',monto:4000,mon:'USD',equivUSD:4000,cta:'USD Habana',sentido:'ingreso',notas:''},
+  {id:10,fecha:'2025-03-24',tipo:'Préstamo recibido',desc:'Préstamo Sofi → Xportprise',acreedor:'Sofi',monto:4023,mon:'EUR',equivUSD:4623,cta:'EUR España',sentido:'ingreso',notas:''},
+  {id:11,fecha:'2025-10-15',tipo:'Amortización deuda',desc:'Cuota oct — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 1/94'},
+  {id:12,fecha:'2025-11-15',tipo:'Amortización deuda',desc:'Cuota nov — Préstamo Fito Empresa',acreedor:'Fito',monto:226.85,mon:'EUR',equivUSD:260.75,cta:'EUR España',sentido:'gasto',notas:'Cuota 2/94'},
+];
 let igNextId =13;
 
 
@@ -3347,7 +3318,6 @@ function pagarCuota(id){
 function liquidarDeuda(id){
   if(!confirm('¿Marcar esta deuda como completamente liquidada?'))return;
   const d=DEUDAS.find(x=>x.id===id);if(d)d.activa=false;
-  try{localStorage.setItem('erp_deudas',JSON.stringify(DEUDAS));}catch(e){}
   renderDeudas();showToast('Deuda liquidada');
 }
 
@@ -3740,8 +3710,8 @@ function renderFichaAbonar(c){
               </select></div>
             <div><label class="lbl">Tipo</label>
               <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option value="ingreso-yano">Entrada de fondos (entrega cash)</option>
-                <option value="gasto-pagado">Gasto pagado directamente</option>
+                <option value="efectivo">Efectivo — entra en caja</option>
+                <option value="compensacion">Compensación gasto — no entra en caja</option>
               </select></div>
           </div>
           <div style="font-size:11px;color:var(--color-text-info);margin-top:6px" id="cajaex-${c.id}"></div>
@@ -3788,10 +3758,17 @@ function toggleCajaCli(cid){
   updCajaExplicaCli(cid);
 }
 function updCajaExplicaCli(cid){
-  const el=document.getElementById('cajaex-'+cid);if(!el)return;
-  const tipo=document.getElementById('a-cajatipo-'+cid)?.value;
-  const caja=document.getElementById('a-caja-'+cid)?.value;
-  el.textContent=tipo==='ingreso-yano'?`El dinero entra a ${caja} — disponible para futuros gastos`:`Gasto ya pagado directamente — salida de ${caja}`;
+  var tipo = document.getElementById('a-cajatipo-'+cid)?.value;
+  var caja = document.getElementById('a-caja-'+cid)?.value;
+  var el = document.getElementById('cajaex-'+cid);
+  if(!el) return;
+  if(tipo==='efectivo'){
+    el.textContent = '✓ El monto entra en caja '+caja+' y reduce la deuda del folio';
+    el.style.color = 'var(--color-text-success)';
+  } else {
+    el.textContent = '✓ Se registra en I/G como ingreso (gasto compensado por cliente) y reduce la deuda. No mueve caja';
+    el.style.color = 'var(--color-text-info)';
+  }
 }
 function registrarAbonoCli(cid){
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
@@ -3832,8 +3809,27 @@ function registrarAbonoCli(cid){
   document.getElementById('cajasec-'+cid).style.display='none';
   document.getElementById('togs-'+cid).textContent='Desactivado — solo abona a la deuda';
   offlineSaveClientes();
-  // Add to caja if enCaja — via mov_cajas
-  if(enCaja&&caja){
+
+  // ── Generar movimiento I/G siempre ───────────────────
+  var _igMov = {
+    id: igNextId++,
+    fecha: fecha,
+    tipo: 'Cobro cliente',
+    desc: 'Abono ' + c.nombre + (cajaTipo==='compensacion'?' (compensación gasto)':'') + ' — ' + desc,
+    monto: monto,
+    mon: mon,
+    equivUSD: parseFloat(equivUSD.toFixed(2)),
+    cta: enCaja&&caja ? caja : (mon+' '+(typeof S!=='undefined'?S.alm||'':'General')),
+    sentido: 'ingreso',
+    notas: 'Folio: '+target.id+' · Cliente: '+c.nombre,
+    vend: (typeof S!=='undefined'&&S.user)||'Admin'
+  };
+  MOVS.unshift(_igMov);
+  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
+  if(typeof syncSaveMov==='function')(async function(){await syncSaveMov(_igMov);})();
+
+  // ── Si es efectivo, mover caja ────────────────────────
+  if(enCaja && caja && cajaTipo!=='compensacion'){
     var _cajaObj2=_cajasData?_cajasData.find(function(x){return x.nombre===caja;}):null;
     var _cajaMov={
       caja_destino:caja,
@@ -3845,15 +3841,12 @@ function registrarAbonoCli(cid){
       fecha:fecha
     };
     _cajasMovs.push(_cajaMov);
-    if(typeof offlineSaveClientes==='function') offlineSaveClientes();
     if(_supaOnline&&typeof supaReq!=='undefined'){
       supaReq('POST','mov_cajas',_cajaMov).catch(function(e){console.warn('mov_cajas:',e);});
     }
-    // Calculate new balance for toast
-    var _newSaldo = typeof _getSaldoCaja==='function' ? _getSaldoCaja(caja) : null;
-    if(_newSaldo!==null) showToast('Caja '+caja+': '+fN(_newSaldo)+' (actualizada)');
-    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
   }
+
   (async function(){
     await syncSaveAbono(cid, target.id, abono);
   })();
