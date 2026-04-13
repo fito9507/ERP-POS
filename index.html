@@ -7088,43 +7088,47 @@ _loadRatesCache();
 async function fetchElToqueAndSave(){
   showToast('🔄 Actualizando tasas elToque...');
   try {
-    // Use a CORS proxy since elToque blocks direct browser requests
+    // elToque API — try multiple endpoints with CORS proxies
+    // allorigins.win is a free CORS proxy that works from the browser
+    var TARGET = 'https://tasas.eltoque.com/v1/trmi';
     var urls = [
-      'https://el-toque-proxy.vercel.app/api/rates',
-      'https://api.el-toque.com/v2/rates',
-      'https://tasas.eltoque.com/v1/trmi'
+      'https://api.allorigins.win/get?url=' + encodeURIComponent(TARGET),
+      'https://corsproxy.io/?' + encodeURIComponent(TARGET),
+      'https://api.codetabs.com/v1/proxy?quest=' + TARGET,
     ];
     var data = null;
-    for (var i=0; i<urls.length; i++) {
+    for (var i = 0; i < urls.length; i++) {
       try {
-        var r = await fetch(urls[i], {headers:{'Accept':'application/json'}});
-        if (r.ok) { data = await r.json(); break; }
+        var r = await fetch(urls[i]);
+        if (!r.ok) continue;
+        var raw = await r.json();
+        // allorigins wraps in {contents: "..."}
+        var parsed = raw.contents ? JSON.parse(raw.contents) : raw;
+        if (parsed && typeof parsed === 'object') { data = parsed; break; }
       } catch(e) { continue; }
     }
     if (!data) throw new Error('No se pudo conectar con elToque');
 
-    // elToque returns rates in different formats — handle both
-    var cup  = parseFloat(data.USD || data.usd || data.CUP || data.cup || (data.rates&&data.rates.USD) || 0);
-    var eur  = parseFloat(data.EUR || data.eur || (data.rates&&data.rates.EUR) || 0);
-    var cupt = parseFloat(data.MLC || data.mlc || data.CUPT || data.cupt || (data.rates&&data.rates.MLC) || 0);
+    // elToque /v1/trmi returns: {USD:300, EUR:310, MLC:200, ...}
+    var cup  = parseFloat(data.USD  || data.usd  || data.CUP  || 0);
+    var eur  = parseFloat(data.EUR  || data.eur  || 0);
+    var cupt = parseFloat(data.MLC  || data.mlc  || data.CUPT || data.cupt || 0);
 
-    if (!cup || cup < 10) throw new Error('Respuesta inválida de elToque: ' + JSON.stringify(data).substring(0,100));
+    if (!cup || cup < 10) throw new Error('Datos inválidos: ' + JSON.stringify(data).substring(0,80));
 
-    // Save market rates
-    var mkt = {CUP: cup, EUR: eur||cup, CUPT: cupt||cup, ts: Date.now()};
+    var mkt = {CUP: cup, EUR: eur || cup, CUPT: cupt || cup, ts: Date.now()};
     try { localStorage.setItem('erp_rates_mkt', JSON.stringify(mkt)); } catch(e) {}
 
-    // Update RATES with market values (user can still apply manual adj)
     RATES.CUP  = cup;
-    if (eur > 0) RATES.EUR = parseFloat((cup / eur).toFixed(6));
+    if (eur  > 0) RATES.EUR  = parseFloat((cup / eur).toFixed(6));
     if (cupt > 0) RATES.CUPT = cupt;
 
-    showToast('✓ elToque: USD/CUP ' + fN(cup,0) + (eur?' · EUR/CUP '+fN(eur,0):''));
+    showToast('✓ elToque: USD ' + fN(cup,0) + ' CUP' + (eur ? ' · EUR ' + fN(eur,0) : ''));
     renderAdminTasas();
     return mkt;
   } catch(e) {
     console.warn('fetchElToqueAndSave:', e);
-    showToast('⚠ elToque no disponible: ' + e.message.substring(0,60));
+    showToast('⚠ elToque: ' + e.message.substring(0, 70));
     return null;
   }
 }
