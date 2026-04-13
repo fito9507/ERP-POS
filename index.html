@@ -5262,7 +5262,7 @@ function renderAdminTasas() {
 
   // If no market cache, use current RATES minus stored adj
   var mUSD  = mkt.CUP  || RATES.CUP;
-  var mEUR  = mkt.CUP && mkt.EUR ? parseFloat((mkt.CUP / mkt.EUR).toFixed(2)) : parseFloat((RATES.CUP / RATES.EUR).toFixed(2));
+  var mEUR  = mkt.EUR || parseFloat((RATES.CUP / RATES.EUR).toFixed(2));
   var mCUPT = mkt.CUPT || RATES.CUPT;
 
   var aUSD  = adj.USD  || 0;
@@ -5355,7 +5355,7 @@ function _adjChange(key, delta) {
   try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
   var mktMap = {
     usd:  mkt.CUP  || RATES.CUP,
-    eur:  mkt.CUP && mkt.EUR ? parseFloat((mkt.CUP/mkt.EUR).toFixed(2)) : parseFloat((RATES.CUP/RATES.EUR).toFixed(2)),
+    eur:  mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2)),
     cupt: mkt.CUPT || RATES.CUPT
   };
   var adj = parseFloat(inp.value) || 0;
@@ -5376,7 +5376,7 @@ function _renderAlmAdjTable() {
   var adj = {};
   try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
   var baseUSD  = (mkt.CUP  || RATES.CUP)  + (adj.USD  || 0);
-  var baseEUR  = (mkt.EUR  ? parseFloat((mkt.CUP/mkt.EUR).toFixed(2)) : parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
+  var baseEUR  = (mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
   var baseMLC  = (mkt.CUPT || RATES.CUPT) + (adj.CUPT || 0);
   var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC};
 
