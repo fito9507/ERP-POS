@@ -3508,7 +3508,7 @@ function registrar(){
   MOVS.unshift(mov);
   // Save to localStorage
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-  // Save to Supabase
+  // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
   if(typeof _supaOnline!=='undefined'&&_supaOnline&&typeof supaReq!=='undefined'){
     var _supaRow={fecha:mov.fecha,tipo:mov.tipo,desc:mov.desc,monto:mov.monto,mon:mov.mon,
       equiv_usd:mov.equivUSD,cta:mov.cta,sentido:mov.sentido,notas:mov.notas||'',
@@ -3522,6 +3522,38 @@ function registrar(){
       supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,desc:_e.desc,monto:_e.monto,
         mon:_e.mon,equiv_usd:_e.equivUSD,cta:_e.cta,sentido:_e.sentido,notas:_e.notas||'',vend:'',alm:''})
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
+    }
+    // Write to mov_cajas so saldo de caja reflects this movement
+    // Transferencia handled by its own UI (admRegistrarMovCaja) — skip here
+    if(mov.tipo!=='Transferencia entre cuentas'){
+      var _mcRow;
+      if(mov.sentido==='gasto'){
+        _mcRow={tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
+          usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+          caja_origen:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
+      } else {
+        _mcRow={tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
+          usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+          caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
+      }
+      supaReq('POST','mov_cajas',_mcRow).then(async function(r){
+        if(r.ok){
+          var _saved=await r.json();
+          if(_saved&&_saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(_saved[0]);
+        } else {
+          var _et=await r.text();
+          console.warn('mov_cajas I/G 400:',_et);
+          showToast('⚠ Error caja: '+_et.substring(0,60));
+        }
+      }).catch(function(e){console.warn('mov_cajas I/G:',e);});
+    }
+  } else if(mov.tipo!=='Transferencia entre cuentas'){
+    // Offline: update local _cajasMovs so Mi Caja stays in sync
+    if(typeof _cajasMovs!=='undefined'){
+      var _localMC=mov.sentido==='gasto'
+        ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto}
+        :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
+      _cajasMovs.unshift(_localMC);
     }
   }
   // mostrar en recientes
