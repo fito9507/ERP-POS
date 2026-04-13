@@ -1418,6 +1418,18 @@ function _dRender(fn, delay) {
 const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
 
+// ── Telegram Bot ─────────────────────────────────────────────
+const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
+const TG_CHAT  = '8781639188';
+function tgSend(msg){
+  if(!TG_TOKEN||!TG_CHAT) return;
+  fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:TG_CHAT,text:msg,parse_mode:'HTML'})
+  }).catch(function(e){console.warn('Telegram:',e);});
+}
+
 let _supaOnline = navigator.onLine;
 let _syncQueue  = [];
 
@@ -2698,6 +2710,18 @@ function confirmar(){
   // Save to offline cache immediately
   if(typeof offlineAutoSave==='function') offlineAutoSave();
   if(!_supaOnline && typeof showOfflineBanner==='function') showOfflineBanner(_syncQueue.length);
+  // Telegram notification
+  (function(){
+    var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n;}).join('\n');
+    var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
+    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b>\n'
+      +'\uD83D\uDC64 '+venta.vend+' • '+venta.alm+'\n'
+      +'\uD83D\uDED2 '+venta.cli+'\n'
+      +'\uD83D\uDCE6 '+_tgProds+'\n'
+      +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
+      +'\uD83D\uDCB3 Cobro: '+_tgCob;
+    tgSend(_tgMsg);
+  })();
   // Mostrar pantalla OK
   document.getElementById('ok-sub').textContent=S.user+' · '+S.alm+' · '+(S.cli||'Walk-in');
   var linesHtml='<div class="res-line"><span>Productos</span>'
@@ -3222,6 +3246,15 @@ function registrarVenta(){
     estCom,nota};
   VENTAS.unshift(v_new);
   if(typeof syncSaveVenta==='function') syncSaveVenta(v_new);
+  // Telegram notification
+  (function(){
+    var _tgMsg='\uD83D\uDCCA <b>Venta manual</b>\n'
+      +'\uD83D\uDC64 '+v_new.vend+' • '+v_new.alm+'\n'
+      +'\uD83D\uDED2 '+v_new.cli+'\n'
+      +'\uD83D\uDCB5 <b>'+fN(v_new.totalUSD)+' USD</b>\n'
+      +(v_new.prods?'\uD83D\uDCE6 '+v_new.prods:'');
+    tgSend(_tgMsg);
+  })();
   ['nv-prods','nv-total','nv-nota'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nv-com-pct').value='';
   document.getElementById('nv-com-usd').value='';
@@ -4541,6 +4574,16 @@ function registrarAbonoCli(cid){
     await syncSaveAbono(cid, target.id, abono);
   })();
 
+  // Telegram notification for abono
+  (function(){
+    var _tgIcon=cajaTipo==='efectivo'?'\uD83D\uDCB5':'\uD83D\uDD04';
+    var _tgMsg=_tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
+      +'\uD83D\uDC64 '+c.nombre+'\n'
+      +'\uD83D\uDCB0 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
+      +(desc?'\uD83D\uDCDD '+desc:'')
+      +(caja?'\uD83C\uDFE6 '+caja:'');
+    tgSend(_tgMsg);
+  })();
   showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
