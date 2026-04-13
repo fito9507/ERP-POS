@@ -3546,17 +3546,17 @@ function registrar(){
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
   // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
   if(typeof _supaOnline!=='undefined'&&_supaOnline&&typeof supaReq!=='undefined'){
-    var _supaRow={fecha:mov.fecha,tipo:mov.tipo,desc:mov.desc,monto:mov.monto,mon:mov.mon,
+    var _supaRow={fecha:mov.fecha,tipo:mov.tipo,descripcion:mov.desc,monto:mov.monto,moneda:mov.mon,
       equiv_usd:mov.equivUSD,cta:mov.cta,sentido:mov.sentido,notas:mov.notas||'',
       vend:mov.vend||'',alm:mov.alm||''};
     supaReq('POST','movimientos_ig',_supaRow).then(async function(r){
-      if(!r.ok){var t=await r.text();console.warn('I/G save error:',t);}
+      if(!r.ok){r.text().then(function(t){console.warn('I/G save error:',t);showToast('⚠ Error I/G: '+t.substring(0,60));});}
     }).catch(function(e){console.warn('I/G save:',e);});
     // If transferencia, also save the entrada entry
-    if(mov.tipo==='Transferencia entre cuentas'&&MOVS[0]&&MOVS[0].sentido==='ingreso'){
+    if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1&&MOVS[0].sentido==='ingreso'){
       var _e=MOVS[0];
-      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,desc:_e.desc,monto:_e.monto,
-        mon:_e.mon,equiv_usd:_e.equivUSD,cta:_e.cta,sentido:_e.sentido,notas:_e.notas||'',vend:'',alm:''})
+      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:_e.monto,
+        moneda:_e.mon,equiv_usd:_e.equivUSD,cta:_e.cta,sentido:_e.sentido,notas:_e.notas||'',vend:'',alm:''})
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
     }
     // Write to mov_cajas so saldo de caja reflects this movement
@@ -4403,8 +4403,8 @@ function registrarAbonoCli(cid){
     MOVS.push(igMov);
     if(_supaOnline&&typeof supaReq!=='undefined'){
       supaReq('POST','movimientos_ig',{
-        fecha:fecha,tipo:igTipo,desc:igMov.desc,
-        monto:equivUSD,mon:'USD',equiv_usd:equivUSD,
+        fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
+        monto:equivUSD,moneda:'USD',equiv_usd:equivUSD,
         cta:igCta,sentido:igSentido,notas:'',vend:'',alm:c.almacen||''
       }).catch(function(e){console.warn('I/G abono:',e);});
     }
