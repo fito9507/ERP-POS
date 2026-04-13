@@ -731,7 +731,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="topbar">
   <button id="ham-pos" onclick="document.getElementById('sidebar').classList.toggle('mob-open')" class="ham-btn">☰</button>
   <span class="topbar-logo">POS</span>
-  <div class="step-bar" id="step-bar"></div>
   <div id="user-chip" style="display:none" class="user-chip" onclick="logout()">
     <div class="dot" id="chip-dot"></div>
     <span id="chip-name"></span>
@@ -740,6 +739,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <span class="badge ba" id="res-btn" style="display:none;cursor:pointer;font-size:10px;padding:2px 8px;border-radius:100px" onclick="openRes()">Reservas <span id="res-n">0</span></span>
   <div style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-shrink:0"><span id="pos-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#606060;display:inline-block"></span><span id="pos-sync-lbl" style="font-size:11px;color:var(--color-text-tertiary)">Offline</span></div>
 </div>
+<!-- Step bar outside topbar so it's always visible on mobile -->
+<div class="step-bar" id="step-bar" style="padding:6px 10px;border-bottom:.5px solid var(--color-border-tertiary);background:var(--color-background-primary)"></div>
 
 <!-- LOGIN -->
 <div class="page act" id="pg-login">
@@ -2226,7 +2227,8 @@ function pinKey(k){
   }
 }
 function logout(){
-  S.user='';S.alm='';S.cart=[];pinBuf='';pendingUser='';
+  S.user='';S.alm='';S.cart=[];S.reservas=[];pinBuf='';pendingUser='';
+  try{localStorage.setItem('erp_reservas','[]');}catch(e){}
   document.getElementById('pin-wrap').style.display='none';
   document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
   updPinDots();
@@ -2451,7 +2453,12 @@ function openRes(){
   document.getElementById('res-overlay').style.display='block';
 }
 function closeRes(){document.getElementById('res-overlay').style.display='none';}
-function cancelRes(id){const r=S.reservas.find(x=>x.id===id);if(r)r.activa=false;updResBadge();openRes();renderProds();}
+function cancelRes(id){
+  S.reservas=S.reservas.filter(x=>x.id!==id);
+  try{localStorage.setItem('erp_reservas',JSON.stringify(S.reservas));}catch(e){}
+  _saveReservas();updResBadge();openRes();renderProds();
+  showToast('Reserva eliminada');
+}
 function cobrarReserva(id){
   const r=S.reservas.find(x=>x.id===id);if(!r)return;
   S.user=r.user;S.alm=r.alm;S.cli=r.cli;S.cart=r.lineas.map(c=>({...c}));
