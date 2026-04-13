@@ -574,6 +574,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #stock-movs-panel > div{flex-direction:column!important}
 
   /* ══ MÓDULO I/G (Ingresos/Gastos) ══ */
+  #nuevo-layout, #abono-layout{grid-template-columns:1fr!important}
+  #n-monto-row{grid-template-columns:1fr 80px!important}
+  #n-monto-row > div:last-child{display:none}  /* hide equiv on mobile, shown below */
   #mod-ig{box-sizing:border-box}
   /* Cajas resumen: 2 cols */
   #cajas-grid{grid-template-columns:1fr 1fr!important;gap:8px!important}
@@ -1153,11 +1156,11 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- ══ NUEVO MOVIMIENTO ══ -->
 <div class="page" id="nuevo">
-  <div class="g2">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="nuevo-layout">
     <div class="card">
       <h3>Registrar movimiento</h3>
       <div style="display:flex;flex-direction:column;gap:9px">
-        <div class="g2">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><label class="lbl">Fecha</label><input type="date" id="n-fecha"></div>
           <div><label class="lbl">Tipo</label>
             <select id="n-tipo" onchange="updNuevo()">
@@ -1199,7 +1202,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
           </div>
         </div>
 
-        <div class="g3">
+        <div style="display:grid;grid-template-columns:1fr 100px 1fr;gap:8px" id="n-monto-row">
           <div><label class="lbl">Monto</label>
             <input type="number" id="n-monto" step="0.01" oninput="updNuevo()"></div>
           <div><label class="lbl">Moneda</label>
@@ -1210,7 +1213,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
             <input type="number" id="n-equiv" step="0.01" style="background:var(--color-background-secondary)" readonly></div>
         </div>
 
-        <div class="g2">
+        <div style="display:flex;flex-direction:column;gap:8px">
           <div><label class="lbl">Cuenta que paga / recibe</label>
             <select id="n-cta">
               <option>USD Habana</option><option>EUR Habana</option><option>CUP Habana</option>
@@ -4244,12 +4247,12 @@ function irAbonar(cid,fid){
 function renderFichaAbonar(c){
   const tot=totCli(c),pag=pagCli(c),pdt=pdtCli(c),pct=tot>0?Math.round(pag/tot*100):0;
   document.getElementById('f-abonar-body').innerHTML=`
-  <div class="g2">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="abono-layout">
     <div class="card">
       <h3>Registrar abono — ${c.nombre}</h3>
       <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">Todo abono reduce la deuda — efectivo, aranceles, fletes, viajes, intereses.</div>
       <div style="display:flex;flex-direction:column;gap:9px">
-        <div class="g2">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><label class="lbl">Fecha</label><input type="date" id="a-fecha-${c.id}" value="${today()}"></div>
           <div><label class="lbl">Folio</label>
             <select id="a-folio-${c.id}">
@@ -4304,11 +4307,11 @@ function renderFichaAbonar(c){
     </div>
     <div class="card">
       <div class="lbl">Deuda total</div>
-      <div style="font-size:20px;font-weight:500">${fN(tot)} USD</div>
-      <div class="pay-bar"><div class="pay-bar-fill" style="width:${pct}%"></div></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:14px">
-        <span style="color:var(--color-text-success)">Abonado: ${fN(pag)} USD</span>
-        <span style="color:var(--color-text-danger)">Pdte: ${fN(pdt)} USD</span>
+      <div style="font-size:clamp(16px,4vw,22px);font-weight:700;word-break:break-word">${fN(tot)} USD</div>
+      <div class="pay-bar" style="margin:8px 0"><div class="pay-bar-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;margin-bottom:14px">
+        <span style="color:var(--color-text-success)">Abonado: <strong>${fN(pag)} USD</strong></span>
+        <span style="color:var(--color-text-danger)">Pdte: <strong>${fN(pdt)} USD</strong></span>
       </div>
     </div>
   </div>`;
