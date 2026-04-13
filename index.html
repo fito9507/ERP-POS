@@ -1156,94 +1156,94 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- ══ NUEVO MOVIMIENTO ══ -->
 <div class="page" id="nuevo">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="nuevo-layout">
-    <div class="card">
-      <h3>Registrar movimiento</h3>
-      <div style="display:flex;flex-direction:column;gap:9px">
+  <div style="max-width:520px">
+  <div class="card">
+    <h3 style="margin-bottom:14px">Registrar movimiento</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="lbl">Fecha</label><input type="date" id="n-fecha" style="width:100%"></div>
+        <div><label class="lbl">Tipo</label>
+          <select id="n-tipo" onchange="updNuevo()" style="width:100%">
+            <option>Gasto operativo</option>
+            <option>Comisión vendedor</option>
+            <option>Ingreso no-venta</option>
+            <option>Préstamo recibido</option>
+            <option>Amortización deuda</option>
+            <option>Pago intereses</option>
+            <option>Aporte socio</option>
+            <option>Transferencia entre cuentas</option>
+          </select>
+        </div>
+      </div>
+
+      <div><label class="lbl">Descripción</label>
+        <input type="text" id="n-desc" placeholder="Ej: Flete container #4, Pago Torrens..."></div>
+
+      <div id="n-com-extra" style="display:none">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><label class="lbl">Fecha</label><input type="date" id="n-fecha"></div>
-          <div><label class="lbl">Tipo</label>
-            <select id="n-tipo" onchange="updNuevo()">
-              <option>Gasto operativo</option>
-              <option>Comisión vendedor</option>
-              <option>Ingreso no-venta</option>
-              <option>Préstamo recibido</option>
-              <option>Amortización deuda</option>
-              <option>Pago intereses</option>
-              <option>Aporte socio</option>
-              <option>Transferencia entre cuentas</option>
-            </select>
-          </div>
+          <div><label class="lbl">Vendedor</label>
+            <select id="n-vend" style="width:100%"><option>Keiler</option><option>Padre</option></select></div>
+          <div><label class="lbl">Almacén</label>
+            <select id="n-alm-venta" style="width:100%"><option>Habana</option><option>Placetas</option></select></div>
         </div>
-
-        <div><label class="lbl">Descripción</label>
-          <input type="text" id="n-desc" placeholder="Ej: Comisión Keiler semana 2-7 mar, Flete container #4..."></div>
-
-        <!-- campo extra para comisión -->
-        <div id="n-com-extra" style="display:none">
-          <div class="g2">
-            <div><label class="lbl">Vendedor</label>
-              <select id="n-vend"><option>Keiler</option><option>Padre</option></select></div>
-            <div><label class="lbl">Almacén origen venta</label>
-              <select id="n-alm-venta"><option>Habana</option><option>Placetas</option></select></div>
-          </div>
-        </div>
-
-        <!-- campo extra para deuda -->
-        <div id="n-deuda-extra" style="display:none">
-          <div class="g2">
-            <div><label class="lbl">Acreedor / Deudor</label>
-              <select id="n-acreedor">
-                <option>Fito</option><option>Miguel Á.</option><option>Sofi</option>
-                <option>Ido</option><option>Jerry</option><option>Otro</option>
-              </select></div>
-            <div><label class="lbl">Referencia deuda</label>
-              <input type="text" id="n-ref-deuda" placeholder="Préstamo empresa, Tarjeta crédito..."></div>
-          </div>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 100px 1fr;gap:8px" id="n-monto-row">
-          <div><label class="lbl">Monto</label>
-            <input type="number" id="n-monto" step="0.01" oninput="updNuevo()"></div>
-          <div><label class="lbl">Moneda</label>
-            <select id="n-mon" onchange="updNuevo()">
-              <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
-            </select></div>
-          <div><label class="lbl">Equiv. USD</label>
-            <input type="number" id="n-equiv" step="0.01" style="background:var(--color-background-secondary)" readonly></div>
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:8px">
-          <div><label class="lbl">Cuenta que paga / recibe</label>
-            <select id="n-cta">
-              <option>USD Habana</option><option>EUR Habana</option><option>CUP Habana</option>
-              <option>USD Placetas</option><option>EUR Placetas</option><option>CUP Placetas</option>
-              <option>USD España</option><option>EUR España</option>
-            </select></div>
-          <div id="n-cta2-wrap" style="display:none">
-            <label class="lbl">Cuenta destino</label>
-            <select id="n-cta2">
-              <option>USD Habana</option><option>EUR Habana</option><option>CUP Habana</option>
-              <option>USD Placetas</option><option>EUR Placetas</option><option>USD España</option><option>EUR España</option>
-            </select>
-          </div>
-        </div>
-
-        <div><label class="lbl">Notas</label>
-          <input type="text" id="n-notas" placeholder="Observaciones adicionales..."></div>
-
-        <div id="n-preview" style="display:none;padding:10px;border-radius:var(--border-radius-md);font-size:12px;margin-top:2px"></div>
-
-        <button class="btn btn-p" onclick="registrar()">Registrar movimiento</button>
       </div>
-    </div>
 
-    <div class="card">
-      <h3>Últimos movimientos</h3>
-      <div id="nuevo-recientes">
-        <div style="color:var(--color-text-tertiary);font-size:12px;padding:12px 0;text-align:center">Sin movimientos aún</div>
+      <div id="n-deuda-extra" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="lbl">Acreedor</label>
+            <select id="n-acreedor" style="width:100%">
+              <option>Fito</option><option>Miguel Á.</option><option>Sofi</option>
+              <option>Ido</option><option>Jerry</option><option>Otro</option>
+            </select></div>
+          <div><label class="lbl">Referencia</label>
+            <input type="text" id="n-ref-deuda" placeholder="Tarjeta crédito..." style="width:100%"></div>
+        </div>
       </div>
+
+      <div style="display:grid;grid-template-columns:1fr 90px;gap:8px">
+        <div><label class="lbl">Monto</label>
+          <input type="number" id="n-monto" step="0.01" placeholder="0" oninput="updNuevo()" style="width:100%;font-size:16px;font-weight:600"></div>
+        <div><label class="lbl">Moneda</label>
+          <select id="n-mon" onchange="updNuevo()" style="width:100%">
+            <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
+          </select></div>
+      </div>
+
+      <div><label class="lbl">Equiv. USD</label>
+        <input type="number" id="n-equiv" step="0.01" readonly
+          style="background:var(--color-background-secondary);font-size:14px;font-weight:500;width:100%"></div>
+
+      <div><label class="lbl">Cuenta</label>
+        <select id="n-cta" style="width:100%">
+          <option>USD Habana</option><option>EUR Habana</option><option>CUP Habana</option>
+          <option>USD Placetas</option><option>EUR Placetas</option><option>CUP Placetas</option>
+          <option>USD España</option><option>EUR España</option>
+        </select></div>
+
+      <div id="n-cta2-wrap" style="display:none">
+        <label class="lbl">Cuenta destino</label>
+        <select id="n-cta2" style="width:100%">
+          <option>USD Habana</option><option>EUR Habana</option><option>CUP Habana</option>
+          <option>USD Placetas</option><option>EUR Placetas</option><option>USD España</option><option>EUR España</option>
+        </select>
+      </div>
+
+      <div><label class="lbl">Notas</label>
+        <input type="text" id="n-notas" placeholder="Observaciones..." style="width:100%"></div>
+
+      <div id="n-preview" style="display:none;padding:10px;border-radius:var(--border-radius-md);font-size:12px"></div>
+
+      <button class="btn btn-p" onclick="registrar()" style="width:100%;padding:14px;font-size:14px">Registrar movimiento</button>
     </div>
+  </div>
+
+  <div class="card" style="margin-top:10px">
+    <h3 style="margin-bottom:10px">Últimos movimientos</h3>
+    <div id="nuevo-recientes">
+      <div style="color:var(--color-text-tertiary);font-size:12px;padding:12px 0;text-align:center">Sin movimientos aún</div>
+    </div>
+  </div>
   </div>
 </div>
 
@@ -4260,73 +4260,90 @@ function irAbonar(cid,fid){
 function renderFichaAbonar(c){
   const tot=totCli(c),pag=pagCli(c),pdt=pdtCli(c),pct=tot>0?Math.round(pag/tot*100):0;
   document.getElementById('f-abonar-body').innerHTML=`
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px" id="abono-layout">
-    <div class="card">
-      <h3>Registrar abono — ${c.nombre}</h3>
-      <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">Todo abono reduce la deuda — efectivo, aranceles, fletes, viajes, intereses.</div>
-      <div style="display:flex;flex-direction:column;gap:9px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><label class="lbl">Fecha</label><input type="date" id="a-fecha-${c.id}" value="${today()}"></div>
-          <div><label class="lbl">Folio</label>
-            <select id="a-folio-${c.id}">
-              <option value="">Abono general</option>
-              ${c.folios.map(f=>`<option value="${f.id}">Folio ${f.id} — pdte: ${fN(pdtF(f))} USD</option>`).join('')}
-            </select>
-          </div>
-        </div>
-        <div><label class="lbl">Concepto</label>
-          <select id="a-concepto-${c.id}" onchange="document.getElementById('a-hint-${c.id}').textContent=({'efectivo':'Cash, FM...','arancel':'Aranceles, aduana','flete':'Flete marítimo/terrestre','estiba':'Carga, descarga','interes':'Intereses','viaje':'Viajes','otro':''}[this.value]||'')">
-            <option value="efectivo">Efectivo / transferencia</option>
-            <option value="arancel">Aranceles / impuestos</option>
-            <option value="flete">Flete / transporte</option>
-            <option value="estiba">Estiba / descarga</option>
-            <option value="interes">Intereses</option>
-            <option value="viaje">Viaje / desplazamiento</option>
-            <option value="otro">Otro</option>
-          </select>
-        </div>
-        <div><label class="lbl">Descripción <span id="a-hint-${c.id}" style="color:var(--color-text-info);font-size:10px"></span></label>
-          <input type="text" id="a-desc-${c.id}" placeholder="Ej: Cash Placetas, Aranceles container #3...">
-        </div>
-        <div class="g3">
-          <div><label class="lbl">Monto</label><input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0" oninput="calcEquivCli('${c.id}')"></div>
-          <div><label class="lbl">Moneda</label>
-            <select id="a-mon-${c.id}" onchange="calcEquivCli('${c.id}')">
-              <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
+  <div style="max-width:520px">
+  <div class="card" style="margin-bottom:10px;padding:10px 12px;display:flex;align-items:center;gap:12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">
+    <div style="flex:1">
+      <div style="font-size:11px;color:var(--color-text-secondary)">Deuda pendiente</div>
+      <div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">${fN(pdt)} USD</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;color:var(--color-text-secondary)">Total / Abonado</div>
+      <div style="font-size:13px">${fN(tot)} / <span style="color:var(--color-text-success)">${fN(pag)}</span> USD</div>
+    </div>
+    <div style="width:50px;height:50px;border-radius:50%;background:conic-gradient(var(--color-text-success) ${pct}%,var(--color-background-tertiary) 0);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${pct}%</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-bottom:14px">Registrar abono — ${c.nombre}</h3>
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="lbl">Fecha</label>
+          <input type="date" id="a-fecha-${c.id}" value="${today()}" style="width:100%"></div>
+        <div><label class="lbl">Folio</label>
+          <select id="a-folio-${c.id}" style="width:100%">
+            <option value="">Abono general</option>
+            ${c.folios.map(f=>`<option value="${f.id}">F${f.id} — ${fN(pdtF(f))} USD</option>`).join('')}
+          </select></div>
+      </div>
+
+      <div><label class="lbl">Concepto</label>
+        <select id="a-concepto-${c.id}" style="width:100%" onchange="document.getElementById('a-hint-${c.id}').textContent=({'efectivo':'Cash, FM...','arancel':'Aranceles, aduana','flete':'Flete marítimo/terrestre','estiba':'Carga, descarga','interes':'Intereses','viaje':'Viajes','otro':''}[this.value]||'')">
+          <option value="efectivo">Efectivo / transferencia</option>
+          <option value="arancel">Aranceles / impuestos</option>
+          <option value="flete">Flete / transporte</option>
+          <option value="estiba">Estiba / descarga</option>
+          <option value="interes">Intereses</option>
+          <option value="viaje">Viaje / desplazamiento</option>
+          <option value="otro">Otro</option>
+        </select></div>
+
+      <div><label class="lbl">Descripción <span id="a-hint-${c.id}" style="color:var(--color-text-info);font-size:10px"></span></label>
+        <input type="text" id="a-desc-${c.id}" placeholder="Ej: Cash Placetas, Aranceles container #3..." style="width:100%"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
+        <div><label class="lbl">Monto</label>
+          <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
+            oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
+        <div><label class="lbl">Moneda</label>
+          <select id="a-mon-${c.id}" onchange="calcEquivCli('${c.id}')" style="width:100%">
+            <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
+          </select></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label class="lbl">Tasa (opcional)</label>
+          <input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto"
+            oninput="calcEquivCli('${c.id}')" style="width:100%"></div>
+        <div><label class="lbl">Equiv. USD</label>
+          <input type="number" id="a-equiv-${c.id}" step="0.01"
+            style="width:100%;font-size:15px;font-weight:600;background:var(--color-background-secondary)"
+            oninput="window['em_${c.id}']=true"></div>
+      </div>
+
+      <div class="caja-section" id="cajasec-${c.id}" style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label class="lbl">Tipo de abono</label>
+            <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')" style="width:100%">
+              <option value="efectivo">💵 Efectivo</option>
+              <option value="compensacion">🔄 Compensación</option>
             </select></div>
-          <div><label class="lbl">Tasa</label><input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto" oninput="calcEquivCli('${c.id}')"></div>
+          <div id="cajasec-cta-${c.id}"><label class="lbl">Cuenta</label>
+            <select id="a-caja-${c.id}" onchange="updCajaExplicaCli('${c.id}')" style="width:100%">
+              ${_getCajasForMon(document.getElementById('a-mon-${c.id}')?.value||'USD', c.almacen||'').map(k=>'<option>'+k+'</option>').join('')}
+            </select></div>
         </div>
-        <div><label class="lbl">Equiv. USD — editable</label>
-          <input type="number" id="a-equiv-${c.id}" step="0.01" style="font-size:15px;font-weight:500;padding:8px 10px"
-            oninput="window['em_${c.id}']=true">
-        </div>
-        <div class="caja-section" id="cajasec-${c.id}">
-          <div class="g2">
-            <div><label class="lbl">Tipo de abono</label>
-              <select id="a-cajatipo-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                <option value="efectivo">💵 Efectivo — entra en caja</option>
-                <option value="compensacion">🔄 Compensación — no entra en caja</option>
-              </select></div>
-            <div id="cajasec-cta-${c.id}"><label class="lbl">Cuenta que recibe</label>
-              <select id="a-caja-${c.id}" onchange="updCajaExplicaCli('${c.id}')">
-                ${_getCajasForMon(document.getElementById('a-mon-${c.id}')?.value||'USD', c.almacen||'').map(k=>'<option>'+k+'</option>').join('')}
-              </select></div>
-          </div>
-          <div style="font-size:11px;margin-top:6px" id="cajaex-${c.id}"></div>
-        </div>
-        <div id="a-prev-${c.id}" class="prev-bar" style="display:none"></div>
-        <button class="btn btn-p" onclick="registrarAbonoCli('${c.id}')">Registrar abono</button>
+        <div style="font-size:11px" id="cajaex-${c.id}"></div>
       </div>
+
+      <div id="a-prev-${c.id}" class="prev-bar" style="display:none"></div>
+
+      <button class="btn btn-p" onclick="registrarAbonoCli('${c.id}')"
+        style="width:100%;padding:14px;font-size:14px">Registrar abono</button>
     </div>
-    <div class="card">
-      <div class="lbl">Deuda total</div>
-      <div style="font-size:clamp(16px,4vw,22px);font-weight:700;word-break:break-word">${fN(tot)} USD</div>
-      <div class="pay-bar" style="margin:8px 0"><div class="pay-bar-fill" style="width:${pct}%"></div></div>
-      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;margin-bottom:14px">
-        <span style="color:var(--color-text-success)">Abonado: <strong>${fN(pag)} USD</strong></span>
-        <span style="color:var(--color-text-danger)">Pdte: <strong>${fN(pdt)} USD</strong></span>
-      </div>
-    </div>
+  </div>
   </div>`;
   window['em_'+c.id]=false;
   window['cajaon_'+c.id]=false;
