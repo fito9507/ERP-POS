@@ -1562,6 +1562,28 @@ async function syncSaveVenta(v) {
   return false;
 }
 
+async function syncLoadMovsIG(){
+  try{
+    var _rm=await supaReq('GET','movimientos_ig?order=fecha.desc&limit=500');
+    if(!_rm.ok) return;
+    var _rd=await _rm.json()||[];
+    // Always replace MOVS with Supabase data (even if empty — clears stale cache)
+    MOVS=_rd.map(function(r){return{
+      id:r.id, fecha:r.fecha, tipo:r.tipo, desc:r.descripcion||r.desc||'',
+      monto:parseFloat(r.monto||0), mon:r.moneda||r.mon||'USD',
+      equivUSD:parseFloat(r.equiv_usd||r.monto||0),
+      cta:r.cuenta||r.cta||'',
+      sentido:(typeof TIPO_META!=='undefined'&&TIPO_META[r.tipo]?TIPO_META[r.tipo].sentido:'gasto'),
+      notas:r.notas||'', vend:r.vendedor||r.vend||'', alm:''
+    };});
+    if(_rd.length){
+      igNextId=Math.max(igNextId,_rd.reduce(function(a,r){return Math.max(a,r.id||0);},0)+1);
+    }
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+    if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
+  }catch(e){console.warn('syncLoadMovsIG:',e);}
+}
+
 async function syncLoadVentas() {
   if (!_supaOnline) return false;
   try {
@@ -1724,26 +1746,7 @@ async function supaInit() {
       showToast('✓ ' + VENTAS.length + ' ventas · ' + PRODS.length + ' productos');
     await syncLoadUsers();
     await syncLoadClientes();
-    // Load I/G movimientos from Supabase
-    try{
-      var _rm=await supaReq('GET','movimientos_ig?order=fecha.desc&limit=500');
-      if(_rm.ok){
-        var _rd=await _rm.json()||[];
-        if(_rd.length){
-          MOVS=_rd.map(function(r){return{
-            id:r.id,fecha:r.fecha,tipo:r.tipo,desc:r.descripcion||r.desc||'',
-            monto:parseFloat(r.monto||0),mon:r.moneda||r.mon||'USD',
-            equivUSD:parseFloat(r.equiv_usd||r.monto||0),
-            cta:r.cuenta||r.cta||'',
-            sentido:(TIPO_META[r.tipo]||{sentido:'gasto'}).sentido,
-            notas:r.notas||'',vend:r.vendedor||r.vend||'',alm:''
-          };});
-          igNextId=Math.max(igNextId,_rd.reduce(function(a,r){return Math.max(a,r.id||0);},0)+1);
-          try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-          if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
-        }
-      }
-    }catch(e){console.warn('load movimientos_ig:',e);}
+    await syncLoadMovsIG();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -1832,6 +1835,8 @@ function goMod(id,title,btn){
       ['ig-btn-cajas','ig-btn-deuda'].forEach(function(bid){var be=document.getElementById(bid);if(be)be.style.display=_igVend?'none':'';});
       // Load cajasData so filtrar_ig can filter by almacen
       (typeof loadCajasData==='function'?loadCajasData():Promise.resolve()).then(function(){
+        // Refresh I/G movimientos from Supabase on every open
+        if(_supaOnline&&typeof syncLoadMovsIG==='function') syncLoadMovsIG();
         try{
           if(_igVend&&USERS[S.user]){
             var _ligAlm=USERS[S.user].almacen;
