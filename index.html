@@ -1879,19 +1879,21 @@ function goMod(id,title,btn){
         // Refresh I/G movimientos from Supabase on every open
         if(_supaOnline&&typeof syncLoadMovsIG==='function') syncLoadMovsIG();
         try{
-          if(_igVend&&USERS[S.user]){
-            var _ligAlm=USERS[S.user].almacen;
-            // Rebuild l-cta options with real Supabase caja names for this alm
-            var _ligSel=document.getElementById('l-cta');
-            if(_ligSel&&_ligAlm&&_cajasData.length){
-              var _ligCajas=_cajasData.filter(function(c){return c.almacen===_ligAlm;});
-              // Replace options: keep "Todas" + add alm cajas only
-              _ligSel.innerHTML='<option value="">Mis cuentas</option>'
-                +_ligCajas.map(function(c){return '<option value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
-            }
-            // updNuevo cta options
-            if(typeof updNuevo==='function') try{updNuevo();}catch(e){}
+          // Rebuild l-cta with real caja names from Supabase
+          var _ligSel=document.getElementById('l-cta');
+          if(_ligSel&&_cajasData.length){
+            var _ligAlm=_igVend&&USERS[S.user]?USERS[S.user].almacen:'';
+            var _ligCajas=_ligAlm?_cajasData.filter(function(c){return c.almacen===_ligAlm;}):_cajasData;
+            var _firstOpt=_igVend?'<option value="">Todas mis cuentas</option>':'<option value="">Todas</option>';
+            _ligSel.innerHTML=_firstOpt
+              +_ligCajas.map(function(c){return '<option value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
           }
+          if(typeof updNuevo==='function') try{updNuevo();}catch(e){}
+          // Set default range "todo" if no dates set yet
+          var _ld=document.getElementById('l-desde');
+          var _lh=document.getElementById('l-hasta');
+          if(_ld&&!_ld.value){_ld.value='2025-01-01';}
+          if(_lh&&!_lh.value){_lh.value='2026-12-31';}
           renderLibro();
         }catch(e){renderLibro();}
       }).catch(function(){renderLibro();});
@@ -3431,9 +3433,8 @@ function filtrar_ig(){
     if(cta&&m.cta!==cta)return false;
     if(sentido&&m.sentido!==sentido)return false;
     if(q&&!m.desc.toLowerCase().includes(q)&&!(m.notas||'').toLowerCase().includes(q))return false;
-    // Vendedor only sees their alm's movs
-    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta))return false;
-    if(_almIG&&!_almCtas.length&&m.cta&&!m.cta.includes(_almIG))return false;
+    // Vendedor only sees their alm's movs (skip filter if cajas not loaded yet)
+    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG))return false;
     return true;
   });
 }
