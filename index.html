@@ -3502,7 +3502,7 @@ function renderLibro(){
         </div>
         ${m.mon!=='USD'?`<div class="mov-amt-sub">≈ ${isGasto?'−':'+'}${fN(m.equivUSD)} USD</div>`:''}
       </div>
-      <button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px;margin-left:4px" onclick="eliminar(${m.id})">×</button>
+      ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px;margin-left:4px" onclick="eliminar(${m.id})">×</button>`:''}
     </div>`;
   }).join(''):`<div style="color:var(--color-text-tertiary);font-size:12px;padding:16px 0;text-align:center">Sin movimientos con estos filtros</div>`;
 }
@@ -3678,6 +3678,9 @@ function registrar(){
 }
 
 function eliminar(id){
+  if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol!=='admin'){
+    showToast('⚠ Solo el admin puede eliminar movimientos');return;
+  }
   if(!confirm('¿Eliminar este movimiento?'))return;
   MOVS=MOVS.filter(m=>m.id!==id);
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
@@ -4200,7 +4203,7 @@ function renderFichaFolios(c){
                   <div style="font-size:12px;font-weight:500;color:var(--color-text-success)">${fN(a.monto,dFor(a.mon))} ${a.mon}</div>
                   ${a.mon!=='USD'?`<div style="font-size:10px;color:var(--color-text-tertiary)">≈${fN(a.equivUSD)} USD</div>`:''}
                 </div>
-                <button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px" onclick="elimA('${c.id}','${f.id}','${a.id}')">×</button>
+                ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px" onclick="elimA('${c.id}','${f.id}','${a.id}')">×</button>`:''}
               </div>`).join('')
             :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:6px 0">Sin abonos</div>'}
           </div>
@@ -4228,6 +4231,9 @@ function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios
 function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
 async function elimA(cid,fid,aid){
+  if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol!=='admin'){
+    showToast('⚠ Solo el admin puede eliminar abonos');return;
+  }
   const c=CLIENTES.find(x=>x.id===cid);
   const f=c?.folios.find(x=>x.id===fid);
   if(!f)return;
