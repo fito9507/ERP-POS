@@ -7125,6 +7125,7 @@ async function fetchElToqueAndSave(){
       var r1 = await supaReq('GET', 'rpc/get_eltoque_rates');
       if (r1.ok) {
         var raw1 = await r1.json();
+        console.log('elToque RPC raw:', JSON.stringify(raw1));
         // RPC returns the JSON directly: {tasas: {USD, ECU, MLC, ...}}
         if (raw1 && typeof raw1 === 'object') data = raw1;
       }
