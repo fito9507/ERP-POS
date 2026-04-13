@@ -1466,7 +1466,7 @@ function updOnlineDot() {
   ['sync-lbl','pos-sync-lbl'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=txt;});
 }
 
-window.addEventListener('online',  function() { _supaOnline = true;  updOnlineDot(); flushQueue(); });
+window.addEventListener('online',  function() { _supaOnline = true; updOnlineDot(); showToast('📶 Conexión restaurada — sincronizando...'); flushQueue(); });
 window.addEventListener('offline', function() { _supaOnline = false; updOnlineDot(); });
 
 function enqueue(op) {
@@ -1528,13 +1528,18 @@ async function flushQueue() {
   if (_syncQueue.length > 0) {
     try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(e) {}
   } else {
-    // All flushed — reload all data
-    if (typeof syncLoadVentas === 'function') await syncLoadVentas();
-    if (typeof syncLoadMovsIG === 'function') await syncLoadMovsIG();
-    if (typeof loadCajasData === 'function') await loadCajasData();
-    if (typeof syncLoadClientes === 'function') syncLoadClientes();
+    // All flushed — reload all data from Supabase
+    var _reloads = [];
+    if (typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
+    if (typeof syncLoadMovsIG === 'function') _reloads.push(syncLoadMovsIG());
+    if (typeof loadCajasData === 'function') _reloads.push(loadCajasData());
+    if (typeof syncLoadClientes === 'function') _reloads.push(syncLoadClientes());
+    await Promise.all(_reloads);
+    // Refresh any open views
+    if(typeof renderLibro==='function') try{renderLibro();}catch(e){}
+    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+    if(typeof renderLista==='function') try{renderLista();}catch(e){}
     showToast('✓ Datos sincronizados con Supabase');
-    localStorage.removeItem('erp_queue');
   }
   updOnlineDot();
 }
@@ -2042,28 +2047,37 @@ async function _supaUpsert(table, idCol, idVal, body){
 }
 
 async function syncSaveCliente(c){
-  if(!_supaOnline||typeof supaReq==='undefined') return;
   var body={id:c.id, nombre:c.nombre, telefono:c.tel||'',
     almacen:c.alm||'', color:c.color||'info',
     notas:c.notas||'', owner:c.owner||'Admin', activo:true};
+  if(!_supaOnline||typeof supaReq==='undefined'){
+    enqueue({method:'POST',path:'clientes?on_conflict=id',body:body});
+    return;
+  }
   await _supaUpsert('clientes','id',c.id,body);
 }
 
 async function syncSaveFolio(cliId, f){
-  if(!_supaOnline||typeof supaReq==='undefined') return;
   var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
     almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[]};
   if(f.mon) body.moneda=f.mon;
+  if(!_supaOnline||typeof supaReq==='undefined'){
+    enqueue({method:'POST',path:'folios?on_conflict=id',body:body});
+    return;
+  }
   await _supaUpsert('folios','id',f.id,body);
 }
 
 async function syncSaveAbono(cliId, folioId, ab){
-  if(!_supaOnline||typeof supaReq==='undefined') return;
   var body={id:ab.id, folio_id:folioId, cliente_id:cliId,
     fecha:ab.fecha, concepto:ab.concepto||'',
-    descripcion:ab.desc||'', monto:ab.monto||0,
-    moneda:ab.mon||'USD', equiv_usd:ab.equivUSD||0,
+    descripcion:ab.desc||'', monto:parseFloat((ab.monto||0).toFixed(4)),
+    moneda:ab.mon||'USD', equiv_usd:parseFloat((ab.equivUSD||0).toFixed(4)),
     en_caja:ab.enCaja||false, caja:ab.caja||'', caja_tipo:ab.cajaTipo||''};
+  if(!_supaOnline||typeof supaReq==='undefined'){
+    enqueue({method:'POST',path:'abonos?on_conflict=id',body:body});
+    return;
+  }
   await _supaUpsert('abonos','id',ab.id,body);
 }
 
@@ -6892,10 +6906,9 @@ function offlineAutoSave() {
     offlineSaveVentas();
     offlineSaveProds();
     offlineSaveClientes();
-    // Save I/G movimientos locally
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-    // Save cajas movimientos locally
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify((_cajasMovs||[]).slice(0,200)));}catch(e){}
+    if(!_supaOnline && _syncQueue.length>0) showOfflineBanner(_syncQueue.length);
   }, 2000);
 }
 
