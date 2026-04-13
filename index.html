@@ -550,6 +550,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   .adm-tab{font-size:11px!important;padding:6px 10px!important;min-height:36px!important}
 
   /* ══ MÓDULO VENTAS ══ */
+  /* Table compact for mobile */
+  #mod-ventas .adm-table-wrap, #mod-ventas>div>div>div.card>div{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  #mod-ventas table{min-width:480px}
+  #mod-ventas table th,#mod-ventas table td{padding:5px 5px!important;font-size:10px!important}
   #mod-ventas .adm-table{min-width:560px}
   #mod-ventas .frow .ff{min-width:calc(50% - 4px)!important}
   /* Filtros de ventas en 2 cols */
@@ -901,52 +905,52 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <!-- ══ REGISTRO VENTAS ══ -->
 <div class="page act" id="ventas">
   <div class="fbar">
-    <div class="frow">
-      <div class="ff"><label class="lbl">Desde</label><input type="date" id="f-desde" oninput="_dRender(renderVentas)"></div>
-      <div class="ff"><label class="lbl">Hasta</label><input type="date" id="f-hasta" oninput="_dRender(renderVentas)"></div>
-      <div class="ff"><label class="lbl">Vendedor</label>
-        <select id="f-vend" onchange="renderVentas()">
+    <!-- Fechas rápidas -->
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+      <button class="btn-sm" onclick="setRange('hoy')">Hoy</button>
+      <button class="btn-sm" onclick="setRange('semana')">Semana</button>
+      <button class="btn-sm" onclick="setRange('mes')">Mes</button>
+      <button class="btn-sm" onclick="setRange('todo')">Todo</button>
+      <button class="btn-sm" onclick="limpiarFiltros()">✕</button>
+      <div id="adm-com-bar" style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--color-text-secondary)">% com:</span>
+        <input type="number" id="com-global" value="4" min="0" max="100" step="0.5" style="width:52px;font-size:11px;padding:3px 5px">
+        <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar</button>
+      </div>
+      <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()">📥</button>
+    </div>
+    <!-- Filtros en grid 2 cols -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div><label class="lbl">Desde</label>
+        <input type="date" id="f-desde" oninput="_dRender(renderVentas)" style="width:100%"></div>
+      <div><label class="lbl">Hasta</label>
+        <input type="date" id="f-hasta" oninput="_dRender(renderVentas)" style="width:100%"></div>
+      <div><label class="lbl">Vendedor</label>
+        <select id="f-vend" onchange="renderVentas()" style="width:100%">
           <option value="">Todos</option><option>Keiler</option><option>Padre</option>
         </select></div>
-      <div class="ff"><label class="lbl">Almacén</label>
-        <select id="f-alm" onchange="renderVentas()">
+      <div><label class="lbl">Almacén</label>
+        <select id="f-alm" onchange="renderVentas()" style="width:100%">
           <option value="">Todos</option><option>Habana</option><option>Placetas</option>
         </select></div>
-      <div class="ff"><label class="lbl">Tipo</label>
-        <select id="f-tipo" onchange="renderVentas()">
+      <div><label class="lbl">Tipo</label>
+        <select id="f-tipo" onchange="renderVentas()" style="width:100%">
           <option value="">Todos</option><option>Minorista</option><option>Mayorista</option>
         </select></div>
-      <div class="ff"><label class="lbl">Moneda</label>
-        <select id="f-mon" onchange="renderVentas()">
+      <div><label class="lbl">Moneda cobro</label>
+        <select id="f-mon" onchange="renderVentas()" style="width:100%">
           <option value="">Todas</option><option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
         </select></div>
-      <div class="ff"><label class="lbl">Est. comisión</label>
-        <select id="f-estcom" onchange="renderVentas()">
+      <div><label class="lbl">Est. comisión</label>
+        <select id="f-estcom" onchange="renderVentas()" style="width:100%">
           <option value="">Todas</option><option>Pendiente</option><option>Pagada</option><option>No aplica</option>
         </select></div>
-      <div class="ff"><label class="lbl">Producto</label>
-        <input id="f-prod" placeholder="Buscar..." oninput="_dRender(renderVentas)" style="min-width:130px"></div>
-    </div>
-    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">
-      <button class="btn-sm" onclick="setRange('hoy')">Hoy</button>
-      <button class="btn-sm" onclick="setRange('semana')">Esta semana</button>
-      <button class="btn-sm" onclick="setRange('mes')">Este mes</button>
-      <button class="btn-sm" onclick="setRange('todo')">Todo</button>
-      <button class="btn-sm" onclick="limpiarFiltros()">✕ Limpiar</button>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <div id="adm-com-bar" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--color-text-secondary)">% com. global:</span>
-          <input type="number" id="com-global" value="4" min="0" max="100" step="0.5"
-            style="width:58px;font-size:11px;padding:3px 6px">
-          <span style="font-size:11px;color:var(--color-text-secondary)">%</span>
-          <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar a selección</button>
-        </div>
-        <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()">Exportar CSV</button>
-      </div>
+      <div><label class="lbl">Producto</label>
+        <input id="f-prod" placeholder="Buscar..." oninput="_dRender(renderVentas)" style="width:100%"></div>
     </div>
   </div>
 
-  <div class="g5" id="v-metrics"></div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px" id="v-metrics"></div>
 
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -2844,19 +2848,19 @@ function renderVentas(){
   document.getElementById('v-body').innerHTML=data.length?data.map(v=>`
     <tr id="vrow-${v.id}">
       <td style="${_isVend?'display:none':''}"><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
-      <td>${fD(v.fecha)}</td>
-      <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'}">${v.vend}</span></td>
-      <td>${v.alm}</td>
-      <td style="font-size:11px;color:var(--color-text-secondary)">${v.cli}</td>
-      <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}">${v.tipo}</span></td>
-      <td style="font-size:10px;max-width:130px;color:var(--color-text-secondary)">${v.prods}</td>
-      <td style="font-weight:500;text-align:right">${fN(v.totalUSD)}</td>
-      <td style="font-size:11px;white-space:nowrap;color:var(--color-text-info)">${(function(){var pp=v.pagos&&v.pagos.length?v.pagos:[{mon:v.mon}];var mons=[...new Set(pp.map(function(p){return p.mon;}))];return mons.join(' + ');}())}</td>
+      <td style="white-space:nowrap">${fD(v.fecha)}</td>
+      <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
+      <td style="font-size:11px">${v.alm}</td>
+      <td style="font-size:11px;color:var(--color-text-secondary);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.cli}</td>
+      <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo[0]}</span></td>
+      <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.prods}</td>
+      <td style="font-weight:600;text-align:right;white-space:nowrap">${fN(v.totalUSD)}</td>
+      <td style="font-size:11px;white-space:nowrap;color:var(--color-text-info)">${(function(){var pp=v.pagos&&v.pagos.length?v.pagos:[{mon:v.mon}];var mons=[...new Set(pp.map(function(p){return p.mon;}))];return mons.join('+');}())}</td>
       <td class="td-com" style="display:none"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
       <td class="td-com" style="display:none;text-align:right;font-weight:500">${fN(v.comUSD)}</td>
       <td class="td-com" style="display:none">${renderEstComCell(v)}</td>
-      <td style="font-size:11px;overflow:hidden;max-width:120px;color:var(--color-text-secondary)">${v.nota||''}</td>
-      <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="margin-right:4px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger)">×</button>'}</td>
+      <td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.nota||''}</td>
+      <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="padding:3px 6px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger);padding:3px 6px">×</button>'}</td>
     </tr>`).join(''):`<tr><td colspan="13" style="text-align:center;color:var(--color-text-tertiary);padding:16px">Sin resultados</td></tr>`;
 
   // foot totales
@@ -3389,24 +3393,33 @@ function navTo_ig(pg,btn){
 // ── FECHAS ────────────────────────────────────────────────
 function setR(r){
   const d=new Date(),fmt=x=>x.toISOString().slice(0,10);
+  const elDesde=document.getElementById('l-desde');
+  const elHasta=document.getElementById('l-hasta');
+  if(!elDesde||!elHasta) return; // elements not in DOM yet
   let desde,hasta=fmt(d);
   if(r==='hoy')desde=fmt(d);
   else if(r==='semana'){const s=new Date(d);s.setDate(d.getDate()-((d.getDay()||7)-1));desde=fmt(s);}
   else if(r==='mes')desde=fmt(new Date(d.getFullYear(),d.getMonth(),1));
-  else if(r==='limpiar'){desde='';hasta='';['l-tipo','l-cta','l-sentido'].forEach(id=>document.getElementById(id).value='');document.getElementById('l-q').value='';}
+  else if(r==='limpiar'){
+    desde='';hasta='';
+    ['l-tipo','l-cta','l-sentido'].forEach(id=>{var e=document.getElementById(id);if(e)e.value='';});
+    var lq=document.getElementById('l-q');if(lq)lq.value='';
+    elDesde.value='';elHasta.value='';
+    renderLibro();return;
+  }
   else{desde='2025-01-01';hasta='2026-12-31';}
-  if(r!=='limpiar'){document.getElementById('l-desde').value=desde;document.getElementById('l-hasta').value=hasta;}
+  elDesde.value=desde;elHasta.value=hasta;
   renderLibro();
 }
 
 // ── FILTRAR ───────────────────────────────────────────────
 function filtrar_ig(){
-  const desde=document.getElementById('l-desde').value;
-  const hasta=document.getElementById('l-hasta').value;
-  const tipo=document.getElementById('l-tipo').value;
-  const cta=document.getElementById('l-cta').value;
-  const sentido=document.getElementById('l-sentido').value;
-  const q=(document.getElementById('l-q').value||'').toLowerCase();
+  const desde=(document.getElementById('l-desde')||{}).value||'';
+  const hasta=(document.getElementById('l-hasta')||{}).value||'';
+  const tipo=(document.getElementById('l-tipo')||{}).value||'';
+  const cta=(document.getElementById('l-cta')||{}).value||'';
+  const sentido=(document.getElementById('l-sentido')||{}).value||'';
+  const q=((document.getElementById('l-q')||{}).value||'').toLowerCase();
   // Vendedor: filter by their almacen's cajas
   var _isVendIG=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
   var _almIG=_isVendIG&&USERS[S.user]?USERS[S.user].almacen:'';
