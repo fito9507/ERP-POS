@@ -1476,6 +1476,26 @@ function enqueue(op) {
   try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(e) {}
 }
 
+// Write to Supabase if online, otherwise enqueue for later
+function _supaWrite(method, path, body) {
+  if (_supaOnline && typeof supaReq === 'function') {
+    return supaReq(method, path, body).then(function(r){
+      if(!r.ok) r.text().then(function(t){
+        console.warn('supaWrite error',path,t);
+        // If it failed, enqueue for retry
+        enqueue({method:method, path:path, body:body});
+      });
+      return r;
+    }).catch(function(e){
+      console.warn('supaWrite offline fallback:',e);
+      enqueue({method:method, path:path, body:body});
+    });
+  } else {
+    enqueue({method:method, path:path, body:body});
+    return Promise.resolve({ok:false, queued:true});
+  }
+}
+
 function loadQueue() {
   try {
     var q = localStorage.getItem('erp_queue');
@@ -1508,9 +1528,13 @@ async function flushQueue() {
   if (_syncQueue.length > 0) {
     try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(e) {}
   } else {
-    // All flushed - reload ventas to get Supabase IDs
+    // All flushed — reload all data
     if (typeof syncLoadVentas === 'function') await syncLoadVentas();
-    showToast('✓ Ventas offline sincronizadas');
+    if (typeof syncLoadMovsIG === 'function') await syncLoadMovsIG();
+    if (typeof loadCajasData === 'function') await loadCajasData();
+    if (typeof syncLoadClientes === 'function') syncLoadClientes();
+    showToast('✓ Datos sincronizados con Supabase');
+    localStorage.removeItem('erp_queue');
   }
   updOnlineDot();
 }
@@ -3558,15 +3582,13 @@ function registrar(){
   // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
   if(typeof _supaOnline!=='undefined'&&_supaOnline&&typeof supaReq!=='undefined'){
     // Schema: descripcion, moneda, cuenta, vendedor (confirmed from Supabase)
-    supaReq('POST','movimientos_ig',{
+    _supaWrite('POST','movimientos_ig',{
       fecha:mov.fecha, tipo:mov.tipo, descripcion:mov.desc,
       monto:parseFloat(parseFloat(mov.monto).toFixed(4)),
       moneda:mov.mon,
       equiv_usd:parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
       cuenta:mov.cta, vendedor:mov.vend||'', notas:mov.notas||''
-    }).then(async function(r){
-      if(!r.ok){var t=await r.text();console.warn('I/G:',t);showToast('⚠ Error I/G: '+t.substring(0,80));}
-    }).catch(function(e){console.warn('I/G:',e);});
+    });
     // If transferencia, also save the entrada entry
     if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1&&MOVS[0].sentido==='ingreso'){
       var _e=MOVS[0];
@@ -3591,25 +3613,16 @@ function registrar(){
           caja_origen:null, caja_destino:mov.cta,
           monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       }
-      supaReq('POST','mov_cajas',_mcRow).then(async function(r){
-        if(r.ok){
-          var _saved=await r.json();
-          if(_saved&&_saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(_saved[0]);
-        } else {
-          var _et=await r.text();
-          console.warn('mov_cajas I/G 400:',_et);
-          showToast('⚠ Error caja: '+_et.substring(0,60));
-        }
-      }).catch(function(e){console.warn('mov_cajas I/G:',e);});
+      _cajasMovs.unshift(_mcRow); // optimistic local update
+      _supaWrite('POST','mov_cajas',_mcRow);
     }
   } else if(mov.tipo!=='Transferencia entre cuentas'){
-    // Offline: update local _cajasMovs so Mi Caja stays in sync
-    if(typeof _cajasMovs!=='undefined'){
-      var _localMC=mov.sentido==='gasto'
-        ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,caja_destino:null,monto_origen:mov.monto,monto_destino:mov.monto}
-        :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:null,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
-      _cajasMovs.unshift(_localMC);
-    }
+    // Offline: update local + queue
+    var _localMC=mov.sentido==='gasto'
+      ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,caja_destino:null,monto_origen:mov.monto,monto_destino:mov.monto}
+      :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:null,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
+    _cajasMovs.unshift(_localMC);
+    enqueue({method:'POST',path:'mov_cajas',body:_localMC});
   }
   // mostrar en recientes
   const rc=document.getElementById('nuevo-recientes');
@@ -4417,11 +4430,11 @@ function registrarAbonoCli(cid){
     };
     MOVS.push(igMov);
     if(_supaOnline&&typeof supaReq!=='undefined'){
-      supaReq('POST','movimientos_ig',{
+      _supaWrite('POST','movimientos_ig',{
         fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
         monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
         cuenta:igCta,vendedor:'',notas:''
-      }).catch(function(e){console.warn('I/G abono:',e);});
+      });
     }
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
@@ -4436,21 +4449,10 @@ function registrarAbonoCli(cid){
       monto_destino:equivUSD,
       tasa_usada:null
     };
-    _cajasMovs.unshift(_cajaMov);
-    if(_supaOnline&&typeof supaReq!=='undefined'){
-      supaReq('POST','mov_cajas',_cajaMov).then(async function(r){
-        if(!r.ok){
-          var errTxt=await r.text();
-          console.warn('mov_cajas abono 400:',errTxt);
-          showToast('⚠ Error caja: '+errTxt.substring(0,80));
-        } else {
-          var saved=await r.json();
-          if(saved&&saved[0]) _cajasMovs[0]=saved[0];
-          var _newSaldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(caja):null;
-          if(_newSaldo!==null) showToast('✓ Caja '+caja+': '+fN(_newSaldo,2));
-        }
-      }).catch(function(e){console.warn('mov_cajas abono:',e);});
-    }
+    _cajasMovs.unshift(_cajaMov); // optimistic local update
+    _supaWrite('POST','mov_cajas',_cajaMov);
+    var _newSaldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(caja):null;
+    if(_newSaldo!==null) showToast('✓ Caja '+caja+': '+fN(_newSaldo,2));
   }
   (async function(){
     await syncSaveAbono(cid, target.id, abono);
@@ -5358,7 +5360,7 @@ function _updEurUsd() {
 // MÓDULO CAJAS ADMIN — saldo_inicial + movimientos
 // ═══════════════════════════════════════════════════════════════
 var _cajasData = [];
-var _cajasMovs = [];
+var _cajasMovs = (function(){try{return JSON.parse(localStorage.getItem('erp_cajas_movs')||'[]');}catch(e){return[];}})();
 var _cajasTab  = 'resumen'; // resumen | movimiento | historial | gestionar
 
 async function loadCajasData() {
@@ -6109,14 +6111,16 @@ async function updateCajasFromVenta(pagos, vueltos, alm) {
         tasa_usada: null
       };
       try {
-        var r = await supaReq('POST', 'mov_cajas', row);
-        if (!r.ok) {
-          var errText = await r.text();
-          console.warn('mov_cajas pago 400:', errText);
-          showToast('⚠ Error caja: ' + errText.substring(0,80));
+        _cajasMovs.unshift(row); // optimistic
+        if(_supaOnline){
+          var r = await supaReq('POST', 'mov_cajas', row);
+          if (!r.ok) {
+            var errText = await r.text();
+            console.warn('mov_cajas pago 400:', errText);
+            enqueue({method:'POST',path:'mov_cajas',body:row});
+          }
         } else {
-          var saved = await r.json();
-          if (saved&&saved[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(saved[0]);
+          enqueue({method:'POST',path:'mov_cajas',body:row});
         }
       } catch(e) { console.warn('updateCajasFromVenta pago:', e); }
     }
@@ -6871,6 +6875,10 @@ function offlineAutoSave() {
     offlineSaveVentas();
     offlineSaveProds();
     offlineSaveClientes();
+    // Save I/G movimientos locally
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+    // Save cajas movimientos locally
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify((_cajasMovs||[]).slice(0,200)));}catch(e){}
   }, 2000);
 }
 
