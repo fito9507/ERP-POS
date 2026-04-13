@@ -1104,9 +1104,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     <!-- Filtros detallados en grid responsive -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <div><label class="lbl">Desde</label>
-        <input type="date" id="l-desde" oninput="_dRender(renderLibro)" style="width:100%"></div>
+        <input type="date" id="ig-desde" oninput="_dRender(renderLibro)" style="width:100%"></div>
       <div><label class="lbl">Hasta</label>
-        <input type="date" id="l-hasta" oninput="_dRender(renderLibro)" style="width:100%"></div>
+        <input type="date" id="ig-hasta" oninput="_dRender(renderLibro)" style="width:100%"></div>
       <div><label class="lbl">Tipo</label>
         <select id="l-tipo" onchange="renderLibro()" style="width:100%">
           <option value="">Todos</option>
@@ -1890,8 +1890,8 @@ function goMod(id,title,btn){
           }
           if(typeof updNuevo==='function') try{updNuevo();}catch(e){}
           // Set default range "todo" if no dates set yet
-          var _ld=document.getElementById('l-desde');
-          var _lh=document.getElementById('l-hasta');
+          var _ld=document.getElementById('ig-desde');
+          var _lh=document.getElementById('ig-hasta');
           if(_ld&&!_ld.value){_ld.value='2025-01-01';}
           if(_lh&&!_lh.value){_lh.value='2026-12-31';}
           renderLibro();
@@ -3395,8 +3395,8 @@ function navTo_ig(pg,btn){
 // ── FECHAS ────────────────────────────────────────────────
 function setR(r){
   const d=new Date(),fmt=x=>x.toISOString().slice(0,10);
-  const elDesde=document.getElementById('l-desde');
-  const elHasta=document.getElementById('l-hasta');
+  const elDesde=document.getElementById('ig-desde');
+  const elHasta=document.getElementById('ig-hasta');
   if(!elDesde||!elHasta) return; // elements not in DOM yet
   let desde,hasta=fmt(d);
   if(r==='hoy')desde=fmt(d);
@@ -3416,8 +3416,8 @@ function setR(r){
 
 // ── FILTRAR ───────────────────────────────────────────────
 function filtrar_ig(){
-  const desde=(document.getElementById('l-desde')||{}).value||'';
-  const hasta=(document.getElementById('l-hasta')||{}).value||'';
+  const desde=(document.getElementById('ig-desde')||{}).value||'';
+  const hasta=(document.getElementById('ig-hasta')||{}).value||'';
   const tipo=(document.getElementById('l-tipo')||{}).value||'';
   const cta=(document.getElementById('l-cta')||{}).value||'';
   const sentido=(document.getElementById('l-sentido')||{}).value||'';
