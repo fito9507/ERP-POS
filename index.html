@@ -1865,11 +1865,24 @@ function goMod(id,title,btn){
   if(_gtb)_gtb.style.display=(id==='mod-pos')?'none':'';
   if(id==='mod-ventas'&&typeof renderVentas==='function'){try{
     // Auto-filter for vendedor
-    if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor'){
+    var _isVendV=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+    if(_isVendV){
       const fv=document.getElementById('f-vend');if(fv)fv.value=S.user;
+      // Vendedor: go to Mi Caja tab, admin: go to ventas tab
+      var _mcBtn=document.getElementById('btn-micaja-nav');
+      if(_mcBtn&&_mcBtn.style.display!=='none'&&typeof navTo_ven==='function'){
+        navTo_ven('micaja',_mcBtn);
+      } else {
+        var _firstVBtn=document.querySelector('#ven-nav button');
+        if(_firstVBtn&&typeof navTo_ven==='function') _firstVBtn.click();
+        else renderVentas();
+      }
+    } else {
+      var _firstVBtn=document.querySelector('#ven-nav button');
+      if(_firstVBtn) _firstVBtn.click();
+      else renderVentas();
     }
-    renderVentas();
-  }catch(e){}}
+  }catch(e){try{renderVentas();}catch(e2){}}}
   if(id==='mod-ig'&&typeof renderLibro==='function'){
     try{
       // Hide/show admin-only tabs based on role
@@ -1895,14 +1908,34 @@ function goMod(id,title,btn){
           var _lh=document.getElementById('ig-hasta');
           if(_ld&&!_ld.value){_ld.value='2025-01-01';}
           if(_lh&&!_lh.value){_lh.value='2026-12-31';}
-          renderLibro();
+          // Activate first visible tab
+          var _igFirstBtn=document.querySelector('#ig-nav button:not([style*="display:none"])');
+          if(_igFirstBtn&&!_igFirstBtn.classList.contains('act')){
+            _igFirstBtn.classList.add('act');
+            var _igFirstPg=_igFirstBtn.getAttribute('onclick').match(/navTo_ig\('([^']+)'/);
+            if(_igFirstPg&&typeof navTo_ig==='function') navTo_ig(_igFirstPg[1],_igFirstBtn);
+          } else renderLibro();
         }catch(e){renderLibro();}
       }).catch(function(){renderLibro();});
     }catch(e){try{renderLibro();}catch(e2){}}
   }
-  if(id==='mod-cli'&&typeof renderLista==='function'){try{renderLista();}catch(e){}}
-  if(id==='mod-admin'&&typeof renderAdmin==='function'){try{renderAdmin();}catch(e){console.error('renderAdmin error:',e);}}
-  if(id==='mod-stock'&&typeof renderStock==='function'){try{renderStock();}catch(e){}}
+  if(id==='mod-cli'&&typeof renderLista==='function'){try{
+    var _cliFirstBtn=document.querySelector('#main-nav button');
+    if(_cliFirstBtn) _cliFirstBtn.click();
+    else renderLista();
+  }catch(e){try{renderLista();}catch(e2){}}}
+  if(id==='mod-admin'&&typeof renderAdmin==='function'){try{
+    renderAdmin();
+    setTimeout(function(){
+      var _admFirstBtn=document.querySelector('#mod-admin .nav button, #mod-admin .adm-nav button');
+      if(_admFirstBtn&&!_admFirstBtn.classList.contains('act')) _admFirstBtn.click();
+    },50);
+  }catch(e){console.error('renderAdmin error:',e);}}
+  if(id==='mod-stock'&&typeof renderStock==='function'){try{
+    var _stFirstBtn=document.querySelector('#mod-stock .nav button');
+    if(_stFirstBtn&&!_stFirstBtn.classList.contains('act')) _stFirstBtn.click();
+    else renderStock();
+  }catch(e){try{renderStock();}catch(e2){}}}
   if(id==='mod-backup'&&typeof renderBackup==='function'){try{renderBackup();}catch(e){}}
   if(id==='mod-prestamos'&&typeof renderPrestamos==='function'){try{renderPrestamos();}catch(e){}}
 }
