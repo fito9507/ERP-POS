@@ -1908,13 +1908,9 @@ function goMod(id,title,btn){
           var _lh=document.getElementById('ig-hasta');
           if(_ld&&!_ld.value){_ld.value='2025-01-01';}
           if(_lh&&!_lh.value){_lh.value='2026-12-31';}
-          // Activate first visible tab
-          var _igFirstBtn=document.querySelector('#ig-nav button:not([style*="display:none"])');
-          if(_igFirstBtn&&!_igFirstBtn.classList.contains('act')){
-            _igFirstBtn.classList.add('act');
-            var _igFirstPg=_igFirstBtn.getAttribute('onclick').match(/navTo_ig\('([^']+)'/);
-            if(_igFirstPg&&typeof navTo_ig==='function') navTo_ig(_igFirstPg[1],_igFirstBtn);
-          } else renderLibro();
+          // Always activate libro tab (first tab) explicitly
+          if(typeof navTo_ig==='function') navTo_ig('libro', document.querySelector('#ig-nav button'));
+          else renderLibro();
         }catch(e){renderLibro();}
       }).catch(function(){renderLibro();});
     }catch(e){try{renderLibro();}catch(e2){}}
