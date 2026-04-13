@@ -5451,8 +5451,9 @@ async function loadCajasData() {
     if (_supaOnline) {
       var rc = await supaReq('GET', 'cajas?order=almacen.asc,moneda.asc&activa=eq.true');
       if (rc.ok) { var d = await rc.json(); if (d && d.length) _cajasData = d; else _cajasData = _cajasFromLocal(); }
-      var rm = await supaReq('GET', 'mov_cajas?order=created_at.desc&limit=500');
-      if (rm.ok) _cajasMovs = await rm.json() || [];
+      var rm = await supaReq('GET', 'mov_cajas?order=created_at.desc&limit=2000');
+      if (rm.ok) { _cajasMovs = await rm.json() || [];
+        try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){} }
     } else {
       _cajasData = _cajasFromLocal();
     }
@@ -5469,9 +5470,12 @@ function _getSaldoCaja(cajaId) {
   var caja = _cajasData.find(function(c){return c.id==cajaId||c.nombre==cajaId;});
   if (!caja) return 0;
   var saldo = parseFloat(caja.saldo_inicial||0);
+  var nombre = caja.nombre;
   _cajasMovs.forEach(function(m){
-    var esOrigen  = (m.caja_origen  == caja.nombre || m.caja_origen_id  == caja.id);
-    var esDestino = (m.caja_destino == caja.nombre || m.caja_destino_id == caja.id);
+    var orig = (m.caja_origen||'').trim();
+    var dest = (m.caja_destino||'').trim();
+    var esOrigen  = orig===nombre || orig==caja.id || m.caja_origen_id==caja.id;
+    var esDestino = dest===nombre || dest==caja.id || m.caja_destino_id==caja.id;
     if (esOrigen)  saldo -= parseFloat(m.monto_origen||0);
     if (esDestino) saldo += parseFloat(m.monto_destino||0);
   });
@@ -7080,8 +7084,60 @@ function _loadRatesCache() {
 _loadRatesCache();
 
 // Auto-refresh: fetch on load + every 30 minutes
+// ── elToque API ──────────────────────────────────────────────
+async function fetchElToqueAndSave(){
+  showToast('🔄 Actualizando tasas elToque...');
+  try {
+    // Use a CORS proxy since elToque blocks direct browser requests
+    var urls = [
+      'https://el-toque-proxy.vercel.app/api/rates',
+      'https://api.el-toque.com/v2/rates',
+      'https://tasas.eltoque.com/v1/trmi'
+    ];
+    var data = null;
+    for (var i=0; i<urls.length; i++) {
+      try {
+        var r = await fetch(urls[i], {headers:{'Accept':'application/json'}});
+        if (r.ok) { data = await r.json(); break; }
+      } catch(e) { continue; }
+    }
+    if (!data) throw new Error('No se pudo conectar con elToque');
+
+    // elToque returns rates in different formats — handle both
+    var cup  = parseFloat(data.USD || data.usd || data.CUP || data.cup || (data.rates&&data.rates.USD) || 0);
+    var eur  = parseFloat(data.EUR || data.eur || (data.rates&&data.rates.EUR) || 0);
+    var cupt = parseFloat(data.MLC || data.mlc || data.CUPT || data.cupt || (data.rates&&data.rates.MLC) || 0);
+
+    if (!cup || cup < 10) throw new Error('Respuesta inválida de elToque: ' + JSON.stringify(data).substring(0,100));
+
+    // Save market rates
+    var mkt = {CUP: cup, EUR: eur||cup, CUPT: cupt||cup, ts: Date.now()};
+    try { localStorage.setItem('erp_rates_mkt', JSON.stringify(mkt)); } catch(e) {}
+
+    // Update RATES with market values (user can still apply manual adj)
+    RATES.CUP  = cup;
+    if (eur > 0) RATES.EUR = parseFloat((cup / eur).toFixed(6));
+    if (cupt > 0) RATES.CUPT = cupt;
+
+    showToast('✓ elToque: USD/CUP ' + fN(cup,0) + (eur?' · EUR/CUP '+fN(eur,0):''));
+    renderAdminTasas();
+    return mkt;
+  } catch(e) {
+    console.warn('fetchElToqueAndSave:', e);
+    showToast('⚠ elToque no disponible: ' + e.message.substring(0,60));
+    return null;
+  }
+}
+
 window.addEventListener('load', function() {
-  // fetchTasasElToque not available in this build
+  // Auto-fetch elToque on load if rates are stale (>1 hour)
+  setTimeout(function(){
+    try {
+      var mkt = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}');
+      var age = mkt.ts ? (Date.now()-mkt.ts)/1000/60 : 999;
+      if (age > 60) fetchElToqueAndSave();
+    } catch(e) {}
+  }, 3000); // wait 3s after load
 });
 
 
