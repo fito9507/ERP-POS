@@ -3594,8 +3594,8 @@ function registrar(){
   // Save to localStorage
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
   // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
-  if(typeof _supaOnline!=='undefined'&&_supaOnline&&typeof supaReq!=='undefined'){
-    // Schema: descripcion, moneda, cuenta, vendedor (confirmed from Supabase)
+  if(typeof supaReq!=='undefined'){
+    // Schema: descripcion, moneda, cuenta, vendedor — _supaWrite handles offline queue
     _supaWrite('POST','movimientos_ig',{
       fecha:mov.fecha, tipo:mov.tipo, descripcion:mov.desc,
       monto:parseFloat(parseFloat(mov.monto).toFixed(4)),
@@ -3615,28 +3615,19 @@ function registrar(){
     if(mov.tipo!=='Transferencia entre cuentas'){
       var _mcRow;
       if(mov.sentido==='gasto'){
-        // retiro: caja_origen=cta, caja_destino=null
         _mcRow={tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
           usuario:(typeof S!=='undefined'&&S.user)||'Admin',
           caja_origen:mov.cta, caja_destino:null,
           monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       } else {
-        // deposito: caja_origen=null, caja_destino=cta (same schema as admRegistrarMovCaja)
         _mcRow={tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
           usuario:(typeof S!=='undefined'&&S.user)||'Admin',
           caja_origen:null, caja_destino:mov.cta,
           monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       }
-      _cajasMovs.unshift(_mcRow); // optimistic local update
-      _supaWrite('POST','mov_cajas',_mcRow);
+      _cajasMovs.unshift(_mcRow); // optimistic local
+      _supaWrite('POST','mov_cajas',_mcRow); // enqueues if offline
     }
-  } else if(mov.tipo!=='Transferencia entre cuentas'){
-    // Offline: update local + queue
-    var _localMC=mov.sentido==='gasto'
-      ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,caja_destino:null,monto_origen:mov.monto,monto_destino:mov.monto}
-      :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:null,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
-    _cajasMovs.unshift(_localMC);
-    enqueue({method:'POST',path:'mov_cajas',body:_localMC});
   }
   // mostrar en recientes
   const rc=document.getElementById('nuevo-recientes');
@@ -3666,8 +3657,11 @@ function eliminar(id){
   if(!confirm('¿Eliminar este movimiento?'))return;
   MOVS=MOVS.filter(m=>m.id!==id);
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-  if(typeof _supaOnline!=='undefined'&&_supaOnline&&typeof supaReq!=='undefined'){
+  // Delete from Supabase (or enqueue if offline)
+  if(_supaOnline&&typeof supaReq!=='undefined'){
     supaReq('DELETE','movimientos_ig?id=eq.'+id).catch(function(e){console.warn('I/G delete:',e);});
+  } else {
+    enqueue({method:'DELETE',path:'movimientos_ig?id=eq.'+id,body:null});
   }
   renderLibro();
 }
@@ -4460,13 +4454,12 @@ function registrarAbonoCli(cid){
       cta: igCta, sentido: igSentido, notas: ''
     };
     MOVS.push(igMov);
-    if(_supaOnline&&typeof supaReq!=='undefined'){
-      _supaWrite('POST','movimientos_ig',{
-        fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
-        monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
-        cuenta:igCta,vendedor:'',notas:''
-      });
-    }
+    // Always write — _supaWrite handles online/offline queuing
+    _supaWrite('POST','movimientos_ig',{
+      fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
+      monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
+      cuenta:igCta,vendedor:'',notas:''
+    });
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
   if(enCaja&&caja){
