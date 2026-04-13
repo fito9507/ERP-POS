@@ -5303,7 +5303,7 @@ function renderAdminTasas() {
           + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">AJUSTE</div>'
           + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
           + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)-0.01).toFixed(2);_updEurUsd()">-</button>'
-          + '<input type="number" id="eurusd-adj" value="'+fN(_adj,2)+'" step="0.01" oninput="_updEurUsd()" style="width:80px;text-align:center;font-size:18px;font-weight:600;height:40px">'
+          + '<input type="number" id="eurusd-adj" value="'+parseFloat(_adj||0).toFixed(2)+'" step="0.01" oninput="_updEurUsd()" style="width:80px;text-align:center;font-size:18px;font-weight:600;height:40px">'
           + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)+0.01).toFixed(2);_updEurUsd()">+</button>'
           + '</div></div>'
           + '<div style="font-size:18px;color:var(--color-text-tertiary)">=</div>'
@@ -7122,8 +7122,12 @@ async function fetchElToqueAndSave(){
 
     // Try via Supabase edge function proxy first
     try {
+      // Edge function called with apikey as header (requires --no-verify-jwt on deploy)
       var r1 = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/eltoque-proxy', {
-        headers: { 'Authorization': 'Bearer ' + SUPA_KEY }
+        headers: {
+          'Authorization': 'Bearer ' + SUPA_KEY,
+          'apikey': SUPA_KEY
+        }
       });
       if (r1.ok) data = await r1.json();
     } catch(e) {}
