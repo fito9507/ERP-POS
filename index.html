@@ -3564,13 +3564,17 @@ function registrar(){
     if(mov.tipo!=='Transferencia entre cuentas'){
       var _mcRow;
       if(mov.sentido==='gasto'){
+        // retiro: caja_origen=cta, caja_destino=null
         _mcRow={tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
           usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-          caja_origen:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
+          caja_origen:mov.cta, caja_destino:null,
+          monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       } else {
+        // deposito: caja_origen=null, caja_destino=cta (same schema as admRegistrarMovCaja)
         _mcRow={tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
           usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-          caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
+          caja_origen:null, caja_destino:mov.cta,
+          monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       }
       supaReq('POST','mov_cajas',_mcRow).then(async function(r){
         if(r.ok){
@@ -3587,8 +3591,8 @@ function registrar(){
     // Offline: update local _cajasMovs so Mi Caja stays in sync
     if(typeof _cajasMovs!=='undefined'){
       var _localMC=mov.sentido==='gasto'
-        ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto}
-        :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
+        ?{tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:mov.cta,caja_destino:null,monto_origen:mov.monto,monto_destino:mov.monto}
+        :{tipo:'deposito',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,caja_origen:null,caja_destino:mov.cta,monto_origen:mov.monto,monto_destino:mov.monto};
       _cajasMovs.unshift(_localMC);
     }
   }
