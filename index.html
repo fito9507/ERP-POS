@@ -7120,45 +7120,17 @@ async function fetchElToqueAndSave(){
     // supabase/functions/eltoque-proxy/index.ts
     var data = null;
 
-    // Try via Supabase edge function proxy first
+    // Call Supabase RPC function (no CORS issues — goes through Supabase REST API)
     try {
-      // Edge function called with apikey as header (requires --no-verify-jwt on deploy)
-      var r1 = await fetch('https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/eltoque-proxy', {
-        headers: {
-          'Authorization': 'Bearer ' + SUPA_KEY,
-          'apikey': SUPA_KEY
-        }
-      });
-      if (r1.ok) data = await r1.json();
-    } catch(e) {}
+      var r1 = await supaReq('GET', 'rpc/get_eltoque_rates');
+      if (r1.ok) {
+        var raw1 = await r1.json();
+        // RPC returns the JSON directly: {tasas: {USD, ECU, MLC, ...}}
+        if (raw1 && typeof raw1 === 'object') data = raw1;
+      }
+    } catch(e) { console.warn('elToque RPC:', e); }
 
-    // Strategy 2: allorigins with Authorization header workaround
-    // Pass token as query param since allorigins can't forward custom headers
-    if (!data) {
-      try {
-        var target = 'https://tasas.eltoque.com/v1/trmi';
-        var r2 = await fetch('https://api.allorigins.win/get?url=' + encodeURIComponent(target));
-        if (r2.ok) {
-          var raw2 = await r2.json();
-          if (raw2.contents) {
-            var parsed2 = JSON.parse(raw2.contents);
-            if (parsed2 && typeof parsed2 === 'object') data = parsed2;
-          }
-        }
-      } catch(e) {}
-    }
-
-    // Strategy 3: Direct call (works if elToque adds CORS headers in future)
-    if (!data) {
-      try {
-        var r3 = await fetch('https://tasas.eltoque.com/v1/trmi', {
-          headers: { 'Authorization': 'Bearer ' + _TOQUE_TOKEN }
-        });
-        if (r3.ok) data = await r3.json();
-      } catch(e) {}
-    }
-
-    if (!data) throw new Error('No se pudo obtener tasas. Revisa la Edge Function de Supabase.');
+    if (!data) throw new Error('No se pudo obtener tasas de elToque via Supabase RPC.');
 
     // Edge function returns: { ok: true, tasas: { USD: 300, ECU: 310, MLC: 200, ... } }
     // Direct elToque returns same structure under data.tasas
