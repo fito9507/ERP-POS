@@ -3436,17 +3436,54 @@ function renderLibro(){
 
 // ── NUEVO MOVIMIENTO ──────────────────────────────────────
 function updNuevo(){
-  // For vendedor, restrict cta options to their alm
   var _igVend2=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
   var _igAlm2=_igVend2&&USERS[S.user]?USERS[S.user].almacen:'';
+  const mon=document.getElementById('n-mon').value;
+
+  // Rebuild n-cta options from _cajasData filtered by moneda (and alm for vendedor)
   var _nCta=document.getElementById('n-cta');
-  if(_nCta&&_igAlm2&&_cajasData.length){
-    var _myCajas=_cajasData.filter(function(c){return c.almacen===_igAlm2;});
-    if(_myCajas.length){
-      _nCta.innerHTML=_myCajas.map(function(c){return '<option>'+c.nombre+'</option>';}).join('');
+  var _nCta2=document.getElementById('n-cta2');
+  if(_nCta){
+    var _prevCta=_nCta.value;
+    var _allCajas=[];
+    if(typeof _cajasData!=='undefined'&&_cajasData.length){
+      _allCajas=_cajasData.filter(function(c){
+        return c.activa!==false
+          && c.moneda===mon
+          && (!_igAlm2 || c.almacen===_igAlm2);
+      });
+      // If no match for this moneda+alm, show all for that moneda (admin can pick any)
+      if(!_allCajas.length&&!_igAlm2){
+        _allCajas=_cajasData.filter(function(c){return c.activa!==false&&c.moneda===mon;});
+      }
+    }
+    // Fallback to hardcoded if _cajasData empty
+    if(!_allCajas.length){
+      var _hardcoded={
+        USD:['USD Habana','USD Placetas','USD España'],
+        EUR:['EUR Habana','EUR Placetas','EUR España'],
+        CUP:['CUP Habana','CUP Placetas'],
+        CUPT:['CUPT Habana','CUPT Placetas']
+      };
+      var _hc=(_hardcoded[mon]||[]);
+      if(_igAlm2) _hc=_hc.filter(function(n){return n.indexOf(_igAlm2)>=0;});
+      _allCajas=_hc.map(function(n){return {nombre:n};});
+    }
+    _nCta.innerHTML=_allCajas.map(function(c){
+      return '<option'+(c.nombre===_prevCta?' selected':'')+'>'+c.nombre+'</option>';
+    }).join('');
+    // Auto-select first if previous doesn't match new moneda
+    if(_nCta.value&&!_nCta.value.startsWith(mon+' ')) _nCta.selectedIndex=0;
+    // Also update n-cta2
+    if(_nCta2){
+      var _prevCta2=_nCta2.value;
+      _nCta2.innerHTML=_allCajas.map(function(c){
+        return '<option'+(c.nombre===_prevCta2?' selected':'')+'>'+c.nombre+'</option>';
+      }).join('');
     }
   }
-  // Also hide comision/deuda/prestamo types for vendedor
+
+  // Hide admin-only tipos for vendedor
   var _nTipo=document.getElementById('n-tipo');
   if(_nTipo&&_igVend2){
     Array.from(_nTipo.options).forEach(function(o){
@@ -3460,24 +3497,16 @@ function updNuevo(){
 
   const tipo=document.getElementById('n-tipo').value;
   const monto=parseFloat(document.getElementById('n-monto').value)||0;
-  const mon=document.getElementById('n-mon').value;
   const equiv=toUSD(monto,mon);
   document.getElementById('n-equiv').value=equiv>0?fN(equiv):'';
   // extras
   document.getElementById('n-com-extra').style.display=tipo==='Comisión vendedor'?'block':'none';
   document.getElementById('n-deuda-extra').style.display=['Amortización deuda','Pago intereses','Préstamo recibido'].includes(tipo)?'block':'none';
   document.getElementById('n-cta2-wrap').style.display=tipo==='Transferencia entre cuentas'?'block':'none';
-  // Auto-select cta based on moneda selected — always, not just for comision
-  var _nCtaSel=document.getElementById('n-cta');
-  if(_nCtaSel&&mon){
-    var _opts=Array.from(_nCtaSel.options).map(function(o){return o.value;});
-    // Find best match: caja whose name starts with the selected moneda
-    var _best=_opts.find(function(o){return o.startsWith(mon+' ');});
-    if(_best) _nCtaSel.value=_best;
-  }
   if(tipo==='Comisión vendedor'){
     const alm=document.getElementById('n-alm-venta')?.value||'Habana';
-    document.getElementById('n-cta').value=(mon==='CUP'?'CUP ':'USD ')+alm;
+    var _comCta=(mon==='CUP'?'CUP ':'USD ')+alm;
+    if(_nCta)_nCta.value=_comCta;
   }
   // preview
   const meta=TIPO_META[tipo]||{};
