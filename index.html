@@ -3467,7 +3467,14 @@ function updNuevo(){
   document.getElementById('n-com-extra').style.display=tipo==='Comisión vendedor'?'block':'none';
   document.getElementById('n-deuda-extra').style.display=['Amortización deuda','Pago intereses','Préstamo recibido'].includes(tipo)?'block':'none';
   document.getElementById('n-cta2-wrap').style.display=tipo==='Transferencia entre cuentas'?'block':'none';
-  // sugerir cuenta según tipo
+  // Auto-select cta based on moneda selected — always, not just for comision
+  var _nCtaSel=document.getElementById('n-cta');
+  if(_nCtaSel&&mon){
+    var _opts=Array.from(_nCtaSel.options).map(function(o){return o.value;});
+    // Find best match: caja whose name starts with the selected moneda
+    var _best=_opts.find(function(o){return o.startsWith(mon+' ');});
+    if(_best) _nCtaSel.value=_best;
+  }
   if(tipo==='Comisión vendedor'){
     const alm=document.getElementById('n-alm-venta')?.value||'Habana';
     document.getElementById('n-cta').value=(mon==='CUP'?'CUP ':'USD ')+alm;
