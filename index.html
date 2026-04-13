@@ -7125,33 +7125,36 @@ async function fetchElToqueAndSave(){
       var r1 = await supaReq('GET', 'rpc/get_eltoque_rates');
       if (r1.ok) {
         var raw1 = await r1.json();
-        console.log('elToque RPC raw:', JSON.stringify(raw1));
-        // RPC returns the JSON directly: {tasas: {USD, ECU, MLC, ...}}
+        // RPC returns: {tasas: {USD, ECU, MLC, BTC, USDT_TRC20, TRX}, date, hour, ...}
         if (raw1 && typeof raw1 === 'object') data = raw1;
       }
     } catch(e) { console.warn('elToque RPC:', e); }
 
     if (!data) throw new Error('No se pudo obtener tasas de elToque via Supabase RPC.');
 
-    // Edge function returns: { ok: true, tasas: { USD: 300, ECU: 310, MLC: 200, ... } }
-    // Direct elToque returns same structure under data.tasas
+    // Response: {tasas: {USD:525, ECU:590, MLC:390, ...}, date, hour, ...}
     var t = data.tasas || data;
-    var cup  = parseFloat(t.USD  || t.usd  || 0);
-    var eur  = parseFloat(t.ECU  || t.EUR  || t.eur  || 0);
-    var cupt = parseFloat(t.MLC  || t.mlc  || 0);
+    var cup  = parseFloat(t.USD || 0);   // CUP por 1 USD
+    var ecu  = parseFloat(t.ECU || 0);   // CUP por 1 EUR (elToque llama ECU al EUR)
+    var cupt = parseFloat(t.MLC || 0);   // CUP por 1 MLC
 
     if (!cup || cup < 10) throw new Error('Datos inesperados: ' + JSON.stringify(data).substring(0,100));
 
-    var mkt = {CUP:cup, EUR:eur||cup, CUPT:cupt||cup, ts:Date.now()};
+    // mkt stores: CUP=USD/CUP rate, EUR=ECU/CUP rate, CUPT=MLC/CUP rate
+    var mkt = {CUP:cup, EUR:ecu||cup, CUPT:cupt||cup, ts:Date.now()};
     try { localStorage.setItem('erp_rates_mkt', JSON.stringify(mkt)); } catch(e) {}
 
+    // RATES.CUP = CUP por USD (e.g. 525)
+    // RATES.EUR = USD por EUR = CUP_USD / CUP_EUR (e.g. 525/590 = 0.89)
+    // RATES.CUPT = CUP por MLC (e.g. 390)
     var adj = {};
     try { adj = JSON.parse(localStorage.getItem('erp_rates_adj')||'{}'); } catch(e) {}
     RATES.CUP  = cup  + (adj.USD  || 0);
-    if (eur  > 0) RATES.EUR  = parseFloat((RATES.CUP / (eur + (adj.EUR||0))).toFixed(6));
-    if (cupt > 0) RATES.CUPT = cupt + (adj.CUPT || 0);
+    var ecuFin = ecu  + (adj.EUR  || 0);
+    if (ecuFin > 0) RATES.EUR = parseFloat((RATES.CUP / ecuFin).toFixed(6));
+    RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
 
-    showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(eur,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
+    showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
     renderAdminTasas();
     return mkt;
   } catch(e) {
