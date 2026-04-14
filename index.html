@@ -1567,7 +1567,9 @@ async function flushQueue() {
   } else {
     // All flushed — reload all data from Supabase
     var _reloads = [];
-    if (typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
+    // Only reload ventas if queue had POST/PATCH (not just DELETEs)
+    var _hadPosts=toProcess.some(function(op){return op.method==='POST'||op.method==='PATCH';});
+    if (_hadPosts && typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
     if (typeof syncLoadMovsIG === 'function') _reloads.push(syncLoadMovsIG());
     if (typeof loadCajasData === 'function') _reloads.push(loadCajasData());
     if (typeof syncLoadClientes === 'function') _reloads.push(syncLoadClientes());
@@ -3050,28 +3052,87 @@ function setEstCom(id,est){
   renderVentas();
 
 }
+
+// ── Revertir venta: devuelve stock + cajas ────────────────
+function _revertirVenta(v){
+  if(!v) return;
+  // 1. Devolver stock
+  if(v.prods && typeof PRODS!=='undefined'){
+    var lineas=[];
+    // Parse prods string: "2× Perfil Angular, 1× Chapa..."
+    var parts=(v.prods||'').split(',');
+    parts.forEach(function(p){
+      var m=p.trim().match(/^(\d+)×\s*(.+)/);
+      if(m){lineas.push({q:parseInt(m[1]),n:m[2].trim()});}
+    });
+    lineas.forEach(function(l){
+      var prod=PRODS.find(function(p){return p.n===l.n;});
+      if(prod){
+        prod.stk=(prod.stk||0)+l.q;
+        if(prod.stk_alm&&v.alm&&prod.stk_alm[v.alm]!=null)
+          prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
+      }
+    });
+    if(lineas.length) offlineSaveProds();
+  }
+  // 2. Revertir mov_cajas: retiro de cada pago cobrado
+  if(v.pagos&&v.pagos.length&&typeof _cajasMovs!=='undefined'){
+    v.pagos.forEach(function(p){
+      var caja=p.caja||(p.mon+' '+(v.alm||''));
+      var retiro={
+        tipo:'retiro', fecha:v.fecha||today(),
+        notas:'Anulación venta '+v.id,
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+        caja_origen:caja, caja_destino:null,
+        monto_origen:p.m, monto_destino:p.m, tasa_usada:null
+      };
+      _cajasMovs.unshift(retiro);
+      _supaWrite('POST','mov_cajas',retiro);
+    });
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+  }
+}
 function eliminarV(id){
   if(!confirm('¿Eliminar esta venta?'))return;
+  var v=VENTAS.find(x=>x.id===id);
+  _revertirVenta(v);
   VENTAS=VENTAS.filter(x=>x.id!==id);
   offlineSaveVentas();
-  if(_supaOnline) supaReq('DELETE','ventas?id=eq.'+id).catch(function(e){console.warn(e);});
-  renderVentas();
+  if(_supaOnline){
+    supaReq('DELETE','ventas?id=eq.'+id).then(function(r){
+      if(!r.ok) console.warn('delete venta failed');
+      renderVentas(); // render after confirmed delete
+    }).catch(function(e){console.warn(e); renderVentas();});
+  } else {
+    renderVentas();
+  }
+  showToast('Venta eliminada — stock y caja revertidos');
 }
 function eliminarSel(){
   var ids=getSelIds();
   if(!ids.length){showToast('Nada seleccionado');return;}
   if(!confirm('¿Eliminar '+ids.length+' venta'+(ids.length>1?'s':'')+' seleccionada'+(ids.length>1?'s':'')+' ? Esta acción no se puede deshacer.'))return;
+  // Revert stock + cajas for each
+  ids.forEach(function(id){
+    var v=VENTAS.find(function(x){return x.id===id;});
+    _revertirVenta(v);
+  });
   VENTAS=VENTAS.filter(function(v){return !ids.includes(v.id);});
   offlineSaveVentas();
   if(_supaOnline){
-    // Delete each from Supabase
-    ids.forEach(function(id){
-      supaReq('DELETE','ventas?id=eq.'+id).catch(function(e){console.warn('del venta:',e);});
+    // Delete all in parallel, then render once done
+    Promise.all(ids.map(function(id){
+      return supaReq('DELETE','ventas?id=eq.'+id).catch(function(e){console.warn('del venta:',e);});
+    })).then(function(){
+      // Don't reload from Supabase — use local state (already filtered above)
+      deselAll();
+      renderVentas();
     });
+  } else {
+    deselAll();
+    renderVentas();
   }
-  deselAll();
-  renderVentas();
-  showToast('🗑 '+ids.length+' venta'+(ids.length>1?'s':'')+' eliminada'+(ids.length>1?'s':''));
+  showToast('🗑 '+ids.length+' venta'+(ids.length>1?'s':'')+' eliminada'+(ids.length>1?'s':'')+' — stock y cajas revertidos');
 }
 function cambiarEstadoSel(est){
   const ids=getSelIds();
@@ -4432,6 +4493,21 @@ async function elimA(cid,fid,aid){
     showToast('Abono eliminado — caja actualizada');
   } else {
     showToast('Abono eliminado');
+  }
+
+  // 4. Delete movimientos_ig entry for this abono (Cobro/Compensación cliente)
+  if(abono&&_supaOnline&&typeof supaReq!=='undefined'){
+    // Find by description containing client name and amount
+    var _igDesc=(abono.cajaTipo==='efectivo'?'Cobro':'Compensación')+' cliente — '+c.nombre;
+    supaReq('DELETE','movimientos_ig?descripcion=like.*'+encodeURIComponent(c.nombre)+'*&fecha=eq.'+abono.fecha)
+      .catch(function(e){console.warn('delete ig abono:',e);});
+    // Also remove from local MOVS
+    MOVS=MOVS.filter(function(m){
+      return !(m.desc&&m.desc.indexOf(c.nombre)>=0&&
+               Math.abs(m.equivUSD-(abono.equivUSD||0))<0.02&&
+               m.fecha===abono.fecha);
+    });
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
   }
 
   renderFichaFolios(c);
