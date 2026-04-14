@@ -3550,6 +3550,8 @@ function filtrar_ig(){
   var _isVendIG=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
   var _almIG=_isVendIG&&USERS[S.user]?USERS[S.user].almacen:'';
   var _almCtas=_almIG?_cajasData.filter(function(c){return c.almacen===_almIG;}).map(function(c){return c.nombre;}):[]; 
+  // If vendedor and _cajasData not loaded yet — show all movs temporarily
+  if(_almIG&&!_almCtas.length&&!_cajasData.length) return MOVS.slice(0,100);
   return MOVS.filter(m=>{
     if(desde&&m.fecha<desde)return false;
     if(hasta&&m.fecha>hasta)return false;
@@ -3557,12 +3559,15 @@ function filtrar_ig(){
     if(cta&&m.cta!==cta)return false;
     if(sentido&&m.sentido!==sentido)return false;
     if(q&&!m.desc.toLowerCase().includes(q)&&!(m.notas||'').toLowerCase().includes(q))return false;
-    // Vendedor sees: their alm's movs + global cajas movs they registered + their own cobros
-    if(_almIG&&_almCtas.length){
+    // Vendedor sees: their alm's movs + global cajas + their own cobros
+    if(_almIG){
       var _globalAlms3=['USA','Xportprise','General','España'];
+      var _ctaOk=_almCtas.includes(m.cta)||(m.cta||'').includes(_almIG);
       var _isGlobal=_globalAlms3.some(function(g){return (m.cta||'').indexOf(g)>=0;});
-      var _isMyMov=(m.vend&&m.vend===S.user)||(m.desc&&m.desc.toLowerCase().indexOf(S.user.toLowerCase())>=0);
-      if(!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG)&&!_isGlobal&&!_isMyMov)return false;
+      var _isMyMov=m.vend&&m.vend===S.user;
+      var _mentionsMe=m.desc&&m.desc.toLowerCase().indexOf((S.user||'').toLowerCase())>=0;
+      // Show if: caja matches alm, OR global caja, OR has vendedor field, OR description mentions them
+      if(!_ctaOk&&!_isGlobal&&!_isMyMov&&!_mentionsMe)return false;
     }
     return true;
   });
