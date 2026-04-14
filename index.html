@@ -963,7 +963,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <th style="width:28px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
         <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
         <th>Tipo</th><th>Productos</th><th>Total USD</th><th>Cobro</th>
-        <th id="th-com1" style="display:none">% Com.</th><th id="th-com2" style="display:none">Com. USD</th><th id="th-com3" style="display:none">Estado com.</th><th>Nota</th><th></th>
+        <th id="th-com1" style="display:none;width:0;padding:0">% Com.</th><th id="th-com2" style="display:none;width:0;padding:0">Com. USD</th><th id="th-com3" style="display:none;width:0;padding:0">Estado com.</th><th>Nota</th><th></th>
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot id="v-foot"></tfoot>
@@ -2929,20 +2929,23 @@ function renderVentas(){
         var pp=v.pagos&&v.pagos.length?v.pagos:[{caja:v.mon+' '+(v.alm||'')}];
         return [...new Set(pp.map(function(p){return p.caja||p.mon;}))].join(', ');
       }())}</td>
-      <td class="td-com" style="display:none"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
-      <td class="td-com" style="display:none;text-align:right;font-weight:500">${fN(v.comUSD)}</td>
-      <td class="td-com" style="display:none">${renderEstComCell(v)}</td>
+      ${_isVend?'':`<td class="td-com" style="display:none;width:0;padding:0"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
+      <td class="td-com" style="display:none;width:0;padding:0;text-align:right;font-weight:500">${fN(v.comUSD)}</td>
+      <td class="td-com" style="display:none;width:0;padding:0">${renderEstComCell(v)}</td>`}
       <td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.nota||''}</td>
       <td style="white-space:nowrap"><button class="btn-sm" onclick="verVenta(${v.id})" style="padding:3px 6px">👁</button>${_isVend?'':'<button class="btn-sm" onclick="eliminarV('+v.id+')" style="color:var(--color-text-danger);padding:3px 6px">×</button>'}</td>
     </tr>`).join(''):`<tr><td colspan="13" style="text-align:center;color:var(--color-text-tertiary);padding:16px">Sin resultados</td></tr>`;
 
   // foot totales
   const totCom2=data.filter(v=>v.estCom!=='No aplica').reduce((a,v)=>a+v.comUSD,0);
-  var _footSpan = _isVend ? 6 : 7; // vendedor has no chk col
+  // cols before Total USD: vendedor=6(fecha,vend,alm,cli,tipo,prods) admin=7(+chk)
+  var _footSpan = _isVend ? 6 : 7;
+  // cols after Total USD: cobro + nota + actions = 3; com cols only if shown
+  var _comCols = document.querySelector('.td-com[style*="display:none;width:0"]') ? 0 : (_isVend?0:3);
   document.getElementById('v-foot').innerHTML=data.length?`<tr class="sum-row">
     <td colspan="${_footSpan}" style="font-weight:600">Total (${data.length} venta${data.length!==1?'s':''})</td>
-    <td style="text-align:right;font-weight:700">${fN(totUSD)}</td>
-    <td colspan="6"></td>
+    <td style="text-align:right;font-weight:700;padding-right:8px">${fN(totUSD)}</td>
+    <td colspan="${3+_comCols}"></td>
   </tr>`:'';
 
   // vincular checkboxes con JS puro (no inline)
