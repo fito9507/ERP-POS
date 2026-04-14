@@ -2938,10 +2938,11 @@ function renderVentas(){
 
   // foot totales
   const totCom2=data.filter(v=>v.estCom!=='No aplica').reduce((a,v)=>a+v.comUSD,0);
+  var _footSpan = _isVend ? 6 : 7; // vendedor has no chk col
   document.getElementById('v-foot').innerHTML=data.length?`<tr class="sum-row">
-    <td colspan="7">Total (${data.length} ventas)</td>
-    <td style="text-align:right">${fN(totUSD)}</td>
-    <td colspan="5"></td>
+    <td colspan="${_footSpan}" style="font-weight:600">Total (${data.length} venta${data.length!==1?'s':''})</td>
+    <td style="text-align:right;font-weight:700">${fN(totUSD)}</td>
+    <td colspan="6"></td>
   </tr>`:'';
 
   // vincular checkboxes con JS puro (no inline)
