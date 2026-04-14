@@ -960,12 +960,22 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <h3 style="margin:0" id="v-count-lbl">Ventas filtradas</h3>
     </div>
     <div style="overflow-x:auto">
-    <table>
+    <table style="table-layout:fixed;width:100%">
       <thead><tr>
-        <th style="width:28px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
-        <th>Fecha</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th>
-        <th>Tipo</th><th>Productos</th><th style="text-align:right;white-space:nowrap;width:80px">Total USD</th><th style="width:90px">Cobro</th>
-        <th id="th-com1" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">% Com.</th><th id="th-com2" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">Com. USD</th><th id="th-com3" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">Estado com.</th><th style="width:80px">Nota</th><th style="width:60px"></th>
+        <th style="width:24px" id="th-chkall"><input type="checkbox" id="chk-all"></th>
+        <th style="width:70px">Fecha</th>
+        <th style="width:70px">Vendedor</th>
+        <th style="width:70px">Almacén</th>
+        <th style="width:70px">Cliente</th>
+        <th style="width:40px">Tipo</th>
+        <th>Productos</th>
+        <th style="text-align:right;width:75px">Total USD</th>
+        <th style="width:85px">Cobro</th>
+        <th id="th-com1" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">% Com.</th>
+        <th id="th-com2" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">Com. USD</th>
+        <th id="th-com3" style="display:none;width:0;max-width:0;padding:0;overflow:hidden">Estado com.</th>
+        <th style="width:70px">Nota</th>
+        <th style="width:50px"></th>
       </tr></thead>
       <tbody id="v-body"></tbody>
       <tfoot id="v-foot"></tfoot>
