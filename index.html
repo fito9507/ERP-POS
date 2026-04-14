@@ -930,7 +930,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <input type="date" id="f-hasta" oninput="_dRender(renderVentas)" style="width:100%"></div>
       <div><label class="lbl">Vendedor</label>
         <select id="f-vend" onchange="renderVentas()" style="width:100%">
-          <option value="">Todos</option><option>Keiler</option><option>Padre</option>
+          <option value="">Todos</option>
         </select></div>
       <div><label class="lbl">Almacén</label>
         <select id="f-alm" onchange="renderVentas()" style="width:100%">
@@ -944,9 +944,13 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <select id="f-mon" onchange="renderVentas()" style="width:100%">
           <option value="">Todas</option><option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
         </select></div>
-      <div><label class="lbl">Est. comisión</label>
+      <div id="f-estcom-wrap"><label class="lbl">Est. comisión</label>
         <select id="f-estcom" onchange="renderVentas()" style="width:100%">
           <option value="">Todas</option><option>Pendiente</option><option>Pagada</option><option>No aplica</option>
+        </select></div>
+      <div><label class="lbl">Cuenta cobro</label>
+        <select id="f-caja" onchange="renderVentas()" style="width:100%">
+          <option value="">Todas</option>
         </select></div>
       <div><label class="lbl">Producto</label>
         <input id="f-prod" placeholder="Buscar..." oninput="_dRender(renderVentas)" style="width:100%"></div>
@@ -2869,7 +2873,7 @@ function setRangeLiq(){
 }
 function limpiarFiltros(){
   ['f-desde','f-hasta','f-prod'].forEach(id=>document.getElementById(id).value='');
-  ['f-vend','f-alm','f-tipo','f-mon','f-estcom'].forEach(id=>document.getElementById(id).value='');
+  ['f-vend','f-alm','f-tipo','f-mon','f-estcom','f-caja'].forEach(id=>{var e=document.getElementById(id);if(e)e.value='';});
   renderVentas();
 }
 
@@ -2882,6 +2886,7 @@ function filtrar_ven(){
   const tipo=document.getElementById('f-tipo').value;
   const mon=document.getElementById('f-mon').value;
   const estcom=document.getElementById('f-estcom').value;
+  const caja=(document.getElementById('f-caja')?.value||'');
   const prod=(document.getElementById('f-prod').value||'').toLowerCase();
   return VENTAS.filter(v=>{
     if(desde&&v.fecha<desde)return false;
@@ -2890,6 +2895,7 @@ function filtrar_ven(){
     if(alm&&v.alm!==alm)return false;
     if(tipo&&v.tipo!==tipo)return false;
     if(mon&&!(v.mon===mon||(v.pagos&&v.pagos.some(function(p){return p.mon===mon;}))))return false;
+    if(caja&&!(v.pagos&&v.pagos.some(function(p){return (p.caja||p.mon+' '+v.alm)===caja;})))return false;
     if(estcom&&v.estCom!==estcom)return false;
     if(prod&&!v.prods.toLowerCase().includes(prod))return false;
     return true;
@@ -2899,6 +2905,20 @@ function filtrar_ven(){
 // ── RENDER VENTAS ─────────────────────────────────────────
 function renderVentas(){
   var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  // Rebuild caja filter from _cajasData
+  var _fcSel=document.getElementById('f-caja');
+  if(_fcSel&&typeof _cajasData!=='undefined'&&_cajasData.length){
+    var _curC=_fcSel.value;
+    var _cajaNames=[...new Set(_cajasData.filter(function(c){return c.activa;}).map(function(c){return c.nombre;}))].sort();
+    _fcSel.innerHTML='<option value="">Todas</option>'+_cajaNames.map(function(n){return '<option'+(n===_curC?' selected':'')+'>'+n+'</option>';}).join('');
+  }
+  // Rebuild vendedor filter from active USERS
+  var _fvSel=document.getElementById('f-vend');
+  if(_fvSel){
+    var _curV=_fvSel.value;
+    var _vendores=Object.keys(USERS).filter(function(k){return USERS[k]&&USERS[k].activo!==false&&USERS[k].rol!=='admin';});
+    _fvSel.innerHTML='<option value="">Todos</option>'+_vendores.map(function(v){return '<option'+(v===_curV?' selected':'')+'>'+v+'</option>';}).join('');
+  }
   var _mc=document.getElementById('btn-micaja-nav');if(_mc)_mc.style.display=_isVend?'':'none';
   var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
   var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
@@ -2908,6 +2928,7 @@ function renderVentas(){
   var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
   var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
   var _admBar=document.getElementById('adm-com-bar');if(_admBar)_admBar.style.display=_isVend?'none':'flex';
+  var _estcomWrap=document.getElementById('f-estcom-wrap');if(_estcomWrap)_estcomWrap.style.display=_isVend?'none':'';
 
   const data=filtrar_ven();
   visibleIds=data.map(v=>v.id);
