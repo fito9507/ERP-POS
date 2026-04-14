@@ -2482,19 +2482,23 @@ function updResBadge(){
   var rbannern=document.getElementById('res-banner-n');if(rbannern)rbannern.textContent=n+' reserva'+(n===1?'':'s');
 }
 function openRes(){
-  const act=S.reservas.filter(r=>r.activa);
-  document.getElementById('res-list').innerHTML=act.length?act.map(r=>`
-    <div class="res-card">
+  var _isAdmRes = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  const act=S.reservas.filter(r=>r.activa&&(_isAdmRes||r.user===S.user));
+  document.getElementById('res-list').innerHTML=act.length?act.map(r=>{
+    var _mia = r.user===S.user;
+    var _puedeCancelar = _isAdmRes || _mia;
+    return `<div class="res-card">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px">
         <span style="font-weight:500">${r.cli||'Walk-in'} · ${r.user} · ${r.alm} · ${r.fecha}</span>
         <span style="font-weight:500">${fN(r.totalUSD)} USD</span>
       </div>
       <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">${r.lineas.map(l=>l.q+'× '+l.n).join(' · ')}</div>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-p" style="flex:1;font-size:12px;padding:8px" onclick="cobrarReserva(${r.id})">Cobrar ahora</button>
-        <button class="btn" style="font-size:12px;padding:8px;width:auto" onclick="cancelRes(${r.id})">Cancelar</button>
+        ${_mia?`<button class="btn btn-p" style="flex:1;font-size:12px;padding:8px" onclick="cobrarReserva(${r.id})">Cobrar ahora</button>`:''}
+        ${_puedeCancelar?`<button class="btn" style="font-size:12px;padding:8px;width:auto" onclick="cancelRes(${r.id})">Cancelar</button>`:''}
       </div>
-    </div>`).join(''):'<div style="text-align:center;color:var(--color-text-tertiary);padding:20px">Sin reservas activas</div>';
+    </div>`;
+  }).join(''):'<div style="text-align:center;color:var(--color-text-tertiary);padding:20px">Sin reservas activas</div>';
   document.getElementById('res-overlay').style.display='block';
 }
 function closeRes(){document.getElementById('res-overlay').style.display='none';}
@@ -3506,10 +3510,13 @@ function filtrar_ig(){
     if(cta&&m.cta!==cta)return false;
     if(sentido&&m.sentido!==sentido)return false;
     if(q&&!m.desc.toLowerCase().includes(q)&&!(m.notas||'').toLowerCase().includes(q))return false;
-    // Vendedor only sees their alm's movs (skip filter if cajas not loaded yet)
-    var _globalAlms3=['USA','Xportprise','General','España'];
-    var _isGlobal=_globalAlms3.some(function(g){return (m.cta||'').indexOf(g)>=0;});
-    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG)&&!_isGlobal)return false;
+    // Vendedor sees: their alm's movs + global cajas movs they registered + their own cobros
+    if(_almIG&&_almCtas.length){
+      var _globalAlms3=['USA','Xportprise','General','España'];
+      var _isGlobal=_globalAlms3.some(function(g){return (m.cta||'').indexOf(g)>=0;});
+      var _isMyMov=(m.vend&&m.vend===S.user)||(m.desc&&m.desc.toLowerCase().indexOf(S.user.toLowerCase())>=0);
+      if(!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG)&&!_isGlobal&&!_isMyMov)return false;
+    }
     return true;
   });
 }
@@ -4550,14 +4557,15 @@ function registrarAbonoCli(cid){
       id: igNextId++, fecha: fecha, tipo: igTipo,
       desc: igTipo+' — '+c.nombre+' — '+desc,
       monto: equivUSD, mon: 'USD', equivUSD: equivUSD,
-      cta: igCta, sentido: igSentido, notas: ''
+      cta: igCta, sentido: igSentido, notas: '',
+      vend: (typeof S!=='undefined'&&S.user)||''
     };
     MOVS.push(igMov);
     // Always write — _supaWrite handles online/offline queuing
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
-      cuenta:igCta,vendedor:'',notas:''
+      cuenta:igCta,vendedor:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
