@@ -554,6 +554,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #mod-ventas .adm-table-wrap, #mod-ventas>div>div>div.card>div{overflow-x:auto;-webkit-overflow-scrolling:touch}
   #mod-ventas table{min-width:480px}
   #mod-ventas table th,#mod-ventas table td{padding:5px 5px!important;font-size:10px!important}
+  .td-com[style*="display:none"],th[style*="display:none"]{width:0!important;max-width:0!important;padding:0!important;border:none!important;overflow:hidden!important}
   #mod-ventas .adm-table{min-width:560px}
   #mod-ventas .frow .ff{min-width:calc(50% - 4px)!important}
   /* Filtros de ventas en 2 cols */
@@ -2940,12 +2941,10 @@ function renderVentas(){
   const totCom2=data.filter(v=>v.estCom!=='No aplica').reduce((a,v)=>a+v.comUSD,0);
   // cols before Total USD: vendedor=6(fecha,vend,alm,cli,tipo,prods) admin=7(+chk)
   var _footSpan = _isVend ? 6 : 7;
-  // cols after Total USD: cobro + nota + actions = 3; com cols only if shown
-  var _comCols = document.querySelector('.td-com[style*="display:none;width:0"]') ? 0 : (_isVend?0:3);
   document.getElementById('v-foot').innerHTML=data.length?`<tr class="sum-row">
     <td colspan="${_footSpan}" style="font-weight:600">Total (${data.length} venta${data.length!==1?'s':''})</td>
     <td style="text-align:right;font-weight:700;padding-right:8px">${fN(totUSD)}</td>
-    <td colspan="${3+_comCols}"></td>
+    <td colspan="3"></td>
   </tr>`:'';
 
   // vincular checkboxes con JS puro (no inline)
