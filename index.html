@@ -1920,31 +1920,29 @@ function goMod(id,title,btn){
       var _igVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
       ['ig-btn-cajas','ig-btn-deuda'].forEach(function(bid){var be=document.getElementById(bid);if(be)be.style.display=_igVend?'none':'';});
       // Load cajasData so filtrar_ig can filter by almacen
-      (typeof loadCajasData==='function'?loadCajasData():Promise.resolve()).then(function(){
-        // Refresh I/G movimientos from Supabase on every open
-        if(_supaOnline&&typeof syncLoadMovsIG==='function') syncLoadMovsIG();
+      (async function(){
+        if(typeof loadCajasData==='function') await loadCajasData();
+        // Load movimientos FIRST, then render
+        if(_supaOnline&&typeof syncLoadMovsIG==='function') await syncLoadMovsIG();
         try{
-          // Rebuild l-cta with real caja names from Supabase
+          // Rebuild l-cta
           var _ligSel=document.getElementById('l-cta');
           if(_ligSel&&_cajasData.length){
             var _ligAlm=_igVend&&USERS[S.user]?USERS[S.user].almacen:'';
             var _globalAlms2=['USA','Xportprise','General','España'];
             var _ligCajas=_ligAlm?_cajasData.filter(function(c){return c.almacen===_ligAlm||_globalAlms2.indexOf(c.almacen)>=0;}):_cajasData;
             var _firstOpt=_igVend?'<option value="">Todas mis cuentas</option>':'<option value="">Todas</option>';
-            _ligSel.innerHTML=_firstOpt
-              +_ligCajas.map(function(c){return '<option value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
+            _ligSel.innerHTML=_firstOpt+_ligCajas.map(function(c){return '<option value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
           }
           if(typeof updNuevo==='function') try{updNuevo();}catch(e){}
-          // Set default range "todo" if no dates set yet
           var _ld=document.getElementById('ig-desde');
           var _lh=document.getElementById('ig-hasta');
           if(_ld&&!_ld.value){_ld.value='2025-01-01';}
           if(_lh&&!_lh.value){_lh.value='2026-12-31';}
-          // Always activate libro tab (first tab) explicitly
           if(typeof navTo_ig==='function') navTo_ig('libro', document.querySelector('#ig-nav button'));
           else renderLibro();
         }catch(e){renderLibro();}
-      }).catch(function(){renderLibro();});
+      })().catch(function(){renderLibro();});
     }catch(e){try{renderLibro();}catch(e2){}}
   }
   if(id==='mod-cli'&&typeof renderLista==='function'){try{
@@ -2905,12 +2903,22 @@ function filtrar_ven(){
 // ── RENDER VENTAS ─────────────────────────────────────────
 function renderVentas(){
   var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  // Rebuild caja filter from _cajasData
+  // Rebuild caja filter — from _cajasData or from ventas pagos
   var _fcSel=document.getElementById('f-caja');
-  if(_fcSel&&typeof _cajasData!=='undefined'&&_cajasData.length){
+  if(_fcSel){
     var _curC=_fcSel.value;
-    var _cajaNames=[...new Set(_cajasData.filter(function(c){return c.activa;}).map(function(c){return c.nombre;}))].sort();
-    _fcSel.innerHTML='<option value="">Todas</option>'+_cajaNames.map(function(n){return '<option'+(n===_curC?' selected':'')+'>'+n+'</option>';}).join('');
+    // Get caja names from actual ventas pagos (most reliable)
+    var _cajasFromVentas=[...new Set(VENTAS.flatMap(function(v){
+      return (v.pagos&&v.pagos.length)?v.pagos.map(function(p){return p.caja||p.mon+' '+v.alm;}):[(v.mon||'USD')+' '+(v.alm||'')];
+    }))].filter(Boolean).sort();
+    // Also add from _cajasData if loaded
+    if(typeof _cajasData!=='undefined'&&_cajasData.length){
+      _cajasData.filter(function(c){return c.activa;}).forEach(function(c){
+        if(_cajasFromVentas.indexOf(c.nombre)<0) _cajasFromVentas.push(c.nombre);
+      });
+      _cajasFromVentas.sort();
+    }
+    _fcSel.innerHTML='<option value="">Todas</option>'+_cajasFromVentas.map(function(n){return '<option'+(n===_curC?' selected':'')+'>'+n+'</option>';}).join('');
   }
   // Rebuild vendedor filter from active USERS
   var _fvSel=document.getElementById('f-vend');
