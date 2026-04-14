@@ -2922,10 +2922,15 @@ function renderVentas(){
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
       <td style="font-size:11px">${v.alm}</td>
       <td style="font-size:11px;color:var(--color-text-secondary);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.cli}</td>
-      <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo[0]}</span></td>
+      <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo==='Mayorista'?'May':'Min'}</span></td>
       <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.prods}</td>
       <td style="font-weight:600;text-align:right;white-space:nowrap">${fN(v.totalUSD)}</td>
-      <td style="font-size:11px;white-space:nowrap;color:var(--color-text-info)">${(function(){var pp=v.pagos&&v.pagos.length?v.pagos:[{mon:v.mon}];var mons=[...new Set(pp.map(function(p){return p.mon;}))];return mons.join('+');}())}</td>
+      <td style="font-size:10px;white-space:nowrap;color:var(--color-text-info)">${(function(){
+        var pp=v.pagos&&v.pagos.length?v.pagos:[{mon:v.mon,caja:v.mon+' '+(v.alm||'')}];
+        // Show caja name if available, else moneda
+        var cajas=[...new Set(pp.map(function(p){return p.caja||p.mon;}))];
+        return cajas.join('<br>');
+      }())}</td>
       <td class="td-com" style="display:none"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %"></td>
       <td class="td-com" style="display:none;text-align:right;font-weight:500">${fN(v.comUSD)}</td>
       <td class="td-com" style="display:none">${renderEstComCell(v)}</td>
