@@ -1912,7 +1912,8 @@ function goMod(id,title,btn){
           var _ligSel=document.getElementById('l-cta');
           if(_ligSel&&_cajasData.length){
             var _ligAlm=_igVend&&USERS[S.user]?USERS[S.user].almacen:'';
-            var _ligCajas=_ligAlm?_cajasData.filter(function(c){return c.almacen===_ligAlm;}):_cajasData;
+            var _globalAlms2=['USA','Xportprise','General','España'];
+            var _ligCajas=_ligAlm?_cajasData.filter(function(c){return c.almacen===_ligAlm||_globalAlms2.indexOf(c.almacen)>=0;}):_cajasData;
             var _firstOpt=_igVend?'<option value="">Todas mis cuentas</option>':'<option value="">Todas</option>';
             _ligSel.innerHTML=_firstOpt
               +_ligCajas.map(function(c){return '<option value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
@@ -3506,7 +3507,9 @@ function filtrar_ig(){
     if(sentido&&m.sentido!==sentido)return false;
     if(q&&!m.desc.toLowerCase().includes(q)&&!(m.notas||'').toLowerCase().includes(q))return false;
     // Vendedor only sees their alm's movs (skip filter if cajas not loaded yet)
-    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG))return false;
+    var _globalAlms3=['USA','Xportprise','General','España'];
+    var _isGlobal=_globalAlms3.some(function(g){return (m.cta||'').indexOf(g)>=0;});
+    if(_almIG&&_almCtas.length&&!_almCtas.includes(m.cta)&&!m.cta.includes(_almIG)&&!_isGlobal)return false;
     return true;
   });
 }
@@ -3585,10 +3588,11 @@ function updNuevo(){
     var _prevCta=_nCta.value;
     var _allCajas=[];
     if(typeof _cajasData!=='undefined'&&_cajasData.length){
+      var _globalAlms=['USA','Xportprise','General','España'];
       _allCajas=_cajasData.filter(function(c){
         return c.activa!==false
           && c.moneda===mon
-          && (!_igAlm2 || c.almacen===_igAlm2);
+          && (!_igAlm2 || c.almacen===_igAlm2 || _globalAlms.indexOf(c.almacen)>=0);
       });
       // If no match for this moneda+alm, show all for that moneda (admin can pick any)
       if(!_allCajas.length&&!_igAlm2){
@@ -3816,7 +3820,7 @@ async function renderCajas(){
   }
 
   // Order almacenes
-  var almOrder = ['Habana','Placetas','Xportprise','España','General'];
+  var almOrder = ['Habana','Placetas','Xportprise','España','USA','General'];
   var byAlm = {};
   cajas.forEach(function(c){
     if(!byAlm[c.almacen]) byAlm[c.almacen]=[];
@@ -5824,19 +5828,19 @@ function _renderHistorialMovCajas() {
 // ── GESTIONAR CAJAS ──────────────────────────────────────────
 function _renderGestionarCajas() {
   var monedas = ['USD','EUR','CUP','CUPT'];
-  var almacenes = ['Habana','Placetas','Xportprise','General'];
+  var almacenes = ['Habana','Placetas','Xportprise','USA','General'];
   return '<div>'
     + '<div class="card" style="margin-bottom:14px">'
     + '<h3 style="margin-bottom:12px">➕ Nueva caja</h3>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-    + '<div><label class="adm-lbl-f">Nombre</label><input class="adm-inp" id="nc-nombre" placeholder="Ej: USD Oficina"></div>'
-    + '<div><label class="adm-lbl-f">Moneda</label><select class="adm-inp" id="nc-moneda">'
+    + '<div><label class="adm-lbl-f">Nombre</label><input class="adm-inp" id="caja-nc-nombre" placeholder="Ej: USD Zelle"></div>'
+    + '<div><label class="adm-lbl-f">Moneda</label><select class="adm-inp" id="caja-nc-moneda">'
     + monedas.map(function(m){return '<option>'+m+'</option>';}).join('')
     + '</select></div>'
-    + '<div><label class="adm-lbl-f">Almacén</label><select class="adm-inp" id="nc-almacen">'
+    + '<div><label class="adm-lbl-f">Almacén</label><select class="adm-inp" id="caja-nc-almacen">'
     + almacenes.map(function(a){return '<option>'+a+'</option>';}).join('')
     + '</select></div>'
-    + '<div><label class="adm-lbl-f">Saldo inicial</label><input class="adm-inp" type="number" id="nc-saldo" placeholder="0.00" step="0.01"></div>'
+    + '<div><label class="adm-lbl-f">Saldo inicial</label><input class="adm-inp" type="number" id="caja-nc-saldo" placeholder="0.00" step="0.01"></div>'
     + '</div>'
     + '<button class="adm-btn adm-btn-p" onclick="admCrearCaja()">Crear caja</button>'
     + '</div>'
@@ -5860,10 +5864,10 @@ function _renderGestionarCajas() {
 }
 
 async function admCrearCaja() {
-  var nombre  = document.getElementById('nc-nombre')?.value.trim();
-  var moneda  = document.getElementById('nc-moneda')?.value;
-  var almacen = document.getElementById('nc-almacen')?.value;
-  var saldo   = parseFloat(document.getElementById('nc-saldo')?.value)||0;
+  var nombre  = document.getElementById('caja-nc-nombre')?.value.trim();
+  var moneda  = document.getElementById('caja-nc-moneda')?.value;
+  var almacen = document.getElementById('caja-nc-almacen')?.value;
+  var saldo   = parseFloat(document.getElementById('caja-nc-saldo')?.value)||0;
   if (!nombre) { showToast('Introduce el nombre'); return; }
   if (_supaOnline) {
     var r=await supaReq('POST','cajas',{nombre:nombre,moneda:moneda,almacen:almacen,saldo_inicial:saldo,activa:true});
