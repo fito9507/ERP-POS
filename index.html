@@ -3099,9 +3099,11 @@ function eliminarV(id){
   VENTAS=VENTAS.filter(x=>x.id!==id);
   offlineSaveVentas();
   if(_supaOnline){
-    supaReq('DELETE','ventas?id=eq.'+id).then(function(r){
-      if(!r.ok) console.warn('delete venta failed');
-      renderVentas(); // render after confirmed delete
+    // Use supaId (UUID) for Supabase DELETE, fallback to local id
+    var _sid=v&&v.supaId?v.supaId:id;
+    supaReq('DELETE','ventas?id=eq.'+_sid).then(function(r){
+      if(!r.ok) r.text().then(function(t){console.warn('delete venta failed:',t);});
+      renderVentas();
     }).catch(function(e){console.warn(e); renderVentas();});
   } else {
     renderVentas();
@@ -3113,16 +3115,20 @@ function eliminarSel(){
   if(!ids.length){showToast('Nada seleccionado');return;}
   if(!confirm('¿Eliminar '+ids.length+' venta'+(ids.length>1?'s':'')+' seleccionada'+(ids.length>1?'s':'')+' ? Esta acción no se puede deshacer.'))return;
   // Revert stock + cajas for each
+  // Collect supaIds BEFORE filtering
+  var _supaIds={};
   ids.forEach(function(id){
     var v=VENTAS.find(function(x){return x.id===id;});
-    _revertirVenta(v);
+    if(v){_supaIds[id]=v.supaId||id; _revertirVenta(v);}
   });
   VENTAS=VENTAS.filter(function(v){return !ids.includes(v.id);});
   offlineSaveVentas();
   if(_supaOnline){
-    // Delete all in parallel, then render once done
     Promise.all(ids.map(function(id){
-      return supaReq('DELETE','ventas?id=eq.'+id).catch(function(e){console.warn('del venta:',e);});
+      var _sid=_supaIds[id]||id;
+      return supaReq('DELETE','ventas?id=eq.'+_sid).then(function(r){
+        if(!r.ok) r.text().then(function(t){console.warn('del venta:',t);});
+      }).catch(function(e){console.warn('del venta:',e);});
     })).then(function(){
       // Don't reload from Supabase — use local state (already filtered above)
       deselAll();
