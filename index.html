@@ -554,7 +554,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #mod-ventas .adm-table-wrap, #mod-ventas>div>div>div.card>div{overflow-x:auto;-webkit-overflow-scrolling:touch}
   #mod-ventas table{min-width:480px}
   #mod-ventas table th,#mod-ventas table td{padding:5px 5px!important;font-size:10px!important}
-  .td-com[style*="display:none"],th[style*="display:none"]{width:0!important;max-width:0!important;padding:0!important;border:none!important;overflow:hidden!important}
+  .td-com,#th-com1,#th-com2,#th-com3{display:none!important;width:0!important;max-width:0!important;min-width:0!important;padding:0!important;margin:0!important;border:none!important;overflow:hidden!important;white-space:nowrap}
+  .td-com.show,#th-com1.show,#th-com2.show,#th-com3.show{display:table-cell!important;width:auto!important}
   #mod-ventas .adm-table{min-width:560px}
   #mod-ventas .frow .ff{min-width:calc(50% - 4px)!important}
   /* Filtros de ventas en 2 cols */
@@ -2891,8 +2892,9 @@ function renderVentas(){
   var _mc=document.getElementById('btn-micaja-nav');if(_mc)_mc.style.display=_isVend?'':'none';
   var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
   var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
-  ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display=_isVend?'none':'table-cell';});
-  document.querySelectorAll('.td-com').forEach(function(el){el.style.display=_isVend?'none':'';}); 
+  // com columns: always hidden unless explicitly shown via .show class
+  ['th-com1','th-com2','th-com3'].forEach(function(id){var e=document.getElementById(id);if(e){e.style.display='';if(!_isVend)e.classList.add('show');}});
+  document.querySelectorAll('.td-com').forEach(function(el){el.style.display='';if(!_isVend)el.classList.add('show');}); 
   var _thChk=document.getElementById('th-chkall');if(_thChk)_thChk.style.display=_isVend?'none':'';
   var _selBar=document.getElementById('sel-bar');if(_selBar&&_isVend)_selBar.classList.remove('show');
   var _admBar=document.getElementById('adm-com-bar');if(_admBar)_admBar.style.display=_isVend?'none':'flex';
