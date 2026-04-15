@@ -434,7 +434,7 @@ const WA = {
 
 // Exchange rates (loaded from Supabase tasas table)
 let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
-let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0,CUPT_PCT:10}, Placetas:{USD:0,EUR:0,MLC:0,CUPT_PCT:10} };
+let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0,CUPT:10}, Placetas:{USD:0,EUR:0,MLC:0,CUPT:10} };
 // CUPT_PCT = % extra sobre precio CUP para transferencia
 let PRODS = [];
 let ALM = 'Habana';
@@ -464,8 +464,9 @@ function fromUSD(usd, mon, alm){
     return parseFloat((usd*(RATES.CUP+adjUSD)).toFixed(0));
   }
   if(mon==='CUPT'){
-    // CUPT = precio CUP × (1 + CUPT_PCT%)
-    var cupt_pct = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['CUPT_PCT']!=null) ? RATES_ALM[_alm]['CUPT_PCT'] : 10;
+    // CUPT = precio CUP × (1 + ajuste_CUPT%)
+    // tasas_almacen moneda='CUPT' ajuste = % extra sobre CUP
+    var cupt_pct = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['CUPT']!=null) ? RATES_ALM[_alm]['CUPT'] : 10;
     var cupBase = usd*(RATES.CUP+adjUSD);
     return parseFloat((cupBase*(1+cupt_pct/100)).toFixed(0));
   }
@@ -510,7 +511,7 @@ async function init(){
             if(!RATES_ALM[r.almacen]) RATES_ALM[r.almacen]={CUPT_PCT:10};
             RATES_ALM[r.almacen][r.moneda] = parseFloat(r.ajuste||0);
             // MLC ajuste used as CUPT % extra
-            if(r.moneda==='MLC') RATES_ALM[r.almacen]['CUPT_PCT'] = parseFloat(r.ajuste||10);
+  
           });
         }catch(e){ console.warn('tasas_almacen fallback'); }
       }

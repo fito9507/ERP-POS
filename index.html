@@ -5750,8 +5750,8 @@ function _adjChange(key, delta) {
 
 function _renderAlmAdjTable() {
   var alms = ['Habana','Placetas','Xportprise'];
-  var mons = ['USD','EUR','MLC'];
-  var monsLabel = {USD:'USD/CUP',EUR:'EUR/CUP',MLC:'CUPT %'};
+  var mons = ['USD','EUR','MLC','CUPT'];
+  var monsLabel = {USD:'USD/CUP',EUR:'EUR/CUP',MLC:'MLC/CUP',CUPT:'CUPT %+'};
 
   // Base rates (TRMI + global adj)
   var mkt = {};
@@ -5768,7 +5768,7 @@ function _renderAlmAdjTable() {
     + '<th style="text-align:left;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)">Almacén</th>'
     + mons.map(function(m){
         var lbl = (typeof monsLabel!=='undefined'&&monsLabel[m])||m+'/CUP';
-        var baseVal = m==='MLC' ? '% extra' : 'base: '+fN(base[m],0);
+        var baseVal = m==='CUPT' ? '% sobre CUP' : m==='MLC' ? 'base: '+fN(base[m]||0,0) : 'base: '+fN(base[m]||0,0);
         return '<th style="text-align:center;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)" colspan="2">'
           + lbl + '<br><span style="font-size:10px;font-weight:400">'+baseVal+'</span></th>';
       }).join('')
@@ -5804,7 +5804,7 @@ function _updAlmFinal(alm, mon, base) {
 }
 
 async function admGuardarAjustesAlm() {
-  var alms=['Habana','Placetas','Xportprise'], mons=['USD','EUR','MLC'];
+  var alms=['Habana','Placetas','Xportprise'], mons=['USD','EUR','MLC','CUPT'];
   var rows=[];
   alms.forEach(function(alm){
     mons.forEach(function(mon){
