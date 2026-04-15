@@ -1376,6 +1376,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
 var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
 var RATES_EURUSD=0;
+try{ var _eu=parseFloat(localStorage.getItem('erp_eurusd')||'0'); if(_eu>0) RATES_EURUSD=_eu; }catch(e){}
 function toUSD(m,mon,alm){
   if(mon==='USD') return m;
   if(mon==='CUPT'){
@@ -5691,8 +5692,17 @@ function renderAdminTasas() {
     + _tasaRow('CUPT / CUP', mUSD+aUSD, 'Base = USD/CUP (CUPT se configura por almacén)', 'cupt2', 0, mUSD+aUSD)
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
     + (function(){
-        var _auto  = RATES_EURUSD > 0 ? parseFloat(RATES_EURUSD.toFixed(2)) : parseFloat((1/RATES.EUR).toFixed(2));
+        // RATES_EURUSD = USD por 1 EUR (e.g. 1.12)
+        // Also try localStorage cache
+        var _euCache = 0;
+        try{ _euCache = parseFloat(localStorage.getItem('erp_eurusd')||'0'); }catch(e){}
+        var _euCalc = RATES.EUR > 0 ? parseFloat((1/RATES.EUR).toFixed(4)) : 1.12;
+        var _auto = RATES_EURUSD > 0.1 ? parseFloat(RATES_EURUSD.toFixed(4))
+                  : _euCache > 0.1 ? parseFloat(_euCache.toFixed(4))
+                  : _euCalc;
         var _adj   = parseFloat(localStorage.getItem('erp_eurusd_adj')||'0');
+        // Reset adj if it looks wrong (adj >= auto means adj was used as the value)
+        if(Math.abs(_adj) >= _auto) _adj = 0;
         var _final = parseFloat((_auto + _adj).toFixed(2));
         var bS = 'width:40px;height:40px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:18px;touch-action:manipulation';
         return '<div class="card" style="margin-top:12px">'
