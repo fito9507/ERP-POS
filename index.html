@@ -1376,17 +1376,38 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
 var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
 var RATES_EURUSD=0;
-function toUSD(m,mon){return mon==='USD'?m:m/RATES[mon];}
+function toUSD(m,mon,alm){
+  if(mon==='USD') return m;
+  if(mon==='CUPT'){
+    var _alm=alm||'';
+    var adjUSD=_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['USD']?RATES_ALM[_alm]['USD']:0;
+    var pct=_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['CUPT']!=null?RATES_ALM[_alm]['CUPT']:10;
+    return m/((RATES.CUP+adjUSD)*(1+pct/100));
+  }
+  if(mon==='CUP') return m/RATES.CUP;
+  if(mon==='MLC') return m/RATES.CUPT;
+  if(mon==='EUR') return m*RATES.EUR;
+  return m/(RATES[mon]||1);
+}
 function fromUSD(u,mon,alm){
   if(mon==='USD') return u;
-  var almAdj=alm&&RATES_ALM[alm]&&RATES_ALM[alm][mon==='CUPT'?'MLC':mon]?RATES_ALM[alm][mon==='CUPT'?'MLC':mon]:0;
-  if(mon==='CUP') return parseFloat((u*(RATES.CUP+almAdj)).toFixed(0));
-  if(mon==='CUPT') return parseFloat((u*(RATES.CUPT+almAdj)).toFixed(0));
+  var _alm=alm||'';
+  var adjUSD = _alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['USD'] ? RATES_ALM[_alm]['USD'] : 0;
+  var adjEUR = _alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['EUR'] ? RATES_ALM[_alm]['EUR'] : 0;
+  var adjMLC = _alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['MLC'] ? RATES_ALM[_alm]['MLC'] : 0;
+  var cupt_pct = _alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['CUPT']!=null ? RATES_ALM[_alm]['CUPT'] : 10;
+  if(mon==='CUP')  return parseFloat((u*(RATES.CUP+adjUSD)).toFixed(0));
+  if(mon==='CUPT'){
+    // CUPT = CUP price × (1 + cupt_pct%)
+    var cupPrice = u*(RATES.CUP+adjUSD);
+    return parseFloat((cupPrice*(1+cupt_pct/100)).toFixed(0));
+  }
+  if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
     var eurCup=RATES.CUP/RATES.EUR;
-    return parseFloat((u*(RATES.CUP/(eurCup+almAdj))).toFixed(2));
+    return parseFloat((u*(RATES.CUP/(eurCup+adjEUR))).toFixed(2));
   }
-  return u*RATES[mon];
+  return u*(RATES[mon]||1);
 }
 function fN(n,d=2){if(n==null||isNaN(n))return'—';return parseFloat(n).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function dFor(m){return m==='CUP'||m==='CUPT'?0:2;}
