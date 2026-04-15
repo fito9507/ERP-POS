@@ -301,13 +301,24 @@
     font-size:12px;color:var(--text-dim);
   }
 
+  @media(max-width:768px){
+    .prod-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  }
   @media(max-width:600px){
     .header-inner{padding:12px 16px}
-    .controls{padding:16px 16px 0}
-    .grid-wrap{padding:16px 16px 80px}
+    .controls{padding:16px 16px 0;gap:10px}
+    .grid-wrap{padding:16px 16px 100px}
     .prod-grid{grid-template-columns:1fr 1fr;gap:10px}
-    .card-body{padding:10px 12px}
+    .card-body{padding:10px 12px;gap:6px}
+    .card-name{font-size:13px}
+    .prices{padding:8px 10px}
+    .price-row .val{font-size:12px}
     #cart-float{bottom:16px;right:16px}
+    .modal-box{padding:20px 16px 28px}
+    .alm-btn{padding:8px 14px;font-size:12px}
+    .mon-pill{padding:5px 10px;font-size:11px}
+    select,.search-inp{min-width:unset;width:100%}
+    .ctrl-group{width:100%}
   }
   @media(max-width:380px){
     .prod-grid{grid-template-columns:1fr}
@@ -548,9 +559,14 @@ function cardHTML(p){
   var stkLabel = stk > 10 ? '<span class="stock-ok">✓ Disponible ('+stk+' uds)</span>' 
                : stk > 0  ? '<span class="stock-low">⚠ Pocas unidades ('+stk+')</span>'
                : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
-  var price = MON==='USD' ? p.min : p.maj || p.min;
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
+  // Mayorista si qty >= MIN_MAY (10 uds por defecto)
+  var MIN_MAY = p.min_may || 10;
+  var isMay = qty >= MIN_MAY && p.maj > 0;
+  var priceMin = p.min || 0;
+  var priceMaj = p.maj || p.min || 0;
+  var price = isMay ? priceMaj : priceMin;
 
   return '<div class="card" id="card-'+esc(p.n)+'">'
     +'<div class="card-img">'
@@ -562,9 +578,17 @@ function cardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
     +'<div class="prices">'
-    +'<div class="price-row main"><span class="lbl">Precio '+MON+'</span><span class="val">'+fPrice(price,MON)+'</span></div>'
+    +(p.maj>0&&p.maj!==p.min?
+      '<div class="price-row" style="margin-bottom:2px">'
+      +'<span class="lbl" style="font-size:10px">Minorista <1-'+(MIN_MAY-1)+' uds)</span>'
+      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON)+'</span></div>'
+      +'<div class="price-row" style="margin-bottom:4px">'
+      +'<span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span>'
+      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON)+'</span></div>'
+      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price,MON)+'</span></div>')
+    +'<div style="border-top:1px solid rgba(255,255,255,.06);margin:4px 0"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
-        return '<div class="price-row"><span class="lbl">'+m+'</span><span class="val" style="font-size:12px">'+fPrice(price,m)+'</span></div>';
+        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m)+'</span></div>';
       }).join('')
     +'</div>'
     +(stk>0?'<div class="qty-row">'
@@ -593,6 +617,20 @@ function chgQty(name, d){
   if(!inp) return;
   var v = parseInt(inp.value)||1;
   inp.value = Math.max(1, v+d);
+  // Update price display if mayorista threshold changes
+  var p = PRODS.find(function(x){return x.n===name;});
+  if(p&&p.maj>0) reRenderCard(name);
+}
+function reRenderCard(name){
+  var p = PRODS.find(function(x){return x.n===name;});
+  var card = document.getElementById('card-'+name);
+  if(!p||!card) return;
+  // Update cart qty to match
+  if(CART[name]){
+    var inp = document.getElementById('qty-'+name);
+    if(inp) CART[name].qty = parseInt(inp.value)||1;
+  }
+  card.outerHTML = cardHTML(p);
 }
 function setQty(name, v){
   var inp = document.getElementById('qty-'+name);
@@ -629,24 +667,44 @@ function openCart(){
 function closeCart(){ document.getElementById('cart-modal').classList.remove('open'); }
 function closeCartOutside(e){ if(e.target===document.getElementById('cart-modal')) closeCart(); }
 
+function getCartPrice(i){
+  var MIN_MAY = i.prod.min_may || 10;
+  var isMay = i.qty >= MIN_MAY && i.prod.maj > 0;
+  return {price: isMay ? (i.prod.maj||i.prod.min) : (i.prod.min||0), isMay:isMay, MIN_MAY:MIN_MAY};
+}
+function updCartQty(name, val){
+  if(!CART[name]) return;
+  CART[name].qty = Math.max(1, parseInt(val)||1);
+  renderCart(); updCart();
+}
 function renderCart(){
   var items = Object.values(CART);
   var el = document.getElementById('cart-items');
   var totEl = document.getElementById('cart-total-val');
-  if(!items.length){ el.innerHTML='<div style="color:var(--text-dim);font-size:13px;padding:16px 0">Sin productos agregados</div>'; return; }
+  if(!items.length){ el.innerHTML='<div style="color:var(--text-dim);font-size:13px;padding:16px 0">Sin productos agregados</div>'; totEl.textContent='0,00'; return; }
   var total = 0;
   el.innerHTML = items.map(function(i){
-    var price = MON==='USD' ? i.prod.min : i.prod.maj||i.prod.min;
-    var lineTotal = price * i.qty;
+    var r = getCartPrice(i);
+    var lineTotal = r.price * i.qty;
     total += lineTotal;
+    var tag = i.prod.maj>0 ? (r.isMay
+      ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
+      : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '';
     return '<div class="cart-item">'
-      +'<div><div class="cart-item-name">'+i.prod.n+'</div>'
-      +'<div class="cart-item-qty">'+i.qty+' uds × '+fPrice(price,MON)+'</div></div>'
-      +'<div style="display:flex;align-items:center;gap:8px">'
-      +'<span class="cart-item-price">'+fPrice(lineTotal,MON)+'</span>'
-      +'<button class="cart-item-rm" onclick="removeFromCart(\''+esc(i.prod.n)+'\')">✕</button>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="cart-item-name">'+esc(i.prod.n)+tag+'</div>'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
+      +'<div class="qty-ctrl">'
+      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty-1)+ ')">−</button>'
+      +'<input class="qty-inp" type="number" min="1" value="'+i.qty+'" onchange="updCartQty(\''+esc(i.prod.n)+'\',this.value)" style="width:36px">'
+      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty+1)+ ')">+</button>'
       +'</div>'
-      +'</div>';
+      +'<span style="font-size:11px;color:var(--text-dim)">× '+fPrice(r.price,MON)+'</span>'
+      +'</div></div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+      +'<button class="cart-item-rm" onclick="removeFromCart(\''+esc(i.prod.n)+'\')">✕</button>'
+      +'<span class="cart-item-price">'+fPrice(lineTotal,MON)+'</span>'
+      +'</div></div>';
   }).join('');
   totEl.textContent = fPrice(total, MON) + ' ' + MON;
 }
@@ -655,12 +713,11 @@ function sendWA(){
   var items = Object.values(CART);
   if(!items.length){ alert('Agrega productos al pedido primero'); return; }
   var lines = items.map(function(i){
-    var price = MON==='USD' ? i.prod.min : i.prod.maj||i.prod.min;
-    return '• '+i.qty+'× '+i.prod.n+' → '+fPrice(price*i.qty, MON);
+    var r = getCartPrice(i);
+    return '• '+i.qty+'× '+i.prod.n+' → '+fPrice(r.price*i.qty, MON)+(r.isMay?' (May)':' (Min)');
   });
   var total = items.reduce(function(a,i){
-    var price = MON==='USD' ? i.prod.min : i.prod.maj||i.prod.min;
-    return a + price*i.qty;
+    return a + getCartPrice(i).price * i.qty;
   },0);
   var nota = (document.getElementById('cart-note').value||'').trim();
   var msg = '🏗️ *Pedido — '+ALM+'*\n\n'
