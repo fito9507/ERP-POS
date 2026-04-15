@@ -5812,7 +5812,7 @@ function _renderAlmAdjTable() {
       var cupt_result = finalVal_cup * (1 + almAdj/100);
       var finalTxt = isCUPT ? fN(almAdj,0)+'% ('+fN(cupt_result,0)+')' : fN(finalVal,0);
       h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
-        + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\',' + (isCUPT?'0':(base[mon]||0)) + ')"'
+        + ' oninput="_updAlmFinal(this,\''+alm+'\',\''+mon+'\',' + (base[mon]||0) + ','+baseUSD+')"'
         + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
       h += '<td id="alm-fin-'+alm+'-'+mon+'" style="padding:4px 8px;text-align:center;font-weight:700;color:var(--color-text-success);font-size:15px">'+finalTxt+'</td>';
     });
@@ -5823,12 +5823,17 @@ function _renderAlmAdjTable() {
   return h;
 }
 
-function _updAlmFinal(alm, mon, base) {
-  var inp = document.getElementById('alm-adj-'+alm+'-'+mon);
+function _updAlmFinal(inp, alm, mon, base, baseUSD) {
   var fin = document.getElementById('alm-fin-'+alm+'-'+mon);
-  if(!inp||!fin) return;
+  if(!fin) return;
   var v = parseFloat(inp.value)||0;
-  fin.textContent = mon==='CUPT' ? fN(v,0)+'%' : fN(base+v, 0);
+  if(mon==='CUPT'){
+    var adjUSD = (RATES_ALM[alm]&&RATES_ALM[alm]['USD'])||0;
+    var cupFinal = (baseUSD||0) + adjUSD;
+    fin.textContent = fN(v,0)+'% ('+fN(cupFinal*(1+v/100),0)+')';
+  } else {
+    fin.textContent = fN((base||0)+v, 0);
+  }
 }
 
 async function admGuardarAjustesAlm() {
