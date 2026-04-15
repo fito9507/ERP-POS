@@ -143,7 +143,7 @@
     font-size:40px;color:var(--text-dim);
     position:relative;overflow:hidden;
   }
-  .card-img img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;z-index:1}
+  .card-img img{width:100%;height:100%;object-fit:contain;position:absolute;inset:0;z-index:1;background:var(--steel-light)}
   .card-img .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:0}
   .card-img .placeholder span{font-size:11px;color:var(--text-dim);font-weight:500}
 
@@ -186,8 +186,17 @@
     border:none;border-left:1px solid var(--border);border-right:1px solid var(--border);
     color:var(--text);font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
     padding:0 4px;height:42px;
+    -webkit-appearance:none;-moz-appearance:textfield;appearance:textfield;
   }
+  .qty-inp::-webkit-inner-spin-button,.qty-inp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
   .qty-inp:focus{outline:none}
+  .qty-disp{
+    width:44px;text-align:center;
+    border-left:1px solid var(--border);border-right:1px solid var(--border);
+    color:var(--text);font-size:16px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;height:42px;
+    min-width:44px;
+  }
   .add-btn{
     flex:1;padding:0 12px;height:42px;
     background:var(--accent);color:#1a1f2e;
@@ -432,7 +441,7 @@ let ALM = 'Habana';
 let MON = 'USD';
 let CART = {}; // {prodName: {prod, qty}}
 
-const MON_SYM = { USD:'$', EUR:'€', CUP:'₱', CUPT:'M' };
+const MON_SYM = { USD:'$', EUR:'€', CUP:'₱', CUPT:'₱' };
 const MON_DEC = { USD:2, EUR:2, CUP:0, CUPT:0 };
 
 // ── UTILS ─────────────────────────────────────────────────
@@ -571,7 +580,8 @@ function cardHTML(p){
   var price = isMay ? priceMaj : priceMin;
 
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
-  return '<div class="card" id="card-'+cardId+'">'
+  var pidx = PRODS.indexOf(p);
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">'
     +'<div class="card-img">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>🏗️</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +'</div>'
@@ -593,19 +603,17 @@ function cardHTML(p){
         return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m)+'</span></div>';
       }).join('')
     +'</div>'
-    +(stk>0?(function(){
-      var pidx=PRODS.indexOf(p);
-      return '<div class="qty-row">'
-        +'<div class="qty-ctrl">'
-        +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)">−</button>'
-        +'<input class="qty-inp" data-idx="'+pidx+'" type="number" min="1" max="'+stk+'" value="'+qty+'">'
-        +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)">+</button>'
-        +'</div>'
-        +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')">'
-        +(cartItem?'✓ Agregado':'+ Agregar')
-        +'</button>'
-        +'</div>';
-    })():'')
+    +(stk>0?
+      '<div class="qty-row">'
+      +'<div class="qty-ctrl">'
+      +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
+      +'<span class="qty-disp" id="qd-'+cardId+'">'+qty+'</span>'
+      +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)" type="button">+</button>'
+      +'</div>'
+      +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
+      +(cartItem?'✓ Agregado':'+ Agregar')
+      +'</button>'
+      +'</div>':'')
     +'</div>'
     +'</div>';
 }
@@ -614,25 +622,38 @@ function esc(s){ return (s||'').replace(/['"<>&]/g,function(c){return {'\'':'&#3
 
 // ── CART ──────────────────────────────────────────────────
 function getQtyInpIdx(idx){ return document.querySelector('.qty-inp[data-idx="'+idx+'"]'); }
-function chgQtyIdx(idx, d){
-  var inp = getQtyInpIdx(idx);
-  if(!inp) return;
-  var v = Math.max(1, (parseInt(inp.value)||1) + d);
-  inp.value = v;
-  var p = PRODS[idx];
-  if(p&&p.maj>0) reRenderCard(p.n);
+function _getCardId(p){ return p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_'); }
+function _getQtyDisp(idx){
+  var p=PRODS[idx]; if(!p) return null;
+  return document.getElementById('qd-'+_getCardId(p));
 }
-function setQtyIdx(idx, v){
-  var inp = getQtyInpIdx(idx);
-  if(inp) inp.value = Math.max(1, parseInt(v)||1);
+function _getQtyVal(idx){
+  var sp=_getQtyDisp(idx); return sp ? parseInt(sp.textContent)||1 : 1;
+}
+function chgQtyIdx(idx, d){
+  var p = PRODS[idx]; if(!p) return;
+  var sp = _getQtyDisp(idx); if(!sp) return;
+  var v = Math.max(1, _getQtyVal(idx) + d);
+  sp.textContent = v;
+  // Update price highlight if mayorista threshold
+  if(p.maj>0){
+    var MIN_MAY = p.min_may||10;
+    var isMay = v >= MIN_MAY;
+    // Update price display
+    var card = document.getElementById('card-'+_getCardId(p));
+    if(card){
+      var minEl = card.querySelector('.price-min');
+      var majEl = card.querySelector('.price-maj');
+      if(minEl) minEl.style.color = isMay ? 'var(--text-dim)' : 'var(--accent)';
+      if(majEl) majEl.style.color = isMay ? 'var(--accent)' : 'var(--text-dim)';
+    }
+  }
 }
 function addToCartIdx(idx){
   var p = PRODS[idx]; if(!p) return;
-  var inp = getQtyInpIdx(idx);
-  var qty = inp ? parseInt(inp.value)||1 : 1;
+  var qty = _getQtyVal(idx);
   CART[p.n] = {prod:p, qty:qty};
-  var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
-  var btn = document.getElementById('addbtn-'+cardId);
+  var btn = document.getElementById('addbtn-'+_getCardId(p));
   if(btn){ btn.textContent='✓ Agregado'; btn.classList.add('added'); }
   updCart();
 }
