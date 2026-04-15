@@ -5761,21 +5761,21 @@ function _renderAlmAdjTable() {
   var baseUSD  = (mkt.CUP  || RATES.CUP)  + (adj.USD  || 0);
   var baseEUR  = (mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
   var baseMLC  = (mkt.CUPT || RATES.CUPT) + (adj.CUPT || 0);
-  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC};
+  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC, CUPT: 0};
 
   var h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
     + '<thead><tr>'
     + '<th style="text-align:left;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)">Almacén</th>'
     + mons.map(function(m){
-        var lbl = (typeof monsLabel!=='undefined'&&monsLabel[m])||m+'/CUP';
-        var baseVal = m==='CUPT' ? '% sobre CUP' : m==='MLC' ? 'base: '+fN(base[m]||0,0) : 'base: '+fN(base[m]||0,0);
+        var lbl = monsLabel[m]||m;
+        var baseVal = m==='CUPT' ? '% extra sobre CUP' : 'base: '+fN(base[m]||0,0);
         return '<th style="text-align:center;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)" colspan="2">'
           + lbl + '<br><span style="font-size:10px;font-weight:400">'+baseVal+'</span></th>';
       }).join('')
     + '</tr>'
     + '<tr>'
     + '<th></th>'
-    + mons.map(function(){ return '<th style="font-size:10px;color:var(--color-text-tertiary);padding:2px 4px;font-weight:400">+/−</th><th style="font-size:10px;color:var(--color-text-success);padding:2px 4px;font-weight:600">FINAL</th>'; }).join('')
+    + mons.map(function(m){ var label=m==='CUPT'?'%':'+/−'; return '<th style="font-size:10px;color:var(--color-text-tertiary);padding:2px 4px;font-weight:400">'+label+'</th><th style="font-size:10px;color:var(--color-text-success);padding:2px 4px;font-weight:600">FINAL</th>'; }).join('')
     + '</tr>'
     + '</thead><tbody>';
 
@@ -5783,8 +5783,10 @@ function _renderAlmAdjTable() {
     h += '<tr style="border-bottom:1px solid var(--color-border-tertiary)">';
     h += '<td style="padding:8px;font-weight:600">'+alm+'</td>';
     mons.forEach(function(mon){
-      var almAdj = (RATES_ALM[alm]&&RATES_ALM[alm][mon])||0;
-      var final  = base[mon] + almAdj;
+      var almAdj = (RATES_ALM[alm]&&RATES_ALM[alm][mon]!=null)?RATES_ALM[alm][mon]:(mon==='CUPT'?10:0);
+      var isCUPT = mon==='CUPT';
+      var finalVal = isCUPT ? almAdj : (base[mon]||0)+almAdj;
+      var finalTxt = isCUPT ? fN(finalVal,0)+'%' : fN(finalVal,0);
       h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
         + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\','+base[mon]+')"'
         + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
@@ -5800,7 +5802,9 @@ function _renderAlmAdjTable() {
 function _updAlmFinal(alm, mon, base) {
   var inp = document.getElementById('alm-adj-'+alm+'-'+mon);
   var fin = document.getElementById('alm-fin-'+alm+'-'+mon);
-  if(inp && fin) fin.textContent = fN(base + (parseFloat(inp.value)||0), 0);
+  if(!inp||!fin) return;
+  var v = parseFloat(inp.value)||0;
+  fin.textContent = mon==='CUPT' ? fN(v,0)+'%' : fN(base+v, 0);
 }
 
 async function admGuardarAjustesAlm() {
