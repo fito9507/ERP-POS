@@ -5624,6 +5624,8 @@ function admGuardarTasas() {
 
   // Save adjustments for next render
   try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD:aUSD, EUR:aEUR, CUPT:aCUPT})); } catch(e) {}
+  // Reset USD/EUR panel adj to 0 since it's derived from the above
+  try { localStorage.setItem('erp_eurusd_adj', '0'); } catch(e) {}
   try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
 
   // Save to Supabase
@@ -7582,7 +7584,7 @@ function _loadRatesCache() {
           var _sa = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}');
           localStorage.setItem('erp_rates_mkt', JSON.stringify({
             CUP: cached.CUP - (_sa.USD||0),
-            EUR: cached.EUR,
+            EUR: cached.CUP / (cached.EUR > 0 ? (1/cached.EUR) : 1), // convert USD/EUR back to CUP/EUR
             CUPT: cached.CUPT - (_sa.CUPT||0)
           }));
         }
