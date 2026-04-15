@@ -1745,29 +1745,37 @@ async function syncStockAlmacen(prodId, almacen, cantidad) {
 }
 
 async function syncSaveProducto(p) {
+  var row = {nombre:p.n,categoria:p.cat||'',
+    precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
+    precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
+    activo:p.activo!==false,en_stock:p.enStock!==false,
+    imagen_url:p.img||null};
+
   if (!_supaOnline) {
-    enqueue({method:'POST',path:'productos?on_conflict=nombre',body:{
-      nombre:p.n,categoria:p.cat||'',
-      precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
-      precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,activo:p.activo!==false,en_stock:p.enStock!==false
-    }});
+    // Offline: use PATCH if supaId known, else POST upsert by nombre
+    if(p.supaId){
+      enqueue({method:'PATCH',path:'productos?id=eq.'+p.supaId,body:row});
+    } else {
+      enqueue({method:'POST',path:'productos?on_conflict=nombre',body:row});
+    }
     return false;
   }
   try {
-    // Step 1: upsert product metadata
-    var row = {nombre:p.n,categoria:p.cat||'',
-      precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
-      precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
-      activo:p.activo!==false, en_stock:p.enStock!==false,
-      imagen_url:p.img||null};
-    var r = await supaReq('POST','productos?on_conflict=nombre',row);
-    if (!r.ok) { console.error('syncSaveProducto POST failed:', r.status); return false; }
-    var data = await r.json();
-    // Step 2: get id (POST upsert may return empty for existing rows)
-    if (data && data[0] && data[0].id) { p.supaId = data[0].id; }
-    else { p.supaId = await getOrCreateProductoId(p) || p.supaId; }
-    if (!p.supaId) { console.error('syncSaveProducto: no supaId for', p.n); return false; }
-    // Step 3: sync stock for all almacenes
+    var r;
+    if (p.supaId) {
+      // Product exists — PATCH by id (safe rename)
+      r = await supaReq('PATCH', 'productos?id=eq.'+p.supaId, row);
+      if (!r.ok) { console.error('syncSaveProducto PATCH failed:', r.status); return false; }
+    } else {
+      // New product — POST upsert by nombre
+      r = await supaReq('POST', 'productos?on_conflict=nombre', row);
+      if (!r.ok) { console.error('syncSaveProducto POST failed:', r.status); return false; }
+      var data = await r.json();
+      if (data && data[0] && data[0].id) { p.supaId = data[0].id; }
+      else { p.supaId = await getOrCreateProductoId(p) || p.supaId; }
+      if (!p.supaId) { console.error('syncSaveProducto: no supaId for', p.n); return false; }
+    }
+    // Sync stock for all almacenes
     for (var alm of ['Habana','Placetas','Xportprise']) {
       var stk = (p.stk_alm&&p.stk_alm[alm]!=null) ? p.stk_alm[alm] : 0;
       await syncStockAlmacen(p.supaId, alm, stk);
@@ -5204,7 +5212,12 @@ function admGuardarProd(idx) {
     maj: isNaN(maj) ? null : maj,
     ddp: isNaN(ddp) ? null : ddp };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
-  else            { PRODS[idx] = prod; showToast('Actualizado: ' + n); }
+  else {
+    // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
+    if(existingProd&&existingProd.supaId) prod.supaId = existingProd.supaId;
+    PRODS[idx] = prod;
+    showToast('Actualizado: ' + n);
+  }
   // Sync to Supabase immediately
   if (typeof syncSaveProducto === 'function') {
     syncSaveProducto(idx === -1 ? PRODS[PRODS.length-1] : PRODS[idx])
@@ -5268,10 +5281,20 @@ async function admUploadImg(input, idx){
   }
 }
 
-function admElimProd(idx) {
-  if (!confirm('¿Eliminar "' + PRODS[idx].n + '"?')) return;
+async function admElimProd(idx) {
+  var p = PRODS[idx];
+  if (!p) return;
+  if (!confirm('¿Eliminar "' + p.n + '"? Esta acción no se puede deshacer.')) return;
+  // Delete from Supabase first
+  if (_supaOnline && p.supaId) {
+    var r = await supaReq('DELETE', 'productos?id=eq.'+p.supaId);
+    if (!r.ok) { showToast('Error al eliminar en Supabase'); return; }
+    // Also delete stock_almacen rows
+    supaReq('DELETE', 'stock_almacen?producto_id=eq.'+p.supaId).catch(function(e){console.warn(e);});
+  }
   PRODS.splice(idx, 1);
-  showToast('Producto eliminado');
+  offlineSaveProds();
+  showToast('✓ Producto eliminado');
   renderAdminProductos();
 }
 function admToggleProd(idx, field){
