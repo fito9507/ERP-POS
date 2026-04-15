@@ -1697,7 +1697,7 @@ async function syncLoadVentas() {
 async function syncLoadProductos() {
   if (!_supaOnline) return false;
   try {
-    var r = await supaReq('GET', 'productos?select=*,stock_almacen(*)&activo=eq.true');
+    var r = await supaReq('GET', 'productos?select=*,stock_almacen(*)');
     if (!r.ok) { console.error('syncLoadProductos error:', r.status); return false; }
     var rows = await r.json();
     if (!rows || !rows.length) return true;
@@ -1711,7 +1711,7 @@ async function syncLoadProductos() {
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
-        activo: row.activo !== false, enStock: row.en_stock !== false, supaId: row.id
+        activo: row.activo !== false, enStock: row.en_stock !== false, img: row.imagen_url||'', supaId: row.id
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -1757,7 +1757,9 @@ async function syncSaveProducto(p) {
     // Step 1: upsert product metadata
     var row = {nombre:p.n,categoria:p.cat||'',
       precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
-      precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,activo:p.activo!==false};
+      precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
+      activo:p.activo!==false, en_stock:p.enStock!==false,
+      imagen_url:p.img||null};
     var r = await supaReq('POST','productos?on_conflict=nombre',row);
     if (!r.ok) { console.error('syncSaveProducto POST failed:', r.status); return false; }
     var data = await r.json();
@@ -5085,10 +5087,19 @@ function renderAdminProductos() {
     + '<input class="adm-inp" id="adm-prod-q" placeholder="Buscar producto..." oninput="_dRender(renderAdminProductos)" style="flex:1;max-width:260px" value="' + q + '">'
     + '<button class="adm-btn adm-btn-p" onclick="editingProd=-1;renderAdminContent()">+ Nuevo producto</button>'
     + '</div>'
+    + '<div id="prod-sel-bar" style="display:none;padding:8px 10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-bottom:8px;flex-wrap:wrap;align-items:center;gap:8px">'
+    + '<span id="prod-sel-count" style="font-size:12px;font-weight:600;color:var(--color-text-info)">0 sel.</span>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(true,\'activo\')">⛔ Des. POS</button>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(false,\'activo\')">✅ Act. POS</button>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(true,\'enStock\')">🚫 Ocultar Stk</button>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(false,\'enStock\')">📦 Mostrar Stk</button>'
+    + '<button class="adm-btn-sm" style="margin-left:auto" onclick="admDeselProds()">✕</button>'
+    + '</div>'
     + '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+    + '<th style="width:20px"><input type="checkbox" id="prod-chk-all" onchange="admChkAllProds(this.checked)"></th>'
     + '<th>Producto</th><th style="text-align:right">Min</th><th style="text-align:right">May</th>'
     + '<th style="text-align:right">DDP</th><th style="text-align:right">Stock</th>'
-    + '<th style="text-align:right">Mín</th><th style="text-align:center">Activo</th><th></th>'
+    + '<th style="text-align:right">Mín</th><th style="text-align:center">POS</th><th style="text-align:center">Stk</th><th></th>'
     + '</tr></thead><tbody>';
 
   rows.forEach(function(p) {
@@ -5101,10 +5112,9 @@ function renderAdminProductos() {
       + '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">' + (p.ddp != null ? fN(p.ddp) : '—') + '</td>'
       + '<td style="text-align:right;font-weight:600' + (bajo ? ';color:var(--color-text-warning)' : '') + '">' + fN(p.stk || 0, 0) + '</td>'
       + '<td style="text-align:right;font-size:11px;color:var(--color-text-tertiary)">' + (p.stk_min || 10) + '</td>'
-      + '<td style="text-align:center;font-size:14px">' + (p.activo===false?'⛔':'✅') + '</td>'
-      + '<td style="text-align:center;font-size:14px">' + (p.enStock===false?'🚫':'📦') + '</td>'
-      + '<td style="text-align:center;font-size:14px">' + (p.activo===false?'⛔':'✅') + '</td>'
-      + '<td style="text-align:center;font-size:14px">' + (p.activo===false?'⛔':'✅') + '</td>'
+      + '<td style="text-align:center"><input type="checkbox" class="prod-chk" data-idx="'+idx+'" style="width:15px;height:15px"></td>'
+      + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'activo\')" title="POS">'+(p.activo===false?'⛔':'✅')+'</button></td>'
+      + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enStock\')" title="Stock">'+(p.enStock===false?'🚫':'📦')+'</button></td>'
       + '<td style="white-space:nowrap">'
       + '<button class="adm-btn-sm" onclick="editingProd=' + idx + ';renderAdminContent()">✏️</button> '
       + '<button class="adm-btn-sm" onclick="admElimProd(' + idx + ')" style="color:var(--color-text-danger)">×</button>'
@@ -5113,6 +5123,10 @@ function renderAdminProductos() {
 
   html += '</tbody></table></div>';
   el.innerHTML = html;
+  // Attach change listeners for sel bar
+  document.querySelectorAll('.prod-chk').forEach(function(c){
+    c.addEventListener('change', admUpdSelBar);
+  });
 }
 
 function renderFormProducto() {
@@ -5153,6 +5167,15 @@ function renderFormProducto() {
     + '<div style="font-size:11px;color:var(--color-text-tertiary)">💡 El stock se gestiona desde el módulo <strong>Stock → Nuevo movimiento</strong></div>'
     + '<div style="font-size:12px;margin-top:4px">Stock actual: <strong>' + fN(p.stk||0,0) + ' uds</strong> (Habana: '+(p.stk_alm&&p.stk_alm.Habana||0)+' · Placetas: '+(p.stk_alm&&p.stk_alm.Placetas||0)+' · Xportprise: '+(p.stk_alm&&p.stk_alm.Xportprise||0)+')</div>'
     + '</div>'
+    + '<div style="margin-top:14px;padding:14px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+    + '<div style="font-size:12px;font-weight:600;margin-bottom:10px">🖼️ Foto del producto (catálogo público)</div>'
+    + (p.img ? '<img src="'+p.img+'" style="width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block" onerror="this.style.display=\'none\'">' : '')
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<input type="file" id="ep-img-file" accept="image/*" style="display:none" onchange="admUploadImg(this,' + (isNew?-1:editingProd) + ')">'
+    + '<button class="adm-btn" onclick="document.getElementById(\'ep-img-file\').click()" id="btn-upload-img">📷 Subir foto</button>'
+    + '<span id="img-upload-status" style="font-size:11px;color:var(--color-text-secondary)">'+(p.img?'✓ Foto guardada':'Sin foto')+'</span>'
+    + '</div>'
+    + '</div>'
     + '<div style="display:flex;gap:8px;margin-top:20px">'
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarProd(' + (isNew ? -1 : editingProd) + ')">' + (isNew ? 'Crear producto' : 'Guardar cambios') + '</button>'
     + '<button class="adm-btn" onclick="editingProd=null;renderAdminContent()">Cancelar</button>'
@@ -5173,7 +5196,10 @@ function admGuardarProd(idx) {
   var cat = (document.getElementById('ep-cat')?.value||'').trim();
   var activo = document.getElementById('ep-activo') ? document.getElementById('ep-activo').checked : true;
   var enStock = document.getElementById('ep-en-stock') ? document.getElementById('ep-en-stock').checked : true;
+  // Preserve existing img URL (upload handled separately)
+  var existingImg = existingProd ? (existingProd.img||'') : '';
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock,
+    img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
     ddp: isNaN(ddp) ? null : ddp };
@@ -5189,11 +5215,109 @@ function admGuardarProd(idx) {
   renderAdminProductos();
 }
 
+async function admUploadImg(input, idx){
+  var file = input.files[0];
+  if(!file) return;
+  if(file.size > 5*1024*1024){ showToast('La imagen no puede superar 5MB'); return; }
+  var status = document.getElementById('img-upload-status');
+  var btn = document.getElementById('btn-upload-img');
+  if(status) status.textContent = '⏳ Subiendo...';
+  if(btn) btn.disabled = true;
+  try{
+    // Upload to Supabase Storage bucket 'productos'
+    var ext = file.name.split('.').pop().toLowerCase()||'jpg';
+    var fname = 'prod_'+(Date.now())+'_'+(Math.random().toString(36).slice(2))+'.'+ext;
+    var uploadResp = await fetch(SUPA_URL+'/storage/v1/object/productos/'+fname, {
+      method:'POST',
+      headers:{
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer '+SUPA_KEY,
+        'Content-Type': file.type,
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if(!uploadResp.ok){
+      var err = await uploadResp.text();
+      throw new Error(err);
+    }
+    var imgUrl = SUPA_URL+'/storage/v1/object/public/productos/'+fname;
+    // Update product in memory
+    if(idx>=0 && PRODS[idx]){ PRODS[idx].img = imgUrl; }
+    // Save to Supabase productos table
+    if(idx>=0 && PRODS[idx] && PRODS[idx].supaId){
+      await supaReq('PATCH','productos?id=eq.'+PRODS[idx].supaId,{imagen_url:imgUrl});
+    }
+    if(status) status.textContent = '✓ Foto guardada';
+    if(btn) btn.textContent = '📷 Cambiar foto';
+    // Show preview
+    var preview = document.createElement('img');
+    preview.src = imgUrl;
+    preview.style.cssText = 'width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block';
+    var uploadSection = btn.parentElement.parentElement;
+    var existing = uploadSection.querySelector('img');
+    if(existing) existing.src = imgUrl;
+    else uploadSection.insertBefore(preview, uploadSection.firstChild);
+    showToast('✓ Foto subida correctamente');
+  }catch(e){
+    console.warn('upload img:', e);
+    if(status) status.textContent = '✗ Error al subir — '+e.message;
+    showToast('Error subiendo foto: '+e.message);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
 function admElimProd(idx) {
   if (!confirm('¿Eliminar "' + PRODS[idx].n + '"?')) return;
   PRODS.splice(idx, 1);
   showToast('Producto eliminado');
   renderAdminProductos();
+}
+function admToggleProd(idx, field){
+  var p=PRODS[idx]; if(!p) return;
+  if(field==='activo') p.activo=p.activo===false?true:false;
+  else if(field==='enStock') p.enStock=p.enStock===false?true:false;
+  offlineSaveProds();
+  if(typeof syncSaveProducto==='function') syncSaveProducto(p);
+  renderAdminProductos();
+  showToast((field==='activo'?(p.activo?'✅ Activado en POS':'⛔ Desactivado de POS'):(p.enStock?'📦 Visible en Stock':'🚫 Oculto de Stock'))+': '+p.n);
+}
+function admGetSelProds(){
+  return [...document.querySelectorAll('.prod-chk:checked')].map(function(c){return parseInt(c.dataset.idx);});
+}
+function admUpdSelBar(){
+  var sel=admGetSelProds();
+  var bar=document.getElementById('prod-sel-bar');
+  var cnt=document.getElementById('prod-sel-count');
+  if(bar){bar.style.display=sel.length?'flex':'none';}
+  if(cnt)cnt.textContent=sel.length+' seleccionado'+(sel.length!==1?'s':'');
+}
+function admChkAllProds(checked){
+  document.querySelectorAll('.prod-chk').forEach(function(c){c.checked=checked;});
+  admUpdSelBar();
+}
+function admDeselProds(){
+  document.querySelectorAll('.prod-chk').forEach(function(c){c.checked=false;});
+  var all=document.getElementById('prod-chk-all');if(all)all.checked=false;
+  admUpdSelBar();
+}
+async function admSelProdToggle(disable, field){
+  var idxs=admGetSelProds();
+  if(!idxs.length){showToast('Selecciona productos primero');return;}
+  idxs.forEach(function(idx){
+    var p=PRODS[idx]; if(!p) return;
+    if(field==='activo') p.activo=!disable;
+    else p.enStock=!disable;
+  });
+  offlineSaveProds();
+  // Save to Supabase in parallel
+  await Promise.all(idxs.map(function(idx){
+    return typeof syncSaveProducto==='function'?syncSaveProducto(PRODS[idx]):Promise.resolve();
+  }));
+  admDeselProds();
+  renderAdminProductos();
+  showToast('✓ '+idxs.length+' producto'+(idxs.length!==1?'s':'')+' actualizados');
 }
 
 // ── USUARIOS ──────────────────────────────────────────────

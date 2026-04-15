@@ -405,7 +405,7 @@
 <script>
 // ── CONFIG ───────────────────────────────────────────────
 const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDM1NDkyMDIsImV4cCI6MjA1OTEyNTIwMn0.4OeEwpHEfHGHqiAVJt5G0W4SuSFYsXjB1-kj5WUMJwY';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
 
 const WA = {
   Habana:   '5358721200',
@@ -451,17 +451,28 @@ async function supa(path){
 // ── INIT ──────────────────────────────────────────────────
 async function init(){
   try{
-    // Load rates
-    var tasas = await supa('tasas?select=moneda,valor');
-    if(tasas&&tasas.length){
-      tasas.forEach(function(t){
-        if(t.moneda==='CUP')  RATES.CUP  = parseFloat(t.valor)||370;
-        if(t.moneda==='EUR')  RATES.EUR  = parseFloat(t.valor)||1.12;
-        if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
-      });
+    // Load rates — fallback to hardcoded if RLS blocks anon
+    try{
+      var tasas = await supa('tasas?select=moneda,valor');
+      if(tasas&&tasas.length){
+        tasas.forEach(function(t){
+          if(t.moneda==='USD')  RATES.CUP  = parseFloat(t.valor)||370;
+          if(t.moneda==='EUR')  RATES.EUR  = parseFloat(t.valor)||1.12;
+          if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
+        });
+      }
+    }catch(e){ console.warn('Tasas: usando valores por defecto'); }
+    // Load products
+    var rows;
+    try{
+      rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&order=nombre.asc');
+    }catch(e){
+      // Show specific error
+      var msg = e.message||'Error desconocido';
+      document.getElementById('prod-grid').innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⚠️</div><p>Error cargando productos:<br><code style="font-size:11px;color:var(--accent)">'+msg+'</code><br><br>Verifica que RLS está desactivado en Supabase:<br><code style="font-size:10px;color:var(--text-dim)">ALTER TABLE productos DISABLE ROW LEVEL SECURITY;</code></p></div>';
+      document.getElementById('last-update').textContent = '● Error 401';
+      return;
     }
-    // Load products (active, with stock)
-    var rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&order=nombre.asc');
     PRODS = (rows||[]).map(function(r){
       var stk_alm = {};
       (r.stock_almacen||[]).forEach(function(s){ stk_alm[s.almacen]=s.cantidad||0; });
@@ -490,8 +501,8 @@ async function init(){
     document.getElementById('last-update').textContent = '● En línea';
     render();
   }catch(e){
-    document.getElementById('last-update').textContent = '● Sin conexión';
-    document.getElementById('prod-grid').innerHTML = '<div class="empty"><div class="empty-icon">📡</div><p>No se pudo cargar el catálogo.<br>Intenta de nuevo más tarde.</p></div>';
+    document.getElementById('last-update').textContent = '● Error: '+e.message;
+    document.getElementById('prod-grid').innerHTML = '<div class="empty"><div class="empty-icon">📡</div><p>'+e.message+'</p></div>';
   }
 }
 
