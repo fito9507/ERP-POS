@@ -476,9 +476,9 @@ async function init(){
       var tasas = await supa('tasas?select=moneda,valor');
       if(tasas&&tasas.length){
         tasas.forEach(function(t){
-          if(t.moneda==='USD')  RATES.CUP  = parseFloat(t.valor)||370;
-          if(t.moneda==='EUR')  RATES.EUR  = parseFloat(t.valor)||1.12;
-          if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
+          if(t.moneda==='USD')    RATES.CUP  = parseFloat(t.valor)||370;
+          if(t.moneda==='USDEUR') RATES.EUR  = parseFloat(t.valor)||1.12;
+          if(t.moneda==='CUPT')   RATES.CUPT = parseFloat(t.valor)||270;
         });
       }
     }catch(e){ console.warn('Tasas: usando valores por defecto'); }
