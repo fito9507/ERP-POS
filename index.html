@@ -5884,10 +5884,9 @@ async function admGuardarAjustesAlm() {
 
 
 function _updEurUsd() {
-  // Read TRMI from DOM (the displayed value, not recalculated)
-  var trmiEl = document.querySelector('#eurusd-trmi');
-  var auto = trmiEl ? parseFloat(trmiEl.textContent)||0 : 
-             (RATES_EURUSD > 0.1 ? RATES_EURUSD : parseFloat((1/RATES.EUR).toFixed(4)));
+  // Use stored RATES_EURUSD directly — avoid DOM text parsing locale issues
+  var auto = RATES_EURUSD > 0.1 ? RATES_EURUSD
+           : (RATES.EUR > 0 ? parseFloat((1/RATES.EUR).toFixed(4)) : 1.12);
   var adj  = parseFloat(document.getElementById('eurusd-adj')?.value||'0');
   var fin  = document.getElementById('eurusd-fin');
   if(fin) fin.textContent = fN(parseFloat((auto+adj).toFixed(4)),2);
