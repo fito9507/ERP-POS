@@ -5688,9 +5688,10 @@ function renderAdminTasas() {
     + _tasaRow('USD / CUP', mUSD,  'CUP por 1 USD',  'usd',  aUSD,  mUSD  + aUSD)
     + _tasaRow('EUR / CUP', mEUR,  'CUP por 1 EUR',  'eur',  aEUR,  mEUR  + aEUR)
     + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
+    + _tasaRow('CUPT / CUP', mUSD+aUSD, 'Base = USD/CUP (CUPT se configura por almacén)', 'cupt2', 0, mUSD+aUSD)
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
     + (function(){
-        var _auto  = parseFloat((1/RATES.EUR).toFixed(2));
+        var _auto  = RATES_EURUSD > 0 ? parseFloat(RATES_EURUSD.toFixed(2)) : parseFloat((1/RATES.EUR).toFixed(2));
         var _adj   = parseFloat(localStorage.getItem('erp_eurusd_adj')||'0');
         var _final = parseFloat((_auto + _adj).toFixed(2));
         var bS = 'width:40px;height:40px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:18px;touch-action:manipulation';
@@ -5808,7 +5809,8 @@ function _renderAlmAdjTable() {
       var isCUPT = mon==='CUPT';
       var finalVal = isCUPT ? almAdj : (base[mon]||0)+almAdj;
       var finalVal_cup = baseUSD + ((RATES_ALM[alm]&&RATES_ALM[alm]['USD'])||0); // CUP final for this almacen
-      var finalTxt = isCUPT ? fN(almAdj,0)+'% → '+fN((finalVal_cup*(1+almAdj/100)),0) : fN(finalVal,0);
+      var cupt_result = finalVal_cup * (1 + almAdj/100);
+      var finalTxt = isCUPT ? fN(almAdj,0)+'% ('+fN(cupt_result,0)+')' : fN(finalVal,0);
       h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
         + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\',' + (isCUPT?'0':(base[mon]||0)) + ')"'
         + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
