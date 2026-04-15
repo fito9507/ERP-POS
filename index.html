@@ -5761,14 +5761,14 @@ function _renderAlmAdjTable() {
   var baseUSD  = (mkt.CUP  || RATES.CUP)  + (adj.USD  || 0);
   var baseEUR  = (mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
   var baseMLC  = (mkt.CUPT || RATES.CUPT) + (adj.CUPT || 0);
-  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC, CUPT: 0};
+  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC, CUPT: 0}; // CUPT base=0, value IS the %, CUP ref=baseUSD
 
   var h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
     + '<thead><tr>'
     + '<th style="text-align:left;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)">Almacén</th>'
     + mons.map(function(m){
         var lbl = monsLabel[m]||m;
-        var baseVal = m==='CUPT' ? '% extra sobre CUP' : 'base: '+fN(base[m]||0,0);
+        var baseVal = m==='CUPT' ? 'base CUP: '+fN(baseUSD,0) : 'base: '+fN(base[m]||0,0);
         return '<th style="text-align:center;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)" colspan="2">'
           + lbl + '<br><span style="font-size:10px;font-weight:400">'+baseVal+'</span></th>';
       }).join('')
@@ -5786,7 +5786,8 @@ function _renderAlmAdjTable() {
       var almAdj = (RATES_ALM[alm]&&RATES_ALM[alm][mon]!=null)?RATES_ALM[alm][mon]:(mon==='CUPT'?10:0);
       var isCUPT = mon==='CUPT';
       var finalVal = isCUPT ? almAdj : (base[mon]||0)+almAdj;
-      var finalTxt = isCUPT ? fN(finalVal,0)+'%' : fN(finalVal,0);
+      var finalVal_cup = baseUSD + ((RATES_ALM[alm]&&RATES_ALM[alm]['USD'])||0); // CUP final for this almacen
+      var finalTxt = isCUPT ? fN(almAdj,0)+'% → '+fN((finalVal_cup*(1+almAdj/100)),0) : fN(finalVal,0);
       h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
         + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\',' + (isCUPT?'0':(base[mon]||0)) + ')"'
         + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
