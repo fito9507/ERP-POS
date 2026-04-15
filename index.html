@@ -3079,8 +3079,26 @@ function _revertirVenta(v){
       var prod=PRODS.find(function(p){return p.n===l.n;});
       if(prod){
         prod.stk=(prod.stk||0)+l.q;
-        if(prod.stk_alm&&v.alm&&prod.stk_alm[v.alm]!=null)
-          prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
+        if(!prod.stk_alm) prod.stk_alm={};
+        if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
+        // Persist to Supabase
+        if(v.alm&&typeof syncStockAlmacen==='function'){
+          var newStk=prod.stk_alm[v.alm]||0;
+          if(prod.supaId){
+            // Have supaId — update directly
+            syncStockAlmacen(prod.supaId, v.alm, newStk);
+          } else if(_supaOnline){
+            // No supaId — fetch id from Supabase first then update
+            supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id').then(function(r){
+              if(r.ok) return r.json();
+            }).then(function(d){
+              if(d&&d[0]&&d[0].id){
+                prod.supaId=d[0].id;
+                syncStockAlmacen(prod.supaId, v.alm, newStk);
+              }
+            }).catch(function(e){console.warn('revertir supaId lookup:',e);});
+          }
+        }
       }
     });
     if(lineas.length) offlineSaveProds();
