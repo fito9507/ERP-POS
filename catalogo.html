@@ -434,7 +434,8 @@ const WA = {
 
 // Exchange rates (loaded from Supabase tasas table)
 let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
-let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0}, Placetas:{USD:0,EUR:0,MLC:0} };
+let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0,CUPT_PCT:10}, Placetas:{USD:0,EUR:0,MLC:0,CUPT_PCT:10} };
+// CUPT_PCT = % extra sobre precio CUP para transferencia
 let PRODS = [];
 let ALM = 'Habana';
 let MON = 'USD';
@@ -450,12 +451,28 @@ function fN(n, dec){
 }
 function fromUSD(usd, mon, alm){
   if(mon==='USD') return usd;
-  var almAdj = alm&&RATES_ALM[alm]&&RATES_ALM[alm][mon==='CUPT'?'MLC':mon] ? RATES_ALM[alm][mon==='CUPT'?'MLC':mon] : 0;
-  if(mon==='CUP')  return parseFloat((usd*(RATES.CUP+almAdj)).toFixed(0));
-  if(mon==='CUPT') return parseFloat((usd*(RATES.CUPT+almAdj)).toFixed(0));
+  var _alm = alm || ALM;
+  // USD adj = extra CUP per USD for this almacen
+  var adjUSD = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['USD']) ? RATES_ALM[_alm]['USD'] : 0;
+  // EUR adj = extra CUP per EUR for this almacen
+  var adjEUR = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['EUR']) ? RATES_ALM[_alm]['EUR'] : 0;
+  // MLC adj = extra CUP per CUPT for this almacen
+  var adjMLC = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['MLC']) ? RATES_ALM[_alm]['MLC'] : 0;
+
+  if(mon==='CUP'){
+    // CUP = USD × (tasa_CUP/USD + ajuste_almacen)
+    return parseFloat((usd*(RATES.CUP+adjUSD)).toFixed(0));
+  }
+  if(mon==='CUPT'){
+    // CUPT = precio CUP × (1 + CUPT_PCT%)
+    var cupt_pct = (_alm&&RATES_ALM[_alm]&&RATES_ALM[_alm]['CUPT_PCT']!=null) ? RATES_ALM[_alm]['CUPT_PCT'] : 10;
+    var cupBase = usd*(RATES.CUP+adjUSD);
+    return parseFloat((cupBase*(1+cupt_pct/100)).toFixed(0));
+  }
   if(mon==='EUR'){
+    // EUR: base = CUP/EUR, ajuste en CUP
     var eurCup = RATES.CUP / RATES.EUR;
-    return parseFloat((usd*(RATES.CUP/(eurCup+almAdj))).toFixed(2));
+    return parseFloat((usd*(RATES.CUP/(eurCup+adjEUR))).toFixed(2));
   }
   return usd;
 }
@@ -490,8 +507,10 @@ async function init(){
         try{
           var tasasAlm = await supa('tasas_almacen?select=almacen,moneda,ajuste');
           (tasasAlm||[]).forEach(function(r){
-            if(!RATES_ALM[r.almacen]) RATES_ALM[r.almacen]={};
+            if(!RATES_ALM[r.almacen]) RATES_ALM[r.almacen]={CUPT_PCT:10};
             RATES_ALM[r.almacen][r.moneda] = parseFloat(r.ajuste||0);
+            // MLC ajuste used as CUPT % extra
+            if(r.moneda==='MLC') RATES_ALM[r.almacen]['CUPT_PCT'] = parseFloat(r.ajuste||10);
           });
         }catch(e){ console.warn('tasas_almacen fallback'); }
       }
