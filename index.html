@@ -5703,21 +5703,21 @@ function renderAdminTasas() {
         var _adj   = parseFloat(localStorage.getItem('erp_eurusd_adj')||'0');
         // Reset adj if it looks wrong (adj >= auto means adj was used as the value)
         if(Math.abs(_adj) >= _auto) _adj = 0;
-        var _final = parseFloat((_auto + _adj).toFixed(2));
+        var _final = parseFloat((_auto + _adj).toFixed(4));
         var bS = 'width:40px;height:40px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:18px;touch-action:manipulation';
         return '<div class="card" style="margin-top:12px">'
           + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">USD / EUR <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(USD por 1 EUR)</span></div>'
           + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
           + '<div style="text-align:center;min-width:60px">'
           + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">TRMI</div>'
-          + '<div style="font-size:22px;font-weight:700;color:var(--color-text-secondary)">'+fN(_auto,2)+'</div>'
+          + '<div id="eurusd-trmi" style="font-size:22px;font-weight:700;color:var(--color-text-secondary)">'+fN(_auto,4)+'</div>'
           + '</div>'
           + '<div style="font-size:18px;color:var(--color-text-tertiary)">+</div>'
           + '<div style="flex:1;text-align:center">'
           + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">AJUSTE</div>'
           + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
           + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)-0.01).toFixed(2);_updEurUsd()">-</button>'
-          + '<input type="number" id="eurusd-adj" value="'+parseFloat(_adj||0).toFixed(2)+'" step="0.01" oninput="_updEurUsd()" style="width:80px;text-align:center;font-size:18px;font-weight:600;height:40px">'
+          + '<input type="number" id="eurusd-adj" value="'+parseFloat(_adj||0).toFixed(4)+'" step="0.01" oninput="_updEurUsd()" style="width:80px;text-align:center;font-size:18px;font-weight:600;height:40px">'
           + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)+0.01).toFixed(2);_updEurUsd()">+</button>'
           + '</div></div>'
           + '<div style="font-size:18px;color:var(--color-text-tertiary)">=</div>'
@@ -5884,10 +5884,13 @@ async function admGuardarAjustesAlm() {
 
 
 function _updEurUsd() {
-  var auto = parseFloat((1/RATES.EUR).toFixed(2));
+  // Read TRMI from DOM (the displayed value, not recalculated)
+  var trmiEl = document.querySelector('#eurusd-trmi');
+  var auto = trmiEl ? parseFloat(trmiEl.textContent)||0 : 
+             (RATES_EURUSD > 0.1 ? RATES_EURUSD : parseFloat((1/RATES.EUR).toFixed(4)));
   var adj  = parseFloat(document.getElementById('eurusd-adj')?.value||'0');
   var fin  = document.getElementById('eurusd-fin');
-  if(fin) fin.textContent = fN(parseFloat((auto+adj).toFixed(2)),2);
+  if(fin) fin.textContent = fN(parseFloat((auto+adj).toFixed(4)),2);
 }
 
 
