@@ -434,6 +434,7 @@ const WA = {
 
 // Exchange rates (loaded from Supabase tasas table)
 let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
+let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0}, Placetas:{USD:0,EUR:0,MLC:0} };
 let PRODS = [];
 let ALM = 'Habana';
 let MON = 'USD';
@@ -447,15 +448,19 @@ function fN(n, dec){
   if(isNaN(n)||n==null) return '—';
   return parseFloat(n).toLocaleString('es-ES',{minimumFractionDigits:dec??2,maximumFractionDigits:dec??2});
 }
-function fromUSD(usd, mon){
+function fromUSD(usd, mon, alm){
   if(mon==='USD') return usd;
-  if(mon==='EUR') return usd / RATES.EUR;
-  if(mon==='CUP') return usd * RATES.CUP;
-  if(mon==='CUPT') return usd * RATES.CUPT;
+  var almAdj = alm&&RATES_ALM[alm]&&RATES_ALM[alm][mon==='CUPT'?'MLC':mon] ? RATES_ALM[alm][mon==='CUPT'?'MLC':mon] : 0;
+  if(mon==='CUP')  return parseFloat((usd*(RATES.CUP+almAdj)).toFixed(0));
+  if(mon==='CUPT') return parseFloat((usd*(RATES.CUPT+almAdj)).toFixed(0));
+  if(mon==='EUR'){
+    var eurCup = RATES.CUP / RATES.EUR;
+    return parseFloat((usd*(RATES.CUP/(eurCup+almAdj))).toFixed(2));
+  }
   return usd;
 }
-function fPrice(usd, mon){
-  var v = fromUSD(usd, mon);
+function fPrice(usd, mon, alm){
+  var v = fromUSD(usd, mon, alm||ALM);
   return MON_SYM[mon] + ' ' + fN(v, MON_DEC[mon]);
 }
 
@@ -479,7 +484,16 @@ async function init(){
           if(t.moneda==='USD')    RATES.CUP  = parseFloat(t.valor)||370;
           if(t.moneda==='USDEUR') RATES.EUR  = parseFloat(t.valor)||1.12;
           if(t.moneda==='CUPT')   RATES.CUPT = parseFloat(t.valor)||270;
+          if(t.moneda==='CUP')    RATES.CUP  = RATES.CUP||parseFloat(t.valor)||370;
         });
+        // Load per-almacen adjustments
+        try{
+          var tasasAlm = await supa('tasas_almacen?select=almacen,moneda,ajuste');
+          (tasasAlm||[]).forEach(function(r){
+            if(!RATES_ALM[r.almacen]) RATES_ALM[r.almacen]={};
+            RATES_ALM[r.almacen][r.moneda] = parseFloat(r.ajuste||0);
+          });
+        }catch(e){ console.warn('tasas_almacen fallback'); }
       }
     }catch(e){ console.warn('Tasas: usando valores por defecto'); }
     // Load products
@@ -591,14 +605,14 @@ function cardHTML(p){
     +(p.maj>0&&p.min>0&&p.maj!==p.min?
       '<div class="price-row" style="margin-bottom:2px">'
       +'<span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span>'
-      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON)+'</span></div>'
+      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
       +'<div class="price-row" style="margin-bottom:4px">'
       +'<span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span>'
-      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON)+'</span></div>'
-      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON)+'</span></div>')
+      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
+      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>')
     +'<div style="border-top:1px solid rgba(255,255,255,.06);margin:4px 0"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
-        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m)+'</span></div>';
+        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
     +(stk>0?
@@ -746,7 +760,7 @@ function renderCart(){
       +'<input class="qty-inp" type="number" min="1" value="'+i.qty+'" onchange="updCartQty(\''+esc(i.prod.n)+'\',this.value)" style="width:64px;height:44px;font-size:15px">'
       +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty+1)+ ')">+</button>'
       +'</div>'
-      +'<span style="font-size:11px;color:var(--text-dim)">× '+fPrice(r.price,MON)+'</span>'
+      +'<span style="font-size:11px;color:var(--text-dim)">× '+fPrice(r.price,MON,ALM)+'</span>'
       +'</div></div>'
       +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
       +'<button class="cart-item-rm" onclick="removeFromCart(\''+esc(i.prod.n)+'\')">✕</button>'
