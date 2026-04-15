@@ -5788,9 +5788,9 @@ function _renderAlmAdjTable() {
       var finalVal = isCUPT ? almAdj : (base[mon]||0)+almAdj;
       var finalTxt = isCUPT ? fN(finalVal,0)+'%' : fN(finalVal,0);
       h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
-        + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\','+base[mon]+')"'
+        + ' oninput="_updAlmFinal(\''+alm+'\',\''+mon+'\',' + (isCUPT?'0':(base[mon]||0)) + ')"'
         + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
-      h += '<td id="alm-fin-'+alm+'-'+mon+'" style="padding:4px 8px;text-align:center;font-weight:700;color:var(--color-text-success);font-size:15px">'+fN(final,0)+'</td>';
+      h += '<td id="alm-fin-'+alm+'-'+mon+'" style="padding:4px 8px;text-align:center;font-weight:700;color:var(--color-text-success);font-size:15px">'+finalTxt+'</td>';
     });
     h += '</tr>';
   });
