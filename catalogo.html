@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Catálogo — Contenedores & Acero</title>
+<title>Marín Metal PDL — Catálogo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -45,12 +45,13 @@
     display:flex;align-items:center;gap:12px;
   }
   .logo-icon{
-    width:44px;height:44px;
-    background:var(--accent);
+    width:48px;height:48px;
+    background:transparent;
     border-radius:10px;
     display:flex;align-items:center;justify-content:center;
     font-size:22px;
     flex-shrink:0;
+    overflow:hidden;
   }
   .logo-text{
     font-family:'Bebas Neue',sans-serif;
@@ -174,27 +175,29 @@
   }
   .qty-ctrl{display:flex;align-items:center;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden}
   .qty-btn{
-    width:32px;height:32px;background:transparent;
-    border:none;color:var(--text);font-size:16px;
+    width:42px;height:42px;background:transparent;
+    border:none;color:var(--text);font-size:20px;
     cursor:pointer;transition:background .15s;display:flex;align-items:center;justify-content:center;
+    -webkit-tap-highlight-color:transparent;touch-action:manipulation;
   }
-  .qty-btn:hover{background:var(--steel-light)}
+  .qty-btn:hover,.qty-btn:active{background:var(--steel-light)}
   .qty-inp{
-    width:40px;text-align:center;background:transparent;
+    width:44px;text-align:center;background:transparent;
     border:none;border-left:1px solid var(--border);border-right:1px solid var(--border);
-    color:var(--text);font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;
-    padding:0 4px;height:32px;
+    color:var(--text);font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
+    padding:0 4px;height:42px;
   }
   .qty-inp:focus{outline:none}
   .add-btn{
-    flex:1;padding:0 12px;height:32px;
+    flex:1;padding:0 12px;height:42px;
     background:var(--accent);color:#1a1f2e;
     border:none;border-radius:8px;
-    font-size:12px;font-weight:700;font-family:'DM Sans',sans-serif;
+    font-size:13px;font-weight:700;font-family:'DM Sans',sans-serif;
     cursor:pointer;transition:all .15s;
-    white-space:nowrap;
+    white-space:nowrap;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
   }
-  .add-btn:hover{background:#f5cc6a;transform:scale(1.02)}
+  .add-btn:hover{background:#f5cc6a}
+  .add-btn:active{transform:scale(0.97)}
   .add-btn.added{background:#4be8a0;color:#1a1f2e}
 
   /* ── CART FLOAT ── */
@@ -329,9 +332,9 @@
 <header>
   <div class="header-inner">
     <div class="logo">
-      <div class="logo-icon">🏗️</div>
+      <div class="logo-icon" id="logo-wrap" style="background:transparent;padding:0"><img id="logo-img" src="data:image/jpeg;base64,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" alt="Marín Metal PDL" style="width:48px;height:48px;border-radius:10px;object-fit:cover"></div>
       <div>
-        <div class="logo-text">Aceros & Contenedores</div>
+        <div class="logo-text">Marín Metal PDL</div>
         <div class="logo-sub">Habana · Placetas · Xportprise</div>
       </div>
     </div>
@@ -409,7 +412,7 @@
 </div>
 
 <footer>
-  © 2026 Aceros &amp; Contenedores · Los precios pueden variar · Confirmar disponibilidad
+  © 2026 Marín Metal PDL · Los precios pueden variar · Confirmar disponibilidad
 </footer>
 
 <script>
@@ -593,7 +596,7 @@ function cardHTML(p){
     +(stk>0?'<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onclick="chgQty(\''+esc(p.n)+'\',-1)">−</button>'
-      +'<input class="qty-inp" id="qty-'+cardId+'" type="number" min="1" max="'+stk+'" value="'+qty+'" onchange="setQty(\''+esc(p.n)+'\',this.value)">'
+      +'<input class="qty-inp" data-name="'+esc(p.n)+'" type="number" min="1" max="'+stk+'" value="'+qty+'" onchange="setQty(\''+esc(p.n)+'\',this.value)">'
       +'<button class="qty-btn" onclick="chgQty(\''+esc(p.n)+'\',1)">+</button>'
       +'</div>'
       +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCart(\''+esc(p.n)+'\')">'
@@ -607,32 +610,33 @@ function cardHTML(p){
 function esc(s){ return (s||'').replace(/['"<>&]/g,function(c){return {'\'':'&#39;','"':'&quot;','<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
 
 // ── CART ──────────────────────────────────────────────────
+function getQtyInp(name){ return document.querySelector('.qty-inp[data-name="'+name+'"]'); }
 function getQty(name){
-  var inp = document.getElementById('qty-'+name);
+  var inp = getQtyInp(name);
   return inp ? parseInt(inp.value)||1 : 1;
 }
 function chgQty(name, d){
-  var inp = document.getElementById('qty-'+name);
+  var inp = getQtyInp(name);
   if(!inp) return;
-  var v = parseInt(inp.value)||1;
-  inp.value = Math.max(1, v+d);
-  // Update price display if mayorista threshold changes
+  var v = Math.max(1, (parseInt(inp.value)||1) + d);
+  inp.value = v;
   var p = PRODS.find(function(x){return x.n===name;});
   if(p&&p.maj>0) reRenderCard(name);
 }
 function reRenderCard(name){
   var p = PRODS.find(function(x){return x.n===name;});
-  var card = document.getElementById('card-'+name);
-  if(!p||!card) return;
-  // Update cart qty to match
+  if(!p) return;
+  var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  var card = document.getElementById('card-'+cardId);
+  if(!card) return;
   if(CART[name]){
-    var inp = document.getElementById('qty-'+name);
+    var inp = getQtyInp(name);
     if(inp) CART[name].qty = parseInt(inp.value)||1;
   }
   card.outerHTML = cardHTML(p);
 }
 function setQty(name, v){
-  var inp = document.getElementById('qty-'+name);
+  var inp = getQtyInp(name);
   if(inp) inp.value = Math.max(1, parseInt(v)||1);
 }
 function addToCart(name){
@@ -640,8 +644,8 @@ function addToCart(name){
   if(!p) return;
   var qty = getQty(name);
   CART[name] = {prod:p, qty:qty};
-  // Visual feedback
-  var btn = document.getElementById('addbtn-'+name);
+  var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  var btn = document.getElementById('addbtn-'+cardId);
   if(btn){ btn.textContent='✓ Agregado'; btn.classList.add('added'); }
   updCart();
 }
