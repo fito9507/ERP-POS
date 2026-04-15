@@ -142,9 +142,8 @@
     font-size:40px;color:var(--text-dim);
     position:relative;overflow:hidden;
   }
-  .card-img img{width:100%;height:100%;object-fit:cover;display:none}
-  .card-img img.loaded{display:block}
-  .card-img .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px}
+  .card-img img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0;z-index:1}
+  .card-img .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:0}
   .card-img .placeholder span{font-size:11px;color:var(--text-dim);font-weight:500}
 
   .card-body{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:8px}
@@ -568,24 +567,24 @@ function cardHTML(p){
   var priceMaj = p.maj || p.min || 0;
   var price = isMay ? priceMaj : priceMin;
 
-  return '<div class="card" id="card-'+esc(p.n)+'">'
+  var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  return '<div class="card" id="card-'+cardId+'">'
     +'<div class="card-img">'
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\'">' : '')
-    +'<div class="placeholder"><span>🏗️</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>'
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>🏗️</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
     +'<div class="prices">'
-    +(p.maj>0&&p.maj!==p.min?
+    +(p.maj>0&&p.min>0&&p.maj!==p.min?
       '<div class="price-row" style="margin-bottom:2px">'
-      +'<span class="lbl" style="font-size:10px">Minorista <1-'+(MIN_MAY-1)+' uds)</span>'
+      +'<span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span>'
       +'<span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON)+'</span></div>'
       +'<div class="price-row" style="margin-bottom:4px">'
       +'<span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span>'
       +'<span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON)+'</span></div>'
-      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price,MON)+'</span></div>')
+      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON)+'</span></div>')
     +'<div style="border-top:1px solid rgba(255,255,255,.06);margin:4px 0"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
         return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m)+'</span></div>';
@@ -594,10 +593,10 @@ function cardHTML(p){
     +(stk>0?'<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onclick="chgQty(\''+esc(p.n)+'\',-1)">−</button>'
-      +'<input class="qty-inp" id="qty-'+esc(p.n)+'" type="number" min="1" max="'+stk+'" value="'+qty+'" onchange="setQty(\''+esc(p.n)+'\',this.value)">'
+      +'<input class="qty-inp" id="qty-'+cardId+'" type="number" min="1" max="'+stk+'" value="'+qty+'" onchange="setQty(\''+esc(p.n)+'\',this.value)">'
       +'<button class="qty-btn" onclick="chgQty(\''+esc(p.n)+'\',1)">+</button>'
       +'</div>'
-      +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+esc(p.n)+'" onclick="addToCart(\''+esc(p.n)+'\')">'
+      +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCart(\''+esc(p.n)+'\')">'
       +(cartItem?'✓ Agregado':'+ Agregar')
       +'</button>'
       +'</div>':'')
