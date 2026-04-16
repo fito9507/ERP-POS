@@ -1409,14 +1409,19 @@ function fromUSD(u,mon,alm){
   }
   if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
-    // EUR = USD * (CUP/USD) / (CUP/EUR)
-    // Use market CUP/EUR rate directly (most reliable source)
+    // EUR = USD * (CUP/USD) / (CUP/EUR adjusted)
     var cupUSD = RATES.CUP + adjUSD;
+    // Base CUP/EUR from elToque market rate
     var mktRates = {}; try{mktRates=JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}');}catch(e){}
-    var cupEUR_base = mktRates.EUR > 10 ? mktRates.EUR  // CUP/EUR from elToque (e.g. 590)
-                    : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP/RATES.EUR  // derive from USD/EUR
-                    : cupUSD * 1.12); // last resort
-    var cupEUR = cupEUR_base + adjEUR;
+    var cupEUR_mkt = mktRates.EUR > 10 ? mktRates.EUR
+                   : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP/RATES.EUR : cupUSD * 1.12);
+    // Global EUR adj from USD/EUR panel (stored as USDEUR ratio adj)
+    // Panel adj changes RATES_EURUSD by delta — translate to CUP/EUR delta
+    var _euAdj = parseFloat(localStorage.getItem('erp_eurusd_adj')||'0');
+    // If euAdj=+0.08 means EUR is 0.08 more USD per EUR → cupEUR increases by cupUSD*0.08
+    var cupEUR_global = cupEUR_mkt + (cupUSD * _euAdj);
+    // Almacen adj (from tasas_almacen.EUR) adds extra CUP per EUR
+    var cupEUR = cupEUR_global + adjEUR;
     return parseFloat((u * cupUSD / cupEUR).toFixed(2));
   }
   return u*(RATES[mon]||1);
