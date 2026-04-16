@@ -1409,14 +1409,13 @@ function fromUSD(u,mon,alm){
   }
   if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
-    // USD → EUR conversion
-    // cupUSD = CUP per USD (e.g. 530 for Habana)
-    // cupEUR = CUP per EUR = base(590) + almacen_adj (e.g. +5 = 595)
-    // EUR = USD * cupUSD / cupEUR
+    // EUR = USD * (CUP/USD) / (CUP/EUR)
+    // Use market CUP/EUR rate directly (most reliable source)
     var cupUSD = RATES.CUP + adjUSD;
-    var cupEUR_base = RATES_EURUSD > 0.5 && RATES_EURUSD < 5
-                    ? RATES.CUP * RATES_EURUSD   // e.g. 525 * 1.1238 = 590
-                    : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP / RATES.EUR : RATES.CUP / 0.89);
+    var mktRates = {}; try{mktRates=JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}');}catch(e){}
+    var cupEUR_base = mktRates.EUR > 10 ? mktRates.EUR  // CUP/EUR from elToque (e.g. 590)
+                    : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP/RATES.EUR  // derive from USD/EUR
+                    : cupUSD * 1.12); // last resort
     var cupEUR = cupEUR_base + adjEUR;
     return parseFloat((u * cupUSD / cupEUR).toFixed(2));
   }
@@ -7660,6 +7659,8 @@ async function fetchElToqueAndSave(){
     RATES.CUP  = cup  + (adj.USD  || 0);
     var ecuFin = ecu  + (adj.EUR  || 0);
     if (ecuFin > 0) RATES.EUR = parseFloat((RATES.CUP / ecuFin).toFixed(6));
+    // RATES_EURUSD = CUP_EUR/CUP_USD (ratio for display panel)
+    if(cup>0 && ecu>0) { RATES_EURUSD=parseFloat((ecu/cup).toFixed(4)); try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){} }
     RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
 
     showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
