@@ -140,7 +140,7 @@
     background:var(--steel-light);
     display:flex;align-items:center;justify-content:center;
     font-size:40px;color:var(--text-dim);
-    position:relative;overflow:hidden;
+    position:relative;overflow:visible;
   }
   .card-img img{width:100%;height:100%;object-fit:contain;position:absolute;inset:0;z-index:1;background:var(--steel-light)}
   .card-img .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:0}
@@ -648,7 +648,7 @@ function cardHTML(p){
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +(p.enTransito?'<div style="position:absolute;top:8px;left:8px;background:rgba(245,158,11,.92);color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">&#128674; EN TR&Aacute;NSITO</div>':'')
+    +(p.enTransito?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
