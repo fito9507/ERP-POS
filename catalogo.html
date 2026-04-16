@@ -833,6 +833,7 @@ function sendWA(){
     + '\uD83D\uDCCD Almac\u00e9n: *'+ALM+'*\n'
     + (nota?'\uD83D\uDCDD '+nota+'\n':'')
     + '\n_Solicito confirmaci\u00f3n de disponibilidad y precio final._';
+  var phone = WA[ALM] || WA.Habana;
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 
