@@ -570,6 +570,8 @@ async function init(){
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
         enTransito: r.en_transito===true || r.en_transito==='true',
+        min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
+        maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false
       };
     }).filter(function(p){ return p.activo !== false && p.enStock !== false; });
@@ -640,8 +642,8 @@ function cardHTML(p){
   // Mayorista si qty >= MIN_MAY (10 uds por defecto)
   var MIN_MAY = p.min_may || 10;
   var isMay = qty >= MIN_MAY && p.maj > 0;
-  var priceMin = p.min || 0;
-  var priceMaj = p.maj || p.min || 0;
+  var priceMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
+  var priceMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
   var price = isMay ? priceMaj : priceMin;
 
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');

@@ -1780,7 +1780,10 @@ async function syncLoadProductos() {
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
-        activo: row.activo !== false, enStock: row.en_stock !== false, enTransito: row.en_transito===true, img: row.imagen_url||'', supaId: row.id
+        activo: row.activo !== false, enStock: row.en_stock !== false, enTransito: row.en_transito===true,
+        min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
+        maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
+        img: row.imagen_url||'', supaId: row.id
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -1818,6 +1821,8 @@ async function syncSaveProducto(p) {
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
     activo:p.activo!==false,en_stock:p.enStock!==false,en_transito:p.enTransito===true,
+    precio_min_placetas:p.min_placetas!=null?p.min_placetas:null,
+    precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
     imagen_url:p.img||null};
 
   if (!_supaOnline) {
@@ -2414,7 +2419,13 @@ function setCartMon(m,btn){
   document.querySelectorAll('.mt-btn').forEach(b=>b.classList.remove('act'));btn.classList.add('act');
   renderCart();
 }
-function getP(p){return S.tipo==='Minorista'?(p.min??p.maj??0):(p.maj??p.min??0);}
+function getP(p){
+  // Use Placetas-specific prices if in Placetas and prices are set
+  var isPlac = S.alm==='Placetas';
+  var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min??p.maj??0);
+  var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj??p.min??0);
+  return S.tipo==='Minorista' ? min : maj;
+}
 function stkDisp(p){
   // Block stock reserved by ANY user globally
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
@@ -5262,7 +5273,7 @@ function renderFormProducto() {
     + '<input class="adm-inp" type="number" id="ep-maj" value="' + (p.maj != null ? p.maj : '') + '" step="0.01" placeholder="—"></div>'
     + '<div><label class="adm-lbl-f">Coste DDP (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-ddp" value="' + (p.ddp != null ? p.ddp : '') + '" step="0.01" placeholder="—"></div>'
-    + '<div><label class="adm-lbl-f">Stock mínimo alerta</label>'
+    + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--color-text-secondary)">🏪 Precios Placetas (opcional)</div>'    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Si está vacío usa el precio de Habana. Rellena solo si Placetas tiene precio diferente.</div>'    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'    + '<div><label class="adm-lbl-f">Min. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-min-plac" value="' + (p.min_placetas != null ? p.min_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '<div><label class="adm-lbl-f">May. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-maj-plac" value="' + (p.maj_placetas != null ? p.maj_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '</div></div>'    + '<div><label class="adm-lbl-f">Stock mínimo alerta</label>'
     + '<input class="adm-inp" type="number" id="ep-stk-min" value="' + (p.stk_min || 10) + '" min="0" step="1"></div>'
     + '</div>'
     + '<div style="margin-top:8px;padding:10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
@@ -5291,6 +5302,10 @@ function admGuardarProd(idx) {
   var maj = parseFloat(document.getElementById('ep-maj').value);
   var ddp = parseFloat(document.getElementById('ep-ddp').value);
   var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
+  var min_placetas_v = document.getElementById('ep-min-plac')?.value;
+  var maj_placetas_v = document.getElementById('ep-maj-plac')?.value;
+  var min_placetas = min_placetas_v!=='' && !isNaN(parseFloat(min_placetas_v)) ? parseFloat(min_placetas_v) : null;
+  var maj_placetas = maj_placetas_v!=='' && !isNaN(parseFloat(maj_placetas_v)) ? parseFloat(maj_placetas_v) : null;
   // Stock preserved from existing product (managed via movements)
   var existingProd = idx === -1 ? null : PRODS[idx];
   var stk_alm = existingProd ? (existingProd.stk_alm || {Habana:0,Placetas:0,Xportprise:0}) : {Habana:0,Placetas:0,Xportprise:0};
@@ -5302,7 +5317,7 @@ function admGuardarProd(idx) {
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
 
-  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito,
+  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas,
     img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
