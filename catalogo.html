@@ -569,10 +569,10 @@ async function init(){
         stk_alm: stk_alm,
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
-        enTransito: r.en_transito===true,
+        enTransito: r.en_transito===true || r.en_transito==='true',
         activo: r.activo!==false
       };
-    }).filter(function(p){ return p.activo && (p.enStock || p.enTransito); });
+    }).filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
 
     // Build categories
     var cats = [...new Set(PRODS.map(function(p){return p.cat;}).filter(Boolean))].sort();
