@@ -446,6 +446,15 @@ const WA = {
   Habana:   '5358721200',
   Placetas: '5353425247'
 };
+const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
+const TG_GROUP = '-5283520069';
+function tgSend(msg){
+  if(!TG_TOKEN||!TG_GROUP) return;
+  fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:TG_GROUP,text:msg,parse_mode:'HTML'})
+  }).catch(function(){});
+}
 
 // Exchange rates (loaded from Supabase tasas table)
 let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
@@ -834,6 +843,13 @@ function sendWA(){
     + (nota?'\uD83D\uDCDD '+nota+'\n':'')
     + '\n_Solicito confirmaci\u00f3n de disponibilidad y precio final._';
   var phone = WA[ALM] || WA.Habana;
+  // Notify Telegram group
+  var tgMsg = '\uD83D\uDED2 <b>Pedido cat\u00e1logo — '+ALM+'</b>\n'
+    + '\uD83D\uDC64 <b>'+nombre+'</b>'+(tel?' · \uD83D\uDCDE '+tel:'')+'\n\n'
+    + items.map(function(i){var r=getCartPrice(i);return '• '+i.qty+'\u00d7 '+i.prod.n+' \u2192 '+fPrice(r.price*i.qty,MON);}).join('\n')
+    + '\n\n\uD83D\uDCB0 <b>Total: '+fPrice(items.reduce(function(a,i){return a+getCartPrice(i).price*i.qty;},0),MON)+'</b>'
+    + (nota?'\n\uD83D\uDCDD '+nota:'');
+  tgSend(tgMsg);
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 

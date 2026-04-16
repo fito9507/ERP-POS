@@ -1475,16 +1475,17 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 // ── Telegram Bot ─────────────────────────────────────────────
 const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
-const TG_CHAT  = '8781639188';
+const TG_CHAT  = '8781639188';   // personal
+const TG_GROUP = '-5283520069';  // grupo
 function tgSend(msg){
-  if(!TG_TOKEN||!TG_CHAT) return;
-  fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:TG_CHAT,text:msg,parse_mode:'HTML'})
-  }).catch(function(e){console.warn('Telegram:',e);});
+  if(!TG_TOKEN) return;
+  [TG_CHAT,TG_GROUP].forEach(function(cid){
+    fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({chat_id:cid,text:msg,parse_mode:'HTML'})
+    }).catch(function(e){console.warn('Telegram:',e);});
+  });
 }
-
 let _supaOnline = navigator.onLine;
 let _syncQueue  = [];
 
