@@ -577,7 +577,10 @@ async function init(){
     // DEBUG: show raw en_transito values in header
     var _dbg = _allRows.filter(function(p){return p.enTransitoRaw!=null;}).map(function(p){return p.n+'='+JSON.stringify(p.enTransitoRaw);}).join(', ');
     document.getElementById('last-update').textContent = _dbg ? 'transito: '+_dbg : 'no en_transito col';
-    PRODS = _allRows.filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
+    // TEMP DEBUG: show ALL active products to diagnose
+    PRODS = _allRows.filter(function(p){ return p.activo !== false; });
+    var _t = _allRows.find(function(p){return p.n==='Varillas E6013 3.2x350mm';});
+    if(_t) document.getElementById('last-update').textContent = 'DEBUG: enStock='+_t.enStock+' enTransito='+_t.enTransito+' enTransitoRaw='+JSON.stringify(_t.enTransitoRaw)+' activo='+_t.activo;
 
     // Build categories
     var cats = [...new Set(PRODS.map(function(p){return p.cat;}).filter(Boolean))].sort();
