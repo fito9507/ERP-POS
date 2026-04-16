@@ -5253,6 +5253,2549 @@ function renderFormProducto() {
     + '<input type="checkbox" id="ep-en-stock"' + (p.enStock!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
     + '</div>'
     + '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;grid-column:1/-1">'
-    + '<label class="adm-lbl-f" style="margin:0;flex:1">En tránsito (catálogo)</label>'
+    + '<label class="adm-lbl-f" style="margin:0;flex:1">En transito (catalogo)</label>'
     + '<input type="checkbox" id="ep-en-transito"' + (p.enTransito?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
     + '</div>'
+    + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-min" value="' + (p.min != null ? p.min : '') + '" step="0.01" placeholder="—"></div>'
+    + '<div><label class="adm-lbl-f">Precio Mayorista (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-maj" value="' + (p.maj != null ? p.maj : '') + '" step="0.01" placeholder="—"></div>'
+    + '<div><label class="adm-lbl-f">Coste DDP (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-ddp" value="' + (p.ddp != null ? p.ddp : '') + '" step="0.01" placeholder="—"></div>'
+    + '<div><label class="adm-lbl-f">Stock mínimo alerta</label>'
+    + '<input class="adm-inp" type="number" id="ep-stk-min" value="' + (p.stk_min || 10) + '" min="0" step="1"></div>'
+    + '</div>'
+    + '<div style="margin-top:8px;padding:10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+    + '<div style="font-size:11px;color:var(--color-text-tertiary)">💡 El stock se gestiona desde el módulo <strong>Stock → Nuevo movimiento</strong></div>'
+    + '<div style="font-size:12px;margin-top:4px">Stock actual: <strong>' + fN(p.stk||0,0) + ' uds</strong> (Habana: '+(p.stk_alm&&p.stk_alm.Habana||0)+' · Placetas: '+(p.stk_alm&&p.stk_alm.Placetas||0)+' · Xportprise: '+(p.stk_alm&&p.stk_alm.Xportprise||0)+')</div>'
+    + '</div>'
+    + '<div style="margin-top:14px;padding:14px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+    + '<div style="font-size:12px;font-weight:600;margin-bottom:10px">🖼️ Foto del producto (catálogo público)</div>'
+    + (p.img ? '<img src="'+p.img+'" style="width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block" onerror="this.style.display=\'none\'">' : '')
+    + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+    + '<input type="file" id="ep-img-file" accept="image/*" style="display:none" onchange="admUploadImg(this,' + (isNew?-1:editingProd) + ')">'
+    + '<button class="adm-btn" onclick="document.getElementById(\'ep-img-file\').click()" id="btn-upload-img">📷 Subir foto</button>'
+    + '<span id="img-upload-status" style="font-size:11px;color:var(--color-text-secondary)">'+(p.img?'✓ Foto guardada':'Sin foto')+'</span>'
+    + '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:20px">'
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarProd(' + (isNew ? -1 : editingProd) + ')">' + (isNew ? 'Crear producto' : 'Guardar cambios') + '</button>'
+    + '<button class="adm-btn" onclick="editingProd=null;renderAdminContent()">Cancelar</button>'
+    + '</div>';
+}
+
+function admGuardarProd(idx) {
+  var n = (document.getElementById('ep-n').value || '').trim();
+  if (!n) { showToast('El nombre es obligatorio'); return; }
+  var min = parseFloat(document.getElementById('ep-min').value);
+  var maj = parseFloat(document.getElementById('ep-maj').value);
+  var ddp = parseFloat(document.getElementById('ep-ddp').value);
+  var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
+  // Stock preserved from existing product (managed via movements)
+  var existingProd = idx === -1 ? null : PRODS[idx];
+  var stk_alm = existingProd ? (existingProd.stk_alm || {Habana:0,Placetas:0,Xportprise:0}) : {Habana:0,Placetas:0,Xportprise:0};
+  var stk = existingProd ? (existingProd.stk || 0) : 0;
+  var cat = (document.getElementById('ep-cat')?.value||'').trim();
+  var activo = document.getElementById('ep-activo') ? document.getElementById('ep-activo').checked : true;
+  var enStock = document.getElementById('ep-en-stock') ? document.getElementById('ep-en-stock').checked : true;
+  var enTransito = document.getElementById('ep-en-transito') ? document.getElementById('ep-en-transito').checked : false;
+  // Preserve existing img URL (upload handled separately)
+  var existingImg = existingProd ? (existingProd.img||'') : '';
+  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito,
+    img: existingImg,
+    min: isNaN(min) ? null : min,
+    maj: isNaN(maj) ? null : maj,
+    ddp: isNaN(ddp) ? null : ddp };
+  if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
+  else {
+    // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
+    if(existingProd&&existingProd.supaId) prod.supaId = existingProd.supaId;
+    PRODS[idx] = prod;
+    showToast('Actualizado: ' + n);
+  }
+  // Sync to Supabase immediately
+  if (typeof syncSaveProducto === 'function') {
+    syncSaveProducto(idx === -1 ? PRODS[PRODS.length-1] : PRODS[idx])
+      .then(function(ok){ if(ok) showToast('✓ Guardado en Supabase'); })
+      .catch(function(e){ console.warn('sync prod:', e); });
+  }
+  editingProd = null;
+  renderAdminProductos();
+}
+
+async function admUploadImg(input, idx){
+  var file = input.files[0];
+  if(!file) return;
+  if(file.size > 5*1024*1024){ showToast('La imagen no puede superar 5MB'); return; }
+  var status = document.getElementById('img-upload-status');
+  var btn = document.getElementById('btn-upload-img');
+  if(status) status.textContent = '⏳ Subiendo...';
+  if(btn) btn.disabled = true;
+  try{
+    // Upload to Supabase Storage bucket 'productos'
+    var ext = file.name.split('.').pop().toLowerCase()||'jpg';
+    var fname = 'prod_'+(Date.now())+'_'+(Math.random().toString(36).slice(2))+'.'+ext;
+    var uploadResp = await fetch(SUPA_URL+'/storage/v1/object/productos/'+fname, {
+      method:'POST',
+      headers:{
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer '+SUPA_KEY,
+        'Content-Type': file.type,
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+    if(!uploadResp.ok){
+      var err = await uploadResp.text();
+      throw new Error(err);
+    }
+    var imgUrl = SUPA_URL+'/storage/v1/object/public/productos/'+fname;
+    // Update product in memory
+    if(idx>=0 && PRODS[idx]){ PRODS[idx].img = imgUrl; }
+    // Save to Supabase productos table
+    if(idx>=0 && PRODS[idx] && PRODS[idx].supaId){
+      await supaReq('PATCH','productos?id=eq.'+PRODS[idx].supaId,{imagen_url:imgUrl});
+    }
+    if(status) status.textContent = '✓ Foto guardada';
+    if(btn) btn.textContent = '📷 Cambiar foto';
+    // Show preview
+    var preview = document.createElement('img');
+    preview.src = imgUrl;
+    preview.style.cssText = 'width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block';
+    var uploadSection = btn.parentElement.parentElement;
+    var existing = uploadSection.querySelector('img');
+    if(existing) existing.src = imgUrl;
+    else uploadSection.insertBefore(preview, uploadSection.firstChild);
+    showToast('✓ Foto subida correctamente');
+  }catch(e){
+    console.warn('upload img:', e);
+    if(status) status.textContent = '✗ Error al subir — '+e.message;
+    showToast('Error subiendo foto: '+e.message);
+  }finally{
+    if(btn) btn.disabled = false;
+  }
+}
+
+async function admElimProd(idx) {
+  var p = PRODS[idx];
+  if (!p) return;
+  if (!confirm('¿Eliminar "' + p.n + '"? Esta acción no se puede deshacer.')) return;
+  // Delete from Supabase first
+  if (_supaOnline && p.supaId) {
+    var r = await supaReq('DELETE', 'productos?id=eq.'+p.supaId);
+    if (!r.ok) { showToast('Error al eliminar en Supabase'); return; }
+    // Also delete stock_almacen rows
+    supaReq('DELETE', 'stock_almacen?producto_id=eq.'+p.supaId).catch(function(e){console.warn(e);});
+  }
+  PRODS.splice(idx, 1);
+  offlineSaveProds();
+  showToast('✓ Producto eliminado');
+  renderAdminProductos();
+}
+function admToggleProd(idx, field){
+  var p=PRODS[idx]; if(!p) return;
+  if(field==='activo') p.activo=p.activo===false?true:false;
+  else if(field==='enStock') p.enStock=p.enStock===false?true:false;
+  offlineSaveProds();
+  if(typeof syncSaveProducto==='function') syncSaveProducto(p);
+  renderAdminProductos();
+  showToast((field==='activo'?(p.activo?'✅ Activado en POS':'⛔ Desactivado de POS'):(p.enStock?'📦 Visible en Stock':'🚫 Oculto de Stock'))+': '+p.n);
+}
+function admGetSelProds(){
+  return [...document.querySelectorAll('.prod-chk:checked')].map(function(c){return parseInt(c.dataset.idx);});
+}
+function admUpdSelBar(){
+  var sel=admGetSelProds();
+  var bar=document.getElementById('prod-sel-bar');
+  var cnt=document.getElementById('prod-sel-count');
+  if(bar){bar.style.display=sel.length?'flex':'none';}
+  if(cnt)cnt.textContent=sel.length+' seleccionado'+(sel.length!==1?'s':'');
+}
+function admChkAllProds(checked){
+  document.querySelectorAll('.prod-chk').forEach(function(c){c.checked=checked;});
+  admUpdSelBar();
+}
+function admDeselProds(){
+  document.querySelectorAll('.prod-chk').forEach(function(c){c.checked=false;});
+  var all=document.getElementById('prod-chk-all');if(all)all.checked=false;
+  admUpdSelBar();
+}
+async function admSelProdToggle(disable, field){
+  var idxs=admGetSelProds();
+  if(!idxs.length){showToast('Selecciona productos primero');return;}
+  idxs.forEach(function(idx){
+    var p=PRODS[idx]; if(!p) return;
+    if(field==='activo') p.activo=!disable;
+    else p.enStock=!disable;
+  });
+  offlineSaveProds();
+  // Save to Supabase in parallel
+  await Promise.all(idxs.map(function(idx){
+    return typeof syncSaveProducto==='function'?syncSaveProducto(PRODS[idx]):Promise.resolve();
+  }));
+  admDeselProds();
+  renderAdminProductos();
+  showToast('✓ '+idxs.length+' producto'+(idxs.length!==1?'s':'')+' actualizados');
+}
+
+// ── USUARIOS ──────────────────────────────────────────────
+function renderAdminUsuarios() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  if (editingUser !== null) { renderFormUsuario(); return; }
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    + '<span style="font-size:13px;font-weight:600">' + Object.keys(USERS).length + ' usuario(s)</span>'
+    + '<button class="adm-btn adm-btn-p" onclick="editingUser=\'__new__\';renderAdminContent()">+ Nuevo usuario</button>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">';
+
+  Object.keys(USERS).forEach(function(name) {
+    var u = USERS[name];
+    html += '<div class="adm-card" style="border-left:3px solid ' + (u.tc || 'var(--color-border-secondary)') + '">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+      + '<div style="width:36px;height:36px;border-radius:50%;background:' + (u.color || 'var(--color-background-secondary)') + ';color:' + (u.tc || 'var(--color-text-primary)') + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">' + name[0] + '</div>'
+      + '<div><div style="font-size:13px;font-weight:600">' + name + '</div>'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary)">' + (u.rol === 'admin' ? '👑 Admin' : '🧑 Vendedor') + (u.almacen ? ' · ' + u.almacen : '') + '</div>'
+      + '</div></div>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button class="adm-btn-sm" onclick="editingUser=\'' + name + '\';renderAdminContent()" style="flex:1">✏️ Editar</button>'
+      + (name !== 'Admin' ? '<button class="adm-btn-sm" onclick="admElimUser(\'' + name + '\')" style="color:var(--color-text-danger)">×</button>' : '')
+      + '</div></div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function renderFormUsuario() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  var isNew = (editingUser === '__new__');
+  var nombre = isNew ? '' : editingUser;
+  var u = isNew ? {pin:'', rol:'vendedor', almacen:'', color:ADMIN_COLORES[0].bg, tc:ADMIN_COLORES[0].tc, modulos:['pos','stock','ventas','clientes']} : (USERS[nombre] || {});
+
+  var coloresHtml = '';
+  ADMIN_COLORES.forEach(function(c, i) {
+    coloresHtml += '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px">'
+      + '<input type="radio" name="eu-color" value="' + i + '" ' + (u.color === c.bg ? 'checked' : '') + '>'
+      + '<div style="width:22px;height:22px;border-radius:50%;background:' + c.bg + ';border:2px solid ' + c.tc + '"></div>'
+      + c.lbl + '</label>';
+  });
+
+  var almsHtml = '<option value="">Sin asignar</option>';
+  ['Habana','Placetas','Xportprise'].forEach(function(a) {
+    almsHtml += '<option' + (u.almacen === a ? ' selected' : '') + '>' + a + '</option>';
+  });
+
+  el.innerHTML = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
+    + '<button class="adm-btn" onclick="editingUser=null;renderAdminContent()">← Volver</button>'
+    + '<span style="font-size:14px;font-weight:600">' + (isNew ? 'Nuevo usuario' : 'Editar: ' + nombre) + '</span>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:480px">'
+    + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Nombre *</label>'
+    + '<input class="adm-inp" id="eu-nombre" value="' + nombre + '" placeholder="Nombre del usuario"' + (!isNew ? ' readonly style="opacity:.6"' : '') + '>'
+    + (!isNew ? '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:3px">El nombre no se puede cambiar</div>' : '')
+    + '</div>'
+    + '<div><label class="adm-lbl-f">PIN (4 dígitos) *</label>'
+    + '<input class="adm-inp" id="eu-pin" type="password" maxlength="4" value="' + (u.pin || '') + '" placeholder="••••"></div>'
+    + '<div><label class="adm-lbl-f">Rol</label>'
+    + '<select class="adm-inp" id="eu-rol"><option value="vendedor"' + (u.rol !== 'admin' ? ' selected' : '') + '>Vendedor</option><option value="admin"' + (u.rol === 'admin' ? ' selected' : '') + '>Admin</option></select></div>'
+    + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Almacén por defecto</label>'
+    + '<select class="adm-inp" id="eu-alm">' + almsHtml + '</select></div>'
+    + '<div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:6px 0"><label class="adm-lbl-f" style="margin:0;flex:1">Puede realizar ventas en POS</label><input type="checkbox" id="eu-puede-vender"' + (u.puedeVender!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer"></div>'
+    + '<div style="grid-column:1/-1"><label class="adm-lbl-f" style="margin-bottom:8px;display:block">Color</label>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap">' + coloresHtml + '</div></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-top:20px">'
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarUser(\'' + (isNew ? '__new__' : nombre) + '\')">' + (isNew ? 'Crear usuario' : 'Guardar cambios') + '</button>'
+    + '<button class="adm-btn" onclick="editingUser=null;renderAdminContent()">Cancelar</button>'
+    + '</div>';
+}
+
+function admGuardarUser(key) {
+  var isNew = (key === '__new__');
+  var nombre = isNew ? (document.getElementById('eu-nombre').value || '').trim() : key;
+  if (!nombre) { showToast('El nombre es obligatorio'); return; }
+  if (isNew && USERS[nombre]) { showToast('Ya existe un usuario con ese nombre'); return; }
+  var pin = (document.getElementById('eu-pin').value || '').trim();
+  if (!pin || pin.length !== 4 || !/^\d+$/.test(pin)) { showToast('El PIN debe tener 4 dígitos'); return; }
+  var rol     = document.getElementById('eu-rol').value || 'vendedor';
+  var almacen = document.getElementById('eu-alm').value || '';
+  var colorEl = document.querySelector('input[name="eu-color"]:checked');
+  var colorIdx = colorEl ? parseInt(colorEl.value) : 0;
+  var colorDef = ADMIN_COLORES[colorIdx] || ADMIN_COLORES[0];
+  var modulos = getSelectedModulos();
+  if(rol==='admin') modulos = Object.keys(MOD_LABELS);
+  else if(!modulos.length) modulos = ['pos','stock','ventas','clientes'];
+  var puedeVender=document.getElementById('eu-puede-vender')?document.getElementById('eu-puede-vender').checked:true;
+  USERS[nombre]={pin:pin,rol:rol,almacen:almacen,color:colorDef.bg,tc:colorDef.tc,activo:true,modulos:modulos,puedeVender:puedeVender};
+  saveUsers();syncSaveUser(nombre,USERS[nombre]);renderLoginCards();
+  showToast(isNew?'Usuario creado: '+nombre:'Actualizado: '+nombre);
+  editingUser=null;renderAdminUsuarios();
+}
+
+function admElimUser(nombre) {
+  if (nombre === 'Admin') { showToast('No se puede eliminar Admin'); return; }
+  if (!confirm('¿Eliminar usuario "' + nombre + '"?')) return;
+  delete USERS[nombre];
+  saveUsers();syncDeleteUser(nombre);renderLoginCards();
+  showToast('Usuario eliminado: '+nombre);
+  renderAdminUsuarios();
+}
+
+
+
+function admFiltrarProds(q) {
+  window._admProdQ = q || '';
+  renderAdminProductos();
+}
+
+
+
+
+
+
+
+
+function getCategorias(){
+  var cats=new Set(PRODS.filter(function(p){return p.cat;}).map(function(p){return p.cat;}));
+  // Also load from CATS (erp_cats) and erp_categorias
+  try{JSON.parse(localStorage.getItem('erp_cats')||'[]').forEach(function(c){cats.add(c);});}catch(e){}
+  try{JSON.parse(localStorage.getItem('erp_categorias')||'[]').forEach(function(c){cats.add(c);});}catch(e){}
+  if(typeof CATS!=='undefined') CATS.forEach(function(c){cats.add(c);});
+  return Array.from(cats).sort();
+}
+// admAddCat defined below
+function admRemoveCat(cat){
+  if(!confirm('Eliminar categoria: '+cat+'?'))return;
+  var arr=getCategorias().filter(function(c){return c!==cat;});
+  try{localStorage.setItem('erp_categorias',JSON.stringify(arr));}catch(e){}
+  renderCatManager();
+}
+function renderCatManager(){
+  var el=document.getElementById('cat-manager-content');if(!el)return;
+  var cats=getCategorias();
+  var h='<div style="display:flex;gap:8px;margin-bottom:10px">';
+  h+='<input class="adm-inp" id="new-cat-inp" placeholder="Nueva categoría..." style="flex:1" onkeydown="if(event.key==\'Enter\')admAddCat()">';
+  h+='<button class="adm-btn adm-btn-p" onclick="admAddCat()">+ Añadir</button></div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  if(cats.length)cats.forEach(function(c){
+    h+='<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 12px;background:var(--color-background-secondary);border-radius:100px;font-size:12px">'+c;
+    h+='<span onclick="admRemoveCat(\''+c+'\')" style="cursor:pointer;color:var(--color-text-danger);font-size:15px">×</span></span>';
+  });
+  else h+='<span style="font-size:12px;color:var(--color-text-tertiary)">Sin categorías</span>';
+  el.innerHTML=h+'</div>';
+}
+
+function renderAdminCats() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  var html = '<div style="max-width:480px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    + '<span style="font-size:13px;font-weight:600">' + CATS.length + ' categorías</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:14px">'
+    + '<input class="adm-inp" id="new-cat-inp" placeholder="Nueva categoría..." style="flex:1"'
+    + ' onkeydown="if(event.key===\'Enter\')admAddCat()">'
+    + '<button class="adm-btn adm-btn-p" onclick="admAddCat()">+ Añadir</button>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px">';
+  CATS.forEach(function(c, i) {
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+      + '<span style="flex:1;font-size:13px">' + c + '</span>'
+      + '<button class="adm-btn-sm" onclick="admDelCat(' + i + ')" style="color:var(--color-text-danger)">×</button>'
+      + '</div>';
+  });
+  html += '</div></div>';
+  el.innerHTML = html;
+  setTimeout(function(){var inp=document.getElementById('new-cat-inp');if(inp)inp.focus();},50);
+}
+function admAddCat() {
+  var inp = document.getElementById('new-cat-inp');
+  var val = (inp ? inp.value : '').trim();
+  if (!val) return;
+  if (CATS.indexOf(val) >= 0) { showToast('Ya existe'); return; }
+  CATS.push(val);
+  saveCats();
+  showToast('Categoría añadida: ' + val);
+  renderAdminCats();
+}
+function admDelCat(i) {
+  if (!confirm('¿Eliminar categoría "' + CATS[i] + '"?')) return;
+  CATS.splice(i, 1);
+  saveCats();
+  renderAdminCats();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// admGuardarTasas defined below
+
+function admPreviewTasas() {
+  var cup  = parseFloat(document.getElementById('t-cup')?.value) || RATES.CUP;
+  var eurC = parseFloat(document.getElementById('t-eur-cup')?.value) || (RATES.CUP/RATES.EUR);
+  var cupt = parseFloat(document.getElementById('t-cupt')?.value) || RATES.CUPT;
+  var pe = document.getElementById('prev-cup'); if(pe) pe.textContent = fN(cup,0);
+  var pe2 = document.getElementById('prev-eur'); if(pe2) pe2.textContent = fN(eurC,0);
+  var pe3 = document.getElementById('prev-cupt'); if(pe3) pe3.textContent = fN(cupt,0);
+}
+
+function admGuardarTasas() {
+  // Read adjustment inputs (generated by _tasaRow with IDs tadj-usd, tadj-eur, tadj-cupt)
+  var aUSD  = parseFloat(document.getElementById('tadj-usd')?.value)  || 0;
+  var aEUR  = parseFloat(document.getElementById('tadj-eur')?.value)  || 0;
+  var aCUPT = parseFloat(document.getElementById('tadj-cupt')?.value) || 0;
+
+  // Get market base rates
+  var mkt = {};
+  try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
+  var mUSD  = mkt.CUP  || RATES.CUP;
+  var mEUR  = mkt.CUP && mkt.EUR ? parseFloat((mkt.CUP/mkt.EUR).toFixed(2)) : parseFloat((RATES.CUP/RATES.EUR).toFixed(2));
+  var mCUPT = mkt.CUPT || RATES.CUPT;
+
+  // Apply: final = market + adjustment
+  var finalUSD  = mUSD  + aUSD;
+  var finalEUR  = mEUR  + aEUR;
+  var finalCUPT = mCUPT + aCUPT;
+
+  if (finalUSD  > 0) RATES.CUP  = finalUSD;
+  if (finalEUR  > 0) RATES.EUR  = parseFloat((finalUSD / finalEUR).toFixed(6));
+  if (finalCUPT > 0) RATES.CUPT = finalCUPT;
+  // RATES_EURUSD = EUR per USD = finalEUR/finalUSD = CUP_EUR/CUP_USD
+  RATES_EURUSD = parseFloat((finalEUR/finalUSD).toFixed(4));
+  if(!(RATES_EURUSD > 0.5 && RATES_EURUSD < 5)) RATES_EURUSD = 1.12;
+  try { localStorage.setItem('erp_eurusd', RATES_EURUSD.toString()); } catch(e) {}
+
+  // Also read CUPT2 adj (informational row, no action needed)
+  var aCUPT2 = parseFloat(document.getElementById('tadj-cupt2')?.value) || 0;
+  // Save adjustments for next render
+  try { localStorage.setItem('erp_rates_adj', JSON.stringify({USD:aUSD, EUR:aEUR, CUPT:aCUPT, CUPT2:aCUPT2})); } catch(e) {}
+  // Save eurusd adj too so panel doesn't reset
+  var aEurUsd = parseFloat(document.getElementById('eurusd-adj')?.value) || 0;
+  try { localStorage.setItem('erp_eurusd_adj', aEurUsd.toString()); } catch(e) {}
+
+  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
+
+  // Save to Supabase
+  if (_supaOnline) {
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'USD',valor:RATES.CUP,tasa_mkt:mUSD,ajuste:aUSD}).catch(function(e){});
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'EUR',valor:RATES.EUR,tasa_mkt:mkt.EUR||RATES.EUR,ajuste:aEUR}).catch(function(e){});
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'CUPT',valor:RATES.CUPT,tasa_mkt:mCUPT,ajuste:aCUPT}).catch(function(e){});
+  }
+
+  showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
+  renderAdminTasas();
+}
+
+
+
+
+
+
+
+function renderAdminTasas() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  // Try to fetch fresh rates in background (non-blocking)
+  var _hasMkt = false;
+  try { var _tm = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt = !!_tm.CUP; } catch(e) {}
+  if (false && !_hasMkt && typeof fetchTasasElToque === 'function') {
+    fetchTasasElToque(true).then(function(){ 
+      var _hasMkt2 = false;
+      try { var _tm2 = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}'); _hasMkt2=!!_tm2.CUP; } catch(e) {}
+      if (_hasMkt2) renderAdminTasas();
+    }).catch(function(){});
+    // Show with current RATES while waiting
+    try { localStorage.setItem('erp_rates_mkt', JSON.stringify({CUP:RATES.CUP,EUR:RATES.EUR,CUPT:RATES.CUPT})); } catch(e) {}
+  }
+
+  // Load saved adjustments
+  var adj = {};
+  try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
+
+  // Load pure market rates (from elToque, before adjustment)
+  var mkt = {};
+  try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
+
+  // If no market cache, use current RATES minus stored adj
+  var mUSD  = mkt.CUP  || RATES.CUP;
+  var mEUR  = mkt.EUR || parseFloat((RATES.CUP / RATES.EUR).toFixed(2));
+  var mCUPT = mkt.CUPT || RATES.CUPT;
+
+  var aUSD  = adj.USD  || 0;
+  var aEUR  = adj.EUR  || 0;
+  var aCUPT = adj.CUPT || 0;
+
+  var age = '';
+  try {
+    var rc = JSON.parse(localStorage.getItem('erp_rates') || '{}');
+    if (rc.ts) age = Math.round((Date.now()-rc.ts)/60000) + ' min';
+  } catch(e) {}
+
+  el.innerHTML = '<div style="max-width:560px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    + '<h3 style="margin:0">💱 Tasas de cambio</h3>'
+    + '<button class="adm-btn adm-btn-p" onclick="fetchElToqueAndSave()" style="font-size:12px">🔄 Actualizar elToque</button>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:16px">'
+    + 'TRMI elToque · auto cada 1 hora' + (age ? ' · hace <b>' + age + '</b>' : '') + '</div>'
+    + _tasaRow('USD / CUP', mUSD,  'CUP por 1 USD',  'usd',  aUSD,  mUSD  + aUSD)
+    + _tasaRow('EUR / CUP', mEUR,  'CUP por 1 EUR',  'eur',  aEUR,  mEUR  + aEUR)
+    + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
+    + '<div class="card" style="margin-bottom:12px;opacity:.7">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">CUPT / CUP <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">— solo lectura, configurable por almacén abajo</span></div>'
+    + '<div style="display:flex;align-items:center;gap:16px">'
+    + '<div style="text-align:center;min-width:70px"><div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">BASE</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--color-text-secondary)">' + fN(mUSD+aUSD,0) + '</div></div>'
+    + '<div style="font-size:13px;color:var(--color-text-tertiary);flex:1">= USD/CUP + % extra configurado por almacén en la tabla inferior</div>'
+    + '</div></div>'
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
+    + (function(){
+        // RATES_EURUSD = USD por 1 EUR (e.g. 1.12)
+        // Also try localStorage cache
+        // USD/EUR = CUP_EUR / CUP_USD = mEUR/mUSD (e.g. 590/525 = 1.124)
+        var _auto = (mEUR > 0 && mUSD > 0) ? parseFloat((mEUR/mUSD).toFixed(4)) : 1.12;
+        if(!(_auto > 0.5 && _auto < 5)) _auto = 1.12;
+        RATES_EURUSD = _auto;
+        try{ localStorage.setItem('erp_eurusd', _auto.toString()); }catch(e){}
+        var _adj = parseFloat(localStorage.getItem('erp_eurusd_adj')||'0');
+        var _final = parseFloat((_auto + _adj).toFixed(4));
+        var bS = 'width:40px;height:40px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:18px;touch-action:manipulation';
+        return '<div class="card" style="margin-top:12px">'
+          + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">USD / EUR <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(USD por 1 EUR)</span></div>'
+          + '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+          + '<div style="text-align:center;min-width:60px">'
+          + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">TRMI</div>'
+          + '<div id="eurusd-trmi" style="font-size:22px;font-weight:700;color:var(--color-text-secondary)">'+fN(_auto,4)+'</div>'
+          + '</div>'
+          + '<div style="font-size:18px;color:var(--color-text-tertiary)">+</div>'
+          + '<div style="flex:1;text-align:center">'
+          + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">AJUSTE</div>'
+          + '<div style="display:flex;align-items:center;gap:6px;justify-content:center">'
+          + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)-0.01).toFixed(2);_updEurUsd()">-</button>'
+          + '<input type="number" id="eurusd-adj" value="'+parseFloat(_adj||0).toFixed(4)+'" step="0.01" oninput="_updEurUsd()" style="width:80px;text-align:center;font-size:18px;font-weight:600;height:40px">'
+          + '<button style="'+bS+'" onclick="var e=document.getElementById(\'eurusd-adj\');e.value=(parseFloat(e.value)+0.01).toFixed(2);_updEurUsd()">+</button>'
+          + '</div></div>'
+          + '<div style="font-size:18px;color:var(--color-text-tertiary)">=</div>'
+          + '<div style="text-align:center;min-width:60px">'
+          + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">FINAL</div>'
+          + '<div id="eurusd-fin" style="font-size:24px;font-weight:800;color:var(--color-text-success)">'+fN(_final,2)+'</div>'
+          + '</div></div></div>';
+      })()
+    + '<h3 style="margin:16px 0 10px">Ajustes por almacén</h3>'
+    + _renderAlmAdjTable()
+    + '<button class="adm-btn adm-btn-p" onclick="admGuardarAjustesAlm()" style="width:100%;padding:10px;margin-top:8px">💾 Guardar ajustes almacén</button>'
+    + '</div>';
+}
+
+function _tasaRow(label, mkt, note, key, adj, fin) {
+  var btnStyle = 'width:40px;height:40px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:18px;touch-action:manipulation;flex-shrink:0';
+  return '<div class="card" style="margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">' + label + '</div>'
+    + '<div style="display:flex;align-items:center;gap:10px">'
+    // TRMI
+    + '<div style="text-align:center;min-width:70px">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">TRMI</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--color-text-secondary)">' + fN(mkt,0) + '</div>'
+    + '</div>'
+    + '<div style="font-size:16px;color:var(--color-text-tertiary)">+</div>'
+    // AJUSTE
+    + '<div style="text-align:center;flex:1">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">AJUSTE</div>'
+    + '<div style="display:flex;align-items:center;gap:4px">'
+    + '<button style="' + btnStyle + '" onclick="_adjChange(\'' + key + '\',-1)">−</button>'
+    + '<input type="number" id="tadj-' + key + '" value="' + adj + '" oninput="_adjChange(\'' + key + '\',0)" style="flex:1;min-width:50px;text-align:center;font-size:16px;font-weight:600;height:40px">'
+    + '<button style="' + btnStyle + '" onclick="_adjChange(\'' + key + '\',+1)">+</button>'
+    + '</div></div>'
+    + '<div style="font-size:16px;color:var(--color-text-tertiary)">=</div>'
+    // FINAL
+    + '<div style="text-align:center;min-width:70px">'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">FINAL</div>'
+    + '<div id="tfin-' + key + '" style="font-size:24px;font-weight:800;color:var(--color-text-success)">' + fN(fin,0) + '</div>'
+    + '</div>'
+    + '</div></div>';
+}
+
+function _adjChange(key, delta) {
+  var inp = document.getElementById('tadj-' + key);
+  if (!inp) return;
+  if (delta !== 0) inp.value = (parseFloat(inp.value) || 0) + delta;
+  // Update final display
+  var mkt = {};
+  try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
+  var mktMap = {
+    usd:  mkt.CUP  || RATES.CUP,
+    eur:  mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2)),
+    cupt: mkt.CUPT || RATES.CUPT
+  };
+  var adj = parseFloat(inp.value) || 0;
+  var fin = document.getElementById('tfin-' + key);
+  if (fin) fin.textContent = fN((mktMap[key] || 0) + adj, 0);
+}
+
+
+
+
+function _renderAlmAdjTable() {
+  var alms = ['Habana','Placetas','Xportprise'];
+  var mons = ['USD','EUR','MLC','CUPT'];
+  var monsLabel = {USD:'USD/CUP',EUR:'EUR/CUP',MLC:'MLC/CUP',CUPT:'CUPT %+'};
+
+  // Base rates (TRMI + global adj)
+  var mkt = {};
+  try { mkt = JSON.parse(localStorage.getItem('erp_rates_mkt') || '{}'); } catch(e) {}
+  var adj = {};
+  try { adj = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}'); } catch(e) {}
+  var baseUSD  = (mkt.CUP  || RATES.CUP)  + (adj.USD  || 0);
+  var baseEUR  = (mkt.EUR || parseFloat((RATES.CUP/RATES.EUR).toFixed(2))) + (adj.EUR  || 0);
+  var baseMLC  = (mkt.CUPT || RATES.CUPT) + (adj.CUPT || 0);
+  var base = {USD: baseUSD, EUR: baseEUR, MLC: baseMLC, CUPT: 0}; // CUPT base=0, value IS the %, CUP ref=baseUSD
+
+  var h = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+    + '<thead><tr>'
+    + '<th style="text-align:left;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)">Almacén</th>'
+    + mons.map(function(m){
+        var lbl = monsLabel[m]||m;
+        var baseVal = m==='CUPT' ? 'base CUP: '+fN(baseUSD,0) : 'base: '+fN(base[m]||0,0);
+        return '<th style="text-align:center;padding:8px;color:var(--color-text-tertiary);border-bottom:1px solid var(--color-border-tertiary)" colspan="2">'
+          + lbl + '<br><span style="font-size:10px;font-weight:400">'+baseVal+'</span></th>';
+      }).join('')
+    + '</tr>'
+    + '<tr>'
+    + '<th></th>'
+    + mons.map(function(m){ var label=m==='CUPT'?'%':'+/−'; return '<th style="font-size:10px;color:var(--color-text-tertiary);padding:2px 4px;font-weight:400">'+label+'</th><th style="font-size:10px;color:var(--color-text-success);padding:2px 4px;font-weight:600">FINAL</th>'; }).join('')
+    + '</tr>'
+    + '</thead><tbody>';
+
+  alms.forEach(function(alm){
+    h += '<tr style="border-bottom:1px solid var(--color-border-tertiary)">';
+    h += '<td style="padding:8px;font-weight:600">'+alm+'</td>';
+    mons.forEach(function(mon){
+      var almAdj = (RATES_ALM[alm]&&RATES_ALM[alm][mon]!=null)?RATES_ALM[alm][mon]:(mon==='CUPT'?10:0);
+      var isCUPT = mon==='CUPT';
+      var finalVal = isCUPT ? almAdj : (base[mon]||0)+almAdj;
+      var finalVal_cup = baseUSD + ((RATES_ALM[alm]&&RATES_ALM[alm]['USD'])||0); // CUP final for this almacen
+      var cupt_result = finalVal_cup * (1 + almAdj/100);
+      var finalTxt = isCUPT ? fN(almAdj,0)+'% ('+fN(cupt_result,0)+')' : fN(finalVal,0);
+      h += '<td style="padding:4px 6px"><input type="number" id="alm-adj-'+alm+'-'+mon+'" value="'+almAdj+'" step="1"'
+        + ' oninput="_updAlmFinal(this,\''+alm+'\',\''+mon+'\',' + (base[mon]||0) + ','+baseUSD+')"'
+        + ' style="width:70px;text-align:center;font-size:13px;height:34px"></td>';
+      h += '<td id="alm-fin-'+alm+'-'+mon+'" style="padding:4px 8px;text-align:center;font-weight:700;color:var(--color-text-success);font-size:15px">'+finalTxt+'</td>';
+    });
+    h += '</tr>';
+  });
+
+  h += '</tbody></table></div>';
+  return h;
+}
+
+function _updAlmFinal(inp, alm, mon, base, baseUSD) {
+  var fin = document.getElementById('alm-fin-'+alm+'-'+mon);
+  if(!fin) return;
+  var v = parseFloat(inp.value)||0;
+  if(mon==='CUPT'){
+    var adjUSD = (RATES_ALM[alm]&&RATES_ALM[alm]['USD'])||0;
+    var cupFinal = (baseUSD||0) + adjUSD;
+    fin.textContent = fN(v,0)+'% ('+fN(cupFinal*(1+v/100),0)+')';
+  } else {
+    fin.textContent = fN((base||0)+v, 0);
+  }
+}
+
+async function admGuardarAjustesAlm() {
+  var alms=['Habana','Placetas','Xportprise'], mons=['USD','EUR','MLC','CUPT'];
+  var rows=[];
+  alms.forEach(function(alm){
+    mons.forEach(function(mon){
+      var el=document.getElementById('alm-adj-'+alm+'-'+mon);
+      var adj=el?parseFloat(el.value)||0:0;
+      if(!RATES_ALM[alm])RATES_ALM[alm]={};
+      RATES_ALM[alm][mon]=adj;
+      rows.push({almacen:alm,moneda:mon,ajuste:adj});
+    });
+  });
+  var euEl=document.getElementById('eurusd-adj');
+  if(euEl){
+    var _euAdj=parseFloat(euEl.value)||0;
+    var _euAuto=RATES_EURUSD > 0.1 ? RATES_EURUSD : parseFloat((1/RATES.EUR).toFixed(4));
+    var _euFinal=parseFloat((_euAuto+_euAdj).toFixed(4));
+    if(_euFinal > 0.1) RATES_EURUSD=_euFinal;
+    try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){}
+    try{localStorage.setItem('erp_eurusd_adj',_euAdj.toString());}catch(e){}
+    if(_supaOnline) supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:_euAuto,ajuste:_euAdj}).catch(function(e){});
+  }
+  if(_supaOnline){
+    for(var i=0;i<rows.length;i++){
+      await supaReq('POST','tasas_almacen?on_conflict=almacen,moneda',rows[i]).catch(function(e){console.warn(e);});
+    }
+    showToast('Ajustes por almacén guardados');
+  } else {
+    try{localStorage.setItem('erp_rates_alm',JSON.stringify(RATES_ALM));}catch(e){}
+    showToast('Ajustes guardados localmente');
+  }
+}
+
+
+
+
+
+
+function _updEurUsd() {
+  // Use stored RATES_EURUSD directly — avoid DOM text parsing locale issues
+  var auto = RATES_EURUSD > 0.1 ? RATES_EURUSD
+           : (RATES.EUR > 0 ? parseFloat((1/RATES.EUR).toFixed(4)) : 1.12);
+  var adj  = parseFloat(document.getElementById('eurusd-adj')?.value||'0');
+  var fin  = document.getElementById('eurusd-fin');
+  if(fin) fin.textContent = fN(parseFloat((auto+adj).toFixed(4)),2);
+}
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO CAJAS ADMIN — saldo_inicial + movimientos
+// ═══════════════════════════════════════════════════════════════
+var _cajasData = [];
+var _cajasMovs = (function(){try{return JSON.parse(localStorage.getItem('erp_cajas_movs')||'[]');}catch(e){return[];}})();
+var _cajasTab  = 'resumen'; // resumen | movimiento | historial | gestionar
+
+async function loadCajasData() {
+  try {
+    if (_supaOnline) {
+      var rc = await supaReq('GET', 'cajas?order=almacen.asc,moneda.asc');
+      if (rc.ok) {
+        var d = await rc.json()||[];
+        window._cajasDataAll = d; // all cajas including archived
+        _cajasData = d.filter(function(c){return c.activa!==false;});
+        if(!_cajasData.length) _cajasData = _cajasFromLocal();
+      }
+      var rm = await supaReq('GET', 'mov_cajas?order=created_at.desc&limit=2000');
+      if (rm.ok) {
+        _cajasMovs = await rm.json() || [];
+        // Always overwrite localStorage with Supabase data (clears stale cache)
+        try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+      }
+    } else {
+      _cajasData = _cajasFromLocal();
+    }
+  } catch(e) { console.warn('loadCajasData:', e); _cajasData = _cajasFromLocal(); }
+}
+
+function _cajasFromLocal() {
+  return Object.keys(CUENTAS_BASE||{}).map(function(n){
+    var p=n.split(' '); return {id:n,nombre:n,moneda:p[0]||'USD',almacen:p.slice(1).join(' ')||'General',saldo_inicial:0,activa:true};
+  });
+}
+
+function _getSaldoCaja(cajaId) {
+  var caja = _cajasData.find(function(c){return c.id==cajaId||c.nombre==cajaId;});
+  if (!caja) return 0;
+  var saldo = parseFloat(caja.saldo_inicial||0);
+  var nombre = caja.nombre;
+  _cajasMovs.forEach(function(m){
+    var orig = (m.caja_origen||'').trim();
+    var dest = (m.caja_destino||'').trim();
+    var esOrigen  = orig===nombre || orig==caja.id || m.caja_origen_id==caja.id;
+    var esDestino = dest===nombre || dest==caja.id || m.caja_destino_id==caja.id;
+    if (esOrigen)  saldo -= parseFloat(m.monto_origen||0);
+    if (esDestino) saldo += parseFloat(m.monto_destino||0);
+  });
+  return saldo;
+}
+
+async function renderAdminCajas() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--color-text-tertiary)">⏳ Cargando cajas...</div>';
+  await loadCajasData();
+
+  var tabDefs = [
+    {k:'resumen',    l:'📊 Resumen'},
+    {k:'movimiento', l:'➕ Movimiento'},
+    {k:'historial',  l:'📋 Historial'},
+    {k:'gestionar',  l:'⚙️ Gestionar'},
+  ];
+  var tabs = '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
+    + tabDefs.map(function(t){
+        return '<button class="adm-tab'+(_cajasTab===t.k?' act':'')+'" onclick="_setCajasTab(\''+t.k+'\')">'+t.l+'</button>';
+      }).join('')
+    + '</div>';
+
+  var content = '';
+  if      (_cajasTab === 'resumen')    content = _renderResumenCajas();
+  else if (_cajasTab === 'movimiento') content = _renderNuevoMovCaja();
+  else if (_cajasTab === 'historial')  content = _renderHistorialMovCajas();
+  else                                  content = _renderGestionarCajas();
+
+  el.innerHTML = tabs + content;
+}
+
+function _setCajasTab(tab) { _cajasTab = tab; renderAdminCajas(); }
+function _getCajaNombres() { return _cajasData.map(function(c){return c.nombre;}); }
+function _getMonedaFromCaja(nombre) {
+  var c = _cajasData.find(function(x){return x.nombre===nombre;});
+  return c ? c.moneda : (nombre.split(' ')[0]||'USD');
+}
+
+// ── RESUMEN ─────────────────────────────────────────────────
+function _renderResumenCajas() {
+  if (!_cajasData.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin cajas — crea una en ⚙️ Gestionar</div>';
+
+  // Group by almacen
+  var byAlm = {};
+  _cajasData.forEach(function(c){
+    if (!byAlm[c.almacen]) byAlm[c.almacen] = [];
+    byAlm[c.almacen].push(c);
+  });
+
+  var html = '';
+  Object.keys(byAlm).forEach(function(alm){
+    html += '<div style="font-size:12px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">'+alm+'</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:8px">';
+    byAlm[alm].forEach(function(c){
+      var saldo = _getSaldoCaja(c.nombre);
+      var color = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.moneda]||'';
+      html += '<div class="card" style="text-align:center;padding:14px 10px">'
+        + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">'+c.nombre+'</div>'
+        + '<div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:8px">'+monIcon+' '+c.moneda+'</div>'
+        + '<div style="font-size:clamp(13px,3vw,20px);font-weight:800;color:'+color+';word-break:break-all;line-height:1.2">'+fN(saldo,2)+'</div>'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">saldo actual</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  });
+  return html;
+}
+
+// ── NUEVO MOVIMIENTO ─────────────────────────────────────────
+function _getTasaDefault(monOrig, monDest) {
+  if (monOrig === monDest) return 1;
+  if (monDest==='CUP'  && monOrig==='USD') return RATES.CUP;
+  if (monDest==='CUP'  && monOrig==='EUR') return parseFloat((RATES.CUP/RATES.EUR).toFixed(2));
+  if (monDest==='CUP'  && monOrig==='CUPT') return RATES.CUPT;
+  if (monOrig==='CUP'  && monDest==='USD') return parseFloat((1/RATES.CUP).toFixed(6));
+  if (monOrig==='CUP'  && monDest==='EUR') return parseFloat((RATES.EUR/RATES.CUP).toFixed(6));
+  if (monOrig==='USD'  && monDest==='EUR') return RATES.EUR;
+  if (monOrig==='EUR'  && monDest==='USD') return parseFloat((1/RATES.EUR).toFixed(4));
+  return 1;
+}
+
+function _renderNuevoMovCaja() {
+  var cajas = _getCajaNombres();
+  var opts  = cajas.map(function(n){return '<option>'+n+'</option>';}).join('');
+  var bS    = 'width:38px;height:38px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);cursor:pointer;font-size:15px;touch-action:manipulation;flex-shrink:0';
+
+  return '<div class="card" style="max-width:560px"><div style="display:grid;gap:14px">'
+    // Tipo
+    + '<div><label class="adm-lbl-f">Tipo de movimiento</label>'
+    + '<select class="adm-inp" id="mc-tipo" onchange="_onMcTipoChange()">'
+    + '<option value="transferencia">🔄 Transferencia entre cajas</option>'
+    + '<option value="cambio">💱 Cambio de divisa</option>'
+    + '<option value="deposito">📥 Depósito externo</option>'
+    + '<option value="retiro">📤 Retiro</option>'
+    + '</select></div>'
+    // Cajas
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div id="mc-origen-wrap"><label class="adm-lbl-f" id="mc-origen-lbl">Caja origen</label>'
+    + '<select class="adm-inp" id="mc-origen" onchange="_onMcCajaChange()">'+opts+'</select></div>'
+    + '<div id="mc-destino-wrap"><label class="adm-lbl-f">Caja destino</label>'
+    + '<select class="adm-inp" id="mc-destino" onchange="_onMcCajaChange()">'+opts+'</select></div>'
+    + '</div>'
+    // Monto
+    + '<div><label class="adm-lbl-f">Monto <span id="mc-mon-orig-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
+    + '<input class="adm-inp" type="number" id="mc-monto" step="0.01" placeholder="0.00" oninput="_calcMcDestino()" style="font-size:20px;font-weight:600;height:46px">'
+    + '</div>'
+    // Tasa (cambio only)
+    + '<div id="mc-tasa-wrap" style="display:none">'
+    + '<label class="adm-lbl-f">Tasa de cambio <span id="mc-tasa-hint" style="font-size:11px;color:var(--color-text-tertiary)"></span></label>'
+    + '<div style="display:flex;align-items:center;gap:6px">'
+    + '<button style="'+bS+'" onclick="_adjMcTasa(-1)">−</button>'
+    + '<button style="'+bS+';font-size:11px" onclick="_adjMcTasa(-0.01)">-.01</button>'
+    + '<input class="adm-inp" type="number" id="mc-tasa" step="0.01" oninput="_calcMcDestino()" style="flex:1;text-align:center;font-size:16px;font-weight:600;height:38px">'
+    + '<button style="'+bS+';font-size:11px" onclick="_adjMcTasa(0.01)">+.01</button>'
+    + '<button style="'+bS+'" onclick="_adjMcTasa(1)">+</button>'
+    + '</div></div>'
+    // Resultado destino
+    + '<div id="mc-dest-wrap" style="display:none">'
+    + '<label class="adm-lbl-f">Resultado <span id="mc-mon-dest-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
+    + '<input class="adm-inp" type="number" id="mc-monto-dest" step="0.01" placeholder="0.00" oninput="_onMcDestManual()" style="font-size:20px;font-weight:600;height:46px">'
+    + '</div>'
+    // Fecha y notas
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div><label class="adm-lbl-f">Fecha</label><input class="adm-inp" type="date" id="mc-fecha" value="'+today()+'"></div>'
+    + '<div><label class="adm-lbl-f">Notas</label><input class="adm-inp" type="text" id="mc-notas" placeholder="Referencia..."></div>'
+    + '</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="admRegistrarMovCaja()" style="padding:12px;font-size:14px">✓ Registrar movimiento</button>'
+    + '</div></div>';
+}
+
+function _onMcTipoChange() {
+  var tipo = document.getElementById('mc-tipo')?.value;
+  var dw=document.getElementById('mc-destino-wrap'), tw=document.getElementById('mc-tasa-wrap');
+  var ddw=document.getElementById('mc-dest-wrap'),   ol=document.getElementById('mc-origen-lbl');
+  if (tipo==='deposito') {
+    dw.style.display='none'; tw.style.display='none'; ddw.style.display='none'; ol.textContent='Caja destino';
+  } else if (tipo==='retiro') {
+    dw.style.display='none'; tw.style.display='none'; ddw.style.display='none'; ol.textContent='Caja origen';
+  } else if (tipo==='transferencia') {
+    dw.style.display=''; tw.style.display='none'; ddw.style.display=''; ol.textContent='Caja origen';
+  } else {
+    dw.style.display=''; tw.style.display=''; ddw.style.display=''; ol.textContent='Caja origen';
+  }
+  _onMcCajaChange();
+}
+
+function _onMcCajaChange() {
+  var tipo=document.getElementById('mc-tipo')?.value;
+  var orig=document.getElementById('mc-origen')?.value||'';
+  var dest=document.getElementById('mc-destino')?.value||'';
+  var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dest);
+  var moEl=document.getElementById('mc-mon-orig-lbl'), mdEl=document.getElementById('mc-mon-dest-lbl');
+  var hiEl=document.getElementById('mc-tasa-hint');
+  if(moEl) moEl.textContent=monO;
+  if(mdEl) mdEl.textContent=monD;
+  if (tipo==='cambio') {
+    var tasa=_getTasaDefault(monO,monD);
+    var tEl=document.getElementById('mc-tasa'); if(tEl) tEl.value=tasa;
+    if(hiEl) hiEl.textContent='1 '+monO+' = '+tasa+' '+monD;
+  }
+  _calcMcDestino();
+}
+
+function _adjMcTasa(delta) {
+  var e=document.getElementById('mc-tasa'); if(!e) return;
+  e.value=parseFloat(((parseFloat(e.value)||0)+delta).toFixed(6));
+  _calcMcDestino();
+}
+
+function _calcMcDestino() {
+  var tipo=document.getElementById('mc-tipo')?.value;
+  var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var tasa=parseFloat(document.getElementById('mc-tasa')?.value)||1;
+  var destEl=document.getElementById('mc-monto-dest');
+  var hiEl=document.getElementById('mc-tasa-hint');
+  var orig=document.getElementById('mc-origen')?.value||'';
+  var dest=document.getElementById('mc-destino')?.value||'';
+  var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dest);
+  if(hiEl) hiEl.textContent='1 '+monO+' = '+tasa+' '+monD;
+  if (!destEl) return;
+  if (tipo==='transferencia') destEl.value=fN(monto,2);
+  else if (tipo==='cambio')   destEl.value=fN(monto*tasa,2);
+}
+
+function _onMcDestManual() {
+  var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var dest=parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var tEl=document.getElementById('mc-tasa'), hiEl=document.getElementById('mc-tasa-hint');
+  var orig=document.getElementById('mc-origen')?.value||'';
+  var dc=document.getElementById('mc-destino')?.value||'';
+  var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dc);
+  if (monto>0 && tEl) {
+    var t=parseFloat((dest/monto).toFixed(6)); tEl.value=t;
+    if(hiEl) hiEl.textContent='1 '+monO+' = '+t+' '+monD;
+  }
+}
+
+async function admRegistrarMovCaja() {
+  var tipo=document.getElementById('mc-tipo')?.value;
+  var orig=document.getElementById('mc-origen')?.value;
+  var dest=document.getElementById('mc-destino')?.value;
+  var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
+  var montoDest=parseFloat(document.getElementById('mc-monto-dest')?.value)||monto;
+  var tasa=parseFloat(document.getElementById('mc-tasa')?.value)||null;
+  var fecha=document.getElementById('mc-fecha')?.value||today();
+  var notas=document.getElementById('mc-notas')?.value||'';
+  var usuario=(typeof S!=='undefined'&&S.user)||'Admin';
+
+  if (!monto) { showToast('Introduce el monto'); return; }
+
+  var cajaOrig = (tipo==='deposito') ? null : orig;
+  var cajaDest = (tipo==='retiro')   ? null : (tipo==='deposito'?orig:dest);
+
+  var row = {
+    tipo:tipo, fecha:fecha, notas:notas, usuario:usuario,
+    caja_origen:  cajaOrig,
+    caja_destino: cajaDest,
+    monto_origen:  monto,
+    monto_destino: (tipo==='transferencia')?monto:(tipo==='cambio'?montoDest:monto),
+    tasa_usada: tasa
+  };
+
+  if (_supaOnline) {
+    var r=await supaReq('POST','mov_cajas',row);
+    if (r.ok) {
+      showToast('✓ Movimiento registrado');
+      _cajasMovs.unshift(row);
+      ['mc-monto','mc-monto-dest','mc-notas'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+      // Refresh resumen saldos
+      _setCajasTab('resumen');
+    } else { showToast('Error al guardar'); }
+  } else {
+    _cajasMovs.unshift(row);
+    showToast('✓ Guardado localmente');
+    _setCajasTab('resumen');
+  }
+}
+
+// ── HISTORIAL ────────────────────────────────────────────────
+function _renderHistorialMovCajas() {
+  if (!_cajasMovs.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos</div>';
+  var tipoIcon  = {transferencia:'🔄',cambio:'💱',deposito:'📥',retiro:'📤'};
+  var tipoColor = {transferencia:'var(--color-text-info)',cambio:'var(--color-text-warning)',deposito:'var(--color-text-success)',retiro:'var(--color-text-danger)'};
+  return '<div style="display:flex;flex-direction:column;gap:8px">'
+    + _cajasMovs.slice(0,100).map(function(m){
+        return '<div class="card" style="padding:10px 14px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          + '<span style="font-size:18px">'+(tipoIcon[m.tipo]||'📋')+'</span>'
+          + '<div>'
+          + '<div style="font-size:13px;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'+m.tipo.charAt(0).toUpperCase()+m.tipo.slice(1)+'</div>'
+          + '<div style="font-size:11px;color:var(--color-text-secondary)">'+(m.caja_origen||'—')+(m.caja_destino?' → '+m.caja_destino:'')+'</div>'
+          + (m.notas?'<div style="font-size:11px;color:var(--color-text-tertiary)">'+m.notas+'</div>':'')
+          + '</div></div>'
+          + '<div style="text-align:right">'
+          + '<div style="font-size:15px;font-weight:700">'+fN(m.monto_origen,2)+(m.tipo==='cambio'?' → '+fN(m.monto_destino,2):'')+'</div>'
+          + (m.tasa_usada?'<div style="font-size:10px;color:var(--color-text-tertiary)">tasa: '+m.tasa_usada+'</div>':'')
+          + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+(m.fecha||'')+' · '+(m.usuario||'')+'</div>'
+          + '</div></div></div>';
+      }).join('')
+    + '</div>';
+}
+
+// ── GESTIONAR CAJAS ──────────────────────────────────────────
+function _renderGestionarCajas() {
+  var monedas = ['USD','EUR','CUP','CUPT'];
+  var almacenes = ['Habana','Placetas','Xportprise','USA','General'];
+  return '<div>'
+    + '<div class="card" style="margin-bottom:14px">'
+    + '<h3 style="margin-bottom:12px">➕ Nueva caja</h3>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+    + '<div><label class="adm-lbl-f">Nombre</label><input class="adm-inp" id="caja-nc-nombre" placeholder="Ej: USD Zelle"></div>'
+    + '<div><label class="adm-lbl-f">Moneda</label><select class="adm-inp" id="caja-nc-moneda">'
+    + monedas.map(function(m){return '<option>'+m+'</option>';}).join('')
+    + '</select></div>'
+    + '<div><label class="adm-lbl-f">Almacén</label><select class="adm-inp" id="caja-nc-almacen">'
+    + almacenes.map(function(a){return '<option>'+a+'</option>';}).join('')
+    + '</select></div>'
+    + '<div><label class="adm-lbl-f">Saldo inicial</label><input class="adm-inp" type="number" id="caja-nc-saldo" placeholder="0.00" step="0.01"></div>'
+    + '</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="admCrearCaja()">Crear caja</button>'
+    + '</div>'
+    + '<div class="card">'
+    + '<h3 style="margin-bottom:12px">Cajas activas</h3>'
+    + '<div style="display:flex;flex-direction:column;gap:6px">'
+    + _cajasData.map(function(c){
+        var saldo = _getSaldoCaja(c.nombre);
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+          + '<div>'
+          + '<span style="font-weight:600">'+c.nombre+'</span>'
+          + '<span style="margin-left:8px;font-size:11px;color:var(--color-text-tertiary)">'+c.moneda+' · '+c.almacen+'</span>'
+          + '</div>'
+          + '<div style="display:flex;align-items:center;gap:12px">'
+          + '<span style="font-size:14px;font-weight:700;color:'+(saldo>=0?'var(--color-text-success)':'var(--color-text-danger)')+'">'+fN(saldo,2)+'</span>'
+          + '<button class="btn-sm" onclick="admDesactivarCaja(\''+c.id+'\')" style="color:var(--color-text-danger);font-size:11px">Archivar</button>'
+          + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div></div>'
+    // Archived cajas section
+    + '<div class="card" style="margin-top:12px">'
+    + '<h3 style="margin-bottom:12px;color:var(--color-text-secondary)">📦 Cajas archivadas</h3>'
+    + (function(){
+        var archivadas = typeof _cajasDataAll!=='undefined' ? _cajasDataAll.filter(function(c){return !c.activa;}) : [];
+        if(!archivadas.length) return '<div style="font-size:12px;color:var(--color-text-tertiary);padding:8px 0">Sin cajas archivadas</div>';
+        return '<div style="display:flex;flex-direction:column;gap:6px">'
+          + archivadas.map(function(c){
+            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);opacity:.6">'
+              + '<div><span style="font-weight:600">'+c.nombre+'</span>'
+              + '<span style="margin-left:8px;font-size:11px;color:var(--color-text-tertiary)">'+c.moneda+' · '+c.almacen+'</span></div>'
+              + '<button class="btn-sm" onclick="admDesarchivarCaja(\''+c.id+'\')" style="color:var(--color-text-success);font-size:11px">Desarchivar</button>'
+              + '</div>';
+          }).join('')
+          + '</div>';
+      })()
+    + '</div></div>';
+}
+
+async function admDesarchivarCaja(id) {
+  if(_supaOnline){
+    var r=await supaReq('PATCH','cajas?id=eq.'+id,{activa:true});
+    if(r.ok){
+      // Reload all cajas including inactive
+      await loadCajasData();
+      showToast('✓ Caja reactivada');
+      renderAdminCajas();
+    } else { showToast('Error al desarchivar'); }
+  }
+}
+
+async function admCrearCaja() {
+  var nombre  = document.getElementById('caja-nc-nombre')?.value.trim();
+  var moneda  = document.getElementById('caja-nc-moneda')?.value;
+  var almacen = document.getElementById('caja-nc-almacen')?.value;
+  var saldo   = parseFloat(document.getElementById('caja-nc-saldo')?.value)||0;
+  if (!nombre) { showToast('Introduce el nombre'); return; }
+  if (_supaOnline) {
+    var r=await supaReq('POST','cajas',{nombre:nombre,moneda:moneda,almacen:almacen,saldo_inicial:saldo,activa:true});
+    if (r.ok) {
+      var d=await r.json(); var caja=d&&d[0]?d[0]:{id:Date.now(),nombre:nombre,moneda:moneda,almacen:almacen,saldo_inicial:saldo,activa:true};
+      _cajasData.push(caja);
+      showToast('✓ Caja creada: '+nombre);
+      renderAdminCajas();
+    } else {
+      var err=await r.text();
+      showToast(err.includes('unique')?'Ya existe una caja con ese nombre':'Error al crear caja');
+    }
+  } else { showToast('Sin conexión'); }
+}
+
+async function admDesactivarCaja(id) {
+  if (!confirm('¿Archivar esta caja?')) return;
+  if (_supaOnline) {
+    var r=await supaReq('PATCH','cajas?id=eq.'+id,{activa:false});
+    if (r.ok) { _cajasData=_cajasData.filter(function(c){return c.id!=id;}); showToast('Caja archivada'); renderAdminCajas(); }
+  }
+}
+
+
+
+</script><script>
+
+// ═══ MÓDULO BACKUP / EXPORT ═══
+
+function limpiarCacheLocal(){
+  if(!confirm('¿Limpiar caché local? Se borrarán ventas, movimientos y cajas del almacenamiento local. Los datos en Supabase no se tocan.')) return;
+  var keys = ['erp_ventas','erp_prods','erp_movs','erp_cajas_movs','erp_queue',
+    'erp_reservas','erp_reservas_global','erp_liquidaciones'];
+  keys.forEach(function(k){ try{localStorage.removeItem(k);}catch(e){} });
+  // Reset in-memory
+  VENTAS.length=0; MOVS.length=0; _cajasMovs=[]; _syncQueue=[];
+  // Reload from Supabase
+  if(_supaOnline){
+    syncLoadVentas();
+    syncLoadMovsIG();
+    loadCajasData().then(function(){ if(typeof renderMiCaja==='function')renderMiCaja(); });
+  }
+  showToast('✓ Caché local limpiado — recargando desde Supabase');
+}
+
+function renderBackup() {
+  var el = document.getElementById('backup-root');
+  if (!el) return;
+
+  var isAdm = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'admin';
+
+  el.innerHTML = '<div style="max-width:600px">'
+    + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">Backup y Exportación</div>'
+    + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:20px">Descarga todos los datos del sistema. El JSON puede reimportarse para restaurar.</div>'
+
+    + '<div class="adm-card" style="margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">💾 Backup completo (JSON)</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Exporta todos los datos: productos, ventas, usuarios, clientes, movimientos. Importable para restaurar.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button class="adm-btn adm-btn-p" onclick="exportJSON()">⬇ Descargar JSON</button>'
+    + '<button class="adm-btn" onclick="syncTodosProductos()" style="margin-top:6px">🔄 Sincronizar productos con Supabase</button>'
+    + '<button class="adm-btn" onclick="syncPushAllClientes()" style="margin-top:6px">👤 Sincronizar clientes con Supabase</button>'
+    + (isAdm ? '<button class="adm-btn" onclick="document.getElementById(\'import-json-input\').click()">⬆ Importar JSON</button>' : '')
+    + (isAdm ? '<input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importJSON(this)">' : '')
+    + '<button class="adm-btn" style="margin-top:6px;border-color:var(--color-text-danger);color:var(--color-text-danger)" onclick="limpiarCacheLocal()">🗑 Limpiar caché local</button>'
+    + '</div>'
+    + '</div>'
+
+    + '<div class="adm-card" style="margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Exportar a Excel</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un .xlsx con pestañas: Ventas, Productos, Clientes, Movimientos I/G.</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="exportExcel()">⬇ Descargar Excel</button>'
+    + '</div>'
+
+    + '<div class="adm-card">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Resumen de datos</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">'
+    + '<div>Productos: <strong>' + PRODS.length + '</strong></div>'
+    + '<div>Usuarios: <strong>' + Object.keys(USERS).length + '</strong></div>'
+    + '<div>Ventas: <strong>' + (typeof VENTAS !== 'undefined' ? VENTAS.length : 0) + '</strong></div>'
+    + '<div>Clientes: <strong>' + (typeof CLIENTES !== 'undefined' ? CLIENTES.length : 0) + '</strong></div>'
+    + '<div>Movimientos I/G: <strong>' + (typeof MOVS !== 'undefined' ? MOVS.length : 0) + '</strong></div>'
+    + '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function exportJSON() {
+  var data = {
+    version: 1,
+    fecha: new Date().toISOString(),
+    USERS: USERS,
+    PRODS: PRODS,
+    VENTAS: typeof VENTAS !== 'undefined' ? VENTAS : [],
+    CLIENTES: typeof CLIENTES !== 'undefined' ? CLIENTES : [],
+    MOVS: typeof MOVS !== 'undefined' ? MOVS : [],
+    RATES: RATES,
+  };
+  var json = JSON.stringify(data, null, 2);
+  var blob = new Blob([json], {type: 'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'containers-erp-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  showToast('JSON descargado ✓');
+}
+
+function importJSON(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (!data.version || !data.PRODS) { showToast('Archivo JSON inválido'); return; }
+      if (!confirm('¿Restaurar todos los datos desde este backup?\n\nFecha: ' + (data.fecha||'desconocida') + '\nProductos: ' + data.PRODS.length + '\nVentas: ' + (data.VENTAS||[]).length + '\n\nEsto sobreescribirá los datos actuales.')) return;
+      // Restore
+      data.PRODS.forEach(function(p,i){ PRODS[i]=p; }); PRODS.length=data.PRODS.length;
+      if(data.VENTAS&&typeof VENTAS!=='undefined'){ data.VENTAS.forEach(function(v,i){VENTAS[i]=v;}); VENTAS.length=data.VENTAS.length; }
+      if(data.CLIENTES&&typeof CLIENTES!=='undefined'){ data.CLIENTES.forEach(function(c,i){CLIENTES[i]=c;}); CLIENTES.length=data.CLIENTES.length; }
+      if(data.MOVS&&typeof MOVS!=='undefined'){ data.MOVS.forEach(function(m,i){MOVS[i]=m;}); MOVS.length=data.MOVS.length; }
+      Object.assign(RATES, data.RATES||{});
+      showToast('Datos restaurados ✓');
+      renderBackup();
+    } catch(err) {
+      showToast('Error al leer el archivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function exportExcel() {
+  if (typeof XLSX === 'undefined') {
+    showToast('Cargando librería Excel...');
+    setTimeout(exportExcel, 1500);
+    return;
+  }
+  var wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: VENTAS ──
+  var ventasData = [['ID','Fecha','Vendedor','Almacén','Cliente','Tipo','Productos','Total USD','Moneda','Comisión %','Comisión USD','Estado Com.']];
+  (typeof VENTAS !== 'undefined' ? VENTAS : []).forEach(function(v) {
+    ventasData.push([v.id, v.fecha, v.vend, v.alm, v.cli||'Walk-in', v.tipo, v.prods, v.totalUSD, v.mon, v.comPct||0, v.comUSD||0, v.estCom||'']);
+  });
+  var wsVentas = XLSX.utils.aoa_to_sheet(ventasData);
+  wsVentas['!cols'] = [{wch:6},{wch:12},{wch:10},{wch:12},{wch:14},{wch:10},{wch:40},{wch:12},{wch:8},{wch:10},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsVentas, 'Ventas');
+
+  // ── Hoja 2: PRODUCTOS ──
+  var prodsData = [['Nombre','Categoría','P.Min','P.May','DDP','Stock Total','Habana','Placetas','Xportprise','Stock Mín','Activo']];
+  PRODS.forEach(function(p) {
+    prodsData.push([
+      p.n, p.cat||'', p.min||'', p.maj||'', p.ddp||'',
+      p.stk||0,
+      (p.stk_alm&&p.stk_alm.Habana)||0,
+      (p.stk_alm&&p.stk_alm.Placetas)||0,
+      (p.stk_alm&&p.stk_alm.Xportprise)||0,
+      p.stk_min||10,
+      p.activo===false?'No':'Sí'
+    ]);
+  });
+  var wsProds = XLSX.utils.aoa_to_sheet(prodsData);
+  wsProds['!cols'] = [{wch:40},{wch:14},{wch:10},{wch:10},{wch:10},{wch:12},{wch:10},{wch:10},{wch:12},{wch:10},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, wsProds, 'Productos');
+
+  // ── Hoja 3: CLIENTES ──
+  var cliData = [['ID','Nombre','Almacén','Tel','Deuda Total USD','Pagado USD','Pendiente USD','Folios']];
+  (typeof CLIENTES !== 'undefined' ? CLIENTES : []).forEach(function(c) {
+    var tot = c.folios ? c.folios.reduce(function(a,f){ return a + f.lineas.reduce(function(b,l){ return b + (toUSD(l.precio,l.mon)*l.q); },0); },0) : 0;
+    var pag = c.folios ? c.folios.reduce(function(a,f){ return a + f.abonos.reduce(function(b,ab){ return b + (ab.equivUSD||toUSD(ab.monto,ab.mon)); },0); },0) : 0;
+    cliData.push([c.id, c.nombre, c.alm||'', c.tel||'', tot, pag, tot-pag, c.folios?c.folios.length:0]);
+  });
+  var wsCli = XLSX.utils.aoa_to_sheet(cliData);
+  wsCli['!cols'] = [{wch:8},{wch:18},{wch:12},{wch:14},{wch:16},{wch:14},{wch:14},{wch:8}];
+  XLSX.utils.book_append_sheet(wb, wsCli, 'Clientes');
+
+  // ── Hoja 4: INGRESOS/GASTOS ──
+  var igrData = [['ID','Fecha','Tipo','Descripción','Monto','Moneda','Equiv.USD','Cuenta','Vendedor']];
+  (typeof MOVS !== 'undefined' ? MOVS : []).forEach(function(m) {
+    igrData.push([m.id, m.fecha, m.tipo, m.desc||'', m.monto, m.mon, m.equivUSD||toUSD(m.monto,m.mon), m.cuenta||'', m.vend||'']);
+  });
+  var wsIgr = XLSX.utils.aoa_to_sheet(igrData);
+  wsIgr['!cols'] = [{wch:6},{wch:12},{wch:20},{wch:30},{wch:12},{wch:8},{wch:12},{wch:16},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsIgr, 'Ingresos-Gastos');
+
+  // ── Hoja 5: RESUMEN ──
+  var resData = [
+    ['Containers ERP — Backup', new Date().toLocaleDateString('es-ES')],
+    [],
+    ['Productos activos', PRODS.filter(function(p){return p.activo!==false;}).length],
+    ['Total ventas', (typeof VENTAS!=='undefined'?VENTAS.length:0)],
+    ['Total clientes', (typeof CLIENTES!=='undefined'?CLIENTES.length:0)],
+    ['Total movimientos I/G', (typeof MOVS!=='undefined'?MOVS.length:0)],
+    [],
+    ['Tasas de cambio actuales'],
+    ['USD', RATES.USD],['EUR', RATES.EUR],['CUP', RATES.CUP],['CUPT', RATES.CUPT],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resData), 'Resumen');
+
+  var fecha = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'containers-erp-' + fecha + '.xlsx');
+  showToast('Excel descargado ✓');
+}
+
+
+</script>
+<script>
+// ═══ PERMISOS POR MÓDULO EN ADMIN ═══
+// Añadir al formulario de usuario en renderFormUsuario
+
+const MOD_LABELS = {
+  pos:      {icon:'🛒', label:'POS'},
+  stock:    {icon:'📦', label:'Stock (consulta)'},
+  ventas:   {icon:'📊', label:'Ventas'},
+  clientes: {icon:'👤', label:'Cuentas clientes'},
+  ig:       {icon:'💰', label:'Ingresos / Gastos'},
+  backup:   {icon:'💾', label:'Backup / Export'},
+  admin:    {icon:'⚙️', label:'Administración'},
+};
+
+function buildModulosCheckboxes(selectedMods) {
+  var html = '<div style="grid-column:1/-1"><label class="adm-lbl-f" style="margin-bottom:8px;display:block">Módulos habilitados</label>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">';
+  Object.keys(MOD_LABELS).forEach(function(key) {
+    var m = MOD_LABELS[key];
+    var checked = selectedMods.indexOf(key) >= 0;
+    html += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;padding:6px 8px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+      + '<input type="checkbox" class="mod-chk" value="' + key + '"' + (checked?' checked':'') + ' style="width:16px;height:16px;cursor:pointer;accent-color:var(--color-text-info)">'
+      + m.icon + ' ' + m.label
+      + '</label>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function getSelectedModulos() {
+  var checked = document.querySelectorAll('.mod-chk:checked');
+  var mods = [];
+  checked.forEach(function(el) { mods.push(el.value); });
+  return mods;
+}
+
+</script>
+
+
+
+<script>
+// Hide liquidation controls for non-admin after login
+(function(){
+  var _origSetUser = window.erpSetUser;
+  window.erpSetUser = function(name, bg, tc) {
+    _origSetUser && _origSetUser(name, bg, tc);
+    var isAdm = typeof USERS!=='undefined' && USERS[name] && USERS[name].rol==='admin';
+    // Hide "Liquidación semanal" nav button for vendedores
+    setTimeout(function(){
+      var btn = document.getElementById('btn-liq-nav');
+      if (btn) btn.style.display = isAdm ? '' : 'none';
+      // Hide liquidar buttons inside comisiones page
+      document.querySelectorAll('.btn-liq,.liq-btn,[onclick*="liquidar"]').forEach(function(el){
+        el.style.display = isAdm ? '' : 'none';
+      });
+    }, 100);
+  };
+})();
+</script>
+
+<script>
+async function syncStockUpdate(cart, alm) {
+  if (!_supaOnline) return;
+  for (var c of cart) {
+    var p = PRODS.find(function(x){ return x.n === c.n; });
+    if (!p) continue;
+    // Lookup supaId by nombre if missing
+    if (!p.supaId) {
+      try {
+        var lr = await supaReq('GET', 'productos?nombre=eq.'+encodeURIComponent(p.n)+'&select=id');
+        if (lr.ok) { var ld = await lr.json(); if (ld&&ld[0]) p.supaId = ld[0].id; }
+      } catch(e) {}
+    }
+    if (!p.supaId) continue;
+    var qty = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : 0;
+    try {
+      await supaReq('PATCH',
+        'stock_almacen?producto_id=eq.'+p.supaId+'&almacen=eq.'+encodeURIComponent(alm),
+        { cantidad: qty });
+    } catch(e) { console.warn('syncStockUpdate:', e); }
+  }
+}
+</script>
+
+<script>
+function renderEstComCell(v) {
+  var isAdm = typeof S!=="undefined" && S.user && USERS[S.user] && USERS[S.user].rol==="admin";
+  var col = v.estCom==="Pagada" ? "var(--color-text-success)" : v.estCom==="No aplica" ? "var(--color-text-tertiary)" : "var(--color-text-warning)";
+  if (isAdm) {
+    return '<select class="est-sel" onchange="setEstCom('+v.id+',this.value)" style="color:'+col+'">'
+      + '<option'+(v.estCom==="Pendiente"?' selected':'')+'>Pendiente</option>'
+      + '<option'+(v.estCom==="Pagada"?' selected':'')+'>Pagada</option>'
+      + '<option'+(v.estCom==="No aplica"?' selected':'')+'>No aplica</option>'
+      + '</select>';
+  }
+  return '<span style="font-size:11px;font-weight:500;color:'+col+'">'+v.estCom+'</span>';
+}
+</script>
+
+<script>
+(function(){
+  var _o = window.erpSetUser;
+  window.erpSetUser = function(n,bg,tc){
+    if(_o)_o(n,bg,tc);
+    var isAdm = typeof USERS!=="undefined"&&USERS[n]&&USERS[n].rol==="admin";
+    setTimeout(function(){
+      var form=document.getElementById("liq-create-form");
+      if(form)form.style.display=isAdm?"":"none";
+      document.querySelectorAll('[onclick*="liquidarGrupo"],[onclick*="liquidarTodo"],[onclick*="guardarLiq"]')
+        .forEach(function(el){el.style.display=isAdm?"":"none";});
+    },200);
+  };
+})();
+</script>
+
+<script>
+// Patch setEstCom to also sync to Supabase
+(function(){
+  var _orig = window.setEstCom;
+  if (typeof _orig !== "function") return;
+  window.setEstCom = function(id, est) {
+    _orig(id, est);
+    var v = VENTAS.find(function(x){ return x.id === id; });
+    if (v && v.supaId && typeof supaReq !== "undefined" && _supaOnline) {
+      supaReq("PATCH", "ventas?id=eq." + v.supaId, { est_com: est })
+        .catch(function(e){ console.warn("setEstCom sync:", e); });
+    }
+  };
+})();
+</script>
+
+<script>
+
+async function syncTodosProductos() {
+  if (!_supaOnline) { showToast('Sin conexión'); return; }
+  showToast('Sincronizando ' + PRODS.length + ' productos...');
+  var ok = 0, fail = 0, errors = [];
+  for (var p of PRODS) {
+    try {
+      var row = {
+        nombre: p.n,
+        categoria: p.cat||'',
+        precio_min: p.min!=null ? p.min : null,
+        precio_maj: p.maj!=null ? p.maj : null,
+        precio_ddp: p.ddp!=null ? p.ddp : null,
+        stk_min: p.stk_min||10,
+        activo: p.activo!==false
+      };
+      var r = await supaReq('POST', 'productos?on_conflict=nombre', row);
+      if (r.ok) {
+        var data = await r.json();
+        var pid = data && data[0] ? data[0].id : null;
+        if (!pid) {
+          // Row already existed, get id by name
+          var gr = await supaReq('GET', 'productos?nombre=eq.' + encodeURIComponent(p.n) + '&select=id');
+          if (gr.ok) { var gd = await gr.json(); pid = gd && gd[0] ? gd[0].id : null; }
+        }
+        if (pid) {
+          p.supaId = pid;
+          for (var alm of ['Habana','Placetas','Xportprise']) {
+            var qty = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : 0;
+            await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen',
+              { producto_id: pid, almacen: alm, cantidad: qty });
+          }
+          ok++;
+        } else { fail++; errors.push(p.n + ': no id'); }
+      } else {
+        var errTxt = await r.text();
+        fail++;
+        errors.push(p.n + ': ' + r.status);
+        console.warn('syncTodosProductos error', p.n, r.status, errTxt);
+      }
+    } catch(e) { fail++; errors.push(p.n + ': ' + e.message); console.warn(e); }
+  }
+  if (errors.length) console.warn('Sync errors:', errors);
+  showToast('✓ ' + ok + ' sync' + (fail ? ' · ' + fail + ' errores' : ' · Todo OK'));
+  if (typeof renderBackup === 'function') renderBackup();
+}
+
+</script>
+<script>
+document.addEventListener("click",function(e){
+  var sb=document.getElementById("sidebar"),ham=document.getElementById("ham");
+  if(sb&&sb.classList.contains("mob-open")&&!sb.contains(e.target)&&e.target!==ham)
+    sb.classList.remove("mob-open");
+});
+</script>
+
+
+<script>
+async function updateCajasFromVenta(pagos, vueltos, alm) {
+  // Update local CUENTAS_BASE (legacy fallback)
+  pagos.forEach(function(p) {
+    var mon = p.mon;
+    var k = p.caja || (mon + ' ' + alm);
+    if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
+    CUENTAS_BASE[k].ingV += (p.m || 0);
+  });
+  vueltos.forEach(function(v) {
+    var mon = v.mon;
+    var k = v.caja || (mon + ' ' + alm);
+    if (!CUENTAS_BASE[k]) CUENTAS_BASE[k] = {ingV:0, ingIG:0, gasIG:0, mon:mon};
+    CUENTAS_BASE[k].gasIG += (v.m || 0);
+  });
+  // Write to Supabase mov_cajas — same schema as admRegistrarMovCaja (no created_at, no null fields)
+  if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
+    var fecha = today();
+    var usuario = (typeof S !== 'undefined' ? S.user : '');
+    for (var i = 0; i < pagos.length; i++) {
+      var p = pagos[i];
+      if (!p.m || p.m <= 0) continue;
+      var cajaDest = p.caja || (p.mon + ' ' + alm);
+      var row = {
+        tipo: 'deposito',
+        fecha: fecha,
+        notas: 'Venta POS',
+        usuario: usuario,
+        caja_destino: cajaDest,
+        monto_origen: p.m,
+        monto_destino: p.m,
+        tasa_usada: null
+      };
+      try {
+        _cajasMovs.unshift(row); // optimistic
+        if(_supaOnline){
+          var r = await supaReq('POST', 'mov_cajas', row);
+          if (!r.ok) {
+            var errText = await r.text();
+            console.warn('mov_cajas pago 400:', errText);
+            enqueue({method:'POST',path:'mov_cajas',body:row});
+          }
+        } else {
+          enqueue({method:'POST',path:'mov_cajas',body:row});
+        }
+      } catch(e) { console.warn('updateCajasFromVenta pago:', e); }
+    }
+    for (var j = 0; j < vueltos.length; j++) {
+      var v2 = vueltos[j];
+      if (!v2.m || v2.m <= 0) continue;
+      var cajaOrig = v2.caja || (v2.mon + ' ' + alm);
+      var rowV = {
+        tipo: 'retiro',
+        fecha: fecha,
+        notas: 'Vuelto POS',
+        usuario: usuario,
+        caja_origen: cajaOrig,
+        monto_origen: v2.m,
+        monto_destino: v2.m,
+        tasa_usada: null
+      };
+      try {
+        var rv = await supaReq('POST', 'mov_cajas', rowV);
+        if (!rv.ok) {
+          var errTextV = await rv.text();
+          console.warn('mov_cajas vuelto 400:', errTextV);
+        } else {
+          var savedV = await rv.json();
+          if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]);
+        }
+      } catch(e) { console.warn('updateCajasFromVenta vuelto:', e); }
+    }
+  }
+  if (typeof renderCajas === 'function') { try { renderCajas(); } catch(e) {} }
+}
+</script>
+
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO: CAJAS PERSONALIZADAS + PRÉSTAMOS
+// ═══════════════════════════════════════════════════════════════
+
+// ── Cajas personalizadas (se guardan en localStorage) ───────────
+function getCustomCajas() {
+  try { return JSON.parse(localStorage.getItem('erp_cajas_custom')||'[]'); } catch(e) { return []; }
+}
+function saveCustomCajas(arr) {
+  try { localStorage.setItem('erp_cajas_custom', JSON.stringify(arr)); } catch(e) {}
+}
+function getAllCajas() {
+  var base = Object.keys(CUENTAS_BASE);
+  var custom = getCustomCajas().map(function(c){ return c.key; });
+  return base.concat(custom.filter(function(k){ return !base.includes(k); }));
+}
+function addCustomCaja(nombre, moneda) {
+  var key = moneda + ' ' + nombre;
+  var arr = getCustomCajas();
+  if (!arr.find(function(c){ return c.key === key; })) {
+    arr.push({ key: key, nombre: nombre, moneda: moneda });
+    saveCustomCajas(arr);
+    // Add to CUENTAS_BASE
+    if (!CUENTAS_BASE[key]) CUENTAS_BASE[key] = { ingV:0, ingIG:0, gasIG:0, mon: moneda };
+  }
+}
+
+// Load custom cajas on startup
+(function(){
+  getCustomCajas().forEach(function(c){
+    if (!CUENTAS_BASE[c.key]) CUENTAS_BASE[c.key] = { ingV:0, ingIG:0, gasIG:0, mon: c.moneda };
+  });
+})();
+
+// ── Panel gestión de cajas en IG (renderizable) ─────────────────
+function renderGestionCajas() {
+  var el = document.getElementById('ig-cajas-mgmt');
+  if (!el) return;
+  var monedas = ['USD','EUR','CUP','CUPT'];
+  el.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:10px">Añadir caja</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
+    + '<input class="adm-inp" id="new-caja-nombre" placeholder="Nombre (ej: España, Xportprise)" style="flex:1;max-width:200px">'
+    + '<select class="adm-inp" id="new-caja-mon" style="max-width:100px">'
+    + monedas.map(function(m){ return '<option>'+m+'</option>'; }).join('')
+    + '</select>'
+    + '<button class="adm-btn adm-btn-p" onclick="admAddCaja()">+ Crear caja</button>'
+    + '</div>'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">Cajas personalizadas</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+    + getCustomCajas().map(function(c){
+        return '<span style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);font-size:12px">'
+          + '<strong>'+c.moneda+'</strong> '+c.nombre
+          + '<span onclick="admRemoveCaja(\''+c.key+'\')" style="cursor:pointer;color:var(--color-text-danger);font-size:15px">×</span></span>';
+      }).join('') || '<span style="font-size:12px;color:var(--color-text-tertiary)">Sin cajas personalizadas</span>'
+    + '</div>';
+}
+function admAddCaja() {
+  var nombre = (document.getElementById('new-caja-nombre').value||'').trim();
+  var mon = document.getElementById('new-caja-mon').value;
+  if (!nombre) { showToast('Introduce un nombre para la caja'); return; }
+  addCustomCaja(nombre, mon);
+  document.getElementById('new-caja-nombre').value = '';
+  renderGestionCajas();
+  if (typeof renderCajas==='function') renderCajas();
+  showToast('Caja creada: ' + mon + ' ' + nombre);
+}
+function admRemoveCaja(key) {
+  if (!confirm('¿Eliminar caja "'+key+'"?')) return;
+  var arr = getCustomCajas().filter(function(c){ return c.key !== key; });
+  saveCustomCajas(arr);
+  delete CUENTAS_BASE[key];
+  renderGestionCajas();
+  if (typeof renderCajas==='function') renderCajas();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO: PRÉSTAMOS
+// ═══════════════════════════════════════════════════════════════
+
+var PRESTAMOS = (function(){
+  try { return JSON.parse(localStorage.getItem('erp_prestamos')||'[]'); } catch(e) { return []; }
+})();
+
+function savePrestamos() {
+  try { localStorage.setItem('erp_prestamos', JSON.stringify(PRESTAMOS)); } catch(e) {}
+  if (typeof renderPrestamos === 'function') renderPrestamos();
+}
+
+// Generate payment schedule
+function calcCuotas(p) {
+  var cuotas = [];
+  if (p.tipo === 'interes_simple') {
+    // Fixed monthly interest, no amortization
+    var interesMensual = p.capital * (p.tasa / 100);
+    for (var i = 1; i <= p.plazo; i++) {
+      var fecha = new Date(p.fechaInicio);
+      fecha.setMonth(fecha.getMonth() + i);
+      cuotas.push({
+        num: i,
+        fecha: fecha.toISOString().slice(0,10),
+        capital: i === p.plazo ? p.capital : 0,
+        interes: interesMensual,
+        total: i === p.plazo ? p.capital + interesMensual : interesMensual,
+        pagada: false, fechaPago: null
+      });
+    }
+  } else {
+    // French method (PMT formula)
+    var r = p.tasa / 100;
+    var n = p.plazo;
+    var pmt = r === 0 ? p.capital / n : p.capital * r * Math.pow(1+r,n) / (Math.pow(1+r,n)-1);
+    var saldo = p.capital;
+    for (var i = 1; i <= n; i++) {
+      var interes = saldo * r;
+      var amort = pmt - interes;
+      saldo = Math.max(0, saldo - amort);
+      var fecha = new Date(p.fechaInicio);
+      fecha.setMonth(fecha.getMonth() + i);
+      cuotas.push({
+        num: i,
+        fecha: fecha.toISOString().slice(0,10),
+        capital: amort,
+        interes: interes,
+        total: pmt,
+        saldoRestante: saldo,
+        pagada: false, fechaPago: null
+      });
+    }
+  }
+  return cuotas;
+}
+
+function crearPrestamo(data) {
+  var p = {
+    id: 'pr-' + Date.now(),
+    nombre: data.nombre,
+    tipo: data.tipo, // 'interes_simple' | 'frances'
+    capital: data.capital,
+    tasa: data.tasa,
+    plazo: data.plazo, // meses
+    moneda: data.moneda,
+    fechaInicio: data.fechaInicio,
+    notas: data.notas || '',
+    cta: data.cta || '',
+    cuotas: []
+  };
+  p.cuotas = calcCuotas(p);
+  PRESTAMOS.unshift(p);
+  savePrestamos();
+  showToast('Préstamo creado: ' + p.nombre);
+}
+
+function pagarCuota(prestamoId, cuotaNum) {
+  var p = PRESTAMOS.find(function(x){ return x.id === prestamoId; });
+  if (!p) return;
+  var c = p.cuotas.find(function(x){ return x.num === cuotaNum; });
+  if (!c) return;
+  c.pagada = !c.pagada;
+  c.fechaPago = c.pagada ? today() : null;
+  // Update caja if account selected
+  if (c.pagada && p.cta && typeof CUENTAS_BASE !== 'undefined') {
+    if (!CUENTAS_BASE[p.cta]) CUENTAS_BASE[p.cta] = { ingV:0, ingIG:0, gasIG:0, mon: p.moneda };
+    CUENTAS_BASE[p.cta].gasIG += c.total;
+    if (typeof renderCajas === 'function') try { renderCajas(); } catch(e) {}
+  }
+  savePrestamos();
+}
+
+function renderPrestamos() {
+  var el = document.getElementById('prestamos-root');
+  if (!el) return;
+
+  var totalDeuda = PRESTAMOS.reduce(function(a, p) {
+    var pendiente = p.cuotas.filter(function(c){ return !c.pagada; }).reduce(function(s,c){ return s+c.total; }, 0);
+    return a + (p.moneda === 'USD' ? pendiente : pendiente / (RATES[p.moneda]||1));
+  }, 0);
+
+  var html = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">'
+    + '<div>'
+    + '<div style="font-size:16px;font-weight:700">Préstamos</div>'
+    + '<div style="font-size:12px;color:var(--color-text-secondary)">Pendiente total: <strong>'+fN(totalDeuda)+' USD equiv.</strong></div>'
+    + '</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="showNuevoPrestamo()">+ Nuevo préstamo</button>'
+    + '</div>'
+    + '<div id="prestamo-form" style="display:none"></div>';
+
+  if (!PRESTAMOS.length) {
+    html += '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin préstamos registrados</div>';
+  } else {
+    PRESTAMOS.forEach(function(p) {
+      var pagadas = p.cuotas.filter(function(c){ return c.pagada; }).length;
+      var pendiente = p.cuotas.filter(function(c){ return !c.pagada; }).reduce(function(a,c){ return a+c.total; }, 0);
+      var vencidas = p.cuotas.filter(function(c){ return !c.pagada && c.fecha < today(); }).length;
+      var pct = Math.round(pagadas / p.cuotas.length * 100);
+
+      html += '<div class="adm-card" style="margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+        + '<div>'
+        + '<div style="font-size:14px;font-weight:600">'+p.nombre+'</div>'
+        + '<div style="font-size:11px;color:var(--color-text-secondary)">'
+        + (p.tipo==='frances'?'Método francés':'Interés simple') + ' · '
+        + fN(p.capital)+' '+p.moneda+' · '+p.tasa+'%/mes · '+p.plazo+' meses'
+        + (p.cta?' · <span style="color:var(--color-text-tertiary)">'+p.cta+'</span>':'')
+        + '</div>'
+        + '</div>'
+        + '<div style="text-align:right">'
+        + '<div style="font-size:13px;font-weight:600;color:'+(vencidas?'var(--color-text-danger)':'var(--color-text-warning)')+'">'+fN(pendiente,2)+' '+p.moneda+' pend.</div>'
+        + (vencidas?'<div style="font-size:11px;color:var(--color-text-danger)">⚠ '+vencidas+' vencida'+(vencidas>1?'s':'')+'</div>':'')
+        + '</div>'
+        + '</div>'
+        // Progress bar
+        + '<div style="background:var(--color-background-secondary);border-radius:4px;height:6px;margin-bottom:10px">'
+        + '<div style="background:var(--color-text-success);height:6px;border-radius:4px;width:'+pct+'%"></div>'
+        + '</div>'
+        + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">'+pagadas+'/'+p.cuotas.length+' cuotas pagadas ('+pct+'%)</div>'
+        // Cuotas table (first 5 unpaid)
+        + '<details><summary style="cursor:pointer;font-size:12px;color:var(--color-text-secondary)">Ver cuotas</summary>'
+        + '<div style="overflow-x:auto;margin-top:8px"><table class="adm-table"><thead><tr>'
+        + '<th>#</th><th>Fecha</th><th style="text-align:right">Capital</th><th style="text-align:right">Interés</th><th style="text-align:right">Total</th>'
+        + (p.tipo==='frances'?'<th style="text-align:right">Saldo</th>':'')
+        + '<th>Estado</th></tr></thead><tbody>'
+        + p.cuotas.map(function(c){
+            var vencida = !c.pagada && c.fecha < today();
+            return '<tr style="'+(c.pagada?'opacity:.5':'')+(vencida?';background:rgba(248,113,113,.07)':'')+'">'
+              + '<td>'+c.num+'</td>'
+              + '<td>'+fD(c.fecha)+'</td>'
+              + '<td style="text-align:right">'+fN(c.capital,2)+'</td>'
+              + '<td style="text-align:right">'+fN(c.interes,2)+'</td>'
+              + '<td style="text-align:right;font-weight:500">'+fN(c.total,2)+'</td>'
+              + (p.tipo==='frances'?'<td style="text-align:right">'+fN(c.saldoRestante||0,2)+'</td>':'')
+              + '<td><button class="adm-btn-sm" onclick="pagarCuota(\''+p.id+'\','+c.num+')" style="color:'+(c.pagada?'var(--color-text-success)':vencida?'var(--color-text-danger)':'var(--color-text-secondary)')+'">'
+              + (c.pagada?'✓ Pagada':vencida?'⚠ Vencida':'Pagar')+'</button></td>'
+              + '</tr>';
+          }).join('')
+        + '</tbody></table></div></details>'
+        + '<div style="display:flex;gap:6px;margin-top:8px">'
+        + '<button class="adm-btn-sm" onclick="eliminarPrestamo(\''+p.id+'\')" style="color:var(--color-text-danger)">Eliminar</button>'
+        + '</div>'
+        + '</div>';
+    });
+  }
+
+  el.innerHTML = html;
+}
+
+function showNuevoPrestamo() {
+  var el = document.getElementById('prestamo-form');
+  if (!el) return;
+  el.style.display = 'block';
+  var cajas = getAllCajas();
+  el.innerHTML = '<div class="adm-card" style="margin-bottom:14px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">Nuevo préstamo</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Nombre / Descripción *</label>'
+    + '<input class="adm-inp" id="pr-nombre" placeholder="Ej: Préstamo Fito — Container 3"></div>'
+    + '<div><label class="adm-lbl-f">Tipo de préstamo</label>'
+    + '<select class="adm-inp" id="pr-tipo" onchange="updPrestamoForm()">'
+    + '<option value="interes_simple">Interés simple (cuota fija sin amortizar)</option>'
+    + '<option value="frances">Método francés (amortizando capital)</option>'
+    + '</select></div>'
+    + '<div><label class="adm-lbl-f">Capital (importe prestado)</label>'
+    + '<input class="adm-inp" type="number" id="pr-capital" value="0" step="0.01" oninput="updPrestamoForm()"></div>'
+    + '<div><label class="adm-lbl-f">Tasa mensual (%)</label>'
+    + '<input class="adm-inp" type="number" id="pr-tasa" value="2" step="0.1" oninput="updPrestamoForm()"></div>'
+    + '<div><label class="adm-lbl-f">Plazo (meses)</label>'
+    + '<input class="adm-inp" type="number" id="pr-plazo" value="12" step="1" min="1" oninput="updPrestamoForm()"></div>'
+    + '<div><label class="adm-lbl-f">Moneda</label>'
+    + '<select class="adm-inp" id="pr-mon">'
+    + ['USD','EUR','CUP','CUPT'].map(function(m){ return '<option>'+m+'</option>'; }).join('')
+    + '</select></div>'
+    + '<div><label class="adm-lbl-f">Fecha inicio</label>'
+    + '<input class="adm-inp" type="date" id="pr-fecha" value="'+today()+'"></div>'
+    + '<div><label class="adm-lbl-f">Cuenta de pago</label>'
+    + '<select class="adm-inp" id="pr-cta">'
+    + '<option value="">Sin asignar</option>'
+    + cajas.map(function(k){ return '<option>'+k+'</option>'; }).join('')
+    + '</select></div>'
+    + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Notas</label>'
+    + '<input class="adm-inp" id="pr-notas" placeholder="Observaciones..."></div>'
+    + '</div>'
+    + '<div id="pr-preview" style="margin-top:12px;font-size:12px;color:var(--color-text-secondary)"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:14px">'
+    + '<button class="adm-btn adm-btn-p" onclick="admCrearPrestamo()">Crear préstamo</button>'
+    + '<button class="adm-btn" onclick="document.getElementById(\'prestamo-form\').style.display=\'none\'">Cancelar</button>'
+    + '</div>'
+    + '</div>';
+  updPrestamoForm();
+}
+
+function updPrestamoForm() {
+  var capital = parseFloat(document.getElementById('pr-capital')?.value)||0;
+  var tasa = parseFloat(document.getElementById('pr-tasa')?.value)||0;
+  var plazo = parseInt(document.getElementById('pr-plazo')?.value)||1;
+  var tipo = document.getElementById('pr-tipo')?.value||'frances';
+  var el = document.getElementById('pr-preview');
+  if (!el || !capital) return;
+  if (tipo === 'interes_simple') {
+    var int = capital * tasa/100;
+    var totalPagar = capital + int * plazo;
+    el.innerHTML = '<strong>Cuota mensual:</strong> '+fN(int,2)+' (solo interés) · Último mes: '+fN(capital+int,2)
+      + ' · <strong>Total a pagar: '+fN(totalPagar,2)+'</strong>';
+  } else {
+    var r = tasa/100;
+    var pmt = r===0 ? capital/plazo : capital*r*Math.pow(1+r,plazo)/(Math.pow(1+r,plazo)-1);
+    el.innerHTML = '<strong>Cuota mensual:</strong> '+fN(pmt,2)+' · <strong>Total a pagar: '+fN(pmt*plazo,2)+'</strong>';
+  }
+}
+
+function admCrearPrestamo() {
+  var nombre = (document.getElementById('pr-nombre')?.value||'').trim();
+  if (!nombre) { showToast('El nombre es obligatorio'); return; }
+  crearPrestamo({
+    nombre: nombre,
+    tipo: document.getElementById('pr-tipo').value,
+    capital: parseFloat(document.getElementById('pr-capital').value)||0,
+    tasa: parseFloat(document.getElementById('pr-tasa').value)||0,
+    plazo: parseInt(document.getElementById('pr-plazo').value)||12,
+    moneda: document.getElementById('pr-mon').value,
+    fechaInicio: document.getElementById('pr-fecha').value||today(),
+    cta: document.getElementById('pr-cta').value,
+    notas: document.getElementById('pr-notas').value,
+  });
+  document.getElementById('prestamo-form').style.display = 'none';
+  renderPrestamos();
+}
+
+function eliminarPrestamo(id) {
+  if (!confirm('¿Eliminar este préstamo?')) return;
+  PRESTAMOS = PRESTAMOS.filter(function(p){ return p.id !== id; });
+  savePrestamos();
+  renderPrestamos();
+}
+
+</script>
+
+<script>
+
+
+
+
+
+// ==SCRIPT==
+
+
+
+
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO: MOVIMIENTOS DE STOCK
+// Tipos: entrada, salida, ajuste, traslado
+// ═══════════════════════════════════════════════════════════════
+
+var STOCK_MOVS = (function(){
+  try { return JSON.parse(localStorage.getItem('erp_stock_movs')||'[]'); } catch(e) { return []; }
+})();
+
+function saveStockMovs() {
+  try { localStorage.setItem('erp_stock_movs', JSON.stringify(STOCK_MOVS.slice(0,500))); } catch(e) {}
+}
+
+// Apply a movement to PRODS array
+function applyStockMov(mov) {
+  var p = PRODS.find(function(x){ return x.n === mov.producto; });
+  if (!p) return false;
+  if (!p.stk_alm) p.stk_alm = { Habana:0, Placetas:0, Xportprise:0 };
+
+  if (mov.tipo === 'entrada') {
+    p.stk_alm[mov.almacen] = (p.stk_alm[mov.almacen]||0) + mov.cantidad;
+  } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
+    p.stk_alm[mov.almacen] = Math.max(0, (p.stk_alm[mov.almacen]||0) - mov.cantidad);
+  } else if (mov.tipo === 'ajuste_alta') {
+    p.stk_alm[mov.almacen] = (p.stk_alm[mov.almacen]||0) + mov.cantidad;
+  } else if (mov.tipo === 'traslado') {
+    p.stk_alm[mov.almacen] = Math.max(0, (p.stk_alm[mov.almacen]||0) - mov.cantidad);
+    p.stk_alm[mov.almacenDest] = (p.stk_alm[mov.almacenDest]||0) + mov.cantidad;
+  } else if (mov.tipo === 'ajuste_abs') {
+    // Set absolute value
+    p.stk_alm[mov.almacen] = mov.cantidad;
+  }
+  // Recalculate total
+  p.stk = Object.values(p.stk_alm).reduce(function(a,v){return a+v;},0);
+  return true;
+}
+
+function registrarMovStock(data) {
+  var mov = {
+    id: 'smov-' + Date.now(),
+    fecha: data.fecha || today(),
+    tipo: data.tipo,
+    producto: data.producto,
+    almacen: data.almacen,
+    almacenDest: data.almacenDest || '',
+    cantidad: parseFloat(data.cantidad) || 0,
+    motivo: data.motivo || '',
+    usuario: (typeof S !== 'undefined' && S.user) || 'Admin'
+  };
+  if (!applyStockMov(mov)) { showToast('Producto no encontrado'); return false; }
+  STOCK_MOVS.unshift(mov);
+  saveStockMovs();
+  // Save to Supabase
+  if (_supaOnline) {
+    supaReq('POST','stock_movimientos',{
+      fecha: mov.fecha,
+      tipo: mov.tipo,
+      producto: mov.producto,
+      almacen: mov.almacen,
+      almacen_dest: mov.almacenDest||'',
+      cantidad: mov.cantidad,
+      motivo: mov.motivo||'',
+      usuario: mov.usuario
+    }).catch(function(e){console.warn('mov supabase:',e);});
+  } else {
+    enqueue({method:'POST',path:'stock_movimientos',body:{
+      fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
+      almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
+      cantidad:mov.cantidad,motivo:mov.motivo||'',usuario:mov.usuario
+    }});
+  }
+  // Sync stock to Supabase
+  var p = PRODS.find(function(x){ return x.n === mov.producto; });
+  if (p && _supaOnline) {
+    (async function(){
+      // Get supaId if missing
+      if (!p.supaId) {
+        try {
+          var lr = await supaReq('GET','productos?nombre=eq.'+encodeURIComponent(p.n)+'&select=id');
+          if (lr.ok) { var ld=await lr.json(); if(ld&&ld[0]) p.supaId=ld[0].id; }
+        } catch(e) {}
+      }
+      if (!p.supaId) return;
+      // Patch affected almacenes
+      var almsToSync = mov.tipo==='traslado'
+        ? [mov.almacen, mov.almacenDest]
+        : [mov.almacen];
+      for (var a of almsToSync) {
+        if (!a) continue;
+        var qty = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
+        try {
+          var pr = await supaReq('PATCH',
+            'stock_almacen?producto_id=eq.'+p.supaId+'&almacen=eq.'+encodeURIComponent(a),
+            {cantidad:qty});
+          if (!pr.ok) { // Row doesn't exist, insert
+            await supaReq('POST','stock_almacen?on_conflict=producto_id,almacen',
+              {producto_id:p.supaId,almacen:a,cantidad:qty});
+          }
+        } catch(e){ console.warn('mov stock sync:',e); }
+      }
+      console.log('✓ Stock synced:', mov.producto, almsToSync.join('+'));
+    })();
+  }
+  if (typeof renderStock === 'function') try { renderStock(); } catch(e) {}
+  return true;
+}
+
+// ── UI ───────────────────────────────────────────────────────
+var _stockMovTab = 'nuevo'; // 'nuevo' | 'historial'
+
+function renderStockMovimientos() {
+  var el = document.getElementById('stock-movs-panel');
+  if (!el) return;
+  var _isAdmStock = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+
+  var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+    + (_isAdmStock ? '<button class="adm-tab'+(_stockMovTab==='nuevo'?' act':'')+'" onclick="_stockMovTab=\'nuevo\';renderStockMovimientos()">📥 Nuevo movimiento</button>' : '')
+    + '<button class="adm-tab'+(_stockMovTab==='historial'?' act':'')+'" onclick="_stockMovTab=\'historial\';renderStockMovimientos()">📋 Historial</button>'
+    + '</div>';
+
+  if (_stockMovTab === 'nuevo') {
+    var alms = ['Habana','Placetas','Xportprise'];
+    var tipos = [
+      {v:'entrada',    l:'📥 Entrada (compra/recepción)'},
+      {v:'salida',     l:'📤 Salida (merma/pérdida)'},
+      {v:'traslado',   l:'🔄 Traslado entre almacenes'},
+      {v:'ajuste_abs', l:'✏️ Ajuste absoluto (fijar cantidad)'},
+      {v:'ajuste_alta',l:'➕ Ajuste positivo'},
+      {v:'ajuste_baja',l:'➖ Ajuste negativo'},
+    ];
+    html += '<div class="adm-card">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:560px">'
+      + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Tipo de movimiento</label>'
+      + '<select class="adm-inp" id="smov-tipo" onchange="_updMovAlmDest()">'
+      + tipos.map(function(t){ return '<option value="'+t.v+'">'+t.l+'</option>'; }).join('')
+      + '</select></div>'
+      + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Producto</label>'
+      + '<select class="adm-inp" id="smov-prod">'
+      + PRODS.filter(function(p){return p.activo!==false;}).map(function(p){
+          return '<option value="'+p.n+'">'+p.n+'</option>';
+        }).join('')
+      + '</select></div>'
+      + '<div><label class="adm-lbl-f">Almacén origen</label>'
+      + '<select class="adm-inp" id="smov-alm">'
+      + alms.map(function(a){ return '<option>'+a+'</option>'; }).join('')
+      + '</select></div>';
+
+    // Dest almacen — always present, hidden unless traslado
+    html += '<div id="smov-dest-wrap" style="display:none"><label class="adm-lbl-f">Almacén destino</label>'
+      + '<select class="adm-inp" id="smov-alm-dest">'
+      + alms.map(function(a){ return '<option>'+a+'</option>'; }).join('')
+      + '</select></div>';
+
+    html += '<div><label class="adm-lbl-f">Cantidad</label>'
+      + '<input class="adm-inp" type="number" id="smov-qty" value="1" min="0" step="1"></div>'
+      + '<div><label class="adm-lbl-f">Fecha</label>'
+      + '<input class="adm-inp" type="date" id="smov-fecha" value="'+today()+'"></div>'
+      + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Motivo / Referencia</label>'
+      + '<input class="adm-inp" id="smov-motivo" placeholder="Ej: Llegada container #3, Merma transporte..."></div>'
+      + '</div>'
+      + '<button class="adm-btn adm-btn-p" style="margin-top:14px" onclick="admRegistrarMovStock()">Registrar movimiento</button>'
+      + '</div>';
+
+  } else {
+    // Historial
+    var q = (document.getElementById('smov-q')?.value||'').toLowerCase();
+    var movs = STOCK_MOVS.filter(function(m){ return !q || m.producto.toLowerCase().includes(q) || m.motivo.toLowerCase().includes(q); });
+    var tipoColor = { entrada:'var(--color-text-success)', salida:'var(--color-text-danger)',
+      traslado:'var(--color-text-info)', ajuste_abs:'var(--color-text-secondary)',
+      ajuste_alta:'var(--color-text-success)', ajuste_baja:'var(--color-text-warning)' };
+    var tipoIcon = { entrada:'📥', salida:'📤', traslado:'🔄', ajuste_abs:'✏️', ajuste_alta:'➕', ajuste_baja:'➖' };
+
+    html += '<div style="display:flex;gap:8px;margin-bottom:10px">'
+      + '<input class="adm-inp" id="smov-q" placeholder="Buscar producto o motivo..." '
+      + 'oninput="_dRender(function(){renderStockMovimientos()})" style="flex:1;max-width:300px">'
+      + '<span style="font-size:12px;color:var(--color-text-tertiary);align-self:center">'+movs.length+' movimientos</span>'
+      + '</div>';
+
+    if (!movs.length) {
+      html += '<div style="text-align:center;padding:30px;color:var(--color-text-tertiary)">Sin movimientos registrados</div>';
+    } else {
+      html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+        + '<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th style="text-align:right">Cant.</th><th>Motivo</th><th>Usuario</th>'
+        + '</tr></thead><tbody>'
+        + movs.map(function(m){
+            var dest = (m.tipo === 'traslado' && m.almacenDest) ? ' → '+m.almacenDest : '';
+            return '<tr>'
+              + '<td style="font-size:11px">'+fD(m.fecha)+'</td>'
+              + '<td style="font-size:11px;color:'+(tipoColor[m.tipo]||'')+'">'+(tipoIcon[m.tipo]||'')+' '+m.tipo.replace('_',' ')+'</td>'
+              + '<td style="font-size:11px;max-width:140px">'+m.producto+'</td>'
+              + '<td style="font-size:11px">'+m.almacen+dest+'</td>'
+              + '<td style="text-align:right;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'
+              + (m.tipo==='salida'||m.tipo==='ajuste_baja'?'−':m.tipo==='traslado'?'↔':'+')
+              + m.cantidad+'</td>'
+              + '<td style="font-size:11px;color:var(--color-text-secondary)">'+(m.motivo||'—')+'</td>'
+              + '<td style="font-size:11px;color:var(--color-text-tertiary)">'+m.usuario+'</td>'
+              + '</tr>';
+          }).join('')
+        + '</tbody></table></div>';
+    }
+  }
+
+  el.innerHTML = html;
+}
+
+function admRegistrarMovStock() {
+  var tipo   = (document.getElementById('smov-tipo') || {}).value;
+  var prod   = (document.getElementById('smov-prod') || {}).value;
+  var alm    = (document.getElementById('smov-alm') || {}).value;
+  var almD   = (document.getElementById('smov-alm-dest') || {}).value || '';
+  var qty    = parseFloat((document.getElementById('smov-qty') || {}).value) || 0;
+  var fecha  = (document.getElementById('smov-fecha') || {}).value || today();
+  var motivo = (document.getElementById('smov-motivo') || {}).value || '';
+
+  if (!tipo || !prod) { showToast('Selecciona tipo y producto'); return; }
+  if (qty <= 0) { showToast('La cantidad debe ser mayor que 0'); return; }
+  if (tipo === 'traslado' && alm === almD) { showToast('Almacén origen y destino no pueden ser iguales'); return; }
+
+  var data = {
+    tipo: tipo, producto: prod, almacen: alm,
+    almacenDest: almD, cantidad: qty, fecha: fecha, motivo: motivo
+  };
+  var ok = registrarMovStock(data);
+  if (ok) {
+    showToast('✓ Movimiento registrado: ' + qty + ' uds ' + tipo);
+    // Re-render stock table immediately
+    if (typeof renderStock === 'function') renderStock();
+    // Reset form fields but keep tipo/alm selection
+    var qEl = document.getElementById('smov-qty');
+    var mEl = document.getElementById('smov-motivo');
+    if (qEl) qEl.value = '1';
+    if (mEl) mEl.value = '';
+  } else {
+    showToast('Error: producto no encontrado');
+  }
+}
+
+
+
+function _updMovAlmDest() {
+  var tipo = (document.getElementById('smov-tipo')||{}).value;
+  var dest = document.getElementById('smov-dest-wrap');
+  if (dest) dest.style.display = tipo === 'traslado' ? '' : 'none';
+}
+
+
+
+
+
+</script>
+<script>
+
+function _closeVentaModal(){
+  var mo=document.getElementById('venta-detail-modal');
+  if(mo) mo.style.display='none';
+}
+function buildReceiptHtml(v){
+  var pagos=v.pagos||[],vueltos=v.vueltos||[];
+  var cobDesc=pagos.length?pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + '):'--';
+  var vueltoDesc=vueltos.length?vueltos.map(function(vt){return fN(vt.m,dFor(vt.mon))+' '+vt.mon;}).join(' + '):'';
+  var cajaMap={};
+  pagos.forEach(function(p){cajaMap[p.caja]=cajaMap[p.caja]||[];cajaMap[p.caja].push('+'+fN(p.m,dFor(p.mon))+' '+p.mon);});
+  vueltos.forEach(function(vt){cajaMap[vt.caja]=cajaMap[vt.caja]||[];cajaMap[vt.caja].push('-'+fN(vt.m,dFor(vt.mon))+' '+vt.mon);});
+  var ck=Object.keys(cajaMap);
+  var h='';
+  h+='<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+v.vend+' &middot; '+v.alm+' &middot; '+(v.cli||'Walk-in')+'</div>';
+  h+='<div class="res-line"><span>Productos</span><span style="text-align:right;font-size:12px;line-height:1.7">'+v.prods.split(', ').join('<br>')+'</span></div>';
+  h+='<div class="res-line"><span>Total</span><strong>'+fN(v.totalUSD)+' USD</strong></div>';
+  h+='<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'+['EUR','CUP','CUPT'].map(function(m){return fN(fromUSD(v.totalUSD,m,v.alm),dFor(m))+' '+m;}).join(' &middot; ')+'</span></div>';
+  h+='<div class="res-line"><span>Cobrado</span><span>'+cobDesc+'</span></div>';
+  if(vueltoDesc) h+='<div class="res-line"><span>Vuelto</span><span>'+vueltoDesc+'</span></div>';
+  if(ck.length){
+    h+='<div style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px">';
+    h+='<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.5px">MOVIMIENTOS DE CAJA</div>';
+    ck.forEach(function(k){h+='<div class="res-line"><span style="font-size:11px">'+k+'</span><span style="font-size:11px">'+cajaMap[k].join(' &middot; ')+'</span></div>';});
+    h+='</div>';
+  }
+  if(v.nota) h+='<div class="res-line" style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px"><span style="color:var(--color-text-tertiary)">&#128203;</span><span style="font-size:12px">'+v.nota+'</span></div>';
+  return h;
+}
+function verVenta(id){
+  var v=VENTAS.find(function(x){return x.id===id;});
+  if(!v) return;
+  var mo=document.getElementById('venta-detail-modal');
+  if(!mo){
+    mo=document.createElement('div');
+    mo.id='venta-detail-modal';
+    mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
+    document.body.appendChild(mo);
+  }
+  mo.innerHTML='<div style="max-width:420px;width:100%;max-height:90vh;overflow-y:auto;position:relative;background:var(--color-background-primary);border-radius:var(--border-radius-lg);padding:24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.6)">'
+    +'<button onclick="_closeVentaModal()" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary);z-index:1">&times;</button>'
+    +'<div style="text-align:center;margin-bottom:20px">'
+    +'<div style="width:52px;height:52px;border-radius:50%;background:var(--color-background-success);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 12px">&#10003;</div>'
+    +'<div style="font-size:18px;font-weight:500;margin-bottom:4px">Venta #'+v.id+'</div>'
+    +'<div style="font-size:12px;color:var(--color-text-secondary)">'+fD(v.fecha)+'</div>'
+    +'</div>'
+    +'<div style="margin-bottom:20px">'+buildReceiptHtml(v)+'</div>'
+    +'<button class="btn" onclick="_closeVentaModal()" style="width:100%">Cerrar</button>'
+    +'</div>';
+  mo.style.display='flex';
+}
+
+
+</script>
+
+
+
+<script>
+
+// ═══════════════════════════════════════════════════════════════
+// OFFLINE STORE — Persistencia completa para modo sin internet
+// Guarda VENTAS y PRODS en localStorage
+// ═══════════════════════════════════════════════════════════════
+
+var _offlineStoreTimer = null;
+
+// ── Guardar estado completo ──────────────────────────────────
+function offlineSaveVentas() {
+  try {
+    // Solo guardar las últimas 500 para no saturar localStorage
+    var toSave = VENTAS.slice(0, 500);
+    localStorage.setItem('erp_ventas_cache', JSON.stringify(toSave));
+    localStorage.setItem('erp_ventas_cache_ts', Date.now().toString());
+  } catch(e) { console.warn('offlineSaveVentas:', e); }
+}
+
+function offlineSaveProds() {
+  try {
+    localStorage.setItem('erp_prods_cache', JSON.stringify(PRODS));
+    localStorage.setItem('erp_prods_cache_ts', Date.now().toString());
+  } catch(e) { console.warn('offlineSaveProds:', e); }
+}
+
+// ── Cargar estado desde caché ────────────────────────────────
+function offlineLoadVentas() {
+  try {
+    var raw = localStorage.getItem('erp_ventas_cache');
+    if (!raw) return false;
+    var cached = JSON.parse(raw);
+    if (!cached || !cached.length) return false;
+    VENTAS.length = 0;
+    cached.forEach(function(v) { VENTAS.push(v); });
+    // Reset venNextId
+    var maxId = cached.reduce(function(a,v){ return Math.max(a, v.id||0); }, 999);
+    venNextId = maxId + 1;
+    console.log('Offline: loaded', VENTAS.length, 'ventas from cache');
+    return true;
+  } catch(e) { console.warn('offlineLoadVentas:', e); return false; }
+}
+
+function offlineLoadProds() {
+  try {
+    var raw = localStorage.getItem('erp_prods_cache');
+    if (!raw) return false;
+    var cached = JSON.parse(raw);
+    if (!cached || !cached.length) return false;
+    PRODS.length = 0;
+    cached.forEach(function(p) { PRODS.push(p); });
+    console.log('Offline: loaded', PRODS.length, 'productos from cache');
+    return true;
+  } catch(e) { console.warn('offlineLoadProds:', e); return false; }
+}
+
+// ── Auto-save debounced ──────────────────────────────────────
+function offlineAutoSave() {
+  clearTimeout(_offlineStoreTimer);
+  _offlineStoreTimer = setTimeout(function() {
+    offlineSaveVentas();
+    offlineSaveProds();
+    offlineSaveClientes();
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify((_cajasMovs||[]).slice(0,200)));}catch(e){}
+    if(!_supaOnline && _syncQueue.length>0) showOfflineBanner(_syncQueue.length);
+  }, 2000);
+}
+
+// ── Banner offline ────────────────────────────────────────────
+function showOfflineBanner(pendingCount) {
+  var existing = document.getElementById('offline-banner');
+  if (existing) existing.remove();
+  if (!pendingCount && _supaOnline) return;
+
+  var banner = document.createElement('div');
+  banner.id = 'offline-banner';
+  banner.style.cssText = (
+    'position:fixed;bottom:0;left:0;right:0;z-index:9998;'
+    + 'background:' + (_supaOnline ? 'var(--color-background-warning)' : '#1a1a2e') + ';'
+    + 'border-top:1px solid ' + (_supaOnline ? 'var(--color-text-warning)' : '#f87171') + ';'
+    + 'padding:8px 16px;display:flex;align-items:center;justify-content:space-between;'
+    + 'font-size:12px;gap:10px;flex-wrap:wrap'
+  );
+
+  if (!_supaOnline) {
+    banner.innerHTML = '<span style="color:#f87171;font-weight:600">⚡ Modo offline</span>'
+      + '<span style="color:var(--color-text-secondary)">'
+      + (pendingCount ? pendingCount + ' venta' + (pendingCount>1?'s':'') + ' pendiente' + (pendingCount>1?'s':'') + ' de sync' : 'Sin conexión — datos guardados localmente')
+      + '</span>'
+      + '<span style="color:var(--color-text-tertiary);font-size:10px">Al reconectar se sincronizará automáticamente</span>';
+  } else if (pendingCount) {
+    banner.innerHTML = '<span style="color:var(--color-text-warning);font-weight:600">⏳ Sincronizando</span>'
+      + '<span style="color:var(--color-text-secondary)">' + pendingCount + ' operación' + (pendingCount>1?'es':'') + ' pendiente' + (pendingCount>1?'s':'') + '</span>'
+      + '<button onclick="flushQueue()" style="background:var(--color-background-primary);border:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">Sincronizar ahora</button>';
+  }
+
+  document.body.appendChild(banner);
+}
+
+function hideOfflineBanner() {
+  var b = document.getElementById('offline-banner');
+  if (b) b.remove();
+}
+
+// ── Monitorear conexión ───────────────────────────────────────
+window.addEventListener('online', function() {
+  console.log('Connection restored');
+  _supaOnline = true;
+  updOnlineDot();
+  showToast('Conexión restaurada — sincronizando...');
+  // Auto sync
+  setTimeout(async function() {
+    await flushQueue();
+    await Promise.all([syncLoadProductos(), syncLoadVentas()]);
+    offlineSaveVentas();
+    offlineSaveProds();
+    offlineSaveClientes();
+    hideOfflineBanner();
+    showToast('✓ Sincronizado');
+  }, 500);
+});
+
+window.addEventListener('offline', function() {
+  console.log('Connection lost');
+  _supaOnline = false;
+  updOnlineDot();
+  showOfflineBanner(_syncQueue.length);
+  showToast('Sin conexión — modo offline activado');
+});
+
+
+// ── Clientes cache ───────────────────────────────────────────
+function offlineSaveClientes() {
+  try {
+    localStorage.setItem('erp_clientes_cache', JSON.stringify(CLIENTES));
+    localStorage.setItem('erp_clientes_cache_ts', Date.now().toString());
+  } catch(e) { console.warn('offlineSaveClientes:', e); }
+}
+
+function offlineLoadClientes() {
+  try {
+    var raw = localStorage.getItem('erp_clientes_cache');
+    if (!raw) return false;
+    var cached = JSON.parse(raw);
+    if (!cached || !cached.length) return false;
+    CLIENTES.length = 0;
+    cached.forEach(function(c) { if(c&&c.id&&c.nombre) CLIENTES.push(c); });
+    // Restore counters
+    nextCid = CLIENTES.reduce(function(a,c){var n=parseInt((c.id||'c0').replace('c',''));return isNaN(n)?a:Math.max(a,n);},0)+1;
+    nextFid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){var n=parseInt(f.id||'0');return isNaN(n)?b:Math.max(b,n);},a);},0)+1;
+    nextAid = CLIENTES.reduce(function(a,c){return (c.folios||[]).reduce(function(b,f){return (f.abonos||[]).reduce(function(d,ab){var n=parseInt((ab.id||'a0').replace('a',''));return isNaN(n)?d:Math.max(d,n);},b);},a);},0)+1;
+    console.log('Clientes loaded:', CLIENTES.length);
+    return true;
+  } catch(e) { console.warn('offlineLoadClientes:', e); return false; }
+}
+function _loadRatesCache() {
+  try {
+    var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
+    if (cached.CUP && cached.CUP > 0) {
+      if (cached.EUR && cached.EUR > 0 && cached.EUR < 2) RATES.EUR = cached.EUR; // USD/EUR must be 0.5-2
+      else if (cached.EUR && cached.EUR > 2) {
+        // Looks like CUP/EUR was stored — ignore it, will recalculate
+        console.warn('Invalid cached EUR rate:', cached.EUR, '— ignoring');
+      }
+      if (cached.CUP) RATES.CUP = cached.CUP;
+      if (cached.CUPT) RATES.CUPT = cached.CUPT;
+      // Also populate market rates cache if not set
+      try {
+        if (!localStorage.getItem('erp_rates_mkt') && cached.CUP) {
+          // Reverse-calculate market from final using stored adj
+          var _sa = JSON.parse(localStorage.getItem('erp_rates_adj') || '{}');
+          localStorage.setItem('erp_rates_mkt', JSON.stringify({
+            CUP: cached.CUP - (_sa.USD||0),
+            EUR: cached.CUP / (cached.EUR > 0 ? (1/cached.EUR) : 1), // convert USD/EUR back to CUP/EUR
+            CUPT: cached.CUPT - (_sa.CUPT||0)
+          }));
+        }
+      } catch(e) {}
+      var age = cached.ts ? Math.round((Date.now()-cached.ts)/60000) : '?';
+      console.log('Rates loaded from cache (' + age + ' min old)');
+    }
+  } catch(e) {}
+}
+
+// Load cached rates immediately on startup (before network call)
+_loadRatesCache();
+
+// Auto-refresh: fetch on load + every 30 minutes
+// ── elToque API ──────────────────────────────────────────────
+var _TOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc0NjYzMzg5OCwianRpIjoiYmZjMGZiZDMtY2Y1NC00NjQ5LTk1MGUtMzBlYWUwNjVlNTY2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY4MGU4ODU0MzhkNzU2MWQyMWM2Nzg2ZiIsIm5iZiI6MTc0NjYzMzg5OCwiZXhwIjoxNzc4MTY5ODk4fQ.frJxUfZ9oPzGOGVBPDXCZ0c3Za8umObbDVLLhfAEihQ';
+
+async function fetchElToqueAndSave(){
+  showToast('🔄 Actualizando elToque...');
+  try {
+    // Strategy 1: Supabase Edge Function proxy (avoids CORS)
+    // Deploy this edge function in your Supabase project:
+    // supabase/functions/eltoque-proxy/index.ts
+    var data = null;
+
+    // Call Supabase RPC function (no CORS issues — goes through Supabase REST API)
+    try {
+      var r1 = await supaReq('GET', 'rpc/get_eltoque_rates');
+      if (r1.ok) {
+        var raw1 = await r1.json();
+        // RPC returns: {tasas: {USD, ECU, MLC, BTC, USDT_TRC20, TRX}, date, hour, ...}
+        if (raw1 && typeof raw1 === 'object') data = raw1;
+      }
+    } catch(e) { console.warn('elToque RPC:', e); }
+
+    if (!data) throw new Error('No se pudo obtener tasas de elToque via Supabase RPC.');
+
+    // Response: {tasas: {USD:525, ECU:590, MLC:390, ...}, date, hour, ...}
+    var t = data.tasas || data;
+    var cup  = parseFloat(t.USD || 0);   // CUP por 1 USD
+    var ecu  = parseFloat(t.ECU || 0);   // CUP por 1 EUR (elToque llama ECU al EUR)
+    var cupt = parseFloat(t.MLC || 0);   // CUP por 1 MLC
+
+    if (!cup || cup < 10) throw new Error('Datos inesperados: ' + JSON.stringify(data).substring(0,100));
+
+    // mkt stores: CUP=USD/CUP rate, EUR=ECU/CUP rate, CUPT=MLC/CUP rate
+    var mkt = {CUP:cup, EUR:ecu||cup, CUPT:cupt||cup, ts:Date.now()};
+    try { localStorage.setItem('erp_rates_mkt', JSON.stringify(mkt)); } catch(e) {}
+
+    // RATES.CUP = CUP por USD (e.g. 525)
+    // RATES.EUR = USD por EUR = CUP_USD / CUP_EUR (e.g. 525/590 = 0.89)
+    // RATES.CUPT = CUP por MLC (e.g. 390)
+    var adj = {};
+    try { adj = JSON.parse(localStorage.getItem('erp_rates_adj')||'{}'); } catch(e) {}
+    RATES.CUP  = cup  + (adj.USD  || 0);
+    var ecuFin = ecu  + (adj.EUR  || 0);
+    if (ecuFin > 0) RATES.EUR = parseFloat((RATES.CUP / ecuFin).toFixed(6));
+    // RATES_EURUSD = CUP_EUR/CUP_USD (ratio for display panel)
+    if(cup>0 && ecu>0) { RATES_EURUSD=parseFloat((ecu/cup).toFixed(4)); try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){} }
+    RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
+
+    showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
+    renderAdminTasas();
+    return mkt;
+  } catch(e) {
+    console.warn('fetchElToqueAndSave:', e);
+    showToast('⚠ elToque: ' + e.message.substring(0, 80));
+    return null;
+  }
+}
+
+window.addEventListener('load', function() {
+  // Auto-fetch elToque on load if rates are stale (>1 hour)
+  setTimeout(function(){
+    try {
+      var mkt = JSON.parse(localStorage.getItem('erp_rates_mkt')||'{}');
+      var age = mkt.ts ? (Date.now()-mkt.ts)/1000/60 : 999;
+      if (age > 60) fetchElToqueAndSave();
+    } catch(e) {}
+  }, 3000); // wait 3s after load
+});
+
+
+
+
+</script>
+
+<script>
+// renderStock defined below
+</script>
+
+<script>
+function renderStock(){
+  var el=document.getElementById('stock-root');if(!el)return;
+  var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
+  var _mp=document.getElementById('stock-movs-panel');if(_mp)_mp.style.display=_isVend?'none':'';
+  var alms=['Habana','Placetas','Xportprise'];
+  var q=(window._stockQ||'').toLowerCase(),catF=window._stockCat||'',almF=window._stockAlm||'';
+  var userAlm=typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
+  var activos=PRODS.filter(function(p){return p.activo!==false && p.enStock!==false;});
+  var total=activos.reduce(function(a,p){return a+(p.stk||0);},0);
+  var bajos=activos.filter(function(p){return(p.stk||0)<=(p.stk_min||10);}).length;
+  var cats=Object.keys(activos.reduce(function(a,p){if(p.cat)a[p.cat]=1;return a;},{})).sort();
+  var prods=activos.filter(function(p){
+    if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
+    if(catF&&p.cat!==catF)return false;
+    if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
+    return true;
+  });
+  var visAlms=almF?[almF]:alms;
+  var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
+  h+='<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
+  h+='<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
+  alms.forEach(function(a){var t=activos.reduce(function(s,p){return s+((p.stk_alm&&p.stk_alm[a])||0);},0);h+='<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(t,0)+'</div></div>';});
+  h+='</div>';
+  if(!_isVend) h+='<button class="adm-btn adm-btn-p" onclick="syncLoadProductos().then(function(){renderStock();showToast(\'✓ Stock sincronizado\');})" style="margin-bottom:8px;width:100%">🔄 Sincronizar stock desde Supabase</button>';
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    +'<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px"><option value="">Todos almacenes</option>'
+    +alms.map(function(a){return'<option'+(almF===a?' selected':'')+'>'+a+'</option>';}).join('')+'</select>'
+    +'<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px"><option value="">Todas cats</option>'
+    +cats.map(function(c){return'<option'+(catF===c?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'
+    +(bajos>0?'<span class="badge" style="background:var(--color-background-warning);color:var(--color-text-warning);padding:4px 10px">'+bajos+' bajo mínimo</span>':'')
+    +'</div>';
+  h+='<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Producto</th><th>Cat.</th>'
+    +visAlms.map(function(a){return'<th style="text-align:right">'+a+'</th>';}).join('')
+    +'<th style="text-align:right">Total</th><th style="text-align:right">Min/May</th></tr></thead><tbody>';
+  if(!prods.length){h+='<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';}
+  else{prods.forEach(function(p){
+    var bajo=(p.stk||0)<=(p.stk_min||10);
+    h+='<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'
+      +'<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'
+      +'<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
+    visAlms.forEach(function(a){
+      var v=(p.stk_alm&&p.stk_alm[a]!=null)?p.stk_alm[a]:0;
+      h+='<td style="text-align:right;font-weight:'+(a===userAlm?'700':'400')+';color:'+(v===0?'var(--color-text-tertiary)':v<=(p.stk_min||10)?'var(--color-text-warning)':'var(--color-text-primary)')+'">'+fN(v,0)+'</td>';
+    });
+    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'
+      +'<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+(p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
+  });}
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+  if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}
+}
+</script>
+</body>
+</html>
