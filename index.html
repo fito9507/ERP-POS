@@ -1475,14 +1475,19 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 // ── Telegram Bot ─────────────────────────────────────────────
 const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
-const TG_CHAT  = '8781639188';   // personal
-const TG_GROUP = '-5283520069';  // grupo
-function tgSend(msg){
+const TG_CHAT  = '8781639188';  // personal (admin)
+// Grupos por almacén
+const TG_VENTAS  = { Habana:'-5121145069', Placetas:'-5196463397' };
+const TG_PEDIDOS = { Habana:'-5283520069', Placetas:'-5229951824' };
+function tgSend(msg, alm, tipo){
   if(!TG_TOKEN) return;
-  [TG_CHAT,TG_GROUP].forEach(function(cid){
+  // tipo: 'venta' o 'pedido'
+  var grupos = tipo==='pedido' ? TG_PEDIDOS : TG_VENTAS;
+  var cid = alm && grupos[alm] ? grupos[alm] : TG_CHAT;
+  [TG_CHAT, cid].filter(function(x,i,a){return a.indexOf(x)===i;}).forEach(function(id){
     fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:cid,text:msg,parse_mode:'HTML'})
+      body:JSON.stringify({chat_id:id,text:msg,parse_mode:'HTML'})
     }).catch(function(e){console.warn('Telegram:',e);});
   });
 }
@@ -2794,7 +2799,7 @@ function confirmar(){
       +'\uD83D\uDCE6 '+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob;
-    tgSend(_tgMsg);
+    tgSend(_tgMsg, S.alm, 'venta');
   })();
   // Mostrar pantalla OK
   document.getElementById('ok-sub').textContent=S.user+' · '+S.alm+' · '+(S.cli||'Walk-in');
@@ -3462,7 +3467,7 @@ function registrarVenta(){
       +'\uD83D\uDED2 '+v_new.cli+'\n'
       +'\uD83D\uDCB5 <b>'+fN(v_new.totalUSD)+' USD</b>\n'
       +(v_new.prods?'\uD83D\uDCE6 '+v_new.prods:'');
-    tgSend(_tgMsg);
+    tgSend(_tgMsg, v_new.alm, 'venta');
   })();
   ['nv-prods','nv-total','nv-nota'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nv-com-pct').value='';
@@ -4818,7 +4823,7 @@ function registrarAbonoCli(cid){
       +'\uD83D\uDCB0 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
       +(desc?'\uD83D\uDCDD '+desc:'')
       +(caja?'\uD83C\uDFE6 '+caja:'');
-    tgSend(_tgMsg);
+    tgSend(_tgMsg, null, 'venta');
   })();
   showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
