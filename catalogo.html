@@ -548,7 +548,7 @@ async function init(){
     // Load products
     var rows;
     try{
-      rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&order=nombre.asc');
+      rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&en_stock=eq.true&order=nombre.asc');
     }catch(e){
       // Show specific error
       var msg = e.message||'Error desconocido';
@@ -628,8 +628,7 @@ function render(){
 
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-  var stkLabel = stk > 10 ? '<span class="stock-ok">✓ Disponible ('+stk+' uds)</span>' 
-               : stk > 0  ? '<span class="stock-low">⚠ Pocas unidades ('+stk+')</span>'
+    var stkLabel = stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
                : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
