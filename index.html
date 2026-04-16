@@ -1575,6 +1575,72 @@ setInterval(_autoSync, 120000);
 // Run once 5 seconds after load
 setTimeout(_autoSync, 5000);
 
+// ── CIERRE DIARIO 8PM ─────────────────────────────────
+var _cierreEnviado = '';
+function _checkCierre() {
+  if (!_supaOnline || !TG_TOKEN) return;
+  var now = new Date();
+  var hoy = now.toISOString().slice(0,10);
+  var hora = now.getHours();
+  // Solo a las 20h (8pm) y si no se envió hoy ya
+  if (hora !== 20) return;
+  if (_cierreEnviado === hoy) return;
+  _cierreEnviado = hoy;
+  try { localStorage.setItem('erp_cierre_enviado', hoy); } catch(e) {}
+  enviarCierreDiario(hoy);
+}
+// Check every minute
+setInterval(_checkCierre, 60000);
+// Restore last sent date
+try { _cierreEnviado = localStorage.getItem('erp_cierre_enviado')||''; } catch(e) {}
+
+async function enviarCierreDiario(fecha) {
+  if (!fecha) fecha = new Date().toISOString().slice(0,10);
+  var alms = ['Habana','Placetas'];
+  for (var i=0; i<alms.length; i++) {
+    var alm = alms[i];
+    var ventasAlm = (typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
+      return v.fecha && v.fecha.slice(0,10)===fecha && v.alm===alm;
+    });
+    var totalUSD = ventasAlm.reduce(function(a,v){return a+(v.totalUSD||0);},0);
+    var numVentas = ventasAlm.length;
+    // Group by seller
+    var porVend = {};
+    ventasAlm.forEach(function(v){
+      var vend = v.vend||v.vendedor||'?';
+      if(!porVend[vend]) porVend[vend]={n:0,usd:0};
+      porVend[vend].n++;
+      porVend[vend].usd+=(v.totalUSD||0);
+    });
+    var vendLines = Object.keys(porVend).map(function(vend){
+      return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' ventas · $'+fN(porVend[vend].usd);
+    }).join('\n');
+    // Products sold
+    var prodCount = {};
+    ventasAlm.forEach(function(v){
+      (v.prods||'').split(',').forEach(function(p){
+        var m=p.trim().match(/^(\d+)\u00d7\s*(.+)/)||p.trim().match(/^(\d+)\xd7\s*(.+)/)||p.trim().match(/^(\d+)[x×]\s*(.+)/);
+        if(m){var nm=m[2].trim();prodCount[nm]=(prodCount[nm]||0)+parseInt(m[1]);}
+      });
+    });
+    var topProds = Object.keys(prodCount).sort(function(a,b){return prodCount[b]-prodCount[a];}).slice(0,5);
+    var prodLines = topProds.map(function(n){return '  \uD83D\uDCE6 '+prodCount[n]+'\u00d7 '+n;}).join('\n');
+
+    var msg = '\uD83D\uDCCA <b>Cierre del d\u00eda \u2014 '+alm+'</b>\n'
+      + '\uD83D\uDDD3 '+fecha+'\n\n'
+      + (numVentas===0
+        ? '\uD83D\uDEAB Sin ventas registradas hoy'
+        : '\uD83D\uDCB0 <b>Total: $'+fN(totalUSD)+'</b> USD\n'
+        + '\uD83D\uDED2 '+numVentas+' venta'+(numVentas!==1?'s':'')+'\n\n'
+        + (vendLines?'<b>Por vendedor:</b>\n'+vendLines:'')
+        + (prodLines?'\n\n<b>Productos vendidos:</b>\n'+prodLines:''))
+      + '\n\n_\uD83E\uDD16 Resumen autom\u00e1tico ERP_';
+
+    tgSend(msg, alm, 'venta');
+  }
+  showToast('\uD83D\uDCCA Cierre enviado al grupo');
+}
+
 function enqueue(op) {
   op.ts = Date.now();
   _syncQueue.push(op);
@@ -6430,8 +6496,7 @@ function renderBackup() {
     + '</div>'
     + '</div>'
 
-    + '<div class="adm-card" style="margin-bottom:12px">'
-    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
+    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm si el ERP está abierto.</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
     + '</div>'
