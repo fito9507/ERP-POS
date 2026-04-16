@@ -6416,6 +6416,12 @@ function renderBackup() {
     + '</div>'
 
     + '<div class="adm-card" style="margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
+    + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
+    + '</div>'
+
+    + '<div class="adm-card" style="margin-bottom:12px">'
     + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Exportar a Excel</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un .xlsx con pestañas: Ventas, Productos, Clientes, Movimientos I/G.</div>'
     + '<button class="adm-btn adm-btn-p" onclick="exportExcel()">⬇ Descargar Excel</button>'
@@ -6432,6 +6438,97 @@ function renderBackup() {
     + '</div>'
     + '</div>'
     + '</div>';
+}
+
+async function exportBackupSQL() {
+  if(!_supaOnline){ showToast('⚠ Necesitas conexión para generar el backup SQL'); return; }
+  showToast('⏳ Generando backup SQL...');
+  var sql = '-- BACKUP Marin Metal PDL\n-- Fecha: ' + new Date().toISOString() + '\n\n';
+
+  try {
+    // 1. Productos
+    sql += '-- ── PRODUCTOS ──────────────────────────\n';
+    var prods = await supaReq('GET','productos?select=*&order=nombre.asc');
+    if(prods.ok){
+      var pd = await prods.json();
+      pd.forEach(function(r){
+        var esc = function(v){ return v ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
+        sql += "INSERT INTO productos (nombre,categoria,precio_min,precio_maj,precio_ddp,stk_min,activo,en_stock,en_transito,imagen_url) VALUES ("
+          + esc(r.nombre)+','+esc(r.categoria)+','
+          + (r.precio_min!=null?r.precio_min:'NULL')+','
+          + (r.precio_maj!=null?r.precio_maj:'NULL')+','
+          + (r.precio_ddp!=null?r.precio_ddp:'NULL')+','
+          + (r.stk_min||10)+','
+          + r.activo+','+r.en_stock+','+(r.en_transito||false)+','
+          + esc(r.imagen_url)
+          + ') ON CONFLICT (nombre) DO UPDATE SET categoria=EXCLUDED.categoria,precio_min=EXCLUDED.precio_min,precio_maj=EXCLUDED.precio_maj,precio_ddp=EXCLUDED.precio_ddp,stk_min=EXCLUDED.stk_min,activo=EXCLUDED.activo,en_stock=EXCLUDED.en_stock,en_transito=EXCLUDED.en_transito,imagen_url=EXCLUDED.imagen_url;\n';
+      });
+    }
+
+    // 2. Stock
+    sql += '\n-- ── STOCK ──────────────────────────────\n';
+    var stk = await supaReq('GET','stock_almacen?select=producto_id,almacen,cantidad,productos(nombre)');
+    if(stk.ok){
+      var sd = await stk.json();
+      sd.forEach(function(r){
+        if(!r.productos) return;
+        sql += "INSERT INTO stock_almacen (producto_id,almacen,cantidad) VALUES ((SELECT id FROM productos WHERE nombre='"+r.productos.nombre.replace(/'/g,"''")+"'),'"+r.almacen+"',"+(r.cantidad||0)+") ON CONFLICT (producto_id,almacen) DO UPDATE SET cantidad=EXCLUDED.cantidad;\n";
+      });
+    }
+
+    // 3. Tasas
+    sql += '\n-- ── TASAS ──────────────────────────────\n';
+    var tasas = await supaReq('GET','tasas?select=*');
+    if(tasas.ok){
+      var td = await tasas.json();
+      td.forEach(function(r){
+        sql += "INSERT INTO tasas (moneda,valor,tasa_mkt,ajuste) VALUES ('"+r.moneda+"',"+(r.valor||0)+","+(r.tasa_mkt||0)+","+(r.ajuste||0)+") ON CONFLICT (moneda) DO UPDATE SET valor=EXCLUDED.valor,tasa_mkt=EXCLUDED.tasa_mkt,ajuste=EXCLUDED.ajuste;\n";
+      });
+    }
+
+    // 4. Tasas almacen
+    sql += '\n-- ── TASAS ALMACEN ───────────────────────\n';
+    var ta = await supaReq('GET','tasas_almacen?select=*');
+    if(ta.ok){
+      var tad = await ta.json();
+      tad.forEach(function(r){
+        sql += "INSERT INTO tasas_almacen (almacen,moneda,ajuste) VALUES ('"+r.almacen+"','"+r.moneda+"',"+(r.ajuste||0)+") ON CONFLICT (almacen,moneda) DO UPDATE SET ajuste=EXCLUDED.ajuste;\n";
+      });
+    }
+
+    // 5. Usuarios
+    sql += '\n-- ── USUARIOS ────────────────────────────\n';
+    var usrs = await supaReq('GET','usuarios?select=*');
+    if(usrs.ok){
+      var ud = await usrs.json();
+      var esc = function(v){ return v ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
+      ud.forEach(function(r){
+        sql += "INSERT INTO usuarios (nombre,pin,rol,almacen,color,tc,activo,puede_vender) VALUES ("+esc(r.nombre)+","+esc(r.pin)+","+esc(r.rol)+","+esc(r.almacen)+","+esc(r.color)+","+esc(r.tc)+","+(r.activo!==false)+","+(r.puede_vender!==false)+") ON CONFLICT (nombre) DO UPDATE SET pin=EXCLUDED.pin,rol=EXCLUDED.rol,almacen=EXCLUDED.almacen,color=EXCLUDED.color,tc=EXCLUDED.tc,activo=EXCLUDED.activo,puede_vender=EXCLUDED.puede_vender;\n";
+      });
+    }
+
+    // 6. Ventas (últimas 500)
+    sql += '\n-- ── VENTAS (últimas 500) ────────────────\n';
+    var vts = await supaReq('GET','ventas?select=*&order=fecha.desc&limit=500');
+    if(vts.ok){
+      var vd = await vts.json();
+      var esc = function(v){ return v!=null ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
+      vd.forEach(function(r){
+        sql += "INSERT INTO ventas (fecha,vendedor,almacen,cliente,tipo,productos,total_usd,moneda_cobro,com_pct,com_usd,est_com,cobrado_usd,notas,cobros_json) VALUES ("+esc(r.fecha)+","+esc(r.vendedor)+","+esc(r.almacen)+","+esc(r.cliente)+","+esc(r.tipo)+","+esc(r.productos)+","+(r.total_usd||0)+","+esc(r.moneda_cobro)+","+(r.com_pct||0)+","+(r.com_usd||0)+","+esc(r.est_com)+","+(r.cobrado_usd||0)+","+esc(r.notas)+","+esc(r.cobros_json)+") ON CONFLICT DO NOTHING;\n";
+      });
+    }
+
+    // Download
+    var blob = new Blob([sql], {type:'text/sql'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'backup_marinmetal_'+new Date().toISOString().slice(0,10)+'.sql';
+    a.click();
+    showToast('✓ SQL backup descargado');
+  } catch(e) {
+    showToast('⚠ Error: '+e.message);
+    console.error('exportBackupSQL:', e);
+  }
 }
 
 function exportJSON() {
