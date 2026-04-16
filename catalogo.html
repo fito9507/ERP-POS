@@ -415,6 +415,26 @@
       <span>Total estimado</span>
       <span id="cart-total-val">0,00</span>
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Nombre *</label>
+        <input id="cart-nombre" type="text" placeholder="Tu nombre" style="width:100%;background:var(--steel-light);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-dim);display:block;margin-bottom:4px">Teléfono *</label>
+        <input id="cart-tel" type="tel" placeholder="+53 5..." style="width:100%;background:var(--steel-light);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;font-weight:600">NOMBRE *</div>
+        <input id="cart-nombre" type="text" placeholder="Tu nombre" style="width:100%;background:var(--steel-light);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;font-weight:600">TELÉFONO *</div>
+        <input id="cart-tel" type="tel" placeholder="+53..." style="width:100%;background:var(--steel-light);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none" onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+    </div>
     <textarea class="cart-note" id="cart-note" placeholder="Notas adicionales (dirección, forma de pago, etc.)..."></textarea>
     <button class="wa-send-btn" onclick="sendWA()">
       <span class="wa-icon">💬</span>
@@ -804,6 +824,10 @@ function renderCart(){
 function sendWA(){
   var items = Object.values(CART);
   if(!items.length){ alert('Agrega productos al pedido primero'); return; }
+  var nombre = (document.getElementById('cart-nombre')?.value||'').trim();
+  var tel    = (document.getElementById('cart-tel')?.value||'').trim();
+  if(!nombre){ document.getElementById('cart-nombre').style.borderColor='var(--color-text-danger,#e84b4b)'; document.getElementById('cart-nombre').focus(); return; }
+  if(!tel){ document.getElementById('cart-tel').style.borderColor='var(--color-text-danger,#e84b4b)'; document.getElementById('cart-tel').focus(); return; }
   var lines = items.map(function(i){
     var r = getCartPrice(i);
     return '• '+i.qty+'× '+i.prod.n+' → '+fPrice(r.price*i.qty, MON)+(r.isMay?' (May)':' (Min)');
@@ -811,14 +835,17 @@ function sendWA(){
   var total = items.reduce(function(a,i){
     return a + getCartPrice(i).price * i.qty;
   },0);
-  var nota = (document.getElementById('cart-note').value||'').trim();
-  var msg = '🏗️ *Pedido — '+ALM+'*\n\n'
+  var nota   = (document.getElementById('cart-note')?.value||'').trim();
+  var nombre = (document.getElementById('cart-nombre')?.value||'').trim();
+  var tel    = (document.getElementById('cart-tel')?.value||'').trim();
+  if(!nombre){ alert('Por favor introduce tu nombre para continuar'); document.getElementById('cart-nombre')?.focus(); return; }
+  var msg = '\uD83C\uDFF7\uFE0F *Pedido \u2014 '+ALM+'*\n\n'
+    + '\uD83D\uDC64 *'+nombre+'*'+(tel?' \u00b7 \uD83D\uDCDE '+tel:'')+'\n\n'
     + lines.join('\n') + '\n\n'
-    + '💰 *Total: '+fPrice(total,MON)+'*\n'
-    + '📍 Almacén: *'+ALM+'*\n'
-    + (nota?'📝 Nota: '+nota+'\n':'')
-    + '\n_Solicito confirmación de disponibilidad y precio final._';
-  var phone = WA[ALM]||WA.Habana;
+    + '\uD83D\uDCB0 *Total: '+fPrice(total,MON)+'*\n'
+    + '\uD83D\uDCCD Almac\u00e9n: *'+ALM+'*\n'
+    + (nota?'\uD83D\uDCDD '+nota+'\n':'')
+    + '\n_Solicito confirmaci\u00f3n de disponibilidad y precio final._';
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 
