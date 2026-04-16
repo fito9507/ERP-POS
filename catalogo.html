@@ -257,9 +257,9 @@
     font-size:16px;display:flex;align-items:center;justify-content:center;
   }
   .cart-item{
-    display:flex;justify-content:space-between;align-items:center;
-    padding:10px 0;border-bottom:1px solid var(--border);
-    gap:12px;
+    display:flex;flex-direction:column;
+    padding:12px 0;border-bottom:1px solid var(--border);
+    gap:0;
   }
   .cart-item-name{font-size:13px;font-weight:500;flex:1}
   .cart-item-qty{font-size:12px;color:var(--text-dim)}
@@ -777,20 +777,22 @@ function renderCart(){
       ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
       : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '';
     return '<div class="cart-item">'
-      +'<div style="flex:1;min-width:0">'
-      +'<div class="cart-item-name">'+esc(i.prod.n)+tag+'</div>'
-      +'<div style="display:flex;align-items:center;gap:6px;margin-top:6px">'
-      +'<div class="qty-ctrl">'
-      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty-1)+ ')">−</button>'
-      +'<input class="qty-inp" type="number" min="1" value="'+i.qty+'" onchange="updCartQty(\''+esc(i.prod.n)+'\',this.value)" style="width:64px;height:44px;font-size:15px">'
-      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty+1)+ ')">+</button>'
-      +'</div>'
-      +'<span style="font-size:11px;color:var(--text-dim)">× '+fPrice(r.price,MON,ALM)+'</span>'
-      +'</div></div>'
-      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">'
+      +'<div class="cart-item-name" style="flex:1">'+esc(i.prod.n)+tag+'</div>'
       +'<button class="cart-item-rm" onclick="removeFromCart(\''+esc(i.prod.n)+'\')">✕</button>'
-      +'<span class="cart-item-price">'+fPrice(lineTotal,MON)+'</span>'
-      +'</div></div>';
+      +'</div>'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +'<div style="display:flex;align-items:center;gap:6px">'
+      +'<div class="qty-ctrl" style="border-radius:8px">'
+      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty-1)+ ')" style="width:40px;height:40px;font-size:20px">−</button>'
+      +'<input class="qty-inp" type="number" min="1" value="'+i.qty+'" onchange="updCartQty(\''+esc(i.prod.n)+'\',this.value)" style="width:52px;height:40px;font-size:15px">'
+      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty+1)+ ')" style="width:40px;height:40px;font-size:20px">+</button>'
+      +'</div>'
+      +'<span style="font-size:12px;color:var(--text-dim)">× '+fPrice(r.price,MON,ALM)+'</span>'
+      +'</div>'
+      +'<span class="cart-item-price" style="font-size:16px">'+fPrice(lineTotal,MON)+'</span>'
+      +'</div>'
+      +'</div>';
   }).join('');
   totEl.textContent = fPrice(total, MON) + ' ' + MON;
 }
