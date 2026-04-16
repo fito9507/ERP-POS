@@ -447,12 +447,13 @@ const WA = {
   Placetas: '5353425247'
 };
 const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
-const TG_GROUP = '-5283520069';
-function tgSend(msg){
-  if(!TG_TOKEN||!TG_GROUP) return;
+const TG_GROUPS = { Habana:'-5283520069', Placetas:'-5229951824' };
+function tgSend(msg, alm){
+  if(!TG_TOKEN) return;
+  var cid = TG_GROUPS[alm] || TG_GROUPS.Habana;
   fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
     method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:TG_GROUP,text:msg,parse_mode:'HTML'})
+    body:JSON.stringify({chat_id:cid,text:msg,parse_mode:'HTML'})
   }).catch(function(){});
 }
 
@@ -849,7 +850,7 @@ function sendWA(){
     + items.map(function(i){var r=getCartPrice(i);return '• '+i.qty+'\u00d7 '+i.prod.n+' \u2192 '+fPrice(r.price*i.qty,MON);}).join('\n')
     + '\n\n\uD83D\uDCB0 <b>Total: '+fPrice(items.reduce(function(a,i){return a+getCartPrice(i).price*i.qty;},0),MON)+'</b>'
     + (nota?'\n\uD83D\uDCDD '+nota:'');
-  tgSend(tgMsg);
+  tgSend(tgMsg, ALM);
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 
