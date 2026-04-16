@@ -572,7 +572,7 @@ async function init(){
         enTransito: r.en_transito===true || r.en_transito==='true',
         activo: r.activo!==false
       };
-    }).filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
+    }).filter(function(p){ return p.activo !== false && p.enStock !== false; });
 
 
 
@@ -614,7 +614,7 @@ function filteredProds(){
   return PRODS.filter(function(p){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q)<0) return false;
-    var stk = p.enTransito ? 0 : (p.stk_alm&&p.stk_alm[ALM])||0;
+    var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
     return stk > 0;
   });
 }
@@ -632,8 +632,7 @@ function render(){
 
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    var stkLabel = p.enTransito ? '<span style="color:#f59e0b;font-weight:600">&#128674; Próximamente</span>'
-               : stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
+    var stkLabel = stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
                : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
