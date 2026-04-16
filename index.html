@@ -1547,8 +1547,33 @@ function updOnlineDot() {
   ['sync-lbl','pos-sync-lbl'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=txt;});
 }
 
-window.addEventListener('online',  function() { _supaOnline = true; updOnlineDot(); showToast('📶 Conexión restaurada — sincronizando...'); flushQueue(); });
+window.addEventListener('online', function() {
+  _supaOnline = true; updOnlineDot();
+  showToast('📶 Conexión restaurada — sincronizando...');
+  flushQueue();
+  _autoSync(); // sync immediately on reconnect
+});
 window.addEventListener('offline', function() { _supaOnline = false; updOnlineDot(); });
+
+// ── AUTO SYNC ─────────────────────────────────────────────
+var _lastSync = 0;
+async function _autoSync() {
+  if (!_supaOnline) return;
+  var now = Date.now();
+  if (now - _lastSync < 30000) return; // max once per 30s
+  _lastSync = now;
+  try {
+    await syncLoadProductos();
+    if (typeof syncLoadVentas === 'function') await syncLoadVentas();
+    if (typeof loadCajasData === 'function') await loadCajasData();
+    if (typeof renderStock === 'function') try { renderStock(); } catch(e) {}
+    if (typeof renderVentas === 'function') try { renderVentas(); } catch(e) {}
+  } catch(e) { console.warn('autoSync:', e); }
+}
+// Run auto sync every 2 minutes
+setInterval(_autoSync, 120000);
+// Run once 5 seconds after load
+setTimeout(_autoSync, 5000);
 
 function enqueue(op) {
   op.ts = Date.now();
@@ -7734,6 +7759,7 @@ function renderStock(){
   h+='<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
   alms.forEach(function(a){var t=activos.reduce(function(s,p){return s+((p.stk_alm&&p.stk_alm[a])||0);},0);h+='<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(t,0)+'</div></div>';});
   h+='</div>';
+  if(!_isVend) h+='<button class="adm-btn adm-btn-p" onclick="syncLoadProductos().then(function(){renderStock();showToast(\'✓ Stock sincronizado\');})" style="margin-bottom:8px;width:100%">🔄 Sincronizar stock desde Supabase</button>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
     +'<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
     +'<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px"><option value="">Todos almacenes</option>'
