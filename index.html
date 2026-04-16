@@ -1405,8 +1405,15 @@ function fromUSD(u,mon,alm){
   }
   if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
-    var eurCup=RATES.CUP/RATES.EUR;
-    return parseFloat((u*(RATES.CUP/(eurCup+adjEUR))).toFixed(2));
+    // Use RATES_EURUSD (EUR per USD, ~1.12) if available — more reliable
+    if(RATES_EURUSD > 0.5 && RATES_EURUSD < 5 && adjEUR === 0){
+      return parseFloat((u * RATES_EURUSD).toFixed(2));
+    }
+    // Fallback: derive from CUP rates
+    // CUP/EUR = (RATES.CUP + adjUSD) / RATES_EURUSD if RATES_EURUSD valid
+    var cupEUR = RATES_EURUSD > 0.5 ? (RATES.CUP + adjUSD) / RATES_EURUSD
+               : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP / RATES.EUR : RATES.CUP / 0.89);
+    return parseFloat((u * (RATES.CUP + adjUSD) / (cupEUR + adjEUR)).toFixed(2));
   }
   return u*(RATES[mon]||1);
 }
@@ -7576,7 +7583,11 @@ function _loadRatesCache() {
   try {
     var cached = JSON.parse(localStorage.getItem('erp_rates') || '{}');
     if (cached.CUP && cached.CUP > 0) {
-      if (cached.EUR) RATES.EUR = cached.EUR;
+      if (cached.EUR && cached.EUR > 0 && cached.EUR < 2) RATES.EUR = cached.EUR; // USD/EUR must be 0.5-2
+      else if (cached.EUR && cached.EUR > 2) {
+        // Looks like CUP/EUR was stored — ignore it, will recalculate
+        console.warn('Invalid cached EUR rate:', cached.EUR, '— ignoring');
+      }
       if (cached.CUP) RATES.CUP = cached.CUP;
       if (cached.CUPT) RATES.CUPT = cached.CUPT;
       // Also populate market rates cache if not set
