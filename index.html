@@ -2817,7 +2817,7 @@ function confirmar(){
   // Telegram notification
   (function(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n;}).join('\n');
-    var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
+    var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b>\n'
       +'\uD83D\uDC64 '+venta.vend+' • '+venta.alm+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
@@ -3487,14 +3487,15 @@ function registrarVenta(){
   if(typeof syncSaveVenta==='function') syncSaveVenta(v_new);
   // Telegram notification
   (function(){
+    var _tgCaja = v_new.caja||(v_new.mon&&v_new.alm?v_new.mon+' '+v_new.alm:v_new.mon||'');
     var _tgMsg='\uD83D\uDCCA <b>Venta manual</b>\n'
-      +'\uD83D\uDC64 '+v_new.vend+' • '+v_new.alm+'\n'
+      +'\uD83D\uDC64 '+v_new.vend+' \u2022 '+v_new.alm+'\n'
       +'\uD83D\uDED2 '+v_new.cli+'\n'
       +'\uD83D\uDCB5 <b>'+fN(v_new.totalUSD)+' USD</b>\n'
+      +'\uD83C\uDFE6 Cobro: '+_tgCaja+'\n'
       +(v_new.prods?'\uD83D\uDCE6 '+v_new.prods:'');
     tgSend(_tgMsg, v_new.alm, 'venta');
   })();
-  ['nv-prods','nv-total','nv-nota'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('nv-com-pct').value='';
   document.getElementById('nv-com-usd').value='';
   showToast('Venta registrada');
