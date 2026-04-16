@@ -7875,11 +7875,28 @@ function renderStock(){
     return true;
   });
   var visAlms=almF?[almF]:alms;
+  // Valor del inventario (DDP × stock) — solo admin
+  var valorTotal = activos.reduce(function(a,p){return a+(p.ddp||0)*(p.stk||0);},0);
+  var valorHabana = activos.reduce(function(a,p){return a+(p.ddp||0)*((p.stk_alm&&p.stk_alm.Habana)||0);},0);
+  var valorPlacetas = activos.reduce(function(a,p){return a+(p.ddp||0)*((p.stk_alm&&p.stk_alm.Placetas)||0);},0);
+  var valorXport = activos.reduce(function(a,p){return a+(p.ddp||0)*((p.stk_alm&&p.stk_alm.Xportprise)||0);},0);
+  var sinDDP = activos.filter(function(p){return (p.stk||0)>0 && !p.ddp;}).length;
+
   var h='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:14px">';
   h+='<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">'+activos.length+'</div></div>';
   h+='<div class="adm-card"><div class="adm-lbl">Uds totales</div><div class="adm-val">'+fN(total,0)+'</div></div>';
   alms.forEach(function(a){var t=activos.reduce(function(s,p){return s+((p.stk_alm&&p.stk_alm[a])||0);},0);h+='<div class="adm-card"><div class="adm-lbl">'+a+'</div><div class="adm-val" style="font-size:16px">'+fN(t,0)+'</div></div>';});
   h+='</div>';
+  if(!_isVend){
+    h+='<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:14px;margin-bottom:14px">'
+      +'<div style="font-size:13px;font-weight:700;margin-bottom:10px">💰 Valor del inventario (DDP)'+(sinDDP>0?'<span style="font-size:10px;color:var(--color-text-warning);font-weight:400;margin-left:8px">⚠ '+sinDDP+' productos sin DDP</span>':'')+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">'
+      +'<div class="adm-card" style="border:1px solid var(--color-border-primary)"><div class="adm-lbl">Total</div><div class="adm-val" style="color:var(--color-text-success);font-size:18px">$'+fN(valorTotal)+'</div></div>'
+      +'<div class="adm-card"><div class="adm-lbl">Habana</div><div class="adm-val" style="font-size:15px">$'+fN(valorHabana)+'</div></div>'
+      +'<div class="adm-card"><div class="adm-lbl">Placetas</div><div class="adm-val" style="font-size:15px">$'+fN(valorPlacetas)+'</div></div>'
+      +'<div class="adm-card"><div class="adm-lbl">Xportprise</div><div class="adm-val" style="font-size:15px">$'+fN(valorXport)+'</div></div>'
+      +'</div></div>';
+  }
   if(!_isVend) h+='<button class="adm-btn adm-btn-p" onclick="syncLoadProductos().then(function(){renderStock();showToast(\'✓ Stock sincronizado\');})" style="margin-bottom:8px;width:100%">🔄 Sincronizar stock desde Supabase</button>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
     +'<input class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
