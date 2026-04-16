@@ -632,7 +632,8 @@ function render(){
 
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    var stkLabel = stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
+    var stkLabel = p.enTransito ? '<span style="color:#f59e0b;font-weight:600">🚢 Próximamente</span>'
+               : stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
                : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
