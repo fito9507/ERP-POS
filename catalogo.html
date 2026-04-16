@@ -556,7 +556,7 @@ async function init(){
       document.getElementById('last-update').textContent = '● Error 401';
       return;
     }
-    PRODS = (rows||[]).map(function(r){
+    var _allRows = (rows||[]).map(function(r){
       var stk_alm = {};
       (r.stock_almacen||[]).forEach(function(s){ stk_alm[s.almacen]=s.cantidad||0; });
       return {
@@ -570,9 +570,14 @@ async function init(){
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
         enTransito: r.en_transito===true || r.en_transito==='true',
+        enTransitoRaw: r.en_transito,
         activo: r.activo!==false
       };
-    }).filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
+    });
+    // DEBUG: show raw en_transito values in header
+    var _dbg = _allRows.filter(function(p){return p.enTransitoRaw!=null;}).map(function(p){return p.n+'='+JSON.stringify(p.enTransitoRaw);}).join(', ');
+    document.getElementById('last-update').textContent = _dbg ? 'transito: '+_dbg : 'no en_transito col';
+    PRODS = _allRows.filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
 
     // Build categories
     var cats = [...new Set(PRODS.map(function(p){return p.cat;}).filter(Boolean))].sort();
