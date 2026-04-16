@@ -643,11 +643,12 @@ function cardHTML(p){
 
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var pidx = PRODS.indexOf(p);
-  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">'
-  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">'+(p.enTransito?'<div style="position:relative">':'<div class="card-img">')
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="width:100%;aspect-ratio:1/1;object-fit:cover">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +(p.enTransito?'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="background:rgba(245,158,11,.92);color:#1a1f2e;font-size:11px;font-weight:800;padding:5px 12px;border-radius:8px;letter-spacing:.5px">&#128674; EN TR&Aacute;NSITO</span></div>':'')
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
+    +'<div class="card-img" style="position:relative">'
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +(p.enTransito?'<div style="position:absolute;top:8px;left:8px;background:rgba(245,158,11,.92);color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">&#128674; EN TR&Aacute;NSITO</div>':'')
     +'</div>'
+    +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
