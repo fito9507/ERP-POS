@@ -572,9 +572,10 @@ async function init(){
         enTransito: r.en_transito===true || r.en_transito==='true',
         activo: r.activo!==false
       };
-    });
+    }).filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
 
-    PRODS = _allRows.filter(function(p){ return p.activo !== false && (p.enStock !== false || p.enTransito === true); });
+
+
 
     // Build categories
     var cats = [...new Set(PRODS.map(function(p){return p.cat;}).filter(Boolean))].sort();
