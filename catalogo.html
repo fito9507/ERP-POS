@@ -814,10 +814,6 @@ function renderCart(){
 function sendWA(){
   var items = Object.values(CART);
   if(!items.length){ alert('Agrega productos al pedido primero'); return; }
-  var nombre = (document.getElementById('cart-nombre')?.value||'').trim();
-  var tel    = (document.getElementById('cart-tel')?.value||'').trim();
-  if(!nombre){ document.getElementById('cart-nombre').style.borderColor='var(--color-text-danger,#e84b4b)'; document.getElementById('cart-nombre').focus(); return; }
-  if(!tel){ document.getElementById('cart-tel').style.borderColor='var(--color-text-danger,#e84b4b)'; document.getElementById('cart-tel').focus(); return; }
   var lines = items.map(function(i){
     var r = getCartPrice(i);
     return '• '+i.qty+'× '+i.prod.n+' → '+fPrice(r.price*i.qty, MON)+(r.isMay?' (May)':' (Min)');
@@ -828,7 +824,8 @@ function sendWA(){
   var nota   = (document.getElementById('cart-note')?.value||'').trim();
   var nombre = (document.getElementById('cart-nombre')?.value||'').trim();
   var tel    = (document.getElementById('cart-tel')?.value||'').trim();
-  if(!nombre){ alert('Por favor introduce tu nombre para continuar'); document.getElementById('cart-nombre')?.focus(); return; }
+  if(!nombre){ document.getElementById('cart-nombre').style.borderColor='#e84b4b'; document.getElementById('cart-nombre').focus(); return; }
+  if(!tel){ document.getElementById('cart-tel').style.borderColor='#e84b4b'; document.getElementById('cart-tel').focus(); return; }
   var msg = '\uD83C\uDFF7\uFE0F *Pedido \u2014 '+ALM+'*\n\n'
     + '\uD83D\uDC64 *'+nombre+'*'+(tel?' \u00b7 \uD83D\uDCDE '+tel:'')+'\n\n'
     + lines.join('\n') + '\n\n'
