@@ -5301,8 +5301,8 @@ function admGuardarProd(idx) {
   var enTransito = document.getElementById('ep-en-transito') ? document.getElementById('ep-en-transito').checked : false;
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
-  // If en transito, force enStock=true so catalog query (activo=true) always returns it
-  if(enTransito) enStock = true;
+  // If en transito, force activo=true and enStock=true so catalog always shows it
+  if(enTransito){ activo = true; enStock = true; }
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito,
     img: existingImg,
     min: isNaN(min) ? null : min,
