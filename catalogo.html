@@ -476,12 +476,11 @@ function fromUSD(usd, mon, alm){
     return parseFloat((cupBase*(1+cupt_pct/100)).toFixed(0));
   }
   if(mon==='EUR'){
-    // RATES_EURUSD = USD per EUR (e.g. 590/525 = 1.124)
-    // $22 / 1.124 = €19.6
-    var usdPerEur = RATES_EURUSD > 0.5 && RATES_EURUSD < 5 ? RATES_EURUSD : 1.12;
-    if(adjEUR === 0) return parseFloat((usd / usdPerEur).toFixed(2));
     var cupUSD = RATES.CUP + adjUSD;
-    var cupEUR = cupUSD * usdPerEur + adjEUR;
+    var cupEUR_base = RATES_EURUSD > 0.5 && RATES_EURUSD < 5
+                    ? RATES.CUP * RATES_EURUSD
+                    : RATES.CUP / 0.89;
+    var cupEUR = cupEUR_base + adjEUR;
     return parseFloat((usd * cupUSD / cupEUR).toFixed(2));
   }
   return usd;

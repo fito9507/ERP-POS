@@ -1409,17 +1409,15 @@ function fromUSD(u,mon,alm){
   }
   if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
-    // RATES_EURUSD = CUP_EUR/CUP_USD = e.g. 590/525 = 1.124 (USD per EUR)
-    // To convert USD→EUR: divide by RATES_EURUSD
-    // $22 / 1.124 = €19.6
-    var usdPerEur = RATES_EURUSD > 0.5 && RATES_EURUSD < 5 ? RATES_EURUSD
-                  : (RATES.EUR > 0 && RATES.EUR < 2 ? 1/RATES.EUR : 1.12);
-    if(adjEUR === 0){
-      return parseFloat((u / usdPerEur).toFixed(2));
-    }
-    // With almacen adjustment (adjEUR = extra CUP per EUR)
-    var cupUSD = RATES.CUP + adjUSD;    // CUP per USD for this almacen
-    var cupEUR = cupUSD * usdPerEur + adjEUR; // CUP per EUR adjusted
+    // USD → EUR conversion
+    // cupUSD = CUP per USD (e.g. 530 for Habana)
+    // cupEUR = CUP per EUR = base(590) + almacen_adj (e.g. +5 = 595)
+    // EUR = USD * cupUSD / cupEUR
+    var cupUSD = RATES.CUP + adjUSD;
+    var cupEUR_base = RATES_EURUSD > 0.5 && RATES_EURUSD < 5
+                    ? RATES.CUP * RATES_EURUSD   // e.g. 525 * 1.1238 = 590
+                    : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP / RATES.EUR : RATES.CUP / 0.89);
+    var cupEUR = cupEUR_base + adjEUR;
     return parseFloat((u * cupUSD / cupEUR).toFixed(2));
   }
   return u*(RATES[mon]||1);
