@@ -1387,7 +1387,11 @@ function toUSD(m,mon,alm){
   }
   if(mon==='CUP') return m/RATES.CUP;
   if(mon==='MLC') return m/RATES.CUPT;
-  if(mon==='EUR') return m*RATES.EUR;
+  if(mon==='EUR'){
+    // m EUR → USD: multiply by USD_per_EUR
+    var _usdPerEur = RATES_EURUSD > 0.5 && RATES_EURUSD < 5 ? RATES_EURUSD : (RATES.EUR > 0 && RATES.EUR < 2 ? 1/RATES.EUR : 1.12);
+    return m * _usdPerEur;
+  }
   return m/(RATES[mon]||1);
 }
 function fromUSD(u,mon,alm){
@@ -1405,15 +1409,18 @@ function fromUSD(u,mon,alm){
   }
   if(mon==='MLC')  return parseFloat((u*(RATES.CUPT+adjMLC)).toFixed(0));
   if(mon==='EUR'){
-    // Use RATES_EURUSD (EUR per USD, ~1.12) if available — more reliable
-    if(RATES_EURUSD > 0.5 && RATES_EURUSD < 5 && adjEUR === 0){
-      return parseFloat((u * RATES_EURUSD).toFixed(2));
+    // RATES_EURUSD = CUP_EUR/CUP_USD = e.g. 590/525 = 1.124 (USD per EUR)
+    // To convert USD→EUR: divide by RATES_EURUSD
+    // $22 / 1.124 = €19.6
+    var usdPerEur = RATES_EURUSD > 0.5 && RATES_EURUSD < 5 ? RATES_EURUSD
+                  : (RATES.EUR > 0 && RATES.EUR < 2 ? 1/RATES.EUR : 1.12);
+    if(adjEUR === 0){
+      return parseFloat((u / usdPerEur).toFixed(2));
     }
-    // Fallback: derive from CUP rates
-    // CUP/EUR = (RATES.CUP + adjUSD) / RATES_EURUSD if RATES_EURUSD valid
-    var cupEUR = RATES_EURUSD > 0.5 ? (RATES.CUP + adjUSD) / RATES_EURUSD
-               : (RATES.EUR > 0 && RATES.EUR < 2 ? RATES.CUP / RATES.EUR : RATES.CUP / 0.89);
-    return parseFloat((u * (RATES.CUP + adjUSD) / (cupEUR + adjEUR)).toFixed(2));
+    // With almacen adjustment (adjEUR = extra CUP per EUR)
+    var cupUSD = RATES.CUP + adjUSD;    // CUP per USD for this almacen
+    var cupEUR = cupUSD * usdPerEur + adjEUR; // CUP per EUR adjusted
+    return parseFloat((u * cupUSD / cupEUR).toFixed(2));
   }
   return u*(RATES[mon]||1);
 }
