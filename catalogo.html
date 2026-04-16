@@ -548,7 +548,7 @@ async function init(){
     // Load products
     var rows;
     try{
-      rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&en_stock=eq.true&order=nombre.asc');
+      rows = await supa('productos?select=*,stock_almacen(*)&activo=eq.true&order=nombre.asc');
     }catch(e){
       // Show specific error
       var msg = e.message||'Error desconocido';
