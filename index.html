@@ -2819,14 +2819,15 @@ function confirmar(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n;}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
-      +'\uD83D\uDC64 '+venta.vend+' • '+venta.alm+'\n'
+    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b>\n'
+      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
       +'\uD83D\uDCE6 '+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob
       +(_tgVuelto?'\n\uD83D\uDD04 Vuelto: '+_tgVuelto:'');
+    tgSend(_tgMsg, S.alm, 'venta');
   })();
-  // Mostrar pantalla OK
   document.getElementById('ok-sub').textContent=S.user+' · '+S.alm+' · '+(S.cli||'Walk-in');
   var linesHtml='<div class="res-line"><span>Productos</span>'
     +'<span style="text-align:right;font-size:12px;line-height:1.7">'
