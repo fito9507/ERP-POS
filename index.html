@@ -5715,7 +5715,13 @@ function renderAdminTasas() {
     + _tasaRow('USD / CUP', mUSD,  'CUP por 1 USD',  'usd',  aUSD,  mUSD  + aUSD)
     + _tasaRow('EUR / CUP', mEUR,  'CUP por 1 EUR',  'eur',  aEUR,  mEUR  + aEUR)
     + _tasaRow('MLC / CUP', mCUPT, 'CUP por 1 MLC',  'cupt', aCUPT, mCUPT + aCUPT)
-    + _tasaRow('CUPT / CUP', mUSD+aUSD, 'Base = USD/CUP (CUPT % se configura por almacén)', 'cupt2', adj.CUPT2||0, mUSD+aUSD+(adj.CUPT2||0))
+    + '<div class="card" style="margin-bottom:12px;opacity:.7">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">CUPT / CUP <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">— solo lectura, configurable por almacén abajo</span></div>'
+    + '<div style="display:flex;align-items:center;gap:16px">'
+    + '<div style="text-align:center;min-width:70px"><div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">BASE</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--color-text-secondary)">' + fN(mUSD+aUSD,0) + '</div></div>'
+    + '<div style="font-size:13px;color:var(--color-text-tertiary);flex:1">= USD/CUP + % extra configurado por almacén en la tabla inferior</div>'
+    + '</div></div>'
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarTasas()" style="width:100%;padding:12px;font-size:14px;margin-top:4px">💾 Aplicar tasas finales</button>'
     + (function(){
         // RATES_EURUSD = USD por 1 EUR (e.g. 1.12)
