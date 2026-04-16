@@ -569,9 +569,10 @@ async function init(){
         stk_alm: stk_alm,
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
+        enTransito: r.en_transito===true,
         activo: r.activo!==false
       };
-    }).filter(function(p){ return p.enStock && p.activo; });
+    }).filter(function(p){ return p.activo && (p.enStock || p.enTransito); });
 
     // Build categories
     var cats = [...new Set(PRODS.map(function(p){return p.cat;}).filter(Boolean))].sort();
@@ -610,7 +611,7 @@ function filteredProds(){
   return PRODS.filter(function(p){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q)<0) return false;
-    var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
+    var stk = p.enTransito ? 0 : (p.stk_alm&&p.stk_alm[ALM])||0;
     return stk > 0;
   });
 }
@@ -628,7 +629,8 @@ function render(){
 
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    var stkLabel = stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
+    var stkLabel = p.enTransito ? '<span style="color:#f59e0b;font-weight:600">&#128674; Próximamente</span>'
+               : stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
                : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
@@ -642,10 +644,10 @@ function cardHTML(p){
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var pidx = PRODS.indexOf(p);
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">'
-    +'<div class="card-img">'
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>🏗️</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">'+(p.enTransito?'<div style="position:relative">':'<div class="card-img">')
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="width:100%;aspect-ratio:1/1;object-fit:cover">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +(p.enTransito?'<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center"><span style="background:rgba(245,158,11,.92);color:#1a1f2e;font-size:11px;font-weight:800;padding:5px 12px;border-radius:8px;letter-spacing:.5px">&#128674; EN TR&Aacute;NSITO</span></div>':'')
     +'</div>'
-    +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
@@ -663,7 +665,7 @@ function cardHTML(p){
         return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
-    +(stk>0?
+    +(stk>0||p.enTransito?
       '<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
