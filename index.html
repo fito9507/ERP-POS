@@ -1609,9 +1609,17 @@ async function enviarCierreDiario(fecha) {
     var cobros = {USD:0,EUR:0,CUP:0,CUPT:0,MLC:0};
     var vueltosMon = {USD:0,EUR:0,CUP:0,CUPT:0,MLC:0};
     ventasAlm.forEach(function(v){
-      var pagos=[]; try{pagos=typeof v.pagos==='string'?JSON.parse(v.pagos):(v.pagos||[]);}catch(e){}
+      var pagos=[]; try{
+        if(Array.isArray(v.pagos)) pagos=v.pagos;
+        else if(typeof v.pagos==='string') pagos=JSON.parse(v.pagos);
+        else if(v.cobros_json){var _c=JSON.parse(v.cobros_json);pagos=_c.pagos||[];}
+      }catch(e){}
       pagos.forEach(function(p){if(cobros[p.mon]!=null)cobros[p.mon]+=(p.m||0);});
-      var vts=[]; try{vts=typeof v.vueltos==='string'?JSON.parse(v.vueltos):(v.vueltos||[]);}catch(e){}
+      var vts=[]; try{
+        if(Array.isArray(v.vueltos)) vts=v.vueltos;
+        else if(typeof v.vueltos==='string') vts=JSON.parse(v.vueltos);
+        else if(v.cobros_json){var _c2=JSON.parse(v.cobros_json);vts=_c2.vueltos||[];}
+      }catch(e){}
       vts.forEach(function(p){if(vueltosMon[p.mon]!=null)vueltosMon[p.mon]+=(p.m||0);});
     });
     var monSym={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
