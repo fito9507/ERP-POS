@@ -1631,6 +1631,27 @@ async function enviarCierreDiario(fecha) {
       return '  '+monSym[m]+' '+fN(vueltosMon[m],m==='USD'||m==='EUR'?2:0)+' '+m;
     }).join('\n');
 
+
+    // Neto por moneda = cobrado - vueltos en cada moneda
+    var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+    var allMons=['USD','EUR','CUP','CUPT','MLC'];
+    var netoLines=allMons.filter(function(m){return cobros[m]>0||vueltosMon[m]>0;}).map(function(m){
+      var neto=cobros[m]-(vueltosMon[m]||0);
+      var dec=m==='USD'||m==='EUR'?2:0;
+      return '  '+(monSym2[m]||'')+'  '+fN(cobros[m],dec)+' cobrado'+(vueltosMon[m]>0?' \u2212 '+fN(vueltosMon[m],dec)+' vuelto':'')+' = <b>'+fN(neto,dec)+'</b> '+m;
+    }).join('\n');
+    // Saldo de cajas del almacen
+    var cajasAlm=typeof _cajasData!=='undefined'?_cajasData.filter(function(c){
+      return c.activa!==false && (c.almacen===alm || c.almacen==='General' || c.almacen==='Xportprise');
+    }):[];
+    var cajasLines=cajasAlm.map(function(c){
+      var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):0;
+      if(Math.abs(saldo)<0.01) return null;
+      var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+      return '  '+(monSym2[c.moneda]||'')+' '+fN(saldo,c.moneda==='USD'||c.moneda==='EUR'?2:0)+' '+c.moneda+' ('+c.nombre+')';
+    }).filter(Boolean).join('\n');
+
+
     // Por vendedor
     var porVend={};
     ventasAlm.forEach(function(v){
@@ -1669,18 +1690,19 @@ async function enviarCierreDiario(fecha) {
            return '  \u2022 '+d.qty+'\u00d7 '+n+(d.usd>0?' \u2014 $'+fN(d.usd):'');
      }).join('\n');
 
+
     var msg='\uD83D\uDCCA <b>Cierre \u2014 '+alm+'</b>\n'
       +'\uD83D\uDDD3 '+fecha+'\n\n'
       +(numVentas===0
         ? '\uD83D\uDEAB Sin ventas registradas hoy'
-        : '\uD83D\uDCB0 <b>Total: $'+fN(totalUSD)+' USD</b>\n'
-        +'\uD83D\uDED2 '+numVentas+' venta'+(numVentas!==1?'s':'')+'\n\n'
+        : '\uD83D\uDED2 <b>'+numVentas+' venta'+(numVentas!==1?'s':'')+'</b>\n\n'
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
+        +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
+        +(netoLines?'\n<b>\uD83D\uDCB5 Neto por moneda:</b>\n'+netoLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
-        +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:''))
-      +'\n\n_\uD83E\uDD16 Resumen autom\u00e1tico ERP_';
-
+        +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:'')
+        +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
     tgSend(msg, alm, 'venta');
   }
   showToast('\uD83D\uDCCA Cierre enviado');
