@@ -1642,16 +1642,32 @@ async function enviarCierreDiario(fecha) {
       return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' venta'+(porVend[vend].n!==1?'s':'')+' · $'+fN(porVend[vend].usd);
     }).join('\n');
 
-    // Top productos
-    var prodCount={};
-    ventasAlm.forEach(function(v){
-      (v.prods||'').split(',').forEach(function(p){
-        var m=p.trim().match(/^(\d+)[x×]\s*(.+)/i);
-        if(m){var nm=m[2].trim();prodCount[nm]=(prodCount[nm]||0)+parseInt(m[1]);}
-      });
-    });
-    var topProds=Object.keys(prodCount).sort(function(a,b){return prodCount[b]-prodCount[a];}).slice(0,5);
-    var prodLines=topProds.map(function(n){return '  \uD83D\uDCE6 '+prodCount[n]+'× '+n;}).join('\n');
+     // Productos vendidos completo + margen
+     var prodData={};
+     ventasAlm.forEach(function(v){
+       (v.prods||'').split(',').forEach(function(p){
+         var m=p.trim().match(/^(\d+)(?:\xd7|\u00d7|x|X)\s*(.+)/i);
+         if(m){
+           var nm=m[2].trim();
+           var qty=parseInt(m[1]);
+           if(!prodData[nm]) prodData[nm]={qty:0,usd:0,ddp:0};
+           prodData[nm].qty+=qty;
+           // Find product price and DDP
+           var prod=typeof PRODS!=='undefined'?PRODS.find(function(pr){return pr.n===nm;}):null;
+           var precioUSD=prod?(prod.maj||prod.min||0):0;
+           var ddpUSD=prod?(prod.ddp||0):0;
+           prodData[nm].usd+=precioUSD*qty;
+           prodData[nm].ddp+=ddpUSD*qty;
+         }
+       });
+     });
+     var totalMargen=0;
+     var prodLines=Object.keys(prodData).sort(function(a,b){return prodData[b].qty-prodData[a].qty;}).map(function(n){
+       var d=prodData[n];
+       var margen=d.ddp>0?d.usd-d.ddp:null;
+       if(margen!=null) totalMargen+=margen;
+           return '  \u2022 '+d.qty+'\u00d7 '+n+(d.usd>0?' \u2014 $'+fN(d.usd):'');
+     }).join('\n');
 
     var msg='\uD83D\uDCCA <b>Cierre \u2014 '+alm+'</b>\n'
       +'\uD83D\uDDD3 '+fecha+'\n\n'
@@ -1662,7 +1678,7 @@ async function enviarCierreDiario(fecha) {
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
-        +(prodLines?'\n\n<b>Top productos:</b>\n'+prodLines:''))
+        +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:''))
       +'\n\n_\uD83E\uDD16 Resumen autom\u00e1tico ERP_';
 
     tgSend(msg, alm, 'venta');
