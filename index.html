@@ -1602,43 +1602,64 @@ async function enviarCierreDiario(fecha) {
     var ventasAlm = (typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
       return v.fecha && v.fecha.slice(0,10)===fecha && v.alm===alm;
     });
-    var totalUSD = ventasAlm.reduce(function(a,v){return a+(v.totalUSD||0);},0);
     var numVentas = ventasAlm.length;
-    // Group by seller
-    var porVend = {};
+    var totalUSD = ventasAlm.reduce(function(a,v){return a+(v.totalUSD||0);},0);
+
+    // Cobros por moneda
+    var cobros = {USD:0,EUR:0,CUP:0,CUPT:0,MLC:0};
+    var vueltosMon = {USD:0,EUR:0,CUP:0,CUPT:0,MLC:0};
     ventasAlm.forEach(function(v){
-      var vend = v.vend||v.vendedor||'?';
-      if(!porVend[vend]) porVend[vend]={n:0,usd:0};
-      porVend[vend].n++;
-      porVend[vend].usd+=(v.totalUSD||0);
+      var pagos=[]; try{pagos=typeof v.pagos==='string'?JSON.parse(v.pagos):(v.pagos||[]);}catch(e){}
+      pagos.forEach(function(p){if(cobros[p.mon]!=null)cobros[p.mon]+=(p.m||0);});
+      var vts=[]; try{vts=typeof v.vueltos==='string'?JSON.parse(v.vueltos):(v.vueltos||[]);}catch(e){}
+      vts.forEach(function(p){if(vueltosMon[p.mon]!=null)vueltosMon[p.mon]+=(p.m||0);});
     });
-    var vendLines = Object.keys(porVend).map(function(vend){
-      return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' ventas Â· $'+fN(porVend[vend].usd);
+    var monSym={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+    var cobrosLines=Object.keys(cobros).filter(function(m){return cobros[m]>0;}).map(function(m){
+      var eq=m==='USD'?'':' \u2248 $'+fN(toUSD(cobros[m],m));
+      return '  '+monSym[m]+' '+fN(cobros[m],m==='USD'||m==='EUR'?2:0)+' '+m+eq;
     }).join('\n');
-    // Products sold
-    var prodCount = {};
+    var vueltosLines=Object.keys(vueltosMon).filter(function(m){return vueltosMon[m]>0;}).map(function(m){
+      return '  '+monSym[m]+' '+fN(vueltosMon[m],m==='USD'||m==='EUR'?2:0)+' '+m;
+    }).join('\n');
+
+    // Por vendedor
+    var porVend={};
+    ventasAlm.forEach(function(v){
+      var vend=v.vend||v.vendedor||'?';
+      if(!porVend[vend])porVend[vend]={n:0,usd:0};
+      porVend[vend].n++;porVend[vend].usd+=(v.totalUSD||0);
+    });
+    var vendLines=Object.keys(porVend).map(function(vend){
+      return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' venta'+(porVend[vend].n!==1?'s':'')+' · $'+fN(porVend[vend].usd);
+    }).join('\n');
+
+    // Top productos
+    var prodCount={};
     ventasAlm.forEach(function(v){
       (v.prods||'').split(',').forEach(function(p){
-        var m=p.trim().match(/^(\d+)\u00d7\s*(.+)/)||p.trim().match(/^(\d+)\xd7\s*(.+)/)||p.trim().match(/^(\d+)[xÃ—]\s*(.+)/);
+        var m=p.trim().match(/^(\d+)[x×]\s*(.+)/i);
         if(m){var nm=m[2].trim();prodCount[nm]=(prodCount[nm]||0)+parseInt(m[1]);}
       });
     });
-    var topProds = Object.keys(prodCount).sort(function(a,b){return prodCount[b]-prodCount[a];}).slice(0,5);
-    var prodLines = topProds.map(function(n){return '  \uD83D\uDCE6 '+prodCount[n]+'\u00d7 '+n;}).join('\n');
+    var topProds=Object.keys(prodCount).sort(function(a,b){return prodCount[b]-prodCount[a];}).slice(0,5);
+    var prodLines=topProds.map(function(n){return '  \uD83D\uDCE6 '+prodCount[n]+'× '+n;}).join('\n');
 
-    var msg = '\uD83D\uDCCA <b>Cierre del d\u00eda \u2014 '+alm+'</b>\n'
-      + '\uD83D\uDDD3 '+fecha+'\n\n'
-      + (numVentas===0
+    var msg='\uD83D\uDCCA <b>Cierre \u2014 '+alm+'</b>\n'
+      +'\uD83D\uDDD3 '+fecha+'\n\n'
+      +(numVentas===0
         ? '\uD83D\uDEAB Sin ventas registradas hoy'
-        : '\uD83D\uDCB0 <b>Total: $'+fN(totalUSD)+'</b> USD\n'
-        + '\uD83D\uDED2 '+numVentas+' venta'+(numVentas!==1?'s':'')+'\n\n'
-        + (vendLines?'<b>Por vendedor:</b>\n'+vendLines:'')
-        + (prodLines?'\n\n<b>Productos vendidos:</b>\n'+prodLines:''))
-      + '\n\n_\uD83E\uDD16 Resumen autom\u00e1tico ERP_';
+        : '\uD83D\uDCB0 <b>Total: $'+fN(totalUSD)+' USD</b>\n'
+        +'\uD83D\uDED2 '+numVentas+' venta'+(numVentas!==1?'s':'')+'\n\n'
+        +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
+        +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
+        +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
+        +(prodLines?'\n\n<b>Top productos:</b>\n'+prodLines:''))
+      +'\n\n_\uD83E\uDD16 Resumen autom\u00e1tico ERP_';
 
     tgSend(msg, alm, 'venta');
   }
-  showToast('\uD83D\uDCCA Cierre enviado al grupo');
+  showToast('\uD83D\uDCCA Cierre enviado');
 }
 
 function enqueue(op) {
