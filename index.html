@@ -5414,13 +5414,10 @@ function renderFormProducto() {
     + '<input class="adm-inp" type="number" id="ep-stk-min" value="' + (p.stk_min || 10) + '" min="0" step="1"></div>'
     + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'
     + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#f59e0b">🏷 Precio preventa (solo en tránsito)</div>'
-    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precio especial para reservas antes de que llegue la mercancía. Si está vacío usa el precio normal.</div>'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    + '<div><label class="adm-lbl-f">Preventa Min. (USD)</label>'
+    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precio especial de reserva. Si vacío usa el precio normal.</div>'
+    + '<div><label class="adm-lbl-f">Preventa (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-preventa-min" value="' + (p.preventa_min != null ? p.preventa_min : '') + '" step="0.01" placeholder="= precio normal"></div>'
-    + '<div><label class="adm-lbl-f">Preventa May. (USD)</label>'
-    + '<input class="adm-inp" type="number" id="ep-preventa-maj" value="' + (p.preventa_maj != null ? p.preventa_maj : '') + '" step="0.01" placeholder="= precio normal"></div>'
-    + '</div></div>'
+    + '</div>'
     + '</div>'
     + '<div style="margin-top:8px;padding:10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
     + '<div style="font-size:11px;color:var(--color-text-tertiary)">💡 El stock se gestiona desde el módulo <strong>Stock → Nuevo movimiento</strong></div>'
@@ -5450,9 +5447,8 @@ function admGuardarProd(idx) {
   var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
   var min_placetas_v = document.getElementById('ep-min-plac')?.value;
   var preventa_min_v = document.getElementById('ep-preventa-min')?.value;
-  var preventa_maj_v = document.getElementById('ep-preventa-maj')?.value;
   var preventa_min = preventa_min_v!==''&&!isNaN(parseFloat(preventa_min_v))?parseFloat(preventa_min_v):null;
-  var preventa_maj = preventa_maj_v!==''&&!isNaN(parseFloat(preventa_maj_v))?parseFloat(preventa_maj_v):null;
+  var preventa_maj = null;
   var maj_placetas_v = document.getElementById('ep-maj-plac')?.value;
   var min_placetas = min_placetas_v!=='' && !isNaN(parseFloat(min_placetas_v)) ? parseFloat(min_placetas_v) : null;
   var maj_placetas = maj_placetas_v!=='' && !isNaN(parseFloat(maj_placetas_v)) ? parseFloat(maj_placetas_v) : null;

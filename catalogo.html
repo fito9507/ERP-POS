@@ -670,17 +670,10 @@ function transitCardHTML(p){
   var pidx = PRODS.indexOf(p);
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
-  var MIN_MAY = p.min_may || 10;
-  var isMay = qty >= MIN_MAY && p.preventa_maj > 0;
-  // Preventa prices
-  var pvMin = p.preventa_min != null ? p.preventa_min : (p.min||0);
-  var pvMaj = p.preventa_maj != null ? p.preventa_maj : (p.maj||0);
-  var pvPrice = isMay ? pvMaj : pvMin;
-  // Normal prices
-  var normMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
-  var normMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
-  var normPrice = isMay ? normMaj : normMin;
-  var hasDiscount = pvPrice > 0 && normPrice > 0 && pvPrice < normPrice;
+  // Single preventa price
+  var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
+  var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
+  var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
   var saving = hasDiscount ? fN(normPrice - pvPrice) : null;
 
   return '<div class="card" style="border:1px solid rgba(245,158,11,.35);position:relative">'
@@ -694,8 +687,8 @@ function transitCardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
     +'<div class="prices">'
-    +(pvPrice>0?'<div class="price-row main"><span class="lbl">Preventa</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'')
-    +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;text-decoration:line-through;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
+    +'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>'
+    +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
     +'</div>'
     +'<div class="qty-row">'
     +'<div class="qty-ctrl">'
