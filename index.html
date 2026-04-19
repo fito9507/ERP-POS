@@ -1919,6 +1919,7 @@ async function syncLoadProductos() {
         activo: row.activo !== false, enStock: row.en_stock !== false,
         enTransito: {Habana:row.en_transito_habana===true, Placetas:row.en_transito_placetas===true, Xportprise:row.en_transito_xportprise===true},
         preventa_min: row.precio_preventa_min!=null?parseFloat(row.precio_preventa_min):null,
+        moq: row.moq!=null?parseInt(row.moq):1,
         preventa_maj: row.precio_preventa_maj!=null?parseFloat(row.precio_preventa_maj):null,
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
@@ -1962,6 +1963,7 @@ async function syncSaveProducto(p) {
     precio_preventa_min:p.preventa_min!=null?p.preventa_min:null,
     precio_preventa_maj:p.preventa_maj!=null?p.preventa_maj:null,
     precio_min_placetas:p.min_placetas!=null?p.min_placetas:null,
+    moq:p.moq||1,
     precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
     imagen_url:p.img||null};
 
@@ -5412,6 +5414,8 @@ function renderFormProducto() {
     + '<input class="adm-inp" type="number" id="ep-ddp" value="' + (p.ddp != null ? p.ddp : '') + '" step="0.01" placeholder="—"></div>'
     + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--color-text-secondary)">🏪 Precios Placetas (opcional)</div>'    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Si está vacío usa el precio de Habana. Rellena solo si Placetas tiene precio diferente.</div>'    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'    + '<div><label class="adm-lbl-f">Min. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-min-plac" value="' + (p.min_placetas != null ? p.min_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '<div><label class="adm-lbl-f">May. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-maj-plac" value="' + (p.maj_placetas != null ? p.maj_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '</div></div>'    + '<div><label class="adm-lbl-f">Stock mínimo alerta</label>'
     + '<input class="adm-inp" type="number" id="ep-stk-min" value="' + (p.stk_min || 10) + '" min="0" step="1"></div>'
+    + '<div><label class="adm-lbl-f">MOQ (mínimo compra)</label>'
+    + '<input class="adm-inp" type="number" id="ep-moq" value="' + (p.moq || 1) + '" min="1" step="1" placeholder="1"></div>'
     + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'
     + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#f59e0b">🏷 Precio preventa (solo en tránsito)</div>'
     + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precio especial de reserva. Si vacío usa el precio normal.</div>'
@@ -5445,6 +5449,7 @@ function admGuardarProd(idx) {
   var maj = parseFloat(document.getElementById('ep-maj').value);
   var ddp = parseFloat(document.getElementById('ep-ddp').value);
   var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
+  var moq = parseInt(document.getElementById('ep-moq')?.value) || 1;
   var min_placetas_v = document.getElementById('ep-min-plac')?.value;
   var preventa_min_v = document.getElementById('ep-preventa-min')?.value;
   var preventa_min = preventa_min_v!==''&&!isNaN(parseFloat(preventa_min_v))?parseFloat(preventa_min_v):null;
@@ -5468,7 +5473,7 @@ function admGuardarProd(idx) {
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
 
-  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj,
+  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj,
     img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,

@@ -572,6 +572,7 @@ async function init(){
         enTransito: {Habana:r.en_transito_habana===true, Placetas:r.en_transito_placetas===true, Xportprise:r.en_transito_xportprise===true},
         preventa_min: r.precio_preventa_min!=null?parseFloat(r.precio_preventa_min):null,
         preventa_maj: r.precio_preventa_maj!=null?parseFloat(r.precio_preventa_maj):null,
+        moq: r.moq!=null?parseInt(r.moq):1,
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false
@@ -694,16 +695,16 @@ function transitCardHTML(p){
     +(showPrice?'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'<div class="price-row main"><span class="lbl">Precio</span><span class="val" style="color:var(--text-dim);font-size:12px">Consultar</span></div>')
     +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
     +'</div>'
+    +(moq>1?'<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">M\u00ednimo '+moq+' uds</div>':'')
     +'<div class="qty-row">'
     +'<div class="qty-ctrl">'
-    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
-    +'<span class="qty-disp" id="qd-'+cardId+'">'+qty+'</span>'
+    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">\u2212</button>'
+    +'<span class="qty-disp" id="qd-tr-'+cardId+'">'+qty+'</span>'
     +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)" type="button">+</button>'
     +'</div>'
-    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
-    +(cartItem?'✓ Reservado':'+ Reservar')
+    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
+    +(cartItem?'\u2713 Reservado':'+ Reservar')
     +'</button></div>'
-    +'</div></div>';
 }
 
 function cardHTML(p){
@@ -775,29 +776,23 @@ function _getQtyVal(idx){
 }
 function chgQtyIdx(idx, d){
   var p = PRODS[idx]; if(!p) return;
-  var sp = _getQtyDisp(idx); if(!sp) return;
-  var v = Math.max(1, _getQtyVal(idx) + d);
+  var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  // Find qty display — try both normal and transit prefix
+  var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
+  if(!sp) return;
+  var moq = p.moq || 1;
+  var v = Math.max(moq, parseInt(sp.textContent)||moq);
+  v = d > 0 ? v + 1 : Math.max(moq, v - 1);
   sp.textContent = v;
-  // Update price highlight if mayorista threshold
-  if(p.maj>0){
-    var MIN_MAY = p.min_may||10;
-    var isMay = v >= MIN_MAY;
-    // Update price display
-    var card = document.getElementById('card-'+_getCardId(p));
-    if(card){
-      var minEl = card.querySelector('.price-min');
-      var majEl = card.querySelector('.price-maj');
-      if(minEl) minEl.style.color = isMay ? 'var(--text-dim)' : 'var(--accent)';
-      if(majEl) majEl.style.color = isMay ? 'var(--accent)' : 'var(--text-dim)';
-    }
-  }
 }
 function addToCartIdx(idx){
   var p = PRODS[idx]; if(!p) return;
-  var qty = _getQtyVal(idx);
+  var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
+  var qty = sp ? (parseInt(sp.textContent)||1) : 1;
   CART[p.n] = {prod:p, qty:qty};
-  var btn = document.getElementById('addbtn-'+_getCardId(p));
-  if(btn){ btn.textContent='✓ Agregado'; btn.classList.add('added'); }
+  var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
+  if(btn){ btn.textContent='✓ Reservado'; btn.classList.add('added'); }
   updCart();
 }
 function getQtyInp(name){ return document.querySelector('.qty-inp[data-name="'+name+'"]'); }
@@ -860,9 +855,14 @@ function closeCart(){ document.getElementById('cart-modal').classList.remove('op
 function closeCartOutside(e){ if(e.target===document.getElementById('cart-modal')) closeCart(); }
 
 function getCartPrice(i){
-  var MIN_MAY = i.prod.min_may || 10;
-  var isMay = i.qty >= MIN_MAY && i.prod.maj > 0;
-  return {price: isMay ? (i.prod.maj||i.prod.min) : (i.prod.min||0), isMay:isMay, MIN_MAY:MIN_MAY};
+  var p = i.prod;
+  var MIN_MAY = p.min_may || 10;
+  var isMay = i.qty >= MIN_MAY && p.maj > 0;
+  var basePrice = isMay ? (p.maj||p.min||0) : (p.min||p.maj||0);
+  // Use preventa price if product is in transit for any almacen
+  var isTransit = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var price = (isTransit && p.preventa_min!=null) ? p.preventa_min : basePrice;
+  return {price:price, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:isTransit};
 }
 function updCartQty(name, val){
   if(!CART[name]) return;
