@@ -887,9 +887,11 @@ function renderCart(){
     var lineTotal = r.price * i.qty;
     total += lineTotal;
     var isTransitProd = i.prod.enTransito && i.prod.enTransito[ALM];
-    var tag = (!isTransitProd && i.prod.maj>0) ? (r.isMay
-      ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
-      : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '';
+    var tag = isTransitProd
+      ? '<span style="font-size:9px;background:#f59e0b;color:#1a1f2e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">?? Preventa</span>'
+      : (i.prod.maj>0 ? (r.isMay
+        ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
+        : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '');
     return '<div class="cart-item">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +'<div class="cart-item-name" style="flex:1">'+esc(i.prod.n)+tag+'</div>'
