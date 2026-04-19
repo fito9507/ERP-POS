@@ -668,12 +668,12 @@ function render(){
 }
 
 function transitCardHTML(p){
-  var cardId = 'tr-'+(p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_'));
+  var cardId = (p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_'));
   // Add to PRODS if not already there so qty controls work
   if(PRODS.indexOf(p) < 0) PRODS.push(p);
   var pidx = PRODS.indexOf(p);
   var cartItem = CART[p.n];
-  var cartItem = CART[p.n];
+  var moq = p.moq || 1;
   var moq = p.moq || 1;
   var qty = cartItem ? cartItem.qty : moq;
   var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
@@ -707,8 +707,9 @@ function transitCardHTML(p){
     +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
     +(cartItem?'\u2713 Reservado':'+ Reservar')
     +'</button></div>'
+    +'</button></div>'
+    +'</div></div>';
 }
-
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
   var _transit = p.enTransito && p.enTransito[ALM];
@@ -779,11 +780,10 @@ function _getQtyVal(idx){
 function chgQtyIdx(idx, d){
   var p = PRODS[idx]; if(!p) return;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
-  // Find qty display — try both normal and transit prefix
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
   if(!sp) return;
   var moq = p.moq || 1;
-  var v = Math.max(moq, parseInt(sp.textContent)||moq);
+  var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
   sp.textContent = v;
 }
@@ -791,10 +791,11 @@ function addToCartIdx(idx){
   var p = PRODS[idx]; if(!p) return;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
-  var qty = sp ? (parseInt(sp.textContent)||1) : 1;
+  var moq = p.moq || 1;
+  var qty = sp ? Math.max(moq, parseInt(sp.textContent)||moq) : moq;
   CART[p.n] = {prod:p, qty:qty};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
-  if(btn){ btn.textContent='✓ Reservado'; btn.classList.add('added'); }
+  if(btn){ btn.textContent = (p.enTransito&&(p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise)) ? '✓ Reservado' : '✓ Agregado'; btn.classList.add('added'); }
   updCart();
 }
 function getQtyInp(name){ return document.querySelector('.qty-inp[data-name="'+name+'"]'); }
