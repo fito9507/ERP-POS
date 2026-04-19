@@ -570,6 +570,8 @@ async function init(){
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
         enTransito: {Habana:r.en_transito_habana===true, Placetas:r.en_transito_placetas===true, Xportprise:r.en_transito_xportprise===true},
+        preventa_min: r.precio_preventa_min!=null?parseFloat(r.precio_preventa_min):null,
+        preventa_maj: r.precio_preventa_maj!=null?parseFloat(r.precio_preventa_maj):null,
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false
@@ -625,11 +627,67 @@ function filteredProds(){
 function render(){
   var prods = filteredProds();
   var grid = document.getElementById('prod-grid');
+  // Separate transit products
+  var transitProds = (window.ALL_PRODS||PRODS).filter(function(p){ return p.activo!==false && p.enTransito && p.enTransito[ALM]; });
+  var transitHTML = '';
+  if(transitProds.length){
+    transitHTML = '<div style="grid-column:1/-1;margin-bottom:8px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px">'
+      +'<span style="font-size:20px">🚢</span>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#f59e0b">Próximamente en '+ALM+'</div>'
+      +'<div style="font-size:11px;color:var(--text-dim)">Reserva ahora a precio especial antes de que llegue</div></div>'
+      +'</div></div>'
+      + transitProds.map(function(p){ return transitCardHTML(p); }).join('');
+  }
   if(!prods.length){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📦</div><p>Sin productos disponibles para <strong>'+ALM+'</strong>.<br>Prueba con otro almacén o categoría.</p></div>';
     return;
   }
-  grid.innerHTML = prods.map(function(p){ return cardHTML(p); }).join('');
+  grid.innerHTML = transitHTML + prods.map(function(p){ return cardHTML(p); }).join('');
+}
+
+function transitCardHTML(p){
+  var cardId = 'tr-'+(p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_'));
+  var pidx = PRODS.indexOf(p);
+  var cartItem = CART[p.n];
+  var qty = cartItem ? cartItem.qty : 1;
+  var MIN_MAY = p.min_may || 10;
+  var isMay = qty >= MIN_MAY && p.preventa_maj > 0;
+  // Preventa prices
+  var pvMin = p.preventa_min != null ? p.preventa_min : (p.min||0);
+  var pvMaj = p.preventa_maj != null ? p.preventa_maj : (p.maj||0);
+  var pvPrice = isMay ? pvMaj : pvMin;
+  // Normal prices
+  var normMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
+  var normMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
+  var normPrice = isMay ? normMaj : normMin;
+  var hasDiscount = pvPrice > 0 && normPrice > 0 && pvPrice < normPrice;
+  var saving = hasDiscount ? fN(normPrice - pvPrice) : null;
+
+  return '<div class="card" style="border:1px solid rgba(245,158,11,.35);position:relative">'
+    +'<div class="card-img" style="position:relative">'
+    +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>'
+    +(hasDiscount?'<div style="position:absolute;top:8px;right:8px;z-index:10;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras $'+saving+'</div>':'')
+    +'</div>'
+    +'<div class="card-body">'
+    +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
+    +'<div class="card-name">'+esc(p.n)+'</div>'
+    +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
+    +'<div class="prices">'
+    +(pvPrice>0?'<div class="price-row main"><span class="lbl">Preventa</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'')
+    +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;text-decoration:line-through;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
+    +'</div>'
+    +'<div class="qty-row">'
+    +'<div class="qty-ctrl">'
+    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
+    +'<span class="qty-disp" id="qd-'+cardId+'">'+qty+'</span>'
+    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)" type="button">+</button>'
+    +'</div>'
+    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
+    +(cartItem?'✓ Reservado':'+ Reservar')
+    +'</button></div>'
+    +'</div></div>';
 }
 
 function cardHTML(p){
