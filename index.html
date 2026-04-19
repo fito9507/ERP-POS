@@ -1941,15 +1941,11 @@ async function getOrCreateProductoId(p) {
 }
 
 async function syncStockAlmacen(prodId, almacen, cantidad) {
-  // PATCH existing row
-  var pr = await supaReq('PATCH',
-    'stock_almacen?producto_id=eq.'+prodId+'&almacen=eq.'+encodeURIComponent(almacen),
-    {cantidad:cantidad});
-  if (pr.ok) return true;
-  // Row doesn't exist — INSERT
-  var pi = await supaReq('POST','stock_almacen?on_conflict=producto_id,almacen',
+  // Upsert — works whether row exists or not
+  var r = await supaReq('POST',
+    'stock_almacen?on_conflict=producto_id,almacen',
     {producto_id:prodId, almacen:almacen, cantidad:cantidad});
-  return pi.ok;
+  return r.ok;
 }
 
 async function syncSaveProducto(p) {
@@ -6568,7 +6564,10 @@ function renderBackup() {
 
     + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm si el ERP está abierto.</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '<button class="adm-btn" onclick="enviarBackupTelegram()">💾 Enviar backup ahora</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
+    + '<button class="adm-btn" onclick="document.getElementById(\'import-sql-input\').click()">⬆ Restaurar desde SQL</button>'
+    + '<input type="file" id="import-sql-input" accept=".sql" style="display:none" onchange="importarBackupSQL(this)">'
     + '</div>'
 
     + '<div class="adm-card" style="margin-bottom:12px">'
@@ -6618,6 +6617,48 @@ async function enviarBackupTelegram() {
       console.warn('Backup Telegram fallo:', r.status);
     }
   } catch(e){ console.warn('enviarBackupTelegram:', e); }
+}
+
+async function importarBackupSQL(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = async function(e) {
+    var sql = e.target.result;
+    if (!sql || !sql.includes('INSERT INTO')) {
+      showToast('⚠ Archivo no válido — no contiene sentencias INSERT');
+      return;
+    }
+    // Count statements
+    var total = (sql.match(/INSERT INTO/g)||[]).length;
+    if (!confirm('¿Restaurar backup?\n\n' + total + ' registros encontrados.\nEsto sobreescribirá los datos actuales en Supabase.\n\n¿Continuar?')) return;
+
+    showToast('⏳ Restaurando ' + total + ' registros...');
+    // Split by statement and execute
+    var stmts = sql.split(';').map(function(s){ return s.trim(); }).filter(function(s){ return s.startsWith('INSERT INTO'); });
+    var ok = 0; var err = 0;
+    for (var i = 0; i < stmts.length; i++) {
+      // Use Supabase REST — send raw SQL via rpc
+      try {
+        var r = await supaReq('POST', 'rpc/exec_sql', {sql: stmts[i]+';'});
+        if (r.ok) ok++; else err++;
+      } catch(e) { err++; }
+    }
+    if (ok === 0 && err > 0) {
+      // Fallback: rpc not available — show instructions
+      showToast('⚠ Pega el SQL manualmente en Supabase SQL Editor');
+      alert('El backup no se puede restaurar automáticamente porque la función rpc/exec_sql no está disponible.\n\nPasos para restaurar:\n1. Abre Supabase → SQL Editor\n2. Pega el contenido del archivo .sql\n3. Pulsa Run');
+    } else {
+      showToast('✓ Restauración completada: ' + ok + ' OK · ' + err + ' errores');
+      // Reload data
+      await syncLoadProductos();
+      if (typeof syncLoadVentas === 'function') await syncLoadVentas();
+      if (typeof loadCajasData === 'function') await loadCajasData();
+      showToast('✓ Datos recargados desde Supabase');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
 }
 
 async function exportBackupSQL(returnSQL) {
@@ -7582,13 +7623,10 @@ function registrarMovStock(data) {
         if (!a) continue;
         var qty = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
         try {
-          var pr = await supaReq('PATCH',
-            'stock_almacen?producto_id=eq.'+p.supaId+'&almacen=eq.'+encodeURIComponent(a),
-            {cantidad:qty});
-          if (!pr.ok) { // Row doesn't exist, insert
-            await supaReq('POST','stock_almacen?on_conflict=producto_id,almacen',
-              {producto_id:p.supaId,almacen:a,cantidad:qty});
-          }
+          // Use upsert — always works whether row exists or not
+          await supaReq('POST',
+            'stock_almacen?on_conflict=producto_id,almacen',
+            {producto_id:p.supaId, almacen:a, cantidad:qty});
         } catch(e){ console.warn('mov stock sync:',e); }
       }
       console.log('✓ Stock synced:', mov.producto, almsToSync.join('+'));
