@@ -672,8 +672,9 @@ function transitCardHTML(p){
   if(PRODS.indexOf(p) < 0) PRODS.push(p);
   var pidx = PRODS.indexOf(p);
   var cartItem = CART[p.n];
-  var qty = cartItem ? cartItem.qty : 1;
-  // Single preventa price
+  var cartItem = CART[p.n];
+  var moq = p.moq || 1;
+  var qty = cartItem ? cartItem.qty : moq;
   var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
   var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
   var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
