@@ -1916,7 +1916,8 @@ async function syncLoadProductos() {
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
-        activo: row.activo !== false, enStock: row.en_stock !== false, enTransito: row.en_transito===true,
+        activo: row.activo !== false, enStock: row.en_stock !== false,
+        enTransito: (function(v){ try{ if(v&&typeof v==='object') return v; if(typeof v==='string'&&v.startsWith('{')) return JSON.parse(v); return {Habana:v===true,Placetas:v===true,Xportprise:v===true}; }catch(e){ return {Habana:false,Placetas:false,Xportprise:false}; } })(row.en_transito),
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
         img: row.imagen_url||'', supaId: row.id
@@ -1952,7 +1953,7 @@ async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
-    activo:p.activo!==false,en_stock:p.enStock!==false,en_transito:p.enTransito===true,
+    activo:p.activo!==false,en_stock:p.enStock!==false,en_transito:(p.enTransito&&typeof p.enTransito==='object')?p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise:false,
     precio_min_placetas:p.min_placetas!=null?p.min_placetas:null,
     precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
     imagen_url:p.img||null};
@@ -5395,10 +5396,7 @@ function renderFormProducto() {
     + '<label class="adm-lbl-f" style="margin:0;flex:1">Visible en Stock</label>'
     + '<input type="checkbox" id="ep-en-stock"' + (p.enStock!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
     + '</div>'
-    + '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;grid-column:1/-1">'
-    + '<label class="adm-lbl-f" style="margin:0;flex:1">En transito (catalogo)</label>'
-    + '<input type="checkbox" id="ep-en-transito"' + (p.enTransito?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
-    + '</div>'
+    + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
     + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-min" value="' + (p.min != null ? p.min : '') + '" step="0.01" placeholder="—"></div>'
     + '<div><label class="adm-lbl-f">Precio Mayorista (USD)</label>'
@@ -5445,7 +5443,12 @@ function admGuardarProd(idx) {
   var cat = (document.getElementById('ep-cat')?.value||'').trim();
   var activo = document.getElementById('ep-activo') ? document.getElementById('ep-activo').checked : true;
   var enStock = document.getElementById('ep-en-stock') ? document.getElementById('ep-en-stock').checked : true;
-  var enTransito = document.getElementById('ep-en-transito') ? document.getElementById('ep-en-transito').checked : false;
+  var enTransito = {
+    Habana: document.getElementById('ep-transito-hab') ? document.getElementById('ep-transito-hab').checked : false,
+    Placetas: document.getElementById('ep-transito-plac') ? document.getElementById('ep-transito-plac').checked : false,
+    Xportprise: document.getElementById('ep-transito-xport') ? document.getElementById('ep-transito-xport').checked : false
+  };
+  var anyTransito = enTransito.Habana||enTransito.Placetas||enTransito.Xportprise;
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
 

@@ -569,7 +569,7 @@ async function init(){
         stk_alm: stk_alm,
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
-        enTransito: r.en_transito===true || r.en_transito==='true',
+        enTransito: (function(v){ try{ if(v&&typeof v==='object') return v; if(typeof v==='string'&&v.startsWith('{')) return JSON.parse(v); return {Habana:v===true,Placetas:v===true,Xportprise:v===true}; }catch(e){return {Habana:false,Placetas:false,Xportprise:false};} })(r.en_transito),
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false
@@ -617,7 +617,7 @@ function filteredProds(){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q)<0) return false;
     var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    return stk > 0;
+    return stk > 0 || (p.enTransito && p.enTransito[ALM]);
   });
 }
 
@@ -634,9 +634,10 @@ function render(){
 
 function cardHTML(p){
   var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    var stkLabel = p.enTransito ? '<span style="color:#f59e0b;font-weight:600">🚢 Próximamente</span>'
-               : stk > 0 ? '<span class="stock-ok">✓ Disponible</span>'
-               : '<span style="color:#e84b4b">✗ Sin stock en '+ALM+'</span>';
+  var _transit = p.enTransito && p.enTransito[ALM];
+  var stkLabel = _transit ? '<span style="color:#f59e0b;font-weight:600">\uD83D\uDEA2 Pr\u00f3ximamente</span>'
+               : stk > 0 ? '<span class="stock-ok">\u2713 Disponible</span>'
+               : '<span style="color:#e84b4b">\u2717 Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
   // Mayorista si qty >= MIN_MAY (10 uds por defecto)
@@ -651,7 +652,7 @@ function cardHTML(p){
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +(p.enTransito?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
+    +(_transit?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
@@ -671,7 +672,7 @@ function cardHTML(p){
         return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
-    +(stk>0||p.enTransito?
+    +(stk>0||_transit?
       '<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
