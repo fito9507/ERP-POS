@@ -782,7 +782,7 @@ function chgQtyIdx(idx, d){
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
   if(!sp) return;
-  var isT = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var isT = p.enTransito && p.enTransito[ALM];
   var moq = isT ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
@@ -796,7 +796,7 @@ function addToCartIdx(idx){
   var qty = sp ? Math.max(moq, parseInt(sp.textContent)||moq) : moq;
   CART[p.n] = {prod:p, qty:qty};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
-  if(btn){ btn.textContent = (p.enTransito&&(p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise)) ? '✓ Reservado' : '✓ Agregado'; btn.classList.add('added'); }
+  if(btn){ btn.textContent = (p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'; btn.classList.add('added'); }
   updCart();
 }
 function getQtyInp(name){ return document.querySelector('.qty-inp[data-name="'+name+'"]'); }
@@ -864,14 +864,14 @@ function getCartPrice(i){
   var isMay = i.qty >= MIN_MAY && p.maj > 0;
   var basePrice = isMay ? (p.maj||p.min||0) : (p.min||p.maj||0);
   // Use preventa price if product is in transit for any almacen
-  var isTransit = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var isTransit = p.enTransito && p.enTransito[ALM];
   var price = (isTransit && p.preventa_min!=null) ? p.preventa_min : basePrice;
   return {price:price, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:isTransit};
 }
 function updCartQty(name, val){
   if(!CART[name]) return;
   var p = CART[name].prod;
-  var isTransit = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var isTransit = p.enTransito && p.enTransito[ALM];
   var minQty = isTransit ? (p.moq||1) : 1;
   CART[name].qty = Math.max(minQty, parseInt(val)||minQty);
   renderCart(); updCart();
@@ -886,7 +886,7 @@ function renderCart(){
     var r = getCartPrice(i);
     var lineTotal = r.price * i.qty;
     total += lineTotal;
-    var isTransitProd = i.prod.enTransito && (i.prod.enTransito.Habana||i.prod.enTransito.Placetas||i.prod.enTransito.Xportprise);
+    var isTransitProd = i.prod.enTransito && i.prod.enTransito[ALM];
     var tag = (!isTransitProd && i.prod.maj>0) ? (r.isMay
       ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
       : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '';
@@ -898,7 +898,7 @@ function renderCart(){
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
       +'<div style="display:flex;align-items:center;gap:6px">'
       +'<div class="qty-ctrl" style="border-radius:8px">'
-      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty-1)+ ')" style="width:40px;height:40px;font-size:20px">−</button>'
+      +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +Math.max((isTransitProd?(i.prod.moq||1):1),i.qty-1)+ ')" style="width:40px;height:40px;font-size:20px">\u2212</button>'
       +'<input class="qty-inp" type="number" min="1" value="'+i.qty+'" onchange="updCartQty(\''+esc(i.prod.n)+'\',this.value)" style="width:52px;height:40px;font-size:15px">'
       +'<button class="qty-btn" onclick="updCartQty(\''+esc(i.prod.n)+'\',' +(i.qty+1)+ ')" style="width:40px;height:40px;font-size:20px">+</button>'
       +'</div>'
