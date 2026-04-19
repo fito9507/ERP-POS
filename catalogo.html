@@ -649,21 +649,22 @@ function render(){
     return true;
   });
 
-  var transitHTML = '';
+  var transitBanner = '';
+  var transitCards = '';
   if(filteredTransit.length){
-    transitHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
+    transitBanner = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px">'
       +'<span style="font-size:20px">🚢</span>'
       +'<div><div style="font-size:13px;font-weight:700;color:#f59e0b">Próximamente en '+ALM+'</div>'
       +'<div style="font-size:11px;color:var(--text-dim)">Reserva ahora a precio especial antes de que llegue</div></div>'
-      +'</div></div>'
-      + filteredTransit.map(function(p){ return transitCardHTML(p); }).join('');
+      +'</div></div>';
+    transitCards = filteredTransit.map(function(p){ return transitCardHTML(p); }).join('');
   }
   if(!normalProds.length && !filteredTransit.length){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📦</div><p>Sin productos disponibles para <strong>'+ALM+'</strong>.<br>Prueba con otro almacén o categoría.</p></div>';
     return;
   }
-  grid.innerHTML = transitHTML + normalProds.map(function(p){ return cardHTML(p); }).join('');
+  grid.innerHTML = transitBanner + transitCards + normalProds.map(function(p){ return cardHTML(p); }).join('');
 }
 
 function transitCardHTML(p){
