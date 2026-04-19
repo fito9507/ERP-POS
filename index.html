@@ -1476,6 +1476,7 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 // ── Telegram Bot ─────────────────────────────────────────────
 const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
 const TG_CHAT  = '8781639188';  // personal (admin)
+const TG_BACKUP = '-5219869639';  // Grupo Backups
 // Grupos por almacén
 const TG_VENTAS  = { Habana:'-1003568620544', Placetas:'-5196463397' };
 const TG_PEDIDOS = { Habana:'-5283520069', Placetas:'-5229951824' };
@@ -1660,7 +1661,7 @@ async function enviarCierreDiario(fecha) {
       porVend[vend].n++;porVend[vend].usd+=(v.totalUSD||0);
     });
     var vendLines=Object.keys(porVend).map(function(vend){
-      return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' venta'+(porVend[vend].n!==1?'s':'')+' � $'+fN(porVend[vend].usd);
+      return '  \uD83D\uDC64 '+vend+': '+porVend[vend].n+' venta'+(porVend[vend].n!==1?'s':'')+' � $'+fN(porVend[vend].usd);
     }).join('\n');
 
      // Productos vendidos completo + margen
@@ -1705,6 +1706,8 @@ async function enviarCierreDiario(fecha) {
         +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
     tgSend(msg, alm, 'venta');
   }
+  // Enviar backup automatico tambien
+  try{ await enviarBackupTelegram(); }catch(e){}
   showToast('\uD83D\uDCCA Cierre enviado');
 }
 
@@ -6563,7 +6566,7 @@ function renderBackup() {
     + '</div>'
     + '</div>'
 
-    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm si el ERP está abierto.</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
+    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm si el ERP está abierto.</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '<button class="adm-btn" onclick="enviarBackupTelegram()">💾 Enviar backup ahora</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
     + '</div>'
@@ -6587,7 +6590,37 @@ function renderBackup() {
     + '</div>';
 }
 
-async function exportBackupSQL() {
+// Backup automático diario — envía SQL al Telegram admin
+async function enviarBackupTelegram() {
+  if(!_supaOnline){ console.warn('Sin conexion para backup'); return; }
+  if(!TG_TOKEN || !TG_BACKUP){ return; }
+  try {
+    var sql = await exportBackupSQL(true);
+    if(!sql){ return; }
+    var fname = 'backup_'+new Date().toISOString().slice(0,10)+'.sql';
+    // Count lines for summary
+    var inserts = (sql.match(/INSERT INTO/g)||[]).length;
+    var caption = '\uD83D\uDCBE <b>Backup diario</b>\n'
+      + new Date().toISOString().slice(0,10)+'\n\n'
+      + inserts+' registros guardados\n'
+      + '\uD83E\uDD16 Backup autom\u00e1tico ERP';
+    // Send as document
+    var fd = new FormData();
+    fd.append('chat_id', TG_BACKUP);
+    fd.append('document', new Blob([sql], {type:'text/sql'}), fname);
+    fd.append('caption', caption);
+    fd.append('parse_mode', 'HTML');
+    var r = await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument', {method:'POST', body:fd});
+    if(r.ok){
+      console.log('Backup enviado a Telegram');
+      try{localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10));}catch(e){}
+    } else {
+      console.warn('Backup Telegram fallo:', r.status);
+    }
+  } catch(e){ console.warn('enviarBackupTelegram:', e); }
+}
+
+async function exportBackupSQL(returnSQL) {
   if(!_supaOnline){ showToast('⚠ Necesitas conexión para generar el backup SQL'); return; }
   showToast('⏳ Generando backup SQL...');
   var sql = '-- BACKUP Marin Metal PDL\n-- Fecha: ' + new Date().toISOString() + '\n\n';
@@ -6654,17 +6687,62 @@ async function exportBackupSQL() {
       });
     }
 
-    // 6. Ventas (últimas 500)
-    sql += '\n-- ── VENTAS (últimas 500) ────────────────\n';
-    var vts = await supaReq('GET','ventas?select=*&order=fecha.desc&limit=500');
+    // 6. Ventas (TODAS)
+    sql += '\n-- ── VENTAS ──────────────────────────────\n';
+    var vts = await supaReq('GET','ventas?select=*&order=fecha.desc&limit=10000');
+    var esc = function(v){ return v!=null ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
     if(vts.ok){
       var vd = await vts.json();
-      var esc = function(v){ return v!=null ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
       vd.forEach(function(r){
         sql += "INSERT INTO ventas (fecha,vendedor,almacen,cliente,tipo,productos,total_usd,moneda_cobro,com_pct,com_usd,est_com,cobrado_usd,notas,cobros_json) VALUES ("+esc(r.fecha)+","+esc(r.vendedor)+","+esc(r.almacen)+","+esc(r.cliente)+","+esc(r.tipo)+","+esc(r.productos)+","+(r.total_usd||0)+","+esc(r.moneda_cobro)+","+(r.com_pct||0)+","+(r.com_usd||0)+","+esc(r.est_com)+","+(r.cobrado_usd||0)+","+esc(r.notas)+","+esc(r.cobros_json)+") ON CONFLICT DO NOTHING;\n";
       });
     }
 
+    // 7. Cajas
+    sql += '\n-- ── CAJAS ───────────────────────────────\n';
+    var cjs = await supaReq('GET','cajas?select=*');
+    if(cjs.ok){
+      var cjd = await cjs.json();
+      cjd.forEach(function(r){
+        sql += "INSERT INTO cajas (nombre,moneda,almacen,saldo_inicial,activa) VALUES ("+esc(r.nombre)+","+esc(r.moneda)+","+esc(r.almacen)+","+(r.saldo_inicial||0)+","+(r.activa!==false)+") ON CONFLICT (nombre) DO UPDATE SET moneda=EXCLUDED.moneda,almacen=EXCLUDED.almacen,saldo_inicial=EXCLUDED.saldo_inicial,activa=EXCLUDED.activa;\n";
+      });
+    }
+
+    // 8. Movimientos de cajas
+    sql += '\n-- ── MOV CAJAS ───────────────────────────\n';
+    var mcj = await supaReq('GET','mov_cajas?select=*&order=created_at.desc&limit=10000');
+    if(mcj.ok){
+      var mcd = await mcj.json();
+      mcd.forEach(function(r){
+        sql += "INSERT INTO mov_cajas (caja_origen,caja_destino,monto_origen,monto_destino,concepto,usuario,fecha) VALUES ("+esc(r.caja_origen)+","+esc(r.caja_destino)+","+(r.monto_origen||0)+","+(r.monto_destino||0)+","+esc(r.concepto)+","+esc(r.usuario)+","+esc(r.fecha)+") ON CONFLICT DO NOTHING;\n";
+      });
+    }
+
+    // 9. Movimientos I/G
+    sql += '\n-- ── MOVIMIENTOS I/G ─────────────────────\n';
+    try {
+      var mig = await supaReq('GET','movimientos_ig?select=*&order=fecha.desc&limit=10000');
+      if(mig.ok){
+        var mid = await mig.json();
+        mid.forEach(function(r){
+          sql += "INSERT INTO movimientos_ig (fecha,tipo,concepto,monto,moneda,caja,usuario,almacen,notas) VALUES ("+esc(r.fecha)+","+esc(r.tipo)+","+esc(r.concepto)+","+(r.monto||0)+","+esc(r.moneda)+","+esc(r.caja)+","+esc(r.usuario)+","+esc(r.almacen)+","+esc(r.notas)+") ON CONFLICT DO NOTHING;\n";
+        });
+      }
+    } catch(e){}
+
+    // 10. Clientes
+    sql += '\n-- ── CLIENTES ────────────────────────────\n';
+    try {
+      var cls = await supaReq('GET','clientes?select=*');
+      if(cls.ok){
+        var cld = await cls.json();
+        cld.forEach(function(r){
+          sql += "INSERT INTO clientes (nombre,telefono,direccion,notas) VALUES ("+esc(r.nombre)+","+esc(r.telefono)+","+esc(r.direccion)+","+esc(r.notas)+") ON CONFLICT (nombre) DO UPDATE SET telefono=EXCLUDED.telefono,direccion=EXCLUDED.direccion,notas=EXCLUDED.notas;\n";
+        });
+      }
+    } catch(e){}
+
+    if(returnSQL) return sql;
     // Download
     var blob = new Blob([sql], {type:'text/sql'});
     var a = document.createElement('a');
