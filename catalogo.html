@@ -625,25 +625,44 @@ function filteredProds(){
 
 // ── RENDER ────────────────────────────────────────────────
 function render(){
-  var prods = filteredProds();
   var grid = document.getElementById('prod-grid');
-  // Separate transit products
-  var transitProds = (window.ALL_PRODS||PRODS).filter(function(p){ return p.activo!==false && p.enTransito && p.enTransito[ALM]; });
+  var allProds = window.ALL_PRODS || PRODS;
+  // Transit products for this almacen
+  var transitProds = allProds.filter(function(p){ return p.activo!==false && p.enTransito && p.enTransito[ALM]; });
+  // Normal products (exclude transit-only, apply search/cat filters)
+  var q = (document.getElementById('search-inp')||{}).value||'';
+  var cat = document.getElementById('cat-sel').value;
+  var normalProds = allProds.filter(function(p){
+    if(p.enTransito && p.enTransito[ALM]) return false; // handled in transit section
+    if(p.activo===false || p.enStock===false) return false;
+    var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
+    if(stk <= 0) return false;
+    if(cat && p.cat !== cat) return false;
+    if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
+    return true;
+  });
+  // Also filter transit by search/cat
+  var filteredTransit = transitProds.filter(function(p){
+    if(cat && p.cat !== cat) return false;
+    if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
+    return true;
+  });
+
   var transitHTML = '';
-  if(transitProds.length){
-    transitHTML = '<div style="grid-column:1/-1;margin-bottom:8px">'
+  if(filteredTransit.length){
+    transitHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px">'
       +'<span style="font-size:20px">🚢</span>'
       +'<div><div style="font-size:13px;font-weight:700;color:#f59e0b">Próximamente en '+ALM+'</div>'
       +'<div style="font-size:11px;color:var(--text-dim)">Reserva ahora a precio especial antes de que llegue</div></div>'
       +'</div></div>'
-      + transitProds.map(function(p){ return transitCardHTML(p); }).join('');
+      + filteredTransit.map(function(p){ return transitCardHTML(p); }).join('');
   }
-  if(!prods.length){
+  if(!normalProds.length && !filteredTransit.length){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📦</div><p>Sin productos disponibles para <strong>'+ALM+'</strong>.<br>Prueba con otro almacén o categoría.</p></div>';
     return;
   }
-  grid.innerHTML = transitHTML + prods.map(function(p){ return cardHTML(p); }).join('');
+  grid.innerHTML = transitHTML + normalProds.map(function(p){ return cardHTML(p); }).join('');
 }
 
 function transitCardHTML(p){
