@@ -782,7 +782,8 @@ function chgQtyIdx(idx, d){
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
   if(!sp) return;
-  var moq = p.moq || 1;
+  var isT = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var moq = isT ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
   sp.textContent = v;
@@ -869,7 +870,10 @@ function getCartPrice(i){
 }
 function updCartQty(name, val){
   if(!CART[name]) return;
-  CART[name].qty = Math.max(1, parseInt(val)||1);
+  var p = CART[name].prod;
+  var isTransit = p.enTransito && (p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise);
+  var minQty = isTransit ? (p.moq||1) : 1;
+  CART[name].qty = Math.max(minQty, parseInt(val)||minQty);
   renderCart(); updCart();
 }
 function renderCart(){
@@ -882,7 +886,8 @@ function renderCart(){
     var r = getCartPrice(i);
     var lineTotal = r.price * i.qty;
     total += lineTotal;
-    var tag = i.prod.maj>0 ? (r.isMay
+    var isTransitProd = i.prod.enTransito && (i.prod.enTransito.Habana||i.prod.enTransito.Placetas||i.prod.enTransito.Xportprise);
+    var tag = (!isTransitProd && i.prod.maj>0) ? (r.isMay
       ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
       : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '';
     return '<div class="cart-item">'
