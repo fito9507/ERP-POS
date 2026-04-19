@@ -569,7 +569,7 @@ async function init(){
         stk_alm: stk_alm,
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
-        enTransito: (function(v){ try{ if(v&&typeof v==='object') return v; if(typeof v==='string'&&v.startsWith('{')) return JSON.parse(v); return {Habana:v===true,Placetas:v===true,Xportprise:v===true}; }catch(e){return {Habana:false,Placetas:false,Xportprise:false};} })(r.en_transito),
+        enTransito: {Habana:r.en_transito_habana===true, Placetas:r.en_transito_placetas===true, Xportprise:r.en_transito_xportprise===true},
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false

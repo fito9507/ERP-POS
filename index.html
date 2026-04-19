@@ -1917,7 +1917,7 @@ async function syncLoadProductos() {
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
         activo: row.activo !== false, enStock: row.en_stock !== false,
-        enTransito: (function(v){ try{ if(v&&typeof v==='object') return v; if(typeof v==='string'&&v.startsWith('{')) return JSON.parse(v); return {Habana:v===true,Placetas:v===true,Xportprise:v===true}; }catch(e){ return {Habana:false,Placetas:false,Xportprise:false}; } })(row.en_transito),
+        enTransito: {Habana:row.en_transito_habana===true, Placetas:row.en_transito_placetas===true, Xportprise:row.en_transito_xportprise===true},
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
         img: row.imagen_url||'', supaId: row.id
@@ -1953,7 +1953,10 @@ async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
-    activo:p.activo!==false,en_stock:p.enStock!==false,en_transito:(p.enTransito&&typeof p.enTransito==='object')?p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise:false,
+    activo:p.activo!==false,en_stock:p.enStock!==false,
+    en_transito_habana:!!(p.enTransito&&p.enTransito.Habana),
+    en_transito_placetas:!!(p.enTransito&&p.enTransito.Placetas),
+    en_transito_xportprise:!!(p.enTransito&&p.enTransito.Xportprise),
     precio_min_placetas:p.min_placetas!=null?p.min_placetas:null,
     precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
     imagen_url:p.img||null};
