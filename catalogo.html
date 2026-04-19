@@ -667,6 +667,8 @@ function render(){
 
 function transitCardHTML(p){
   var cardId = 'tr-'+(p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_'));
+  // Add to PRODS if not already there so qty controls work
+  if(PRODS.indexOf(p) < 0) PRODS.push(p);
   var pidx = PRODS.indexOf(p);
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
@@ -676,6 +678,8 @@ function transitCardHTML(p){
   var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
   var saving = hasDiscount ? fN(normPrice - pvPrice) : null;
 
+  // If no price at all show placeholder
+  var showPrice = pvPrice > 0;
   return '<div class="card" style="border:1px solid rgba(245,158,11,.35);position:relative">'
     +'<div class="card-img" style="position:relative">'
     +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
@@ -687,7 +691,7 @@ function transitCardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
     +'<div class="prices">'
-    +'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>'
+    +(showPrice?'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'<div class="price-row main"><span class="lbl">Precio</span><span class="val" style="color:var(--text-dim);font-size:12px">Consultar</span></div>')
     +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
     +'</div>'
     +'<div class="qty-row">'
