@@ -459,6 +459,7 @@ function tgSend(msg, alm){
 
 // Exchange rates (loaded from Supabase tasas table)
 let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
+let RATES_EURUSD = 1.13;
 let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0,CUPT:10}, Placetas:{USD:0,EUR:0,MLC:0,CUPT:10} };
 // CUPT_PCT = % extra sobre precio CUP para transferencia
 let PRODS = [];
@@ -734,8 +735,8 @@ function cardHTML(p){
   var priceMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
   var priceMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
   var hasEscala = p.escala && p.escala.length > 0;
-  var price = isMay ? priceMaj : priceMin;
-
+  var escalaPrice = hasEscala ? (getEscalaPrice(p,qty) || p.escala[0].precio) : null;
+  var price = hasEscala ? escalaPrice : (isMay ? priceMaj : priceMin);
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var pidx = PRODS.indexOf(p);
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
@@ -764,7 +765,8 @@ function cardHTML(p){
         : '<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
     })()
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
-        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m,ALM)+'</span></div>';
+        var refPrice = priceMin || (hasEscala ? p.escala[0].precio : priceMaj) || 0;
+        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(refPrice,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
     +(stk>0||_transit?
