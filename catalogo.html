@@ -573,6 +573,7 @@ async function init(){
         preventa_min: r.precio_preventa_min!=null?parseFloat(r.precio_preventa_min):null,
         preventa_maj: r.precio_preventa_maj!=null?parseFloat(r.precio_preventa_maj):null,
         moq: r.moq!=null?parseInt(r.moq):1,
+        escala: (function(v){ try{ return v?(typeof v==='string'?JSON.parse(v):v):null; }catch(e){return null;} })(r.precios_escala),
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false
@@ -732,6 +733,7 @@ function cardHTML(p){
   var isMay = qty >= MIN_MAY && p.maj > 0;
   var priceMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
   var priceMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
+  var hasEscala = p.escala && p.escala.length > 0;
   var price = isMay ? priceMaj : priceMin;
 
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
@@ -746,15 +748,21 @@ function cardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
     +'<div class="prices">'
-    +(p.maj>0&&p.min>0&&p.maj!==p.min?
-      '<div class="price-row" style="margin-bottom:2px">'
-      +'<span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span>'
-      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
-      +'<div class="price-row" style="margin-bottom:4px">'
-      +'<span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span>'
-      +'<span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
-      :'<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>')
-    +'<div style="border-top:1px solid rgba(255,255,255,.06);margin:4px 0"></div>'
+    +(function(){
+      if(hasEscala){
+        var rows = (priceMin>0?'<div class="price-row"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val" style="font-size:12px;color:var(--text-dim)">'+fPrice(priceMin,MON,ALM)+'</span></div>':'')
+          + p.escala.map(function(r,i){
+              var lbl = r.desde+(r.hasta?'-'+r.hasta:'+')+ ' uds';
+              var active = qty>=r.desde&&(r.hasta==null||qty<=r.hasta);
+              return '<div class="price-row"><span class="lbl" style="font-size:10px">'+lbl+'</span><span class="val" style="font-size:12px;'+(active?'color:var(--accent)':'color:var(--text-dim)')+'">'+fPrice(r.precio,MON,ALM)+'</span></div>';
+            }).join('');
+        return rows;
+      }
+      return (p.maj>0&&p.min>0&&p.maj!==p.min
+        ? '<div class="price-row"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
+          +'<div class="price-row"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
+        : '<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
+    })()
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
         return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(price,m,ALM)+'</span></div>';
       }).join('')
@@ -867,15 +875,26 @@ function openCart(){
 function closeCart(){ document.getElementById('cart-modal').classList.remove('open'); }
 function closeCartOutside(e){ if(e.target===document.getElementById('cart-modal')) closeCart(); }
 
+function getEscalaPrice(p, qty){
+  if(!p.escala || !p.escala.length) return null;
+  var MIN_MAY = p.min_may || 10;
+  if(qty < MIN_MAY) return null; // minorista range, no escala
+  var match = null;
+  p.escala.forEach(function(r){
+    if(qty >= r.desde && (r.hasta==null || qty <= r.hasta)) match = r.precio;
+  });
+  return match;
+}
+
 function getCartPrice(i){
   var p = i.prod;
   var MIN_MAY = p.min_may || 10;
   var isMay = i.qty >= MIN_MAY && p.maj > 0;
-  var basePrice = isMay ? (p.maj||p.min||0) : (p.min||p.maj||0);
-  // Use preventa price if product is in transit for any almacen
   var isTransit = p.enTransito && p.enTransito[ALM];
-  var price = (isTransit && p.preventa_min!=null) ? p.preventa_min : basePrice;
-  return {price:price, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:isTransit};
+  if(isTransit && p.preventa_min!=null) return {price:p.preventa_min, isMay:false, MIN_MAY:MIN_MAY, isTransit:true};
+  var escalaPrice = getEscalaPrice(p, i.qty);
+  var basePrice = escalaPrice!=null ? escalaPrice : (isMay ? (p.maj||p.min||0) : (p.min||p.maj||0));
+  return {price:basePrice, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:false, hasEscala:escalaPrice!=null};
 }
 function updCartQty(name, val){
   if(!CART[name]) return;

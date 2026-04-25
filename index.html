@@ -1914,6 +1914,7 @@ async function syncLoadProductos() {
         n: row.nombre, cat: row.categoria||'',
         min: row.precio_min != null ? parseFloat(row.precio_min) : null,
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
+        escala: (function(v){ try{ return v ? (typeof v==='string'?JSON.parse(v):v) : null; }catch(e){ return null; } })(row.precios_escala),
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
         activo: row.activo !== false, enStock: row.en_stock !== false,
@@ -1955,6 +1956,7 @@ async function syncStockAlmacen(prodId, almacen, cantidad) {
 async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
+    precios_escala:p.escala&&p.escala.length?JSON.stringify(p.escala):null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
     activo:p.activo!==false,en_stock:p.enStock!==false,
     en_transito_habana:!!(p.enTransito&&p.enTransito.Habana),
@@ -5380,6 +5382,18 @@ function renderAdminProductos() {
   });
 }
 
+function admAddEscalaRow(){
+  var container = document.getElementById('ep-escala-rows');
+  if(!container) return;
+  var div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center';
+  div.innerHTML = '<input class="adm-inp ep-esc-desde" type="number" placeholder="Desde" min="1" step="1">'
+    +'<input class="adm-inp ep-esc-hasta" type="number" placeholder="\u221e" min="1" step="1">'
+    +'<input class="adm-inp ep-esc-precio" type="number" placeholder="Precio" step="0.01">'
+    +'<button type="button" onclick="this.closest(\'div\').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">\u2715</button>';
+  container.appendChild(div);
+}
+
 function renderFormProducto() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -5408,8 +5422,7 @@ function renderFormProducto() {
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
     + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-min" value="' + (p.min != null ? p.min : '') + '" step="0.01" placeholder="—"></div>'
-    + '<div><label class="adm-lbl-f">Precio Mayorista (USD)</label>'
-    + '<input class="adm-inp" type="number" id="ep-maj" value="' + (p.maj != null ? p.maj : '') + '" step="0.01" placeholder="—"></div>'
+    + '<div><label class="adm-lbl-f">Precio Mayorista base (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-maj" value="' + (p.maj != null ? p.maj : '') + '" step="0.01" placeholder="—"></div>'    + '<div style="grid-column:1/-1">'    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--color-text-secondary)">📊 Escala de precios mayorista (opcional)</div>'    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precios por rangos de cantidad. Si vacío usa el precio mayorista base.</div>'    + '<div id="ep-escala-rows" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px">'    + (function(){        var rows = p.escala&&p.escala.length ? p.escala : [];        return rows.map(function(r,i){          return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px;align-items:center">'            +'<input class="adm-inp ep-esc-desde" type="number" value="'+r.desde+'" placeholder="Desde" min="1" step="1">'            +'<input class="adm-inp ep-esc-hasta" type="number" value="'+(!r.hasta?'':''+r.hasta)+'" placeholder="∞" min="1" step="1">'            +'<input class="adm-inp ep-esc-precio" type="number" value="'+r.precio+'" placeholder="Precio" step="0.01">'            +'<button type="button" onclick="this.closest(\'div\').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>'            +'</div>';        }).join('');      })()    + '</div>'    + '<button type="button" onclick="admAddEscalaRow()" class="adm-btn" style="font-size:12px;padding:4px 10px">+ Añadir rango</button>'    + '</div>'
     + '<div><label class="adm-lbl-f">Coste DDP (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-ddp" value="' + (p.ddp != null ? p.ddp : '') + '" step="0.01" placeholder="—"></div>'
     + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--color-text-secondary)">🏪 Precios Placetas (opcional)</div>'    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Si está vacío usa el precio de Habana. Rellena solo si Placetas tiene precio diferente.</div>'    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'    + '<div><label class="adm-lbl-f">Min. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-min-plac" value="' + (p.min_placetas != null ? p.min_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '<div><label class="adm-lbl-f">May. Placetas (USD)</label>'    + '<input class="adm-inp" type="number" id="ep-maj-plac" value="' + (p.maj_placetas != null ? p.maj_placetas : '') + '" step="0.01" placeholder="= Habana"></div>'    + '</div></div>'    + '<div><label class="adm-lbl-f">Stock mínimo alerta</label>'
@@ -5450,6 +5463,15 @@ function admGuardarProd(idx) {
   if (!n) { showToast('El nombre es obligatorio'); return; }
   var min = parseFloat(document.getElementById('ep-min').value);
   var maj = parseFloat(document.getElementById('ep-maj').value);
+  var escala = [];
+  document.querySelectorAll('#ep-escala-rows > div').forEach(function(row){
+    var desde = parseInt(row.querySelector('.ep-esc-desde').value);
+    var hastaEl = row.querySelector('.ep-esc-hasta').value;
+    var hasta = hastaEl ? parseInt(hastaEl) : null;
+    var precio = parseFloat(row.querySelector('.ep-esc-precio').value);
+    if(!isNaN(desde) && !isNaN(precio)) escala.push({desde:desde, hasta:hasta, precio:precio});
+  });
+  escala = escala.length ? escala.sort(function(a,b){return a.desde-b.desde;}) : null;
   var ddp = parseFloat(document.getElementById('ep-ddp').value);
   var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
   var moq = parseInt(document.getElementById('ep-moq')?.value) || 1;
@@ -5476,7 +5498,7 @@ function admGuardarProd(idx) {
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
 
-  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj,
+  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
     img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
