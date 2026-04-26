@@ -532,10 +532,9 @@ async function init(){
           if(t.moneda==='USD')  RATES.CUP  = parseFloat(t.valor)||370;
           if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
         });
-        // Pass 2: compute EUR ratio with correct RATES.CUP
+        // Pass 2: EUR — use USDEUR (with adjustment) as authoritative source, same as ERP
         tasas.forEach(function(t){
-          if(t.moneda==='USDEUR') RATES.EUR = parseFloat(t.valor)||1.12;
-          if(t.moneda==='EUR')    { var _cupEUR=parseFloat(t.valor); if(_cupEUR>10) RATES_EURUSD=parseFloat((_cupEUR/RATES.CUP).toFixed(4)); }
+          if(t.moneda==='USDEUR') { RATES_EURUSD=parseFloat(t.valor)||1.12; }
         });
         // Load per-almacen adjustments
         try{
