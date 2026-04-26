@@ -1375,7 +1375,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 // ═══ SHARED GLOBALS ═══
 const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
 var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
-try{ var _ra=JSON.parse(localStorage.getItem('erp_rates_alm')||'{}'); if(Object.keys(_ra).length) RATES_ALM=_ra; }catch(e){}
 var RATES_EURUSD=0;
 try{ var _eu=parseFloat(localStorage.getItem('erp_eurusd')||'0'); if(_eu>0) RATES_EURUSD=_eu; }catch(e){}
 function toUSD(m,mon,alm){
@@ -2035,9 +2034,7 @@ async function supaInit() {
     if(ra.ok){(await ra.json()||[]).forEach(function(r){
       if(!RATES_ALM[r.almacen])RATES_ALM[r.almacen]={};
       RATES_ALM[r.almacen][r.moneda]=parseFloat(r.ajuste||0);
-    });
-    try{localStorage.setItem('erp_rates_alm',JSON.stringify(RATES_ALM));}catch(e){}
-    }
+    });}
   }catch(e){}
   try{
     var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
@@ -2783,7 +2780,7 @@ function initPago(){
 }
 function goPago(){if(!S.cart.length)return;goStep('pg-pago',3);}
 function addPago(mon){
-  const sug=getPendCobro()>0?rUp(fromUSD(getPendCobro(),mon),mon):0;
+  const sug=getPendCobro()>0?rUp(fromUSD(getPendCobro(),mon,S.alm),mon):0;
   const cj=(function(){
     // Pick the best caja name from Supabase or fallback
     var opts=_getCajasForMon(mon,S.alm||'Habana');
@@ -2794,18 +2791,18 @@ function addPago(mon){
   setTimeout(()=>{const e=document.getElementById('pi-'+id);if(e){e.focus();e.select();}},40);
 }
 function addVuelto(mon){
-  const sug=getPendVuelto()>0?parseFloat(fromUSD(getPendVuelto(),mon).toFixed(dFor(mon))):0;
+  const sug=getPendVuelto()>0?parseFloat(fromUSD(getPendVuelto(),mon,S.alm).toFixed(dFor(mon))):0;
   const id='v'+Date.now();S.vueltos.push({id,mon,m:sug});renderPago();
   setTimeout(()=>{const e=document.getElementById('vi-'+id);if(e){e.focus();e.select();}},40);
 }
 function fillP(id){
   const idx=S.pagos.findIndex(x=>x.id===id);
-  S.pagos[idx].m=rUp(fromUSD(getPendCobro()+toUSD(S.pagos[idx].m||0,S.pagos[idx].mon),S.pagos[idx].mon),S.pagos[idx].mon);
+  S.pagos[idx].m=rUp(fromUSD(getPendCobro()+toUSD(S.pagos[idx].m||0,S.pagos[idx].mon,S.alm),S.pagos[idx].mon,S.alm),S.pagos[idx].mon);
   renderPago();
 }
 function fillV(id){
   const idx=S.vueltos.findIndex(x=>x.id===id);
-  S.vueltos[idx].m=parseFloat(fromUSD(getPendVuelto()+toUSD(S.vueltos[idx].m||0,S.vueltos[idx].mon),S.vueltos[idx].mon).toFixed(dFor(S.vueltos[idx].mon)));
+  S.vueltos[idx].m=parseFloat(fromUSD(getPendVuelto()+toUSD(S.vueltos[idx].m||0,S.vueltos[idx].mon,S.alm),S.vueltos[idx].mon,S.alm).toFixed(dFor(S.vueltos[idx].mon)));
   renderPago();
 }
 function renderPago(){
@@ -2815,10 +2812,10 @@ function renderPago(){
   document.getElementById('pend-cobro').textContent=fN(pendC)+' USD';
   document.getElementById('strip-cobro').className='strip '+(pendC<0.01?'ok':'warn');
   document.getElementById('cobro-btns').innerHTML=pendC>0.005
-    ?MONEDAS.map(m=>`<button class="bf" onclick="addPago('${m}')">${fN(rUp(fromUSD(pendC,m),m),dFor(m))} ${m}</button>`).join('')
+    ?MONEDAS.map(m=>`<button class="bf" onclick="addPago('${m}')">${fN(rUp(fromUSD(pendC,m,S.alm),m),dFor(m))} ${m}</button>`).join('')
     :'<span style="font-size:12px;color:var(--color-text-success);font-weight:500">Cobro completo ✓</span>';
   document.getElementById('pagos-cnt').innerHTML=S.pagos.map((p,i)=>{
-    const usd=toUSD(p.m||0,p.mon);const fq=rUp(fromUSD(getPendCobro()+usd,p.mon),p.mon);
+    const usd=toUSD(p.m||0,p.mon);const fq=rUp(fromUSD(getPendCobro()+usd,p.mon,S.alm),p.mon);
     return `<div class="prow">
       <span style="font-size:11px;color:var(--color-text-secondary);min-width:50px">Pago ${i+1}</span>
       <input type="number" id="pi-${p.id}" value="${p.m||''}" step="${dFor(p.mon)?'1':'0.01'}" style="flex:1;min-width:70px" oninput="S.pagos[${i}].m=parseFloat(this.value)||0;renderPagoTotalsOnly()">
@@ -2847,7 +2844,7 @@ function renderPago(){
       :pendV<-0.005?'<span style="font-size:12px;color:var(--color-text-danger);font-weight:500">⚠ Exceso de vuelto: '+fN(Math.abs(pendV))+' USD</span>'
       :'<span style="font-size:12px;color:var(--color-text-success);font-weight:500">Vuelto cuadrado ✓</span>';
     document.getElementById('vueltos-cnt').innerHTML=S.vueltos.map((v,i)=>{
-      const usd=toUSD(v.m||0,v.mon);const fq=parseFloat(fromUSD(getPendVuelto()+usd,v.mon).toFixed(dFor(v.mon)));
+      const usd=toUSD(v.m||0,v.mon);const fq=parseFloat(fromUSD(getPendVuelto()+usd,v.mon,S.alm).toFixed(dFor(v.mon)));
       return `<div class="vrow">
         <span style="font-size:11px;color:var(--color-text-secondary);min-width:54px">Vuelto ${i+1}</span>
         <input type="number" id="vi-${v.id}" value="${v.m||''}" step="${dFor(v.mon)?'1':'0.01'}" style="flex:1;min-width:70px" oninput="S.vueltos[${i}].m=parseFloat(this.value)||0;renderPagoTotalsOnly()">
@@ -2884,7 +2881,7 @@ function renderPagoTotalsOnly(){
   if(el_strip) el_strip.className='strip '+(pendC<0.01?'ok':'warn');
   const el_cob=document.getElementById('cobro-btns');
   if(el_cob) el_cob.innerHTML=pendC>0.005
-    ?MONEDAS.map(m=>`<button class="bf" onclick="addPago('${m}')">${fN(rUp(fromUSD(pendC,m),m),dFor(m))} ${m}</button>`).join('')
+    ?MONEDAS.map(m=>`<button class="bf" onclick="addPago('${m}')">${fN(rUp(fromUSD(pendC,m,S.alm),m),dFor(m))} ${m}</button>`).join('')
     :'<span style="font-size:12px;color:var(--color-text-success);font-weight:500">Cobro completo ✓</span>';
   const el_tot=document.getElementById('tot-cob');
   if(el_tot) el_tot.textContent=fN(cobUSD)+' USD';
