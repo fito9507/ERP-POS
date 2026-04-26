@@ -5894,6 +5894,7 @@ function admGuardarTasas() {
 
   showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
   renderAdminTasas();
+  if(typeof renderProds==='function'){try{renderProds();}catch(e){}}
 }
 
 
