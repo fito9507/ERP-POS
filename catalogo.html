@@ -527,11 +527,14 @@ async function init(){
     try{
       var tasas = await supa('tasas?select=moneda,valor');
       if(tasas&&tasas.length){
+        // Pass 1: USD/CUP first so RATES.CUP is correct before computing EUR ratio
         tasas.forEach(function(t){
-          if(t.moneda==='USD')    RATES.CUP      = parseFloat(t.valor)||370;
-          if(t.moneda==='USDEUR') RATES.EUR      = parseFloat(t.valor)||1.12;
-          if(t.moneda==='CUPT')   RATES.CUPT     = parseFloat(t.valor)||270;
-          if(t.moneda==='CUP')    RATES.CUP      = RATES.CUP||parseFloat(t.valor)||370;
+          if(t.moneda==='USD')  RATES.CUP  = parseFloat(t.valor)||370;
+          if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
+        });
+        // Pass 2: compute EUR ratio with correct RATES.CUP
+        tasas.forEach(function(t){
+          if(t.moneda==='USDEUR') RATES.EUR = parseFloat(t.valor)||1.12;
           if(t.moneda==='EUR')    { var _cupEUR=parseFloat(t.valor); if(_cupEUR>10) RATES_EURUSD=parseFloat((_cupEUR/RATES.CUP).toFixed(4)); }
         });
         // Load per-almacen adjustments
