@@ -1375,6 +1375,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 // ═══ SHARED GLOBALS ═══
 const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
 var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
+try{ var _ra=JSON.parse(localStorage.getItem('erp_rates_alm')||'{}'); if(Object.keys(_ra).length) RATES_ALM=_ra; }catch(e){}
 var RATES_EURUSD=0;
 try{ var _eu=parseFloat(localStorage.getItem('erp_eurusd')||'0'); if(_eu>0) RATES_EURUSD=_eu; }catch(e){}
 function toUSD(m,mon,alm){
@@ -1474,12 +1475,12 @@ const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
 
 // ── Telegram Bot ─────────────────────────────────────────────
-const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
-const TG_CHAT  = '8781639188';  // personal (admin)
-const TG_BACKUP = '-5219869639';  // Grupo Backups
+const TG_TOKEN = '5729620093:AAHEi7-8tqm3Eig4yoryBYMh0PPGIF9--js';
+const TG_CHAT  = '575008904';  // personal (admin)
+const TG_BACKUP = '-5277125001';  // Grupo Backups
 // Grupos por almacén
-const TG_VENTAS  = { Habana:'-1003568620544', Placetas:'-5196463397' };
-const TG_PEDIDOS = { Habana:'-5283520069', Placetas:'-5229951824' };
+const TG_VENTAS  = { Habana:'-5116861755', Placetas:'-5162236143' };
+const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669' };
 function tgSend(msg, alm, tipo){
   if(!TG_TOKEN) return;
   // tipo: 'venta' o 'pedido'
@@ -2034,7 +2035,9 @@ async function supaInit() {
     if(ra.ok){(await ra.json()||[]).forEach(function(r){
       if(!RATES_ALM[r.almacen])RATES_ALM[r.almacen]={};
       RATES_ALM[r.almacen][r.moneda]=parseFloat(r.ajuste||0);
-    });}
+    });
+    try{localStorage.setItem('erp_rates_alm',JSON.stringify(RATES_ALM));}catch(e){}
+    }
   }catch(e){}
   try{
     var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
