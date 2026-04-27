@@ -2489,13 +2489,31 @@ const PRODS=[
 function _loadReservas(){try{return JSON.parse(localStorage.getItem('erp_reservas')||'[]');}catch(e){return[];}}
 function _saveReservas(){try{localStorage.setItem('erp_reservas',JSON.stringify(S.reservas));}catch(e){}}
 let S={user:'',alm:'',tipo:'Minorista',cli:'',cart:[],pagos:[],vueltos:[],cartMon:'USD',reservas:_loadReservas()};
+// Restore session state if page was reloaded
+(function(){
+  try{
+    var _ss=JSON.parse(sessionStorage.getItem('erp_S')||'{}');
+    if(_ss&&_ss.user&&_ss.alm){
+      S.user=_ss.user; S.alm=_ss.alm; S.tipo=_ss.tipo||'Minorista';
+      S.cli=_ss.cli||''; S.cart=_ss.cart||[]; S.cartMon=_ss.cartMon||'USD';
+      S.step=_ss.step||0;
+    }
+  }catch(e){}
+})();
 let pinBuf='',pendingUser='';
 
 function rUp(n,m){return m==='CUP'||m==='CUPT'?Math.ceil(n):parseFloat(n.toFixed(2));}
 
 const STEPS=['Sesión','Almacén','Productos','Cobro'];
 const PAGES=['pg-login','pg-alm','pg-prod','pg-pago'];
+function _saveSession(){
+  try{sessionStorage.setItem('erp_S',JSON.stringify({
+    user:S.user,alm:S.alm,tipo:S.tipo,cli:S.cli,
+    cart:S.cart,cartMon:S.cartMon,step:S.step||0
+  }));}catch(e){}
+}
 function renderSteps(active){
+  S.step=active; _saveSession();
   document.getElementById('step-bar').innerHTML=STEPS.map((s,i)=>{
     const done=i<active,act=i===active;
     return `${i>0?'<span class="chevron">›</span>':''}
@@ -2548,6 +2566,7 @@ function pinKey(k){
   }
 }
 function logout(){
+  try{sessionStorage.removeItem('erp_S');}catch(e){}
   S.user='';S.alm='';S.cart=[];S.reservas=[];pinBuf='';pendingUser='';
   try{localStorage.setItem('erp_reservas','[]');}catch(e){}
   document.getElementById('pin-wrap').style.display='none';
