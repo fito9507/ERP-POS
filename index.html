@@ -2887,11 +2887,11 @@ function renderPago(){
     }).join('');
     document.getElementById('tot-vuelto').textContent=fN(vueltoUSD)+' USD';
   }
-  const neto=cobUSD-vueltoUSD-ventaUSD,ok=Math.abs(neto)<0.05&&pendC<0.01&&Math.abs(pendV)<0.01;
+  const neto=cobUSD-vueltoUSD-ventaUSD,ok=Math.abs(neto)<0.05&&pendC<0.02&&Math.abs(pendV)<0.02;
   const eb=document.getElementById('est-bar'),bc=document.getElementById('btn-conf');
   if(cobUSD<0.01){eb.style.cssText='background:var(--color-background-secondary);color:var(--color-text-secondary)';eb.textContent='Añade los pagos recibidos';bc.disabled=true;bc.style.opacity='.45';}
   else if(ok){eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Operación cuadrada ✓';bc.disabled=false;bc.style.opacity='1';}
-  else if(pendC>0.01){eb.style.cssText='background:var(--color-background-warning);color:var(--color-text-warning)';eb.textContent='Faltan '+fN(pendC)+' USD por cobrar';bc.disabled=true;bc.style.opacity='.45';}
+  else if(pendC>0.02){eb.style.cssText='background:var(--color-background-warning);color:var(--color-text-warning)';eb.textContent='Faltan '+fN(pendC)+' USD por cobrar';bc.disabled=true;bc.style.opacity='.45';}
   else{eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Listo para confirmar ✓';bc.disabled=false;bc.style.opacity='1';}
 }
 function renderPagoTotalsOnly(){
@@ -2935,12 +2935,12 @@ function renderPagoTotalsOnly(){
     });
   }
   // Update status bar
-  const neto=cobUSD-vueltoUSD-ventaUSD,ok=Math.abs(neto)<0.05&&pendC<0.01&&Math.abs(pendV)<0.01;
+  const neto=cobUSD-vueltoUSD-ventaUSD,ok=Math.abs(neto)<0.05&&pendC<0.02&&Math.abs(pendV)<0.02;
   const eb=document.getElementById('est-bar'),bc=document.getElementById('btn-conf');
   if(!eb||!bc) return;
   if(cobUSD<0.01){eb.style.cssText='background:var(--color-background-secondary);color:var(--color-text-secondary)';eb.textContent='Añade los pagos recibidos';bc.disabled=true;bc.style.opacity='.45';}
   else if(ok){eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Operación cuadrada ✓';bc.disabled=false;bc.style.opacity='1';}
-  else if(pendC>0.01){eb.style.cssText='background:var(--color-background-warning);color:var(--color-text-warning)';eb.textContent='Faltan '+fN(pendC)+' USD por cobrar';bc.disabled=true;bc.style.opacity='.45';}
+  else if(pendC>0.02){eb.style.cssText='background:var(--color-background-warning);color:var(--color-text-warning)';eb.textContent='Faltan '+fN(pendC)+' USD por cobrar';bc.disabled=true;bc.style.opacity='.45';}
   else{eb.style.cssText='background:var(--color-background-success);color:var(--color-text-success)';eb.textContent='Listo para confirmar ✓';bc.disabled=false;bc.style.opacity='1';}
 }
 
