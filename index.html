@@ -1662,11 +1662,11 @@ async function enviarCierreDiario(fecha, isAuto) {
       var dec=mon==='USD'||mon==='EUR'?2:0;
       var lines=d.movs.map(function(m){
         var sym=m.sentido==='ingreso'?'+':'-';
-        return '  '+sym+' '+fN(m.monto,dec)+' '+mon+' - '+m.desc;
+        return '  '+sym+' '+fN(m.monto,dec)+' '+mon+' · '+m.desc;
       }).join('\n');
       var neto=d.ing-d.gas;
-      var netoStr=(neto>=0?'+':'')+fN(Math.abs(neto),dec)+' '+mon+' neto';
-      return lines+'\n  -> '+netoStr;
+      var netoStr=(neto>=0?'+':'-')+fN(Math.abs(neto),dec)+' '+mon+' neto';
+      return lines+'\n  = '+netoStr;
     }).join('\n');
     // Ensure cajas data is loaded
     if(typeof loadCajasData==='function' && (!_cajasData||!_cajasData.length)){
