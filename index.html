@@ -1699,7 +1699,6 @@ async function enviarCierreDiario(fecha, isAuto) {
         : '\uD83D\uDED2 <b>'+numVentas+' venta'+(numVentas!==1?'s':'')+'</b>\n\n'
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
-        +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
         +(netoLines?'\n<b>\uD83D\uDCB5 Neto por moneda:</b>\n'+netoLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
         +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:'')
