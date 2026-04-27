@@ -2563,13 +2563,23 @@ function setCartMon(m,btn){
   document.querySelectorAll('.mt-btn').forEach(b=>b.classList.remove('act'));btn.classList.add('act');
   renderCart();
 }
-function getP(p){
-  // Use Placetas-specific prices if in Placetas and prices are set
+function getPorEscala(p, q){
   var isPlac = S.alm==='Placetas';
   var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min??p.maj??0);
   var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj??p.min??0);
-  return S.tipo==='Minorista' ? min : maj;
+  if(S.tipo==='Minorista') return min;
+  if(p.escala && p.escala.length && q > 0){
+    var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
+    for(var i=0;i<sorted.length;i++){
+      var r=sorted[i];
+      if(q >= r.desde && (r.hasta==null || r.hasta==='' || q <= r.hasta)){
+        return parseFloat(r.precio)||maj;
+      }
+    }
+  }
+  return maj;
 }
+function getP(p){ return getPorEscala(p, 1); }
 function stkDisp(p){
   // Block stock reserved by ANY user globally
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
@@ -2623,14 +2633,19 @@ function setQtyDirect(i,val){
 function commitQty(i,val){
   const p=PRODS.find(x=>x.n===S.cart[i].n);
   const stk=stkDisp(p||{stk:9999});
-  S.cart[i].q=Math.min(stk,Math.max(1,parseInt(val)||1));
+  const q=Math.min(stk,Math.max(1,parseInt(val)||1));
+  S.cart[i].q=q;
+  if(!S.cart[i].modified && p) S.cart[i].precioUSD=getPorEscala(p,q);
   renderCart();
 }
 function chQty(i,d){
   const p=PRODS.find(x=>x.n===S.cart[i].n);
   const stk=stkDisp(p||{stk:9999});
   const q=Math.max(0,Math.min(stk,S.cart[i].q+d));
-  if(q===0)S.cart.splice(i,1);else S.cart[i].q=q;
+  if(q===0){S.cart.splice(i,1);}else{
+    S.cart[i].q=q;
+    if(!S.cart[i].modified && p) S.cart[i].precioUSD=getPorEscala(p,q);
+  }
   renderCart();
 }
 function editPriceMon(i,v,mon){
