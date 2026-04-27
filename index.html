@@ -1235,9 +1235,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
           </select></div>
       </div>
 
-      <div id="n-equiv-wrap"><label class="lbl">Equiv. USD</label>
-        <input type="number" id="n-equiv" step="0.01" readonly
-          style="background:var(--color-background-secondary);font-size:14px;font-weight:500;width:100%"></div>
+      <input type="hidden" id="n-equiv">
 
       <div><label class="lbl">Cuenta</label>
         <select id="n-cta" style="width:100%" onchange="updNuevo()">
@@ -4067,9 +4065,7 @@ function updNuevo(){
   var _ctaVal=(document.getElementById('n-cta')?.value||'');
   var _igAlmDetect=['Habana','Placetas','Xportprise'].find(function(a){return _ctaVal.indexOf(a)>=0;})||_igAlm2||'Habana';
   const equiv=toUSD(monto,mon,_igAlmDetect);
-  var _equivWrap=document.getElementById('n-equiv-wrap');
-  if(_equivWrap) _equivWrap.style.display=mon==='USD'?'none':'';
-  document.getElementById('n-equiv').value=(mon!=='USD'&&equiv>0)?fN(equiv):'';
+  document.getElementById('n-equiv').value=equiv>0?equiv.toFixed(4):'';
   // extras
   document.getElementById('n-com-extra').style.display=tipo==='Comisión vendedor'?'block':'none';
   document.getElementById('n-deuda-extra').style.display=['Amortización deuda','Pago intereses','Préstamo recibido'].includes(tipo)?'block':'none';
