@@ -2591,7 +2591,7 @@ function renderProds(){
     if(catF&&p.cat!==catF)return false;
     return true;
   }).map(p=>{
-    const pr=getP(p);if(!pr)return'';
+    const pr=getP(p)||(p.escala&&p.escala.length?p.escala[0].precio:0);if(pr==null||pr==='')return'';
     const stk=stkDisp(p);const ns=stk<=0;
     const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
     return `<button class="pb${ns?' no-stk':''}" onclick="${ns?'':` addCart('${p.n}')`}">
