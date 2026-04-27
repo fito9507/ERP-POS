@@ -5891,7 +5891,7 @@ function admGuardarTasas() {
   if (finalEUR  > 0) RATES.EUR  = parseFloat((finalUSD / finalEUR).toFixed(6));
   if (finalCUPT > 0) RATES.CUPT = finalCUPT;
   // RATES_EURUSD = EUR per USD = finalEUR/finalUSD = CUP_EUR/CUP_USD
-  RATES_EURUSD = parseFloat((finalEUR/finalUSD).toFixed(4));
+  RATES_EURUSD = parseFloat((finalEUR/finalUSD).toFixed(2));
   if(!(RATES_EURUSD > 0.5 && RATES_EURUSD < 5)) RATES_EURUSD = 1.12;
   try { localStorage.setItem('erp_eurusd', RATES_EURUSD.toString()); } catch(e) {}
 
@@ -5908,8 +5908,9 @@ function admGuardarTasas() {
   // Save to Supabase
   if (_supaOnline) {
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'USD',valor:RATES.CUP,tasa_mkt:mUSD,ajuste:aUSD}).catch(function(e){});
-    supaReq('POST','tasas?on_conflict=moneda',{moneda:'EUR',valor:RATES.EUR,tasa_mkt:mkt.EUR||RATES.EUR,ajuste:aEUR}).catch(function(e){});
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'EUR',valor:finalEUR,tasa_mkt:mkt.EUR||finalEUR,ajuste:aEUR}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'CUPT',valor:RATES.CUPT,tasa_mkt:mCUPT,ajuste:aCUPT}).catch(function(e){});
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:parseFloat((mEUR/mUSD).toFixed(4)),ajuste:parseFloat((RATES_EURUSD-(mEUR/mUSD)).toFixed(4))}).catch(function(e){});
   }
 
   showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
