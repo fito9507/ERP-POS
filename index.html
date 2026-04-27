@@ -2811,7 +2811,8 @@ function addPago(mon){
   setTimeout(()=>{const e=document.getElementById('pi-'+id);if(e){e.focus();e.select();}},40);
 }
 function addVuelto(mon){
-  const sug=getPendVuelto()>0?parseFloat(fromUSD(getPendVuelto(),mon,S.alm).toFixed(dFor(mon))):0;
+  var _rv=fromUSD(getPendVuelto(),mon,S.alm);
+  const sug=getPendVuelto()>0?(mon==='CUP'||mon==='CUPT'?Math.floor(_rv):parseFloat(_rv.toFixed(2))):0;
   const id='v'+Date.now();S.vueltos.push({id,mon,m:sug});renderPago();
   setTimeout(()=>{const e=document.getElementById('vi-'+id);if(e){e.focus();e.select();}},40);
 }
@@ -2860,7 +2861,7 @@ function renderPago(){
     if(el_pv2){el_pv2.textContent=(pendV<0?'-':'')+fN(Math.abs(pendV))+' USD';el_pv2.style.color=pendV<-0.005?'var(--color-text-danger)':'';}
     document.getElementById('strip-vuelto').className='strip '+(pendV>-0.005&&pendV<0.01?'ok':pendV<-0.005?'err':'warn');
     document.getElementById('vuelto-btns').innerHTML=pendV>0.005
-      ?MONEDAS.map(m=>`<button class="bf" onclick="addVuelto('${m}')">${fN(parseFloat(fromUSD(pendV,m).toFixed(dFor(m))),dFor(m))} ${m}</button>`).join('')
+      ?MONEDAS.map(m=>`<button class="bf" onclick="addVuelto('${m}')">\${fN((m==='CUP'||m==='CUPT')?Math.floor(fromUSD(pendV,m,S.alm)):parseFloat(fromUSD(pendV,m,S.alm).toFixed(2)),dFor(m))} ${m}</button>`).join('')
       :pendV<-0.005?'<span style="font-size:12px;color:var(--color-text-danger);font-weight:500">⚠ Exceso de vuelto: '+fN(Math.abs(pendV))+' USD</span>'
       :'<span style="font-size:12px;color:var(--color-text-success);font-weight:500">Vuelto cuadrado ✓</span>';
     document.getElementById('vueltos-cnt').innerHTML=S.vueltos.map((v,i)=>{
@@ -2920,7 +2921,7 @@ function renderPagoTotalsOnly(){
     if(el_sv) el_sv.className='strip '+(pendV>-0.005&&pendV<0.01?'ok':pendV<-0.005?'err':'warn');
     const el_vb=document.getElementById('vuelto-btns');
     if(el_vb) el_vb.innerHTML=pendV>0.005
-      ?MONEDAS.map(m=>`<button class="bf" onclick="addVuelto('${m}')">${fN(parseFloat(fromUSD(pendV,m).toFixed(dFor(m))),dFor(m))} ${m}</button>`).join('')
+      ?MONEDAS.map(m=>`<button class="bf" onclick="addVuelto('${m}')">\${fN((m==='CUP'||m==='CUPT')?Math.floor(fromUSD(pendV,m,S.alm)):parseFloat(fromUSD(pendV,m,S.alm).toFixed(2)),dFor(m))} ${m}</button>`).join('')
       :pendV<-0.005?'<span style="font-size:12px;color:var(--color-text-danger);font-weight:500">⚠ Exceso de vuelto: '+fN(Math.abs(pendV))+' USD</span>'
       :'<span style="font-size:12px;color:var(--color-text-success);font-weight:500">Vuelto cuadrado ✓</span>';
     const el_tv=document.getElementById('tot-vuelto');
