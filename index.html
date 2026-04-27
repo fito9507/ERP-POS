@@ -4061,7 +4061,10 @@ function updNuevo(){
 
   const tipo=document.getElementById('n-tipo').value;
   const monto=parseFloat(document.getElementById('n-monto').value)||0;
-  const equiv=toUSD(monto,mon);
+  // Detect almacen from selected caja name (e.g. "CUP Habana" → "Habana")
+  var _ctaVal=(document.getElementById('n-cta')?.value||'');
+  var _igAlmDetect=['Habana','Placetas','Xportprise'].find(function(a){return _ctaVal.indexOf(a)>=0;})||_igAlm2||'Habana';
+  const equiv=toUSD(monto,mon,_igAlmDetect);
   document.getElementById('n-equiv').value=equiv>0?fN(equiv):'';
   // extras
   document.getElementById('n-com-extra').style.display=tipo==='Comisión vendedor'?'block':'none';
