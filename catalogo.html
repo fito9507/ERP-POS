@@ -711,9 +711,9 @@ function transitCardHTML(p){
     +(moq>1?'<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">M\u00ednimo '+moq+' uds</div>':'')
     +'<div class="qty-row">'
     +'<div class="qty-ctrl">'
-    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">\u2212</button>'
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">\u2212</button>'
     +'<span class="qty-disp" id="qd-tr-'+cardId+'">'+qty+'</span>'
-    +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)" type="button">+</button>'
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
     +'</div>'
     +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
     +(cartItem?'\u2713 Reservado':'+ Reservar')
@@ -760,8 +760,8 @@ function cardHTML(p){
         return rows;
       }
       return (p.maj>0&&p.min>0&&p.maj!==p.min
-        ? '<div class="price-row"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
-          +'<div class="price-row"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
+        ? '<div class="price-row" data-minmaj="min"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val minmaj-val" data-tipo="min" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
+          +'<div class="price-row" data-minmaj="maj"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val minmaj-val" data-tipo="maj" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
         : '<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
     })()
     + '<div style="border-top:1px solid var(--border);margin:6px 0 4px"></div>'
@@ -773,9 +773,9 @@ function cardHTML(p){
     +(stk>0||_transit?
       '<div class="qty-row">'
       +'<div class="qty-ctrl">'
-      +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',-1)" type="button">−</button>'
+      +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">−</button>'
       +'<span class="qty-disp" id="qd-'+cardId+'">'+qty+'</span>'
-      +'<button class="qty-btn" onclick="chgQtyIdx('+pidx+',1)" type="button">+</button>'
+      +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
       +'</div>'
       +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
       +(cartItem?'✓ Agregado':'+ Agregar')
@@ -797,6 +797,8 @@ function _getQtyDisp(idx){
 function _getQtyVal(idx){
   var sp=_getQtyDisp(idx); return sp ? parseInt(sp.textContent)||1 : 1;
 }
+// Long-press state
+var _lpTimer=null, _lpInterval=null;
 function chgQtyIdx(idx, d){
   var p = PRODS[idx]; if(!p) return;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
@@ -807,8 +809,17 @@ function chgQtyIdx(idx, d){
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
   sp.textContent = v;
-  // Update escala highlight + equiv prices based on new qty
   updCardPrices(cardId, p, v);
+}
+function _lpStart(idx, d){
+  chgQtyIdx(idx, d);
+  _lpTimer = setTimeout(function(){
+    _lpInterval = setInterval(function(){ chgQtyIdx(idx, d); }, 80);
+  }, 400);
+}
+function _lpStop(){
+  if(_lpTimer)  { clearTimeout(_lpTimer);   _lpTimer=null;   }
+  if(_lpInterval){ clearInterval(_lpInterval); _lpInterval=null; }
 }
 function updCardPrices(cardId, p, qty){
   var card = document.getElementById('card-'+cardId) || document.getElementById('card-tr-'+cardId);
@@ -834,7 +845,14 @@ function updCardPrices(cardId, p, qty){
   } else {
     // Min/maj: highlight based on qty
     var MIN_MAY_loc = typeof MIN_MAY!=='undefined'?MIN_MAY:10;
-    activePrice = qty>=MIN_MAY_loc ? (p.maj||p.min||0) : (p.min||p.maj||0);
+    var isMaj = qty >= MIN_MAY_loc;
+    activePrice = isMaj ? (p.maj||p.min||0) : (p.min||p.maj||0);
+    card.querySelectorAll('[data-minmaj]').forEach(function(row){
+      var tipo = row.dataset.minmaj;
+      var isActive = (tipo==='maj' && isMaj) || (tipo==='min' && !isMaj);
+      var val = row.querySelector('.minmaj-val');
+      if(val) val.style.color = isActive ? 'var(--accent)' : 'var(--text-dim)';
+    });
   }
   if(activePrice==null) return;
   // Update equiv currency values
