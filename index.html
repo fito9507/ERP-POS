@@ -1669,7 +1669,7 @@ async function enviarCierreDiario(fecha, isAuto) {
       return lines+'\n  -> '+netoStr;
     }).join('\n');
         var cajasAlm=typeof _cajasData!=='undefined'?_cajasData.filter(function(c){
-      return c.activa!==false && (c.almacen===alm || c.almacen==='General' || c.almacen==='Xportprise');
+      return c.activa!==false && c.almacen===alm && c.nombre.indexOf('ZELLE')<0 && c.nombre.indexOf('Xportprise')<0;
     }):[];
     var cajasLines=cajasAlm.map(function(c){
       var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):(parseFloat(c.saldo_inicial)||0);
@@ -1728,8 +1728,8 @@ async function enviarCierreDiario(fecha, isAuto) {
         +(netoLines?'\n<b>\uD83D\uDCB5 Neto por moneda:</b>\n'+netoLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
         +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:'')
-        +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'')
-        +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:''))
+        +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:'')
+        +(cajasLines?'\n\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
     tgSend(msg, alm, 'venta');
   }
   if(isAuto){ try{ await enviarBackupTelegram(); }catch(e){} }
