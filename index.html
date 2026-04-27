@@ -2567,17 +2567,19 @@ function getPorEscala(p, q){
   var isPlac = S.alm==='Placetas';
   var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min??p.maj??0);
   var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj??p.min??0);
-  if(S.tipo==='Minorista') return min;
   if(p.escala && p.escala.length && q > 0){
     var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
     for(var i=0;i<sorted.length;i++){
       var r=sorted[i];
       if(q >= r.desde && (r.hasta==null || r.hasta==='' || q <= r.hasta)){
-        return parseFloat(r.precio)||maj;
+        return parseFloat(r.precio)||maj||min;
       }
     }
+    // No range matched — use first range as fallback
+    return parseFloat(p.escala[0].precio)||maj||min;
   }
-  return maj;
+  if(S.tipo==='Minorista') return min||maj;
+  return maj||min;
 }
 function getP(p){ return getPorEscala(p, 1); }
 function stkDisp(p){
