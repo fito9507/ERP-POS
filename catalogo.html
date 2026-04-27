@@ -527,14 +527,12 @@ async function init(){
     try{
       var tasas = await supa('tasas?select=moneda,valor');
       if(tasas&&tasas.length){
-        // Pass 1: USD/CUP first so RATES.CUP is correct before computing EUR ratio
         tasas.forEach(function(t){
-          if(t.moneda==='USD')  RATES.CUP  = parseFloat(t.valor)||370;
-          if(t.moneda==='CUPT') RATES.CUPT = parseFloat(t.valor)||270;
-        });
-        // Pass 2: EUR — use USDEUR (with adjustment) as authoritative source, same as ERP
-        tasas.forEach(function(t){
-          if(t.moneda==='USDEUR') { RATES_EURUSD=parseFloat(t.valor)||1.12; }
+          if(t.moneda==='USD')    RATES.CUP      = parseFloat(t.valor)||370;
+          if(t.moneda==='USDEUR') RATES.EUR      = parseFloat(t.valor)||1.12;
+          if(t.moneda==='CUPT')   RATES.CUPT     = parseFloat(t.valor)||270;
+          if(t.moneda==='CUP')    RATES.CUP      = RATES.CUP||parseFloat(t.valor)||370;
+          if(t.moneda==='EUR')    { var _cupEUR=parseFloat(t.valor); if(_cupEUR>10) RATES_EURUSD=parseFloat((_cupEUR/RATES.CUP).toFixed(4)); }
         });
         // Load per-almacen adjustments
         try{
@@ -766,9 +764,10 @@ function cardHTML(p){
           +'<div class="price-row"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
         : '<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
     })()
+    + '<div style="border-top:1px solid var(--border);margin:6px 0 4px"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
         var refPrice = priceMin || (hasEscala ? p.escala[0].precio : priceMaj) || 0;
-        return '<div class="price-row"><span class="lbl" style="font-size:10px">'+m+'</span><span class="val" style="font-size:11px">'+fPrice(refPrice,m,ALM)+'</span></div>';
+        return '<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">'+m+'</span><span class="val" style="font-size:11px;color:var(--text-dim)">'+fPrice(refPrice,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
     +(stk>0||_transit?
