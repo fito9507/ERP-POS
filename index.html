@@ -1669,11 +1669,11 @@ async function enviarCierreDiario(fecha, isAuto) {
       return lines+'\n  -> '+netoStr;
     }).join('\n');
         var cajasAlm=typeof _cajasData!=='undefined'?_cajasData.filter(function(c){
-      return c.activa!==false && c.almacen===alm && c.nombre.indexOf('ZELLE')<0 && c.nombre.indexOf('Xportprise')<0;
+      return c.activa!==false && c.almacen===alm && c.nombre.indexOf('ZELLE')<0;
     }):[];
     var cajasLines=cajasAlm.map(function(c){
       var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):(parseFloat(c.saldo_inicial)||0);
-      if(Math.abs(saldo)<0.01) return null;
+      if(Math.abs(saldo)<0.01 && c.moneda!=='CUPT') return null;
       var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
       return '  '+(monSym2[c.moneda]||'')+' '+fN(saldo,c.moneda==='USD'||c.moneda==='EUR'?2:0)+' '+c.moneda+' ('+c.nombre+')';
     }).filter(Boolean).join('\n');
