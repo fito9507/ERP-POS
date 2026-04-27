@@ -1640,7 +1640,30 @@ async function enviarCierreDiario(fecha, isAuto) {
       return '  '+(monSym2[m]||'')+'  '+fN(cobros[m],dec)+' cobrado'+(vueltosMon[m]>0?' \u2212 '+fN(vueltosMon[m],dec)+' vuelto':'')+' = <b>'+fN(neto,dec)+'</b> '+m;
     }).join('\n');
     // Saldo de cajas del almacen
-    var cajasAlm=typeof _cajasData!=='undefined'?_cajasData.filter(function(c){
+    // IG movements of the day for this almacen
+    var movsHoy=(typeof MOVS!=='undefined'?MOVS:[]).filter(function(m){
+      var mAlm=['Habana','Placetas','Xportprise'].find(function(a){return (m.cta||'').indexOf(a)>=0;})||m.alm||'';
+      return m.fecha&&m.fecha.slice(0,10)===fecha && mAlm===alm;
+    });
+    var igByMon={};
+    movsHoy.forEach(function(m){
+      if(!igByMon[m.mon]) igByMon[m.mon]={ing:0,gas:0,movs:[]};
+      if(m.sentido==='ingreso') igByMon[m.mon].ing+=m.monto;
+      else igByMon[m.mon].gas+=m.monto;
+      igByMon[m.mon].movs.push(m);
+    });
+    var igLines=Object.keys(igByMon).map(function(mon){
+      var d=igByMon[mon];
+      var dec=mon==='USD'||mon==='EUR'?2:0;
+      var lines=d.movs.map(function(m){
+        var sym=m.sentido==='ingreso'?'+':'-';
+        return '  '+sym+' '+fN(m.monto,dec)+' '+mon+' - '+m.desc;
+      }).join('\n');
+      var neto=d.ing-d.gas;
+      var netoStr=(neto>=0?'+':'')+fN(Math.abs(neto),dec)+' '+mon+' neto';
+      return lines+'\n  -> '+netoStr;
+    }).join('\n');
+        var cajasAlm=typeof _cajasData!=='undefined'?_cajasData.filter(function(c){
       return c.activa!==false && (c.almacen===alm || c.almacen==='General' || c.almacen==='Xportprise');
     }):[];
     var cajasLines=cajasAlm.map(function(c){
@@ -1700,7 +1723,8 @@ async function enviarCierreDiario(fecha, isAuto) {
         +(netoLines?'\n<b>\uD83D\uDCB5 Neto por moneda:</b>\n'+netoLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
         +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:'')
-        +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
+        +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'')
+        +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:''))
     tgSend(msg, alm, 'venta');
   }
   if(isAuto){ try{ await enviarBackupTelegram(); }catch(e){} }
