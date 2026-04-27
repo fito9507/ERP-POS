@@ -4000,7 +4000,9 @@ function renderLibro(){
 // ── NUEVO MOVIMIENTO ──────────────────────────────────────
 function updNuevo(){
   var _igVend2=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  var _igAlm2=_igVend2&&USERS[S.user]?USERS[S.user].almacen:'';
+  // For IG module: always use the user's assigned almacen (from Supabase), not S.alm
+  // S.alm is where they sell today; almacen is where they can register expenses
+  var _igAlm2=_igVend2?(USERS[S.user]?.almacen||S.alm||''):'';
   const mon=document.getElementById('n-mon').value;
 
   // Rebuild n-cta options from _cajasData filtered by moneda (and alm for vendedor)
