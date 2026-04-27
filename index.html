@@ -1634,11 +1634,16 @@ async function enviarCierreDiario(fecha, isAuto) {
     // Neto por moneda = cobrado - vueltos en cada moneda
     var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
     var allMons=['USD','EUR','CUP','CUPT','MLC'];
+    var _netoTotalUSD=0;
+    var _netoMonCount=allMons.filter(function(m){return cobros[m]>0||vueltosMon[m]>0;}).length;
     var netoLines=allMons.filter(function(m){return cobros[m]>0||vueltosMon[m]>0;}).map(function(m){
       var neto=cobros[m]-(vueltosMon[m]||0);
       var dec=m==='USD'||m==='EUR'?2:0;
-      return '  '+(monSym2[m]||'')+'  '+fN(cobros[m],dec)+' cobrado'+(vueltosMon[m]>0?' \u2212 '+fN(vueltosMon[m],dec)+' vuelto':'')+' = <b>'+fN(neto,dec)+'</b> '+m;
+      var netoEquiv=m!=='USD'?(' \u2248 $'+fN(toUSD(neto,m,alm))):'';
+      _netoTotalUSD+=toUSD(neto,m,alm);
+      return '  '+(monSym2[m]||'')+'  '+fN(cobros[m],dec)+' cobrado'+(vueltosMon[m]>0?' \u2212 '+fN(vueltosMon[m],dec)+' vuelto':'')+' = <b>'+fN(neto,dec)+'</b> '+m+netoEquiv;
     }).join('\n');
+    if(_netoMonCount>1) netoLines+='\n  \u2014\u2014\u2014\n  <b>\uD83D\uDCB0 Total neto: $'+fN(_netoTotalUSD)+'</b>';
     // Saldo de cajas del almacen
     // IG movements of the day for this almacen
     var movsHoy=(typeof MOVS!=='undefined'?MOVS:[]).filter(function(m){
