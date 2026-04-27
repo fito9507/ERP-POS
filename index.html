@@ -1474,12 +1474,12 @@ const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
 
 // ── Telegram Bot ─────────────────────────────────────────────
-const TG_TOKEN = '5729620093:AAHEi7-8tqm3Eig4yoryBYMh0PPGIF9--js';
-const TG_CHAT  = '575008904';  // personal (admin)
-const TG_BACKUP = '-5277125001';  // Grupo Backups
+const TG_TOKEN = '8332597117:AAGMBfVgNp41Oa-sjFy2JUzc-nOAwBP_OtM';
+const TG_CHAT  = '8781639188';  // personal (admin)
+const TG_BACKUP = '-5219869639';  // Grupo Backups
 // Grupos por almacén
-const TG_VENTAS  = { Habana:'-5116861755', Placetas:'-5162236143' };
-const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669' };
+const TG_VENTAS  = { Habana:'-1003568620544', Placetas:'-5196463397' };
+const TG_PEDIDOS = { Habana:'-5283520069', Placetas:'-5229951824' };
 function tgSend(msg, alm, tipo){
   if(!TG_TOKEN) return;
   // tipo: 'venta' o 'pedido'
@@ -1676,7 +1676,7 @@ async function enviarCierreDiario(fecha) {
            prodData[nm].qty+=qty;
            // Find product price and DDP
            var prod=typeof PRODS!=='undefined'?PRODS.find(function(pr){return pr.n===nm;}):null;
-           var precioUSD=prod?(prod.maj||prod.min||0):0;
+           var precioUSD=prod?((prod.maj||prod.min)||((prod.escala&&prod.escala.length)?parseFloat(prod.escala[0].precio)||0:0)):0;
            var ddpUSD=prod?(prod.ddp||0):0;
            prodData[nm].usd+=precioUSD*qty;
            prodData[nm].ddp+=ddpUSD*qty;
@@ -2604,9 +2604,12 @@ function setCatFilter(cat){const el=document.getElementById('cat-filter');if(el)
 function addCart(n){
   const p=PRODS.find(x=>x.n===n);if(!p)return;
   const stk=stkDisp(p);
-  const precioUSD=getP(p);
   const ex=S.cart.find(c=>c.n===n&&c.tipo===S.tipo);
-  if(ex){if(ex.q>=stk)return;ex.q++;}
+  const newQty = ex ? ex.q+1 : 1;
+  // Use escala price for new quantity, fallback to escala[0] if maj/min=0
+  var precioUSD = getPorEscala(p, newQty);
+  if(!precioUSD && p.escala && p.escala.length) precioUSD = parseFloat(p.escala[0].precio)||0;
+  if(ex){if(ex.q>=stk)return;ex.q++;ex.precioUSD=precioUSD;}
   else S.cart.push({n,q:1,precioUSD,tipo:S.tipo,modified:false});
   renderCart();
 }
