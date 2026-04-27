@@ -755,7 +755,7 @@ function cardHTML(p){
           + p.escala.map(function(r,i){
               var lbl = r.desde+(r.hasta?'-'+r.hasta:'+')+ ' uds';
               var active = qty>=r.desde&&(r.hasta==null||qty<=r.hasta);
-              return '<div class="price-row"><span class="lbl" style="font-size:10px">'+lbl+'</span><span class="val" style="font-size:12px;'+(active?'color:var(--accent)':'color:var(--text-dim)')+'">'+fPrice(r.precio,MON,ALM)+'</span></div>';
+              return '<div class="price-row" data-escala-idx="'+i+'" data-desde="'+r.desde+'" data-hasta="'+(r.hasta||'')+'"><span class="lbl" style="font-size:10px">'+lbl+'</span><span class="val escala-val" style="font-size:12px;'+(active?'color:var(--accent)':'color:var(--text-dim)')+'">'+fPrice(r.precio,MON,ALM)+'</span></div>';
             }).join('');
         return rows;
       }
@@ -767,7 +767,7 @@ function cardHTML(p){
     + '<div style="border-top:1px solid var(--border);margin:6px 0 4px"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
         var refPrice = priceMin || (hasEscala ? p.escala[0].precio : priceMaj) || 0;
-        return '<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">'+m+'</span><span class="val" style="font-size:11px;color:var(--text-dim)">'+fPrice(refPrice,m,ALM)+'</span></div>';
+        return '<div class="price-row" data-equiv="'+m+'"><span class="lbl" style="font-size:10px;color:var(--text-dim)">'+m+'</span><span class="equiv-val" data-mon="'+m+'" style="font-size:11px;color:var(--text-dim)">'+fPrice(refPrice,m,ALM)+'</span></div>';
       }).join('')
     +'</div>'
     +(stk>0||_transit?
@@ -807,6 +807,42 @@ function chgQtyIdx(idx, d){
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
   sp.textContent = v;
+  // Update escala highlight + equiv prices based on new qty
+  updCardPrices(cardId, p, v);
+}
+function updCardPrices(cardId, p, qty){
+  var card = document.getElementById('card-'+cardId) || document.getElementById('card-tr-'+cardId);
+  if(!card) return;
+  // Find active escala price
+  var activePrice = null;
+  if(p.escala && p.escala.length){
+    var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
+    for(var i=0;i<sorted.length;i++){
+      var r=sorted[i];
+      if(qty>=r.desde&&(r.hasta==null||r.hasta===''||qty<=r.hasta)){
+        activePrice=parseFloat(r.precio); break;
+      }
+    }
+    // Highlight escala rows
+    card.querySelectorAll('[data-escala-idx]').forEach(function(row){
+      var desde=parseInt(row.dataset.desde)||0;
+      var hasta=row.dataset.hasta===''?null:parseInt(row.dataset.hasta);
+      var isActive=qty>=desde&&(hasta==null||qty<=hasta);
+      var val=row.querySelector('.escala-val');
+      if(val) val.style.color=isActive?'var(--accent)':'var(--text-dim)';
+    });
+  } else {
+    // Min/maj: highlight based on qty
+    var MIN_MAY_loc = typeof MIN_MAY!=='undefined'?MIN_MAY:10;
+    activePrice = qty>=MIN_MAY_loc ? (p.maj||p.min||0) : (p.min||p.maj||0);
+  }
+  if(activePrice==null) return;
+  // Update equiv currency values
+  card.querySelectorAll('[data-equiv]').forEach(function(row){
+    var mon=row.dataset.equiv;
+    var el=row.querySelector('.equiv-val');
+    if(el) el.textContent=fPrice(activePrice,mon,ALM);
+  });
 }
 function addToCartIdx(idx){
   var p = PRODS[idx]; if(!p) return;
