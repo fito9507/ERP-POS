@@ -1589,20 +1589,21 @@ function _checkCierre() {
   if (_cierreEnviado === hoy) return;
   _cierreEnviado = hoy;
   try { localStorage.setItem('erp_cierre_enviado', hoy); } catch(e) {}
-  enviarCierreDiario(hoy);
+  enviarCierreDiario(hoy, true);
 }
 // Check every minute
 setInterval(_checkCierre, 60000);
 // Restore last sent date
 try { _cierreEnviado = localStorage.getItem('erp_cierre_enviado')||''; } catch(e) {}
 
-async function enviarCierreDiario(fecha) {
+async function enviarCierreDiario(fecha, isAuto) {
   if (!fecha) fecha = new Date().toISOString().slice(0,10);
   var alms = ['Habana','Placetas'];
   for (var i=0; i<alms.length; i++) {
     var alm = alms[i];
     var ventasAlm = (typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
-      return v.fecha && v.fecha.slice(0,10)===fecha && v.alm===alm;
+      var vAlm = v.alm || v.almacen || 'Habana';
+      return v.fecha && v.fecha.slice(0,10)===fecha && vAlm===alm;
     });
     var numVentas = ventasAlm.length;
     var totalUSD = ventasAlm.reduce(function(a,v){return a+(v.totalUSD||0);},0);
@@ -1647,7 +1648,7 @@ async function enviarCierreDiario(fecha) {
       return c.activa!==false && (c.almacen===alm || c.almacen==='General' || c.almacen==='Xportprise');
     }):[];
     var cajasLines=cajasAlm.map(function(c){
-      var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):0;
+      var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):(parseFloat(c.saldo_inicial)||0);
       if(Math.abs(saldo)<0.01) return null;
       var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
       return '  '+(monSym2[c.moneda]||'')+' '+fN(saldo,c.moneda==='USD'||c.moneda==='EUR'?2:0)+' '+c.moneda+' ('+c.nombre+')';
@@ -1707,8 +1708,7 @@ async function enviarCierreDiario(fecha) {
         +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
     tgSend(msg, alm, 'venta');
   }
-  // Enviar backup automatico tambien
-  try{ await enviarBackupTelegram(); }catch(e){}
+  if(isAuto){ try{ await enviarBackupTelegram(); }catch(e){} }
   showToast('\uD83D\uDCCA Cierre enviado');
 }
 
