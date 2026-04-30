@@ -1578,10 +1578,12 @@ setTimeout(_autoSync, 5000);
 var _cierreEnviado = '';
 function _checkCierre() {
   if (!_supaOnline || !TG_TOKEN) return;
+  // Use Cuba timezone (America/Havana) — UTC-4 summer, UTC-5 winter
   var now = new Date();
-  var hoy = now.toISOString().slice(0,10);
-  var hora = now.getHours();
-  // Solo a las 20h (8pm) y si no se envió hoy ya
+  var cubaNow = new Date(now.toLocaleString('en-US', {timeZone:'America/Havana'}));
+  var hoy = cubaNow.getFullYear()+'-'+String(cubaNow.getMonth()+1).padStart(2,'0')+'-'+String(cubaNow.getDate()).padStart(2,'0');
+  var hora = cubaNow.getHours();
+  // Solo a las 20h (8pm hora Cuba) y si no se envió hoy ya
   if (hora !== 20) return;
   if (_cierreEnviado === hoy) return;
   _cierreEnviado = hoy;
@@ -4495,7 +4497,17 @@ const COLORES=[
   {bg:'var(--color-background-secondary)',tc:'var(--color-text-secondary)',id:'sec'},
 ];
 var PRODS_NAMES = [];
-function _getProdNames(){ return PRODS.filter(function(p){return p.activo!==false;}).map(function(p){return p.n;}); }
+function _getProdNames(alm){
+  return PRODS.filter(function(p){
+    if(p.activo===false) return false;
+    if(!alm) return true;
+    // Include if has stock in this almacen
+    var stk = p.stk_alm&&p.stk_alm[alm]!=null ? p.stk_alm[alm] : (p.stk||0);
+    // Include if in transit for this almacen
+    var inTransit = p.enTransito&&p.enTransito[alm];
+    return stk > 0 || inTransit;
+  }).map(function(p){return p.n;});
+}
 const ICON={efectivo:'💵',arancel:'📋',flete:'🚛',estiba:'📦',interes:'📈',viaje:'🚗',otro:'•'};
 const HINTS={efectivo:'Cash, transferencia, FM...',arancel:'Aranceles, impuestos aduana',flete:'Flete marítimo o terrestre',estiba:'Carga, descarga',interes:'Intereses de financiación',viaje:'Viajes, desplazamientos',otro:''};
 
@@ -5097,7 +5109,7 @@ function renderFichaNF(c){
     <div style="display:flex;flex-direction:column;gap:9px">
       <div class="g3">
         <div><label class="lbl">Fecha</label><input type="date" id="nf-fecha-${c.id}" value="${today()}"></div>
-        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}"><option>Placetas</option><option>Habana</option><option>España</option></select></div>
+        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>España</option></select></div>
         <div><label class="lbl">Moneda ref.</label><select id="nf-mon-${c.id}"><option>USD</option><option>EUR</option><option>CUP</option></select></div>
       </div>
       <div><label class="lbl">Descripción</label><input type="text" id="nf-desc-${c.id}" placeholder="Ej: Container #4 — perfiles"></div>
@@ -5121,7 +5133,11 @@ function renderFichaNF(c){
 }
 function addNFLCli(cid){
   if(!window['nfl_'+cid])window['nfl_'+cid]=[];
-  window['nfl_'+cid].push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD'});
+  var _almNF=document.getElementById('nf-alm-'+cid)?.value||'';
+  var _firstProd=_getProdNames(_almNF)[0]||'';
+  var _firstP=PRODS.find(function(x){return x.n===_firstProd;});
+  var _firstPrice=_firstP?getP(_firstP):0;
+  window['nfl_'+cid].push({prod:_firstProd,q:1,precio:_firstPrice,mon:'USD'});
   renderNFLCli(cid);
 }
 function renderNFLCli(cid){
@@ -5129,10 +5145,10 @@ function renderNFLCli(cid){
   const c=document.getElementById('nfl-'+cid);if(!c)return;
   c.innerHTML=lineas.map((l,i)=>`
     <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
-      <select style="flex:2;min-width:140px;font-size:11px" onchange="window['nfl_${cid}'][${i}].prod=this.value">
-        ${_getProdNames().map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
+      <select style="flex:2;min-width:140px;font-size:11px" onchange="window['nfl_${cid}'][${i}].prod=this.value;var _ap=PRODS.find(function(x){return x.n===this.value;});if(_ap){window['nfl_${cid}'][${i}].precio=getP(_ap)||0;}renderNFLCli('${cid}')">
+        ${_getProdNames(document.getElementById('nf-alm-'+cid)?.value||'').map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
-      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _max=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):9999;var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;updNFTotCli('${cid}')">
+      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _stkF=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):0;var _inT=_p&&_p.enTransito&&_p.enTransito[_alm];var _max=_inT?9999:(_p?_stkF:9999);var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;updNFTotCli('${cid}')">
       <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;updNFTotCli('${cid}')">
       <select style="width:64px;font-size:11px;padding:4px 6px" onchange="window['nfl_${cid}'][${i}].mon=this.value;updNFTotCli('${cid}')">
         <option>USD</option><option>EUR</option><option>CUP</option>
@@ -5143,11 +5159,12 @@ function renderNFLCli(cid){
 }
 function updNFTotCli(cid){
   const lineas=window['nfl_'+cid]||[];
-  const tot=lineas.reduce((a,l)=>a+toUSD(l.q*l.precio,l.mon),0);
+  const _almNFC=document.getElementById('nf-alm-'+cid)?.value||S.alm||'';
+  const tot=lineas.reduce((a,l)=>a+toUSD(l.q*l.precio,l.mon,_almNFC),0);
   const el=document.getElementById('nf-tot-'+cid);if(el)el.textContent=fN(tot)+' USD';
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
-  const iniUSD=toUSD(ini,iniMon);
+  const iniUSD=toUSD(ini,iniMon,_almNFC);
   const pdt=Math.max(0,tot-iniUSD);
   const prev=document.getElementById('nf-prev-'+cid);
   if(prev&&tot>0){prev.style.display='block';prev.style.background='var(--color-background-info)';prev.style.color='var(--color-text-info)';prev.textContent=`Venta: ${fN(tot)} USD${ini>0?` · Abono inicial: ${fN(ini,dFor(iniMon))} ${iniMon}`:''} · Deuda pdte: ${fN(pdt)} USD`;}
@@ -6689,7 +6706,7 @@ function renderBackup() {
     + '</div>'
     + '</div>'
 
-    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm si el ERP está abierto.</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '<button class="adm-btn" onclick="enviarBackupTelegram()">💾 Enviar backup ahora</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
+    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">📊 Cierre diario Telegram</div>'    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Envía el resumen de ventas del día a los grupos de Telegram. Se envía automáticamente a las 8pm desde Supabase (sin necesitar el navegador abierto).</div>'    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'    + '<button class="adm-btn adm-btn-p" onclick="enviarCierreDiario()">📤 Enviar cierre ahora</button>'    + '<button class="adm-btn" onclick="enviarCierreDiario(new Date(Date.now()-86400000).toISOString().slice(0,10))">📅 Enviar cierre de ayer</button>'    + '<button class="adm-btn" onclick="enviarBackupTelegram()">💾 Enviar backup ahora</button>'    + '</div></div>'    + '<div class="adm-card" style="margin-bottom:12px">'    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🗄 Backup SQL (Supabase)</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
