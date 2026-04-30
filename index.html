@@ -5153,7 +5153,7 @@ function renderNFLCli(cid){
   const c=document.getElementById('nfl-'+cid);if(!c)return;
   c.innerHTML=lineas.map((l,i)=>`
     <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
-      <select style="flex:2;min-width:140px;font-size:11px" onchange="window['nfl_${cid}'][${i}].prod=this.value;var _ap=PRODS.find(function(x){return x.n===this.value;});if(_ap){var _almC=document.getElementById('nf-alm-${cid}')?.value||'';window['nfl_${cid}'][${i}].precio=_getPrecioNF(_ap,_almC)||0;}renderNFLCli('${cid}')">
+      <select style="flex:2;min-width:140px;font-size:11px" onchange="var _v=event.target.value;window['nfl_${cid}'][${i}].prod=_v;var _ap=PRODS.find(function(x){return x.n===_v;});if(_ap){var _almC=document.getElementById('nf-alm-${cid}')?.value||'';window['nfl_${cid}'][${i}].precio=_getPrecioNF(_ap,_almC)||0;}renderNFLCli('${cid}')">
         ${_getProdNames(document.getElementById('nf-alm-'+cid)?.value||'').map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
       <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _stkF=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):0;var _inT=_p&&_p.enTransito&&_p.enTransito[_alm];var _max=_inT?9999:(_p?_stkF:9999);var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;updNFTotCli('${cid}')">
