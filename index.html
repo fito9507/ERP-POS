@@ -1624,7 +1624,7 @@ async function enviarCierreDiario(fecha, isAuto) {
       }catch(e){}
       vts.forEach(function(p){if(vueltosMon[p.mon]!=null)vueltosMon[p.mon]+=(p.m||0);});
     });
-    var monSym={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+    var monSym={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'\u20b1'};
     var cobrosLines=Object.keys(cobros).filter(function(m){return cobros[m]>0;}).map(function(m){
       var eq=m==='USD'?'':' \u2248 $'+fN(toUSD(cobros[m],m));
       return '  '+monSym[m]+' '+fN(cobros[m],m==='USD'||m==='EUR'?2:0)+' '+m+eq;
@@ -1635,7 +1635,7 @@ async function enviarCierreDiario(fecha, isAuto) {
 
 
     // Neto por moneda = cobrado - vueltos en cada moneda
-    var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+    var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'\u20b1'};
     var allMons=['USD','EUR','CUP','CUPT','MLC'];
     var _netoTotalUSD=0;
     var _netoMonCount=allMons.filter(function(m){return cobros[m]>0||vueltosMon[m]>0;}).length;
@@ -1681,7 +1681,7 @@ async function enviarCierreDiario(fecha, isAuto) {
     var cajasLines=cajasAlm.map(function(c){
       var saldo=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre||c.id):(parseFloat(c.saldo_inicial)||0);
       // Show all cajas even if empty
-      var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'M'};
+      var monSym2={USD:'$',EUR:'\u20ac',CUP:'\u20b1',CUPT:'\u20b1',MLC:'\u20b1'};
       return '  '+(monSym2[c.moneda]||'')+' '+fN(saldo,c.moneda==='USD'||c.moneda==='EUR'?2:0)+' '+c.moneda+' ('+c.nombre+')';
     }).filter(Boolean).join('\n');
 
@@ -3757,7 +3757,7 @@ async function renderMiCaja() {
   if (typeof loadCajasData === 'function') await loadCajasData();
 
   var RATES_USD = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
-  var monIcon   = {USD:'$', EUR:'€', CUP:'₱', CUPT:'M'};
+  var monIcon   = {USD:'$', EUR:'€', CUP:'₱', CUPT:'\u20b1'};
 
   // Build cajas — EXACT same logic as renderCajas but forced to vendedor's alm
   var cajas = [];
@@ -4182,6 +4182,13 @@ function registrar(){
   if(!desc){alert('Añade una descripción');return;}
   if(!monto){alert('Introduce el monto');return;}
   const meta=TIPO_META[tipo]||{sentido:'gasto'};
+  // Validate saldo disponible
+  if((meta.sentido==='gasto'||tipo==='Transferencia entre cuentas')&&typeof _getSaldoCaja==='function'){
+    var _saldoCheck=_getSaldoCaja(cta);
+    if(_saldoCheck>=0&&monto>_saldoCheck){
+      if(!confirm('Saldo disponible en '+cta+': '+fN(_saldoCheck,mon==='CUP'?0:2)+' '+mon+'\n¿Continuar de todas formas?')) return;
+    }
+  }
   const equivUSD=parseFloat(toUSD(monto,mon).toFixed(2));
   const mov={id:igNextId++,fecha,tipo,desc,monto,mon,equivUSD,cta,sentido:meta.sentido,notas};
   if(tipo==='Comisión vendedor'){mov.vend=document.getElementById('n-vend').value;mov.alm=document.getElementById('n-alm-venta').value;}
@@ -4344,13 +4351,14 @@ async function renderCajas(){
 
   // Order almacenes
   var almOrder = ['Habana','Placetas','Xportprise','España','USA','General'];
+  var almLabel = {'General':'ZELLE'};
   var byAlm = {};
   cajas.forEach(function(c){
     if(!byAlm[c.almacen]) byAlm[c.almacen]=[];
     byAlm[c.almacen].push(c);
   });
 
-  var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'};
+  var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'\u20b1'};
   var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
 
   var html = '';
@@ -4368,7 +4376,7 @@ async function renderCajas(){
     var almTot = almCajas.reduce(function(a,c){return a+c.equivUSD;},0);
     html += '<div style="margin-bottom:20px">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">'
-      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+alm+'</div>'
+      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+(almLabel[alm]||alm)+'</div>'
       + '<div style="font-size:12px;color:var(--color-text-secondary)">Total: <b style="color:var(--color-text-primary)">'+fN(almTot,2)+' USD</b></div>'
       + '</div>'
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">';
@@ -6416,7 +6424,7 @@ function _renderResumenCajas() {
     byAlm[alm].forEach(function(c){
       var saldo = _getSaldoCaja(c.nombre);
       var color = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'M'}[c.moneda]||'';
+      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'\u20b1'}[c.moneda]||'';
       html += '<div class="card" style="text-align:center;padding:14px 10px">'
         + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">'+c.nombre+'</div>'
         + '<div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:8px">'+monIcon+' '+c.moneda+'</div>'
