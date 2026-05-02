@@ -3991,7 +3991,24 @@ function filtrar_ig(){
 
 // ── RENDER LIBRO ──────────────────────────────────────────
 function renderLibro(){
-  const data=filtrar_ig().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  // Sort and group transfer pairs together
+  const _rawData=filtrar_ig().sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
+  // Re-group: after each transfer salida, insert its matching entrada immediately after
+  const _seen=new Set();
+  const data=[];
+  _rawData.forEach(function(m){
+    if(_seen.has(m.id)) return;
+    _seen.add(m.id);
+    data.push(m);
+    if(m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0){
+      var _base=(m.desc||'').replace(' (salida)','');
+      var _pair=_rawData.find(function(x){
+        return !_seen.has(x.id)&&x.tipo==='Transferencia entre cuentas'
+          &&(x.desc||'').replace(' (entrada)','')===_base&&x.fecha===m.fecha;
+      });
+      if(_pair){_seen.add(_pair.id);data.push(_pair);}
+    }
+  });
   const ing=data.filter(m=>m.sentido==='ingreso').reduce((a,m)=>a+m.equivUSD,0);
   const gas=data.filter(m=>m.sentido==='gasto').reduce((a,m)=>a+m.equivUSD,0);
   const neto=ing-gas;
