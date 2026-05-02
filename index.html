@@ -4024,7 +4024,10 @@ function renderLibro(){
   const meta=TIPO_META;
   document.getElementById('l-movs').innerHTML=data.length?data.map(m=>{
     const tm=meta[m.tipo]||{icon:'•',cls:'bb'};
-    const isGasto=m.sentido==='gasto';
+    var isGasto=m.sentido==='gasto';
+    var isTransferSalida=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0;
+    var isTransferEntrada=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(entrada)')>=0;
+    if(isTransferSalida) isGasto=true;
     return `<div class="mov-row">
       <div class="mov-icon" style="background:var(--color-background-secondary)">${tm.icon}</div>
       <div class="mov-main">
@@ -4040,8 +4043,8 @@ function renderLibro(){
         </div>
       </div>
       <div class="mov-amt">
-        <div class="mov-amt-main" style="color:${isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
-          ${isGasto?'−':'+'}${fN(m.monto,m.mon==='CUP'||m.mon==='CUPT'?0:2)} ${m.mon}
+        <div class="mov-amt-main" style="color:${isTransferSalida?'var(--color-text-danger)':isTransferEntrada?'var(--color-text-success)':isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
+          ${isTransferSalida?'−':isGasto?'−':'+'}${fN(m.monto,m.mon==='CUP'||m.mon==='CUPT'?0:2)} ${m.mon}
         </div>
         ${m.mon!=='USD'?`<div class="mov-amt-sub">≈ ${isGasto?'−':'+'}${fN(m.equivUSD)} USD</div>`:''}
       </div>
