@@ -4138,7 +4138,16 @@ function updNuevo(){
     const isGasto=meta.sentido==='gasto';
     prev.style.background=isGasto?'var(--color-background-danger)':'var(--color-background-success)';
     prev.style.color=isGasto?'var(--color-text-danger)':'var(--color-text-success)';
-    prev.textContent=`${isGasto?'Salida':'Entrada'}: ${fN(monto,mon==='CUP'||mon==='CUPT'?0:2)} ${mon}${mon!=='USD'?` (≈ ${fN(equiv)} USD)`:''} desde ${document.getElementById('n-cta').value}`;
+    if(tipo==='Transferencia entre cuentas'){
+      const cta2=document.getElementById('n-cta2')?.value||'';
+      const ctaOrig=document.getElementById('n-cta').value;
+      const monFmt=fN(monto,mon==='CUP'||mon==='CUPT'?0:2);
+      prev.style.background='var(--color-background-info)';
+      prev.style.color='var(--color-text-info)';
+      prev.textContent=`Salida: ${monFmt} ${mon} de ${ctaOrig}  →  Entrada: ${monFmt} ${mon} en ${cta2}`;
+    } else {
+      prev.textContent=`${isGasto?'Salida':'Entrada'}: ${fN(monto,mon==='CUP'||mon==='CUPT'?0:2)} ${mon}${mon!=='USD'?` (≈ ${fN(equiv)} USD)`:''} desde ${document.getElementById('n-cta').value}`;
+    }
   } else prev.style.display='none';
 }
 
@@ -4177,11 +4186,14 @@ function registrar(){
       cuenta:mov.cta, vendedor:mov.vend||'', notas:mov.notas||''
     });
     // If transferencia, also save the entrada entry
-    if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1&&MOVS[0].sentido==='ingreso'){
-      var _e=MOVS[0];
+    if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1){
+      var _e=MOVS.find(function(m){return m.sentido==='ingreso'&&(m.desc||'').indexOf('(entrada)')>=0;});
+      if(!_e) _e=MOVS[1];
+      if(_e){
       supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
         moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),cuenta:_e.cta,vendedor:'',notas:_e.notas||''})
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
+      }
     }
     // Write to mov_cajas so saldo de caja reflects this movement
     if(mov.tipo==='Transferencia entre cuentas'){
@@ -4217,14 +4229,16 @@ function registrar(){
   const div=document.createElement('div');
   div.className='mov-row';
   const isGasto=meta.sentido==='gasto';
+  const _isTransfer=tipo==='Transferencia entre cuentas';
+  const _cta2Trans=_isTransfer?(document.getElementById('n-cta2')?.value||''):'';
   div.innerHTML=`<div class="mov-icon" style="background:var(--color-background-secondary)">${(TIPO_META[tipo]||{icon:'•'}).icon}</div>
     <div class="mov-main">
-      <div class="mov-desc"><strong>${desc}</strong></div>
+      <div class="mov-desc"><strong>${desc}</strong>${_isTransfer?' → '+_cta2Trans:''}</div>
       <div class="mov-meta">${fD(fecha)} · ${cta}</div>
     </div>
     <div class="mov-amt">
-      <div class="mov-amt-main" style="color:${isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
-        ${isGasto?'−':'+'}${fN(monto,mon==='CUP'||mon==='CUPT'?0:2)} ${mon}
+      <div class="mov-amt-main" style="color:${_isTransfer?'var(--color-text-info)':isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
+        ${_isTransfer?'↔':isGasto?'−':'+'}${fN(monto,mon==='CUP'||mon==='CUPT'?0:2)} ${mon}
       </div>
     </div>`;
   rc.prepend(div);
