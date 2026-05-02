@@ -4184,8 +4184,17 @@ function registrar(){
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
     }
     // Write to mov_cajas so saldo de caja reflects this movement
-    // Transferencia handled by its own UI (admRegistrarMovCaja) — skip here
-    if(mov.tipo!=='Transferencia entre cuentas'){
+    if(mov.tipo==='Transferencia entre cuentas'){
+      // Transferencia: salida de cuenta origen + entrada a cuenta destino
+      var _cta2=document.getElementById('n-cta2')?.value||'';
+      var _mcTrans={tipo:'transferencia',fecha:mov.fecha,
+        notas:mov.desc.replace(' (salida)','').replace(' (entrada)',''),
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+        caja_origen:mov.cta, caja_destino:_cta2,
+        monto_origen:mov.monto, monto_destino:mov.monto, tasa_usada:1};
+      _cajasMovs.unshift(_mcTrans);
+      _supaWrite('POST','mov_cajas',_mcTrans);
+    } else {
       var _mcRow;
       if(mov.sentido==='gasto'){
         _mcRow={tipo:'retiro',fecha:mov.fecha,notas:mov.tipo+' — '+mov.desc,
@@ -4198,8 +4207,8 @@ function registrar(){
           caja_origen:null, caja_destino:mov.cta,
           monto_origen:mov.monto,monto_destino:mov.monto,tasa_usada:null};
       }
-      _cajasMovs.unshift(_mcRow); // optimistic local
-      _supaWrite('POST','mov_cajas',_mcRow); // enqueues if offline
+      _cajasMovs.unshift(_mcRow);
+      _supaWrite('POST','mov_cajas',_mcRow);
     }
   }
   // mostrar en recientes
