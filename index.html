@@ -5131,12 +5131,19 @@ function renderFichaNF(c){
   window['nfl_'+c.id]=[];
   addNFLCli(c.id);
 }
-function _getPrecioNF(p, alm){
-  // Get mayorista price for this almacen (credit sales are typically wholesale)
+function _getPrecioNF(p, alm, qty){
   var isPlac = alm==='Placetas';
   var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj||p.min||0);
   var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min||p.maj||0);
-  if(p.escala && p.escala.length) return parseFloat(p.escala[0].precio)||maj||min;
+  var q = qty || 1;
+  if(p.escala && p.escala.length){
+    var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
+    for(var i=0;i<sorted.length;i++){
+      var r=sorted[i];
+      if(q>=r.desde&&(r.hasta==null||r.hasta===''||q<=r.hasta)) return parseFloat(r.precio)||maj||min;
+    }
+    return parseFloat(p.escala[0].precio)||maj||min;
+  }
   return maj||min;
 }
 function addNFLCli(cid){
@@ -5156,8 +5163,8 @@ function renderNFLCli(cid){
       <select style="flex:2;min-width:140px;font-size:11px" onchange="var _v=event.target.value;window['nfl_${cid}'][${i}].prod=_v;var _ap=PRODS.find(function(x){return x.n===_v;});if(_ap){var _almC=document.getElementById('nf-alm-${cid}')?.value||'';window['nfl_${cid}'][${i}].precio=_getPrecioNF(_ap,_almC)||0;}renderNFLCli('${cid}')">
         ${_getProdNames(document.getElementById('nf-alm-'+cid)?.value||'').map(p=>`<option ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
-      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _stkF=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):0;var _inT=_p&&_p.enTransito&&_p.enTransito[_alm];var _max=_inT?9999:(_p?_stkF:9999);var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;updNFTotCli('${cid}')">
-      <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;updNFTotCli('${cid}')">
+      <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _stkF=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):0;var _inT=_p&&_p.enTransito&&_p.enTransito[_alm];var _max=_inT?9999:(_p?_stkF:9999);var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;if(_p&&!window['nfl_${cid}'][${i}]._manualPrice){window['nfl_${cid}'][${i}].precio=_getPrecioNF(_p,_alm,_v);}renderNFLCli('${cid}')">
+      <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;window['nfl_${cid}'][${i}]._manualPrice=true;updNFTotCli('${cid}')">
       <select style="width:64px;font-size:11px;padding:4px 6px" onchange="window['nfl_${cid}'][${i}].mon=this.value;updNFTotCli('${cid}')">
         <option>USD</option><option>EUR</option><option>CUP</option>
       </select>
