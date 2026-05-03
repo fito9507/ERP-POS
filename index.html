@@ -3803,8 +3803,13 @@ async function renderMiCaja() {
     var dec   = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
     var icon  = monIcon[c.mon]||'';
     // Show sub-name if caja name differs from "MON Alm" pattern (e.g. "USD Abanca" vs "USD Habana")
-    var _ctaShort = c.cta.replace(c.mon+' ','').replace(alm,'').trim();
-    var _showLabel = _ctaShort && _ctaShort.length > 0 && _ctaShort !== alm;
+    // Extract sub-label: remove moneda prefix and almacen suffix
+    var _ctaFull = (c.cta||'').toUpperCase();
+    var _monPfx = (c.mon||'').toUpperCase()+' ';
+    var _almSfx = (alm||'').toUpperCase();
+    var _ctaShort = _ctaFull.startsWith(_monPfx) ? _ctaFull.slice(_monPfx.length) : _ctaFull;
+    if(_ctaShort === _almSfx) _ctaShort = '';
+    var _showLabel = _ctaShort.length > 0 && _ctaShort !== _almSfx;
     cardsHtml += '<div class="card" style="padding:14px 12px;text-align:center">'
       + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px;font-weight:600;letter-spacing:.05em">'+c.mon+(_showLabel?' · '+_ctaShort:'')+'</div>'
       + '<div style="font-size:clamp(13px,3vw,20px);font-weight:800;color:'+color+';word-break:break-all;line-height:1.2">'+icon+' '+fN(c.saldo,dec)+'</div>'
