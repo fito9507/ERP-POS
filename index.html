@@ -4310,19 +4310,26 @@ function eliminar(id){
       supaReq('DELETE',_q).catch(function(e){console.warn('mov_cajas delete:',e);});
     }
   }
-  // Delete from Supabase movimientos_ig
+  // Delete from Supabase movimientos_ig — await before reload
   if(_supaOnline&&typeof supaReq!=='undefined'){
-    supaReq('DELETE','movimientos_ig?id=eq.'+id).catch(function(e){console.warn('I/G delete:',e);});
-    // Also delete paired transfer entry
+    var _delPromises=[supaReq('DELETE','movimientos_ig?id=eq.'+id)];
     if(_mov&&_mov.tipo==='Transferencia entre cuentas'){
       var _baseDsc=(_mov.desc||'').replace(' (salida)','').replace(' (entrada)','');
-      supaReq('DELETE','movimientos_ig?descripcion=like.*'+encodeURIComponent(_baseDsc)+'*&fecha=eq.'+_mov.fecha+'&tipo=eq.Transferencia entre cuentas').catch(function(e){});
+      // Delete paired entry by matching description and fecha
+      _delPromises.push(supaReq('DELETE','movimientos_ig?descripcion=like.*'+encodeURIComponent(_baseDsc)+'*&fecha=eq.'+_mov.fecha+'&tipo=eq.Transferencia+entre+cuentas&id=neq.'+id));
     }
+    Promise.all(_delPromises).then(function(){
+      renderLibro();
+      if(typeof renderCajas==='function') renderCajas();
+    }).catch(function(e){
+      console.warn('I/G delete error:',e);
+      renderLibro();
+    });
   } else {
     enqueue({method:'DELETE',path:'movimientos_ig?id=eq.'+id,body:null});
+    renderLibro();
+    if(typeof renderCajas==='function') renderCajas();
   }
-  renderLibro();
-  if(typeof renderCajas==='function') renderCajas();
 }
 
 // ── CAJAS ─────────────────────────────────────────────────
