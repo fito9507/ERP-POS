@@ -4281,15 +4281,48 @@ function eliminar(id){
     showToast('⚠ Solo el admin puede eliminar movimientos');return;
   }
   if(!confirm('¿Eliminar este movimiento?'))return;
-  MOVS=MOVS.filter(m=>m.id!==id);
+  // Find mov before removing to reverse caja movement
+  var _mov=MOVS.find(function(m){return m.id===id;});
+  MOVS=MOVS.filter(function(m){return m.id!==id;});
+  // Also remove paired transfer entry if exists
+  if(_mov&&_mov.tipo==='Transferencia entre cuentas'){
+    var _baseDesc=(_mov.desc||'').replace(' (salida)','').replace(' (entrada)','');
+    MOVS=MOVS.filter(function(m){
+      return !(m.tipo==='Transferencia entre cuentas'&&
+        (m.desc||'').replace(' (salida)','').replace(' (entrada)','')=== _baseDesc&&
+        m.fecha===_mov.fecha);
+    });
+  }
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-  // Delete from Supabase (or enqueue if offline)
+  // Reverse mov_cajas entry
+  if(_mov&&typeof _getSaldoCaja!=='undefined'){
+    // Find and remove matching mov_cajas row
+    var _ctaMov=_mov.cta||'';
+    _cajasMovs=_cajasMovs.filter(function(mc){
+      var matchOrigen=mc.caja_origen===_ctaMov&&parseFloat(mc.monto_origen)===parseFloat(_mov.monto);
+      var matchDest=mc.caja_destino===_ctaMov&&parseFloat(mc.monto_destino)===parseFloat(_mov.monto);
+      var matchDesc=(mc.notas||'').indexOf(_baseDesc||_mov.desc||'')>=0;
+      return !(matchOrigen||matchDest)&&matchDesc!==false||!(matchDesc);
+    });
+    // Delete from Supabase mov_cajas by description+caja+monto
+    if(_supaOnline&&typeof supaReq!=='undefined'){
+      var _q='mov_cajas?notas=like.*'+encodeURIComponent((_mov.desc||'').replace(' (salida)','').replace(' (entrada)',''))+'*&monto_origen=eq.'+_mov.monto;
+      supaReq('DELETE',_q).catch(function(e){console.warn('mov_cajas delete:',e);});
+    }
+  }
+  // Delete from Supabase movimientos_ig
   if(_supaOnline&&typeof supaReq!=='undefined'){
     supaReq('DELETE','movimientos_ig?id=eq.'+id).catch(function(e){console.warn('I/G delete:',e);});
+    // Also delete paired transfer entry
+    if(_mov&&_mov.tipo==='Transferencia entre cuentas'){
+      var _baseDsc=(_mov.desc||'').replace(' (salida)','').replace(' (entrada)','');
+      supaReq('DELETE','movimientos_ig?descripcion=like.*'+encodeURIComponent(_baseDsc)+'*&fecha=eq.'+_mov.fecha+'&tipo=eq.Transferencia entre cuentas').catch(function(e){});
+    }
   } else {
     enqueue({method:'DELETE',path:'movimientos_ig?id=eq.'+id,body:null});
   }
   renderLibro();
+  if(typeof renderCajas==='function') renderCajas();
 }
 
 // ── CAJAS ─────────────────────────────────────────────────
