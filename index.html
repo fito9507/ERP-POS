@@ -4433,8 +4433,14 @@ async function renderCajas(){
       var icon = monIcon[c.mon]||'';
       var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
       var dec = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
+      var _cf = (c.nombre||c.cta||'').toUpperCase();
+      var _mp = (c.mon||'').toUpperCase()+' ';
+      var _as = (alm||'').toUpperCase();
+      var _cs = _cf.startsWith(_mp) ? _cf.slice(_mp.length) : _cf;
+      if(_cs === _as) _cs = '';
+      var _sl = _cs.length > 0 && _cs !== _as;
       html += '<div class="card" style="padding:14px 12px;text-align:center;border-color:'+(pos?'var(--color-border-tertiary)':'rgba(248,113,113,.3)')+'">'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px;font-weight:600;letter-spacing:.05em">'+c.mon+'</div>'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px;font-weight:600;letter-spacing:.05em">'+c.mon+(_sl?' · '+_cs:'')+'</div>'
         + '<div style="font-size:clamp(13px,3vw,20px);font-weight:800;color:'+color+';line-height:1.2;word-break:break-all">'+icon+' '+fN(c.saldo,dec)+'</div>'
         + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:5px">≈ '+fN(c.equivUSD,2)+' USD</div>'
         + '</div>';
