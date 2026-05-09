@@ -1806,6 +1806,20 @@ async function flushQueue() {
     var _reloads = [];
     // Only reload ventas if queue had POST/PATCH (not just DELETEs)
     var _hadPosts=toProcess.some(function(op){return op.method==='POST'||op.method==='PATCH';});
+    if(_hadPosts&&typeof TG_TOKEN!=='undefined'&&TG_TOKEN){
+      toProcess.filter(function(op){return op.method==='POST'&&op.path==='ventas'&&op.body;}).forEach(function(op){
+        var v=op.body; if(!v||!v.almacen) return;
+        var _pr=Array.isArray(v.productos)?v.productos.map(function(p){return (p.q||1)+'x '+(p.n||p.nombre||'?')+' @ $'+(p.precioUSD||p.precio||0);}).join(', '):'';
+        var _cb=Array.isArray(v.cobros_json)?v.cobros_json.filter(function(c){return !c.esVuelto;}).map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||'USD');}).join(' + '):'';
+        tgSend('\uD83D\uDCB0 <b>Venta POS (offline)</b>\n'
+          +'\uD83D\uDC64 '+(v.vendedor||'?')+' \u2022 '+v.almacen+'\n'
+          +'\uD83D\uDED2 '+(v.cliente||'Walk-in')+'\n'
+          +(_pr?'\uD83D\uDCE6 '+_pr+'\n':'')
+          +'\uD83D\uDCB5 <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
+          +'\uD83D\uDCB3 '+(_cb||'-')+'\n'
+          +'\u2601\uFE0F Sincronizada offline',v.almacen,'venta');
+      });
+    }
     if (_hadPosts && typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
     if (typeof syncLoadMovsIG === 'function') _reloads.push(syncLoadMovsIG());
     if (typeof loadCajasData === 'function') _reloads.push(loadCajasData());
@@ -2790,7 +2804,17 @@ function reservar(){
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
-  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
+  // Telegram for reserva
+  if(TG_TOKEN&&S.cart&&S.cart.length){
+    var _rProds=S.cart.map(function(c){return c.q+'x '+c.n+' @ $'+fN(c.precioUSD);}).join(', ');
+    var _rTot=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
+    tgSend('\uD83D\uDCCB <b>Reserva</b>\n'
+      +'\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n'
+      +'\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n'
+      +'\uD83D\uDCE6 '+_rProds+'\n'
+      +'\uD83D\uDCB5 <b>$'+fN(_rTot)+'</b>', S.alm, 'pedido');
+  }
+  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado \u2014 stock bloqueado');
 }
 function syncReservasGlobal(){
   RESERVAS_GLOBAL=S.reservas.slice();
@@ -5347,6 +5371,16 @@ function crearFolioCli(cid){
       offlineSaveVentas();
     }catch(e){console.warn('folio sync:',e);}
   })();
+  // Telegram for folio
+  if(TG_TOKEN){
+    var _fProds=lineas.map(function(l){return l.q+'x '+l.prod+' @ $'+fN(l.precio);}).join(', ');
+    var _fTot=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
+    tgSend('\uD83D\uDCC4 <b>Venta a cr\u00e9dito (Folio '+fid+')</b>\n'
+      +'\uD83D\uDC64 '+c.nombre+' \u2022 '+alm+'\n'
+      +'\uD83D\uDCE6 '+_fProds+'\n'
+      +'\uD83D\uDCB5 <b>$'+fN(_fTot)+'</b>\n'
+      +'\uD83D\uDCDD '+desc, alm, 'pedido');
+  }
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
 }
