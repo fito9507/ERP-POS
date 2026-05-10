@@ -1814,10 +1814,11 @@ async function flushQueue() {
         // cobros_json may be string JSON or array
         var _cj=v.cobros_json;
         if(typeof _cj==='string'){try{_cj=JSON.parse(_cj);}catch(e){_cj=null;}}
-        var _pg=Array.isArray(_cj)?_cj:(_cj&&Array.isArray(_cj.pagos)?_cj.pagos:[]);
-        var _cb=_pg.filter(function(c){return !c.esVuelto;}).map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
-        var _vt=_pg.filter(function(c){return c.esVuelto;}).map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
-        var _tk=v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)?v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1]:'';
+        var _pagos=Array.isArray(_cj)?_cj:(_cj&&Array.isArray(_cj.pagos)?_cj.pagos:[]);
+        var _vueltos=(_cj&&Array.isArray(_cj.vueltos)?_cj.vueltos:[]);
+        var _cb=_pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
+        var _vt=_vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
+        var _tk=v.notas&&v.notas.match(/\[([A-Z]{3}\d{2}-\d{3})\]/)?v.notas.match(/\[([A-Z]{3}\d{2}-\d{3})\]/)[1]:'';
         tgSend('\uD83D\uDCB0 <b>Venta POS (offline)</b>'+(_tk?' <code>'+_tk+'</code>':'')+'\n'
           +'\uD83D\uDC64 '+(v.vendedor||'?')+' \u2022 '+v.almacen+'\n'
           +'\uD83D\uDED2 '+(v.cliente||'Walk-in')+'\n'
@@ -1856,7 +1857,7 @@ async function syncSaveVenta(v) {
     com_pct:      v.comPct || 0,
     com_usd:      v.comUSD  || 0,
     est_com:      v.estCom  || 'Pendiente',
-    notas:        (v.ticket?'['+v.ticket+'] ':'')+( v.nota||''),
+    notas:        v.nota    || '',
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[]}) : ''
   };
   // Include supaId if we already have it (for upsert)
@@ -3045,10 +3046,9 @@ function confirmar(){
   var comPct=(typeof COM_DEF!=='undefined'&&COM_DEF[S.user]&&COM_DEF[S.user][S.alm])||0;
   var comUSD=parseFloat((totalUSD*(comPct/100)).toFixed(2));
   var estCom=S.alm==='Placetas'?'No aplica':'Pendiente';
-  var _ticket=genTicket(S.alm);
   var venta={
     id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
-    tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
+    tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
     estCom:estCom,nota:(document.getElementById('venta-nota')?.value||''),
@@ -3077,7 +3077,7 @@ function confirmar(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
-    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
+    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b>\n'
       +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
       +'\uD83D\uDCE6 '+_tgProds+'\n'
@@ -3087,7 +3087,8 @@ function confirmar(){
       +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
     tgSend(_tgMsg, S.alm, 'venta');
   })();
-  var linesHtml='<div class="res-line"><span>Productos</span>'
+  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
+  +'<div class="res-line"><span>Productos</span>'
     +'<span style="text-align:right;font-size:12px;line-height:1.7">'
     +S.cart.map(function(c){return c.q+'× '+c.n;}).join('<br>')
     +'</span></div>'
@@ -3167,19 +3168,6 @@ let liquidaciones=(function(){try{const d=localStorage.getItem('erp_liquidacione
 // ── DATA ─────────────────────────────────────────────────
 let VENTAS=[];  // cargado desde Supabase
 let venNextId = 1000; // starts high to avoid Supabase ID collisions
-
-// Ticket number system: HAB05-001
-var _ticketSeq = JSON.parse(localStorage.getItem('erp_ticket_seq')||'{}');
-function genTicket(alm){
-  var _almCode = {Habana:'HAB',Placetas:'PLA',Xportprise:'XPR'}[alm]||(alm||'GEN').slice(0,3).toUpperCase();
-  var _now = new Date();
-  var _mm = String(_now.getMonth()+1).padStart(2,'0');
-  var _key = _almCode+_mm;
-  if(!_ticketSeq[_key]) _ticketSeq[_key]=0;
-  _ticketSeq[_key]++;
-  try{localStorage.setItem('erp_ticket_seq',JSON.stringify(_ticketSeq));}catch(e){}
-  return _key+'-'+String(_ticketSeq[_key]).padStart(3,'0');
-}
 
 // IDs visibles actualmente en la tabla
 let visibleIds=[];
