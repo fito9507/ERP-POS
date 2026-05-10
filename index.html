@@ -904,6 +904,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <button id="btn-com-nav" onclick="navTo_ven('comisiones',this)">Comisiones</button>
   <button id="btn-liq-nav" onclick="navTo_ven('liquidacion',this)">Liquidación semanal</button>
   <button id="btn-micaja-nav" onclick="navTo_ven('micaja',this)" style="display:none">💰 Mi Caja</button>
+  <button id="btn-micom-nav" onclick="navTo_ven('micomision',this)" style="display:none">🏆 Mi Comisión</button>
 </div>
 
 <!-- ══ REGISTRO VENTAS ══ -->
@@ -1055,6 +1056,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <!-- ══ MI CAJA ══ -->
 <div class="page" id="micaja">
   <div id="micaja-root"></div>
+</div>
+
+<div class="page" id="micomision">
+  <div id="micomision-root" style="padding:4px"></div>
 </div>
 
 <!-- ══ NUEVA VENTA ══ -->
@@ -1838,6 +1843,7 @@ async function flushQueue() {
     if (_hadPosts && typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
     if (typeof syncLoadMovsIG === 'function') _reloads.push(syncLoadMovsIG());
     if (typeof loadCajasData === 'function') _reloads.push(loadCajasData());
+    if (typeof loadComReglas === 'function') _reloads.push(loadComReglas());
     if (typeof syncLoadClientes === 'function') _reloads.push(syncLoadClientes());
     await Promise.all(_reloads);
     // Refresh any open views
@@ -3049,9 +3055,18 @@ function confirmar(){
   var prods=S.cart.map(function(c){return c.q+'× '+c.n;}).join(', ');
   var cobDesc=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
   var vueltoDesc=S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon;}).join(' + '):'';
-  var comPct=(typeof COM_DEF!=='undefined'&&COM_DEF[S.user]&&COM_DEF[S.user][S.alm])||0;
-  var comUSD=parseFloat((totalUSD*(comPct/100)).toFixed(2));
-  var estCom=S.alm==='Placetas'?'No aplica':'Pendiente';
+  // Per-product commission
+  var estCom=getComPct(S.user,'','',S.alm)>0?'Pendiente':'No aplica';
+  var comUSD=0;
+  S.cart.forEach(function(c){
+    var p=PRODS.find(function(x){return x.n===c.n;});
+    var cat=p?p.cat:''; 
+    var pct=getComPct(S.user,c.n,cat,S.alm);
+    if(pct>0){ comUSD+=parseFloat((c.precioUSD*c.q*(pct/100)).toFixed(4)); estCom='Pendiente'; }
+  });
+  comUSD=parseFloat(comUSD.toFixed(2));
+  var comPct=totalUSD>0?parseFloat((comUSD/totalUSD*100).toFixed(2)):0;
+  if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
     id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
@@ -3169,7 +3184,36 @@ renderSteps(0);
 <script>
 
 
-const COM_DEF={Keiler:{Habana:4,Placetas:1.5},Padre:{Habana:4,Placetas:1.5}};
+// Commission rules loaded from Supabase com_reglas
+var COM_REGLAS = []; // [{vendedor,producto,categoria,almacen,pct}]
+var COM_DEF = {Keiler:{Habana:4,Placetas:1.5},Padre:{Habana:4,Placetas:1.5}}; // fallback
+
+async function loadComReglas(){
+  try{
+    var r=await supaReq('GET','com_reglas?select=*&order=id.asc');
+    if(r.ok){ COM_REGLAS=await r.json(); }
+  }catch(e){ console.warn('loadComReglas:',e); }
+}
+
+// Get commission % for a vendedor+producto+almacen
+// Priority: vendedor+producto > vendedor+categoria > vendedor+almacen > vendedor global
+function getComPct(vend, prod, cat, alm){
+  if(!COM_REGLAS.length){
+    // fallback to COM_DEF
+    return (COM_DEF[vend]&&COM_DEF[vend][alm])||0;
+  }
+  var rules=COM_REGLAS.filter(function(r){return r.vendedor===vend||r.vendedor==='*';});
+  // Most specific first
+  var byProd=rules.find(function(r){return r.producto&&r.producto===prod&&(!r.almacen||r.almacen===alm);});
+  if(byProd) return byProd.pct;
+  var byCat=rules.find(function(r){return r.categoria&&r.categoria===cat&&(!r.almacen||r.almacen===alm);});
+  if(byCat) return byCat.pct;
+  var byAlm=rules.find(function(r){return !r.producto&&!r.categoria&&r.almacen===alm;});
+  if(byAlm) return byAlm.pct;
+  var global=rules.find(function(r){return !r.producto&&!r.categoria&&!r.almacen;});
+  if(global) return global.pct;
+  return 0;
+}
 let liquidaciones=(function(){try{const d=localStorage.getItem('erp_liquidaciones');return d?JSON.parse(d):[];}catch(e){return [];}})();
 
 // ── DATA ─────────────────────────────────────────────────
@@ -3201,6 +3245,7 @@ function navTo_ven(pg,btn){
   btn.classList.add('act');
   if(pg==='ventas')renderVentas();
   if(pg==='comisiones')renderCom();
+  if(pg==='micomision')renderMiComision();
   if(pg==='liquidacion'){setRangeLiq();renderLiq();refreshLiqHist();var hw=document.getElementById('liq-hist-wrap');if(hw&&liquidaciones.length)hw.style.display='block';}
   if(pg==='nueva'){document.getElementById('nv-fecha').value=today();updNvCom();}
 
@@ -3290,6 +3335,8 @@ function renderVentas(){
     _fvSel.innerHTML='<option value="">Todos</option>'+_vendores.map(function(v){return '<option'+(v===_curV?' selected':'')+'>'+v+'</option>';}).join('');
   }
   var _mc=document.getElementById('btn-micaja-nav');if(_mc)_mc.style.display=_isVend?'':'none';
+  var _mcom=document.getElementById('btn-micom-nav');
+  if(_mcom)_mcom.style.display=(_isVend&&COM_REGLAS.some(function(r){return r.vendedor===S.user||r.vendedor==='*';}))?'':'none';
   var _bc=document.getElementById('btn-com-nav');if(_bc)_bc.style.display=_isVend?'none':'';
   var _bl=document.getElementById('btn-liq-nav');if(_bl)_bl.style.display=_isVend?'none':'';
   // com columns: always hidden unless explicitly shown via .show class
@@ -3645,7 +3692,11 @@ function renderLiq(){
       <button class="btn-sm" onclick="exportLiqCSV()">Exportar CSV</button>
       <button class="btn" onclick="guardarLiq('${desde}','${hasta}','${almLabel}',${totVentaUSD},${totComUSD},${fromUSD(totComUSD,'EUR')},${totComUSD*tasa})">Guardar liquidación</button>
       <select id="liq-cuenta" style="font-size:12px;padding:7px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary)"><option>Efectivo USD</option><option>Efectivo EUR</option><option>Efectivo CUP</option><option>Transferencia USD</option><option>Transferencia EUR</option><option>Tarjeta CUP</option></select>
-      <button class="btn btn-p" onclick="liquidarTodo()">Marcar todo pagado</button>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <input type="number" id="liq-parcial" placeholder="Monto parcial USD" step="0.01" style="flex:1;padding:6px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:12px">
+        <button class="btn" onclick="liquidarParcial()">Pago parcial</button>
+        <button class="btn btn-p" onclick="liquidarTodo()">Marcar todo pagado</button>
+      </div>
     </div>
   </div>`;
 
@@ -5570,6 +5621,7 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'categorias' ? ' act' : '') + '" onclick="setAdminTab(\'categorias\')">🏷️ Categorías</button>'
     + '<button class="adm-tab' + (adminTab === 'tasas'  ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
     + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
+    + '<button class="adm-tab' + (adminTab === 'comisiones' ? ' act' : '') + '" onclick="setAdminTab(\'comisiones\')">🏆 Comisiones</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -5589,11 +5641,116 @@ function renderAdminContent() {
   else if (adminTab === 'usuarios')  renderAdminUsuarios();
   else if (adminTab === 'tasas')     renderAdminTasas();
   else if (adminTab === 'cajas')     renderAdminCajas();
+  else if (adminTab === 'comisiones') renderAdminComisiones();
   else if (adminTab === 'categorias') {
     var el=document.getElementById('admin-content');if(!el)return;
     el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:12px">🏷️ Categorías</div><div id="cat-manager-content"></div>';
     renderCatManager();
   }
+}
+
+// ── COMISIONES ADMIN ─────────────────────────────────────────
+async function renderAdminComisiones(){
+  var el=document.getElementById('admin-content');if(!el)return;
+  await loadComReglas();
+  var vendedores=Object.keys(USERS).filter(function(u){return USERS[u].rol==='vendedor'&&USERS[u].activo!==false;});
+  var prods=PRODS.filter(function(p){return p.activo!==false;}).map(function(p){return p.n;});
+  var cats=[...new Set(PRODS.map(function(p){return p.cat||'';}).filter(Boolean))];
+  var alms=['Habana','Placetas','Xportprise'];
+
+  var rulesHtml=COM_REGLAS.map(function(r,i){
+    return '<tr>'      +'<td>'+r.vendedor+'</td>'      +'<td>'+(r.producto||'—')+'</td>'      +'<td>'+(r.categoria||'—')+'</td>'      +'<td>'+(r.almacen||'Todos')+'</td>'      +'<td style="color:var(--color-text-warning);font-weight:600">'+r.pct+'%</td>'      +'<td><button class="adm-btn" style="padding:2px 8px;font-size:11px" onclick="delComRegla('+r.id+')">✕</button></td>'      +'</tr>';
+  }).join('');
+
+  el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:16px">🏆 Reglas de Comisión</div>'    +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">Prioridad: Producto > Categoría > Almacén > Global. Regla más específica gana.</div>'    +'<div class="card" style="margin-bottom:16px">'    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:12px">'    +'<div><label class="lbl">Vendedor</label>'    +'<select id="cr-vend" style="width:100%"><option value="*">Todos</option>'    +vendedores.map(function(v){return '<option>'+v+'</option>';}).join('')+'</select></div>'    +'<div><label class="lbl">Producto (opcional)</label>'    +'<select id="cr-prod" style="width:100%"><option value="">— Cualquiera —</option>'    +prods.map(function(p){return '<option>'+p+'</option>';}).join('')+'</select></div>'    +'<div><label class="lbl">Categoría (opcional)</label>'    +'<select id="cr-cat" style="width:100%"><option value="">— Cualquiera —</option>'    +cats.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></div>'    +'<div><label class="lbl">Almacén (opcional)</label>'    +'<select id="cr-alm" style="width:100%"><option value="">Todos</option>'    +alms.map(function(a){return '<option>'+a+'</option>';}).join('')+'</select></div>'    +'<div><label class="lbl">% Comisión</label>'    +'<input type="number" id="cr-pct" step="0.1" min="0" max="100" value="4" style="width:100%"></div>'    +'</div>'    +'<button class="btn btn-p" onclick="addComRegla()">+ Añadir regla</button>'    +'</div>'    +'<div class="card">'    +'<table style="width:100%;border-collapse:collapse;font-size:12px">'    +'<thead><tr style="color:var(--color-text-secondary)"><th style="text-align:left;padding:6px 4px">Vendedor</th><th style="text-align:left;padding:6px 4px">Producto</th><th style="text-align:left;padding:6px 4px">Categoría</th><th style="text-align:left;padding:6px 4px">Almacén</th><th style="text-align:left;padding:6px 4px">%</th><th></th></tr></thead>'    +'<tbody id="com-reglas-body">'+rulesHtml+'</tbody>'    +'</table>'    +(COM_REGLAS.length===0?'<div style="text-align:center;padding:20px;color:var(--color-text-tertiary);font-size:12px">Sin reglas. Añade una arriba.</div>':'')
+    +'</div>';
+}
+
+async function addComRegla(){
+  var vend=document.getElementById('cr-vend').value;
+  var prod=document.getElementById('cr-prod').value;
+  var cat=document.getElementById('cr-cat').value;
+  var alm=document.getElementById('cr-alm').value;
+  var pct=parseFloat(document.getElementById('cr-pct').value)||0;
+  if(!vend||pct<=0){showToast('⚠ Selecciona vendedor y % válido');return;}
+  var row={vendedor:vend,producto:prod||null,categoria:cat||null,almacen:alm||null,pct:pct};
+  try{
+    var r=await supaReq('POST','com_reglas',row);
+    if(r.ok){showToast('✓ Regla añadida');await renderAdminComisiones();}
+    else{showToast('Error al guardar');}
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+async function delComRegla(id){
+  if(!confirm('¿Eliminar esta regla?'))return;
+  try{
+    await supaReq('DELETE','com_reglas?id=eq.'+id);
+    showToast('✓ Regla eliminada');
+    await renderAdminComisiones();
+  }catch(e){showToast('Error: '+e.message);}
+}
+
+function renderMiComision(){
+  var el=document.getElementById('micomision-root');if(!el)return;
+  var vend=S.user;
+  var misVentas=VENTAS.filter(function(v){return v.vend===vend&&v.estCom!=='No aplica';});
+  var pendiente=misVentas.filter(function(v){return v.estCom==='Pendiente';}).reduce(function(a,v){return a+v.comUSD;},0);
+  var pagado=misVentas.filter(function(v){return v.estCom==='Pagada';}).reduce(function(a,v){return a+v.comUSD;},0);
+  var total=pendiente+pagado;
+
+  // Group by moneda
+  var porMon={};
+  misVentas.forEach(function(v){
+    if(!porMon[v.mon]) porMon[v.mon]={pdte:0,pag:0};
+    var m=fromUSD(v.comUSD,v.mon);
+    if(v.estCom==='Pendiente') porMon[v.mon].pdte+=m;
+    else porMon[v.mon].pag+=m;
+  });
+
+  // Recent ventas with commission
+  var recientes=misVentas.slice().sort(function(a,b){return b.fecha.localeCompare(a.fecha);}).slice(0,20);
+
+  el.innerHTML='<div style="padding:8px">'    +'<div style="font-size:16px;font-weight:700;margin-bottom:16px">🏆 Mi Comisión</div>'    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">ACUMULADA</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-warning)">$'+fN(total)+'</div>'    +'</div>'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">PENDIENTE</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-danger)">$'+fN(pendiente)+'</div>'    +'</div>'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">COBRADA</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-success)">$'+fN(pagado)+'</div>'    +'</div>'    +'</div>'    +Object.entries(porMon).filter(function(e){return e[1].pdte>0||e[1].pag>0;}).map(function(e){
+      var m=e[0],d=e[1];var dec=m==='CUP'||m==='CUPT'?0:2;
+      return '<div class="card" style="margin-bottom:8px">'        +'<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">'+m+'</div>'        +'<div style="display:flex;justify-content:space-between"><span style="font-size:12px">Pendiente</span><span style="color:var(--color-text-danger);font-weight:600">'+fN(d.pdte,dec)+' '+m+'</span></div>'        +'<div style="display:flex;justify-content:space-between"><span style="font-size:12px">Cobrada</span><span style="color:var(--color-text-success);font-weight:600">'+fN(d.pag,dec)+' '+m+'</span></div>'        +'</div>';
+    }).join('')    +'<div class="card">'    +'<div style="font-size:12px;font-weight:600;margin-bottom:10px">Últimas ventas con comisión</div>'    +recientes.map(function(v){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary)">'        +'<div>'        +'<div style="font-size:12px">'+v.cli+'</div>'        +'<div style="font-size:10px;color:var(--color-text-tertiary)">'+fD(v.fecha)+' · '+v.alm+'</div>'        +'</div>'        +'<div style="text-align:right">'        +'<div style="font-size:12px;font-weight:600;color:var(--color-text-warning)">$'+fN(v.comUSD)+'</div>'        +'<div style="font-size:10px;padding:1px 6px;border-radius:10px;background:'+(v.estCom==='Pendiente'?'rgba(251,191,36,.15)':'rgba(74,222,128,.15)')+';color:'+(v.estCom==='Pendiente'?'var(--color-text-warning)':'var(--color-text-success)')+'">'+v.estCom+'</div>'        +'</div>'        +'</div>';
+    }).join('')    +'</div>'    +'</div>';
+}
+
+function liquidarParcial(){
+  var monto=parseFloat(document.getElementById('liq-parcial')?.value)||0;
+  if(monto<=0){showToast('⚠ Introduce monto parcial');return;}
+  var cta=document.getElementById('liq-cuenta')?.value||'Efectivo USD';
+  var vend=document.getElementById('c-vend2')?.value||document.getElementById('l-vend')?.value||'';
+  var desde=document.getElementById('l-desde').value;
+  var hasta=document.getElementById('l-hasta').value;
+  var alm=document.getElementById('l-alm').value;
+  // Mark ventas as partially paid up to monto
+  var restante=monto;
+  VENTAS.filter(function(v){
+    return v.estCom==='Pendiente'
+      &&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)
+      &&(!alm||v.alm===alm)
+      &&(!vend||v.vend===vend);
+  }).forEach(function(v){
+    if(restante<=0) return;
+    if(v.comUSD<=restante){
+      v.estCom='Pagada';
+      restante-=v.comUSD;
+      supaReq('PATCH','ventas?id=eq.'+v.supaId,{est_com:'Pagada'}).catch(function(e){});
+    }
+  });
+  // Register I/G movement
+  if(typeof MOVS!=='undefined'){
+    MOVS.unshift({id:Date.now(),fecha:today(),tipo:'Comision vendedor',
+      desc:'Pago parcial comisión '+(vend||'vendedor')+' '+desde+'/'+hasta,
+      monto:monto,mon:'USD',equivUSD:monto,cta:cta,sentido:'gasto',notas:''});
+    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+  }
+  offlineSaveVentas();
+  renderLiq();
+  showToast('✓ Pago parcial de $'+fN(monto)+' registrado');
 }
 
 // ── PRODUCTOS ──────────────────────────────────────────────
