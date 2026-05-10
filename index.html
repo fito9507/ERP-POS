@@ -1546,6 +1546,11 @@ function updOnlineDot() {
   ['sync-lbl','pos-sync-lbl'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent=txt;});
 }
 
+window.addEventListener('beforeunload', function(){
+  try{localStorage.setItem('erp_queue',JSON.stringify(_syncQueue));}catch(e){}
+  if(typeof offlineSaveVentas==='function') offlineSaveVentas();
+  if(typeof offlineSaveProds==='function') offlineSaveProds();
+});
 window.addEventListener('online', function() {
   _supaOnline = true; updOnlineDot();
   showToast('📶 Conexión restaurada — sincronizando...');
@@ -1826,6 +1831,7 @@ async function flushQueue() {
           +'\uD83D\uDCB5 <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
           +'\uD83D\uDCB3 '+(_cb||'-')
           +(_vt?'\n\uD83D\uDD04 Vuelto: '+_vt:'')
+          +(v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?'\n\uD83D\uDCDD '+v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim():'')
           +'\n\u2601\uFE0F Sincronizada offline',v.almacen,'venta');
       });
     }
