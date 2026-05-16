@@ -1442,14 +1442,7 @@ function showToast(msg){
   clearTimeout(_gToastTimer);_gToastTimer=setTimeout(()=>t.style.opacity=0,2800);
 }
 
-function fD(s){
-  if(!s)return'—';
-  // Handle both 'YYYY-MM-DD' and full ISO '2026-05-16T14:32:11.000Z'
-  var _ds = s.length>10 ? s : s+'T00:00:00';
-  var d=new Date(_ds);
-  if(isNaN(d)) return s.slice(0,10)||'—';
-  return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});
-}
+function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
 
 function today(){return new Date().toISOString().slice(0,10);}
 
@@ -1746,6 +1739,8 @@ async function enviarCierreDiario(fecha, isAuto) {
       +'\uD83D\uDDD3 '+fecha+'\n\n'
       +(numVentas===0
         ? '\uD83D\uDEAB Sin ventas registradas hoy'
+          +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:'')
+          +(cajasLines?'\n\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'')
         : '\uD83D\uDED2 <b>'+numVentas+' venta'+(numVentas!==1?'s':'')+'</b>\n\n'
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
@@ -3076,7 +3071,7 @@ function confirmar(){
   if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
-    id:venNextId++,fecha:new Date().toISOString(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
+    id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
     tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
@@ -3106,9 +3101,9 @@ function confirmar(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
-    var _tgHora=venta.hora?' · '+venta.hora:'';
-    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
-      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+_tgHora+'\n'
+    var _tgHora=(function(){var _d=new Date();try{var _c=new Date(_d.toLocaleString('en-US',{timeZone:'America/Havana'}));return _c.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}catch(e){return _d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}})();
+    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code> <i>'+_tgHora+'</i>\n'
+      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
       +'\uD83D\uDCE6 '+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
@@ -3117,7 +3112,10 @@ function confirmar(){
       +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
     try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
-  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
+  var _horaRecibo=(function(){var _d=new Date();try{var _c=new Date(_d.toLocaleString('en-US',{timeZone:'America/Havana'}));return _c.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}catch(e){return _d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}})();
+  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px">'
+    +'<span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span>'
+    +'<span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+' <span style="font-weight:400;font-size:11px;color:var(--color-text-tertiary)">'+_horaRecibo+'</span></span></div>'
   +'<div class="res-line"><span>Productos</span>'
     +'<span style="text-align:right;font-size:12px;line-height:1.7">'
     +S.cart.map(function(c){return c.q+'× '+c.n;}).join('<br>')
@@ -3302,9 +3300,8 @@ function filtrar_ven(){
   const caja=(document.getElementById('f-caja')?.value||'');
   const prod=(document.getElementById('f-prod').value||'').toLowerCase();
   return VENTAS.filter(v=>{
-    var _vfd=(v.fecha||'').slice(0,10);
-    if(desde&&_vfd<desde)return false;
-    if(hasta&&_vfd>hasta)return false;
+    if(desde&&v.fecha<desde)return false;
+    if(hasta&&v.fecha>hasta)return false;
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
     if(tipo&&v.tipo!==tipo)return false;
@@ -3313,7 +3310,7 @@ function filtrar_ven(){
     if(estcom&&v.estCom!==estcom)return false;
     if(prod&&!v.prods.toLowerCase().includes(prod))return false;
     return true;
-  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.supaId>a.supaId?-1:b.supaId<a.supaId?1:0)||(b.id-a.id));
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
 }
 
 // ── RENDER VENTAS ─────────────────────────────────────────
@@ -3524,22 +3521,6 @@ function _revertirVenta(v){
     });
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
   }
-  // 3. Revertir vueltos: los vueltos fueron salidas de caja, hay que reponerlas
-  if(v.vueltos&&v.vueltos.length&&typeof _cajasMovs!=='undefined'){
-    v.vueltos.forEach(function(vt){
-      var caja=vt.caja||(vt.mon+' '+(v.alm||''));
-      var deposito={
-        tipo:'deposito', fecha:v.fecha||today(),
-        notas:'Anulación vuelto venta '+v.id,
-        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-        caja_origen:null, caja_destino:caja,
-        monto_origen:vt.m, monto_destino:vt.m, tasa_usada:null
-      };
-      _cajasMovs.unshift(deposito);
-      _supaWrite('POST','mov_cajas',deposito);
-    });
-    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
-  }
 }
 function eliminarV(id){
   if(!confirm('¿Eliminar esta venta?'))return;
@@ -3623,9 +3604,8 @@ function renderCom(){
   const vend=document.getElementById('c-vend').value;
   const alm=document.getElementById('c-alm').value;
   const data=VENTAS.filter(v=>{
-    var _vfc=(v.fecha||'').slice(0,10);
-    if(desde&&_vfc<desde)return false;
-    if(hasta&&_vfc>hasta)return false;
+    if(desde&&v.fecha<desde)return false;
+    if(hasta&&v.fecha>hasta)return false;
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
@@ -3674,9 +3654,8 @@ function renderLiq(){
   const alm=document.getElementById('l-alm').value;
   const tasa=parseFloat(document.getElementById('l-tasa').value)||512.88;
   const data=VENTAS.filter(v=>{
-    var _vfl=(v.fecha||'').slice(0,10);
-    if(desde&&_vfl<desde)return false;
-    if(hasta&&_vfl>hasta)return false;
+    if(desde&&v.fecha<desde)return false;
+    if(hasta&&v.fecha>hasta)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
   });
@@ -3801,9 +3780,8 @@ function exportLiqCSV(){
   const hasta=document.getElementById('l-hasta').value;
   const alm=document.getElementById('l-alm').value;
   const data=VENTAS.filter(v=>{
-    var _vfe=(v.fecha||'').slice(0,10);
-    if(desde&&_vfe<desde)return false;
-    if(hasta&&_vfe>hasta)return false;
+    if(desde&&v.fecha<desde)return false;
+    if(hasta&&v.fecha>hasta)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
   });
