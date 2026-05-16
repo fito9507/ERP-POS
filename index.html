@@ -1443,13 +1443,7 @@ function showToast(msg){
 }
 
 function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
-function fmtHora12(){
-  var _now=new Date();
-  try{_now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Havana'}));}catch(e){}
-  var _h=_now.getHours(),_m=_now.getMinutes(),_ampm=_h>=12?'PM':'AM';
-  _h=_h%12;if(!_h)_h=12;
-  return _h+':'+(String(_m).padStart(2,'0'))+' '+_ampm;
-}
+function fmtHora12(){var _now=new Date();try{_now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Havana'}));}catch(e){}var _h=_now.getHours(),_m=_now.getMinutes(),_ampm=_h>=12?'PM':'AM';_h=_h%12;if(!_h)_h=12;return _h+':'+(String(_m).padStart(2,'0'))+' '+_ampm;}
 
 function today(){return new Date().toISOString().slice(0,10);}
 
@@ -1612,42 +1606,26 @@ setInterval(_checkCierre, 60000);
 // Restore last sent date
 try { _cierreEnviado = localStorage.getItem('erp_cierre_enviado')||''; } catch(e) {}
 
-// ── RESUMEN DE STOCK DOMINICAL ─────────────────────────────
-var _stockResumenEnviado = '';
-function _checkStockDomingo() {
-  if (!_supaOnline || !TG_TOKEN) return;
-  var now = new Date();
-  var cubaNow = new Date(now.toLocaleString('en-US', {timeZone:'America/Havana'}));
-  if (cubaNow.getDay() !== 0) return;
-  var hoy = cubaNow.getFullYear()+'-'+String(cubaNow.getMonth()+1).padStart(2,'0')+'-'+String(cubaNow.getDate()).padStart(2,'0');
-  if (cubaNow.getHours() !== 9) return;
-  if (_stockResumenEnviado === hoy) return;
-  _stockResumenEnviado = hoy;
-  try { localStorage.setItem('erp_stock_resumen_enviado', hoy); } catch(e) {}
-  enviarStockResumen(false);
-}
-setInterval(_checkStockDomingo, 60000);
-try { _stockResumenEnviado = localStorage.getItem('erp_stock_resumen_enviado')||''; } catch(e) {}
-async function enviarStockResumen(manual) {
-  if (!TG_TOKEN) { showToast('Sin Telegram configurado'); return; }
-  if (!PRODS || !PRODS.length) { showToast('Sin productos cargados'); return; }
-  var alms = ['Habana','Placetas'];
-  var fecha = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});
-  var emoji = manual ? '\uD83D\uDCCB' : '\uD83D\uDDD3\uFE0F';
-  for (var i=0; i<alms.length; i++) {
-    var alm = alms[i];
-    var prods = PRODS.filter(function(p){ var stk=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0); return stk>0&&p.activo!==false; });
-    var prodsTrans = PRODS.filter(function(p){ return p['en_transito_'+alm.toLowerCase()]===true&&p.activo!==false; });
-    if (!prods.length && !prodsTrans.length) continue;
-    prods.sort(function(a,b){ return (a.cat||'').localeCompare(b.cat||'')||a.n.localeCompare(b.n); });
-    var cats = {};
-    prods.forEach(function(p){ var cat=p.cat||'Sin categoría'; if(!cats[cat])cats[cat]=[]; var stk=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0); var low=p.stock_min&&stk<=p.stock_min; cats[cat].push((low?'\u26A0\uFE0F ':'  \u2022 ')+p.n+' \u2014 <b>'+stk+'</b> uds'+(p.precio_min?' @ $'+fN(p.precio_min):'')); });
-    var stockLines=Object.keys(cats).map(function(cat){ return '\uD83D\uDCC2 <b>'+cat+'</b>\n'+cats[cat].join('\n'); }).join('\n\n');
-    var transLines=prodsTrans.length?'\n\n\uD83D\uDE9A <b>En tránsito</b>\n'+prodsTrans.map(function(p){return '  \u2022 '+p.n;}).join('\n'):'';
-    var totalUds=prods.reduce(function(a,p){ return a+((p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0)); }, 0);
-    var msg=emoji+' <b>Inventario '+alm+'</b> \u2014 '+fecha+'\n'+'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'+stockLines+transLines+'\n'+'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'+'\uD83D\uDCE6 Total: <b>'+totalUds+' uds</b> en '+prods.length+' productos'+(prodsTrans.length?' + '+prodsTrans.length+' en tránsito':'');
-    tgSend(msg, alm, 'venta');
-    await new Promise(function(r){setTimeout(r,600);});
+var _stockResumenEnviado='';
+function _checkStockDomingo(){if(!_supaOnline||!TG_TOKEN)return;var now=new Date();var cn=new Date(now.toLocaleString('en-US',{timeZone:'America/Havana'}));if(cn.getDay()!==0)return;var hoy=cn.getFullYear()+'-'+String(cn.getMonth()+1).padStart(2,'0')+'-'+String(cn.getDate()).padStart(2,'0');if(cn.getHours()!==9)return;if(_stockResumenEnviado===hoy)return;_stockResumenEnviado=hoy;try{localStorage.setItem('erp_stock_resumen_enviado',hoy);}catch(e){}enviarStockResumen(false);}
+setInterval(_checkStockDomingo,60000);
+try{_stockResumenEnviado=localStorage.getItem('erp_stock_resumen_enviado')||'';}catch(e){}
+async function enviarStockResumen(manual){
+  if(!TG_TOKEN){showToast('Sin Telegram');return;}if(!PRODS||!PRODS.length){showToast('Sin productos');return;}
+  var alms=['Habana','Placetas'],fecha=new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'}),emoji=manual?'\uD83D\uDCCB':'\uD83D\uDDD3\uFE0F';
+  for(var i=0;i<alms.length;i++){
+    var alm=alms[i];
+    var prods=PRODS.filter(function(p){var s=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);return s>0&&p.activo!==false;});
+    var trans=PRODS.filter(function(p){return p['en_transito_'+alm.toLowerCase()]===true&&p.activo!==false;});
+    if(!prods.length&&!trans.length)continue;
+    prods.sort(function(a,b){return(a.cat||'').localeCompare(b.cat||'')||a.n.localeCompare(b.n);});
+    var cats={};
+    prods.forEach(function(p){var cat=p.cat||'Sin categoría';if(!cats[cat])cats[cat]=[];var s=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);var low=p.stock_min&&s<=p.stock_min;cats[cat].push((low?'\u26A0\uFE0F ':'  \u2022 ')+p.n+' \u2014 <b>'+s+'</b> uds'+(p.precio_min?' @ $'+fN(p.precio_min):''));});
+    var lines=Object.keys(cats).map(function(c){return'\uD83D\uDCC2 <b>'+c+'</b>\n'+cats[c].join('\n');}).join('\n\n');
+    var tl=trans.length?'\n\n\uD83D\uDE9A <b>En tránsito</b>\n'+trans.map(function(p){return'  \u2022 '+p.n;}).join('\n'):'';
+    var tot=prods.reduce(function(a,p){return a+((p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0));},0);
+    var msg=emoji+' <b>Inventario '+alm+'</b> \u2014 '+fecha+'\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'+lines+tl+'\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\uD83D\uDCE6 Total: <b>'+tot+' uds</b> en '+prods.length+' productos'+(trans.length?' + '+trans.length+' en tránsito':'');
+    tgSend(msg,alm,'venta');await new Promise(function(r){setTimeout(r,600);});
   }
   showToast('\uD83D\uDCCB Resumen de stock enviado');
 }
@@ -1848,19 +1826,20 @@ async function flushQueue() {
     try {
       var r = await supaReq(op.method, op.path, op.body);
       if (r.ok) {
-        // If this was a venta POST, capture it for TG notification
+        // Capture successfully synced ventas for stock update + TG
         if (op.method === 'POST' && op.path === 'ventas' && op.body) {
           _syncedVentas.push(op.body);
         }
       } else {
-        var _status = r.status;
-        // 409 on ventas = already saved (duplicate) → treat as success, don't re-queue
-        if (_status === 409 && op.path === 'ventas') {
-          console.warn('Venta duplicate 409 — already in Supabase, skipping');
+        var _fqStatus = r.status;
+        // 409 on ventas = already saved (duplicate key) — treat as success
+        if (_fqStatus === 409 && op.path === 'ventas') {
+          if (op.body) _syncedVentas.push(op.body);
+          console.warn('Venta duplicate 409 — already in Supabase');
         } else {
-          var _errText = ''; try { _errText = await r.text(); } catch(e2) {}
-          console.warn('Queue op failed:', _status, op.path, _errText.slice(0,200));
-          showToast('\u26A0 Error sync ('+_status+'): '+op.path.split('?')[0]);
+          var _fqErr = ''; try { _fqErr = await r.text(); } catch(e2) {}
+          console.warn('Queue op failed:', _fqStatus, op.path, _fqErr.slice(0,200));
+          showToast('\u26A0 Error sync ('+_fqStatus+'): '+op.path.split('?')[0]);
           _syncQueue.push(op);
         }
       }
@@ -1869,58 +1848,93 @@ async function flushQueue() {
       _syncQueue.push(op);
     }
   }
-  // Send TG for each successfully synced venta (independent of other ops)
-  if(typeof TG_TOKEN!=='undefined'&&TG_TOKEN&&_syncedVentas.length){
-    _syncedVentas.forEach(function(v){
-      if(!v||!v.almacen) return;
-      var _pr=(function(){
-        if(Array.isArray(v.productos)) return v.productos.map(function(p){return (p.q||1)+'\u00d7 '+(p.n||p.nombre||'?')+' @ $'+fN(p.precioUSD||p.precio||0);}).join('\n');
+
+  // ── For each successfully synced offline venta: update stock in Supabase ──
+  // MUST happen BEFORE syncLoadProductos so Supabase has the correct deducted stock
+  if (_syncedVentas.length && typeof syncStockUpdate === 'function') {
+    for (var _si = 0; _si < _syncedVentas.length; _si++) {
+      var _sv = _syncedVentas[_si];
+      if (!_sv || !_sv.almacen) continue;
+      // Parse products string into cart array for syncStockUpdate
+      var _svCart = [];
+      var _svProds = _sv.productos || '';
+      // Split on ', ' first (standard format), fallback to ','
+      var _svParts = _svProds.indexOf(', ') >= 0 ? _svProds.split(', ') : _svProds.split(',');
+      _svParts.forEach(function(part) {
+        var _m = part.trim().match(/^(\d+)×\s*(.+?)(?:\s*@.*)?$/);
+        if (_m) _svCart.push({ n: _m[2].trim(), q: parseInt(_m[1]) });
+      });
+      if (_svCart.length) {
+        // Re-apply local deduction to make sure it's reflected
+        _svCart.forEach(function(item) {
+          var _p = PRODS.find(function(x){ return x.n === item.n; });
+          if (_p) {
+            _p.stk = Math.max(0, (_p.stk||0) - item.q);
+            if (!_p.stk_alm) _p.stk_alm = {};
+            if (_sv.almacen) _p.stk_alm[_sv.almacen] = Math.max(0, (_p.stk_alm[_sv.almacen]||0) - item.q);
+          }
+        });
+        await syncStockUpdate(_svCart, _sv.almacen);
+      }
+    }
+    if (typeof offlineSaveProds === 'function') offlineSaveProds();
+  }
+
+  // ── TG notifications for synced ventas ──
+  if (typeof TG_TOKEN !== 'undefined' && TG_TOKEN && _syncedVentas.length) {
+    _syncedVentas.forEach(function(v) {
+      if (!v || !v.almacen) return;
+      var _pr = (function(){
+        if (Array.isArray(v.productos)) return v.productos.map(function(p){return (p.q||1)+'\u00d7 '+(p.n||p.nombre||'?')+' @ $'+fN(p.precioUSD||p.precio||0);}).join('\n');
         return (v.productos||'').split(', ').map(function(p){return p.trim();}).join('\n');
       })();
-      var _cj=v.cobros_json;
-      if(typeof _cj==='string'){try{_cj=JSON.parse(_cj);}catch(e){_cj=null;}}
-      var _pagos=Array.isArray(_cj)?_cj:(_cj&&Array.isArray(_cj.pagos)?_cj.pagos:[]);
-      var _vueltos=(_cj&&Array.isArray(_cj.vueltos))?_cj.vueltos:[];
-      var _cb=_pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
-      var _vt=_vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
-      var _tk=v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)?v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1]:'';
-      var _prLines=_pr?_pr.split('\n').map(function(l){return '  \u2022 '+l.trim();}).join('\n'):'';
-      var _offHora=v.hora||fmtHora12();
-      var _offNota=v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim():'';
-      var _offMsg=''
-        +'\u2601\uFE0F <b>Venta POS</b>'+(_tk?' <code>'+_tk+'</code>':'')+' <i>(offline)</i>\n'
-        +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-        +'\uD83D\uDC64 <b>'+(v.vendedor||'?')+'</b>  \uD83C\uDFE2 '+v.almacen+'  \uD83D\uDD52 '+_offHora+'\n'
-        +'\uD83D\uDED2 Cliente: <b>'+(v.cliente||'Walk-in')+'</b>\n'
-        +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-        +(_prLines?'\uD83D\uDCE6 Productos:\n'+_prLines+'\n':'')
-        +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-        +'\uD83D\uDCB5 Total: <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
-        +'\uD83D\uDCB3 Cobro: '+(_cb||'-')
-        +(_vt?'\n\uD83D\uDD04 Vuelto: '+_vt:'')
-        +(_offNota?'\n\uD83D\uDCDD <i>'+_offNota+'</i>':'');
-      tgSend(_offMsg,v.almacen,'venta');
+      var _cj = v.cobros_json;
+      if (typeof _cj === 'string') { try { _cj = JSON.parse(_cj); } catch(e) { _cj = null; } }
+      var _pagos = Array.isArray(_cj) ? _cj : (_cj && Array.isArray(_cj.pagos) ? _cj.pagos : []);
+      var _vueltos = (_cj && Array.isArray(_cj.vueltos)) ? _cj.vueltos : [];
+      var _cb = _pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
+      var _vt = _vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
+      var _tk = v.notas && v.notas.match(/([A-Z]{3}\d{2}-\d{3})/) ? v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1] : '';
+      var _prLines = _pr ? _pr.split('\n').map(function(l){return '  \u2022 '+l.trim();}).join('\n') : '';
+      var _offHora = v.hora || fmtHora12();
+      var _offNota = v.notas && v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim() ? v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim() : '';
+      var _offMsg = ''
+        + '\u2601\uFE0F <b>Venta POS</b>' + (_tk ? ' <code>'+_tk+'</code>' : '') + ' <i>(offline)</i>\n'
+        + '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+        + '\uD83D\uDC64 <b>'+(v.vendedor||'?')+'</b>  \uD83C\uDFE2 '+v.almacen+'  \uD83D\uDD52 '+_offHora+'\n'
+        + '\uD83D\uDED2 Cliente: <b>'+(v.cliente||'Walk-in')+'</b>\n'
+        + '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+        + (_prLines ? '\uD83D\uDCE6 Productos:\n'+_prLines+'\n' : '')
+        + '\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+        + '\uD83D\uDCB5 Total: <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
+        + '\uD83D\uDCB3 Cobro: '+(_cb||'-')
+        + (_vt ? '\n\uD83D\uDD04 Vuelto: '+_vt : '')
+        + (_offNota ? '\n\uD83D\uDCDD <i>'+_offNota+'</i>' : '');
+      tgSend(_offMsg, v.almacen, 'venta');
     });
   }
 
   if (_syncQueue.length > 0) {
     try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(e) {}
-    showToast('\u26A0 '+ _syncQueue.length+' operación(es) pendientes de sincronizar');
+    showToast('\u26A0 '+_syncQueue.length+' operación(es) pendientes de sincronizar');
   } else {
     showToast('\u2714 Datos sincronizados con Supabase');
   }
-  // Reload data regardless of partial failures
+
+  // Reload all data from Supabase (stock already updated above before this)
   var _reloads = [];
-  var _hadPosts=toProcess.some(function(op){return op.method==='POST'||op.method==='PATCH';});
+  var _hadPosts = toProcess.some(function(op){return op.method==='POST'||op.method==='PATCH';});
   if (_hadPosts && typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
+  if (_hadPosts && typeof syncLoadProductos === 'function') _reloads.push(syncLoadProductos());
   if (typeof syncLoadMovsIG === 'function') _reloads.push(syncLoadMovsIG());
   if (typeof loadCajasData === 'function') _reloads.push(loadCajasData());
   if (typeof loadComReglas === 'function') _reloads.push(loadComReglas());
   if (typeof syncLoadClientes === 'function') _reloads.push(syncLoadClientes());
   await Promise.all(_reloads);
-  if(typeof renderLibro==='function') try{renderLibro();}catch(e){}
-  if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
-  if(typeof renderLista==='function') try{renderLista();}catch(e){}
+  if (typeof renderLibro === 'function') try{renderLibro();}catch(e){}
+  if (typeof renderCajas === 'function') try{renderCajas();}catch(e){}
+  if (typeof renderLista === 'function') try{renderLista();}catch(e){}
+  if (typeof renderStock === 'function') try{renderStock();}catch(e){}
   updOnlineDot();
 }
 
@@ -2224,13 +2238,11 @@ async function supaInit() {
       offlineSaveVentas(); offlineSaveProds(); offlineSaveClientes();
     }
   }, 30000);
-  // Auto-refresh cajas every 45s when cajas page is visible
+  // Auto-refresh cajas every 45s when visible
   setInterval(async function(){
     if(!_supaOnline) return;
-    var _cajasPage=document.getElementById('cajas');
-    var _cajasGrid=document.getElementById('cajas-grid');
-    var _visible=(_cajasPage&&_cajasPage.classList.contains('act'))||(_cajasGrid&&_cajasGrid.offsetParent!==null);
-    if(!_visible) return;
+    var _cp=document.getElementById('cajas'),_cg=document.getElementById('cajas-grid');
+    if(!(_cp&&_cp.classList.contains('act'))&&!(_cg&&_cg.offsetParent!==null)) return;
     if(typeof loadCajasData==='function') await loadCajasData();
     if(typeof syncLoadVentas==='function') await syncLoadVentas();
     if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
@@ -2909,15 +2921,13 @@ function reservar(){
   if(TG_TOKEN&&S.cart&&S.cart.length){
     var _rP=S.cart.map(function(c){return c.q+'x '+c.n+' @ $'+fN(c.precioUSD);}).join(', ');
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
-    var _rHora=fmtHora12();
-    var _rProdsLines=S.cart.map(function(c){return '  \u2022 '+c.q+'\u00d7 '+c.n+' @ $'+fN(c.precioUSD);}).join('\n');
     var _rMsg=''
       +'\uD83D\uDCCB <b>Reserva</b>\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-      +'\uD83D\uDC64 <b>'+(S.user||'?')+'</b>  \uD83C\uDFE2 '+(S.alm||'')+'  \uD83D\uDD52 '+_rHora+'\n'
+      +'\uD83D\uDC64 <b>'+(S.user||'?')+'</b>  \uD83C\uDFE2 '+(S.alm||'')+'  \uD83D\uDD52 '+fmtHora12()+'\n'
       +'\uD83D\uDED2 Cliente: <b>'+(S.cli||'Walk-in')+'</b>\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-      +'\uD83D\uDCE6 Productos:\n'+_rProdsLines+'\n'
+      +'\uD83D\uDCE6 Productos:\n'+S.cart.map(function(c){return '  \u2022 '+c.q+'\u00d7 '+c.n+' @ $'+fN(c.precioUSD);}).join('\n')+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCB5 Total: <b>$'+fN(_rT)+'</b>';
     tgSend(_rMsg,S.alm,'pedido');
@@ -3240,10 +3250,9 @@ function confirmar(){
     })()
     +(venta.nota?'<div class="res-line" style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px"><span style="color:var(--color-text-tertiary)">📝</span><span style="font-size:12px">'+venta.nota+'</span></div>':'');
   document.getElementById('ok-lines').innerHTML=linesHtml;
-  var _okTitleEl=document.getElementById('ok-title');
-  var _okSubEl=document.getElementById('ok-sub');
-  if(_okTitleEl) _okTitleEl.textContent=_ticket;
-  if(_okSubEl) _okSubEl.textContent=today().slice(2).replace(/-/g,'/')+(venta.hora?' · '+venta.hora:'');
+  var _okTitleEl=document.getElementById('ok-title'),_okSubEl=document.getElementById('ok-sub');
+  if(_okTitleEl)_okTitleEl.textContent=_ticket;
+  if(_okSubEl)_okSubEl.textContent=today().slice(2).replace(/-/g,'/')+(venta.hora?' · '+venta.hora:'');
   const notaEl=document.getElementById('venta-nota');if(notaEl)notaEl.value='';
   goStep('pg-ok',3);
 }
@@ -3562,13 +3571,17 @@ function setEstCom(id,est){
 // ── Revertir venta: devuelve stock + cajas ────────────────
 function _revertirVenta(v){
   if(!v) return;
+  // 1. Devolver stock
   if(v.prods && typeof PRODS!=='undefined'){
     var lineas=[];
-    var parts=(v.prods||'').split(', ');
-    if(parts.length===1) parts=(v.prods||'').split(',');
-    parts.forEach(function(p){
-      var m=p.trim().match(/^(\d+)×\s*(.+?)(?:\s*@.*)?$/);
-      if(m){lineas.push({q:parseInt(m[1]),n:m[2].trim()});}
+    // Parse "2× Producto @ $1.20, 1× Otro" — split on ', ' then strip @ price
+    var _rvParts = (v.prods||'').indexOf(', ') >= 0
+      ? (v.prods||'').split(', ')
+      : (v.prods||'').split(',');
+    _rvParts.forEach(function(p){
+      // Match: digits× name (optional @ price)
+      var m = p.trim().match(/^(\d+)×\s*(.+?)(?:\s*@.*)?$/);
+      if(m) lineas.push({q:parseInt(m[1]), n:m[2].trim()});
     });
     lineas.forEach(function(l){
       var prod=PRODS.find(function(p){return p.n===l.n;});
@@ -3576,33 +3589,50 @@ function _revertirVenta(v){
         prod.stk=(prod.stk||0)+l.q;
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
-        if(v.alm&&typeof syncStockAlmacen==='function'){
+        // Push updated stock to Supabase
+        if(v.alm && typeof syncStockAlmacen==='function'){
           var newStk=prod.stk_alm[v.alm]||0;
-          if(prod.supaId) syncStockAlmacen(prod.supaId,v.alm,newStk);
-          else if(_supaOnline) supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id').then(function(r){if(r.ok)return r.json();}).then(function(d){if(d&&d[0]&&d[0].id){prod.supaId=d[0].id;syncStockAlmacen(prod.supaId,v.alm,newStk);}}).catch(function(e){console.warn('revertir supaId:',e);});
+          if(prod.supaId){
+            syncStockAlmacen(prod.supaId, v.alm, newStk);
+          } else if(_supaOnline){
+            supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id')
+              .then(function(r){if(r.ok)return r.json();})
+              .then(function(d){
+                if(d&&d[0]&&d[0].id){
+                  prod.supaId=d[0].id;
+                  syncStockAlmacen(prod.supaId, v.alm, prod.stk_alm[v.alm]||0);
+                }
+              }).catch(function(e){console.warn('revertir supaId:',e);});
+          }
         }
       }
     });
-    if(lineas.length) offlineSaveProds();
+    if(lineas.length){ offlineSaveProds(); }
   }
   if(typeof _cajasMovs==='undefined') return;
-  var _anulDesc='Anulación venta '+(v.ticket||v.id);
+  var _anulDesc='Anulación '+(v.ticket||('venta #'+v.id));
   var _usr=(typeof S!=='undefined'&&S.user)||'Admin';
   var _fecha=v.fecha||today();
+  // 2. Revertir pagos → retiro de caja (devolución al cliente)
   if(v.pagos&&v.pagos.length){
     v.pagos.forEach(function(p){
       if(!p.m||p.m<=0) return;
       var caja=p.caja||(p.mon+' '+(v.alm||''));
-      var retiro={tipo:'retiro',fecha:_fecha,notas:_anulDesc,usuario:_usr,caja_origen:caja,caja_destino:null,monto_origen:p.m,monto_destino:p.m,tasa_usada:null};
-      _cajasMovs.unshift(retiro); _supaWrite('POST','mov_cajas',retiro);
+      var retiro={tipo:'retiro',fecha:_fecha,notas:_anulDesc,usuario:_usr,
+        caja_origen:caja,caja_destino:null,monto_origen:p.m,monto_destino:p.m,tasa_usada:null};
+      _cajasMovs.unshift(retiro);
+      _supaWrite('POST','mov_cajas',retiro);
     });
   }
+  // 3. Revertir vueltos → depósito de regreso a caja (se recupera el efectivo dado)
   if(v.vueltos&&v.vueltos.length){
     v.vueltos.forEach(function(vt){
       if(!vt.m||vt.m<=0) return;
       var caja=vt.caja||(vt.mon+' '+(v.alm||''));
-      var dep={tipo:'deposito',fecha:_fecha,notas:_anulDesc+' (vuelto recuperado)',usuario:_usr,caja_destino:caja,caja_origen:null,monto_origen:vt.m,monto_destino:vt.m,tasa_usada:null};
-      _cajasMovs.unshift(dep); _supaWrite('POST','mov_cajas',dep);
+      var dep={tipo:'deposito',fecha:_fecha,notas:_anulDesc+' (vuelto recuperado)',usuario:_usr,
+        caja_destino:caja,caja_origen:null,monto_origen:vt.m,monto_destino:vt.m,tasa_usada:null};
+      _cajasMovs.unshift(dep);
+      _supaWrite('POST','mov_cajas',dep);
     });
   }
   try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
@@ -4476,12 +4506,11 @@ function registrar(){
   if(TG_TOKEN&&tipo!=='Transferencia entre cuentas'){
     var _igIcon=meta.sentido==='ingreso'?'\uD83D\uDCB0':'\uD83D\uDCB8';
     var _igAlm=['Habana','Placetas','Xportprise'].find(function(a){return cta.indexOf(a)>=0;})||'';
-    var _igHora=fmtHora12();
     var _igMsg=''
       +_igIcon+' <b>'+tipo+'</b>\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCDD <i>'+desc+'</i>\n'
-      +'\uD83D\uDD52 '+_igHora+'\n'
+      +'\uD83D\uDD52 '+fmtHora12()+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCB2 '+(meta.sentido==='ingreso'?'+':'-')+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon
       +(mon!=='USD'?' \u2248 $'+fN(equivUSD)+' USD':'')+'\n'
@@ -5402,12 +5431,11 @@ function registrarAbonoCli(cid){
   // Telegram notification for abono
   (function(){
     var _tgIcon=cajaTipo==='efectivo'?'\uD83D\uDCB5':'\uD83D\uDD04';
-    var _tgAbHora=fmtHora12();
     var _tgMsg=''
       +_tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDC64 Cliente: <b>'+c.nombre+'</b>\n'
-      +'\uD83D\uDD52 Hora: '+_tgAbHora+'\n'
+      +'\uD83D\uDD52 Hora: '+fmtHora12()+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCB0 Monto: <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ $'+fN(equivUSD)+' USD':'')+'\n'
       +(caja?'\uD83C\uDFE6 Cuenta: '+caja+'\n':'')
@@ -5562,15 +5590,13 @@ function crearFolioCli(cid){
   if(TG_TOKEN){
     var _fP=lineas.map(function(l){return l.q+'x '+l.prod+' @ $'+fN(l.precio);}).join(', ');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
-    var _fHora=fmtHora12();
-    var _fProdsLines=_fP.split(', ').map(function(l){return '  \u2022 '+l.trim();}).join('\n');
     var _fMsg=''
-      +'\uD83D\uDCC4 <b>Venta a cr\u00e9dito</b>  <code>Folio '+fid+'</code>\n'
+      +'\uD83D\uDCC4 <b>Venta a crédito</b>  <code>Folio '+fid+'</code>\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDC64 Cliente: <b>'+c.nombre+'</b>\n'
-      +'\uD83C\uDFE2 Almacén: '+alm+'  \uD83D\uDD52 '+_fHora+'\n'
+      +'\uD83C\uDFE2 Almacén: '+alm+'  \uD83D\uDD52 '+fmtHora12()+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-      +'\uD83D\uDCE6 Productos:\n'+_fProdsLines+'\n'
+      +'\uD83D\uDCE6 Productos:\n'+_fP.split(', ').map(function(l){return '  \u2022 '+l.trim();}).join('\n')+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCB5 Total: <b>$'+fN(_fT)+'</b>\n'
       +(desc?'\uD83D\uDCDD <i>'+desc+'</i>':'');
@@ -8402,12 +8428,7 @@ function buildReceiptHtml(v){
   h+='<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'+['EUR','CUP','CUPT'].map(function(m){return fN(fromUSD(v.totalUSD,m,v.alm),dFor(m))+' '+m;}).join(' &middot; ')+'</span></div>';
   h+='<div class="res-line"><span>Cobrado</span><span>'+cobDesc+'</span></div>';
   if(vueltoDesc) h+='<div class="res-line"><span>Vuelto</span><span>'+vueltoDesc+'</span></div>';
-  if(ck.length){
-    h+='<div style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px">';
-    h+='<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.5px">MOVIMIENTOS DE CAJA</div>';
-    ck.forEach(function(k){h+='<div class="res-line"><span style="font-size:11px">'+k+'</span><span style="font-size:11px">'+cajaMap[k].join(' &middot; ')+'</span></div>';});
-    h+='</div>';
-  }
+  if(ck.length){h+='<div style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px">';h+='<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.5px">MOVIMIENTOS DE CAJA</div>';ck.forEach(function(k){h+='<div class="res-line"><span style="font-size:11px">'+k+'</span><span style="font-size:11px">'+cajaMap[k].join(' &middot; ')+'</span></div>';});h+='</div>';}
   if(v.nota) h+='<div class="res-line" style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px"><span style="color:var(--color-text-tertiary)">&#128203;</span><span style="font-size:12px">'+v.nota+'</span></div>';
   return h;
 }
