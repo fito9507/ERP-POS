@@ -1443,6 +1443,13 @@ function showToast(msg){
 }
 
 function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
+function fmtHora12(){
+  var _now=new Date();
+  try{_now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Havana'}));}catch(e){}
+  var _h=_now.getHours(),_m=_now.getMinutes(),_ampm=_h>=12?'PM':'AM';
+  _h=_h%12;if(!_h)_h=12;
+  return _h+':'+(String(_m).padStart(2,'0'))+' '+_ampm;
+}
 
 function today(){return new Date().toISOString().slice(0,10);}
 
@@ -2578,7 +2585,8 @@ function renderSteps(active){
   var _rbn=document.getElementById('res-banner-n');if(_rbn)_rbn.textContent=_rn+' reserva'+(_rn===1?'':'s');
 }
 function goStep(pg,idx){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
+  var _posRoot=document.getElementById('mod-pos')||document;
+  _posRoot.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
   document.getElementById(pg).classList.add('act');
   renderSteps(idx);
   if(pg==='pg-alm'){_poblarClientesPOS();}
@@ -3116,7 +3124,7 @@ function confirmar(){
   // Telegram notification
   // Telegram notification
   (function(){
-    var _tgProds=S.cart.map(function(c){return '  • '+c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
+    var _tgProds=S.cart.map(function(c){return '  \u2022 '+c.q+'\u00d7 '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
     var _tgMsg=''
