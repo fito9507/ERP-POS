@@ -1618,11 +1618,9 @@ function _checkStockDomingo() {
   if (!_supaOnline || !TG_TOKEN) return;
   var now = new Date();
   var cubaNow = new Date(now.toLocaleString('en-US', {timeZone:'America/Havana'}));
-  var diaSemana = cubaNow.getDay(); // 0=domingo
-  if (diaSemana !== 0) return;
+  if (cubaNow.getDay() !== 0) return; // solo domingo
   var hoy = cubaNow.getFullYear()+'-'+String(cubaNow.getMonth()+1).padStart(2,'0')+'-'+String(cubaNow.getDate()).padStart(2,'0');
-  var hora = cubaNow.getHours();
-  if (hora !== 9) return; // 9am domingos
+  if (cubaNow.getHours() !== 9) return; // 9am
   if (_stockResumenEnviado === hoy) return;
   _stockResumenEnviado = hoy;
   try { localStorage.setItem('erp_stock_resumen_enviado', hoy); } catch(e) {}
@@ -1665,16 +1663,14 @@ async function enviarStockResumen(manual) {
     var totalUds = prods.reduce(function(a,p){ return a+((p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0)); }, 0);
     var msg = emoji+' <b>Inventario '+alm+'</b> \u2014 '+fecha+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-      +stockLines
-      +transLines+'\n'
+      +stockLines+transLines+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCE6 Total: <b>'+totalUds+' uds</b> en '+prods.length+' productos'
       +(prodsTrans.length?' + '+prodsTrans.length+' en tránsito':'');
-    // Send to TG_VENTAS group (not pedidos)
-    tgSend(msg, alm, 'venta');
+    tgSend(msg, alm, 'venta'); // → TG_VENTAS group
     await new Promise(function(r){setTimeout(r,600);});
   }
-  showToast('\uD83D\uDCCB Resumen de stock enviado a Telegram');
+  showToast('\uD83D\uDCCB Resumen de stock enviado');
 }
 
 async function enviarCierreDiario(fecha, isAuto) {
@@ -1905,19 +1901,21 @@ async function flushQueue() {
         var _cb=_pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
         var _vt=_vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
         var _tk=v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)?v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1]:'';
-        var _prLines2=_pr?_pr.split('\n').map(function(l){return '  \u2022 '+l;}).join('\n'):'';
+        var _prLines=_pr?_pr.split('\n').map(function(l){return '  \u2022 '+l.trim();}).join('\n'):'';
+        var _offHora=v.hora||fmtHora12();
+        var _offNota=v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim():'';
         var _offMsg=''
-          +'\u2601\uFE0F <b>Venta POS</b>'+(_tk?' <code>'+_tk+'</code>':'')+' <i>(sincronizada)</i>\n'
+          +'\u2601\uFE0F <b>Venta POS</b>'+(_tk?' <code>'+_tk+'</code>':'')+' <i>(offline)</i>\n'
           +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-          +'\uD83D\uDC64 <b>'+(v.vendedor||'?')+'</b>  \uD83C\uDFE2 '+v.almacen+'\n'
+          +'\uD83D\uDC64 <b>'+(v.vendedor||'?')+'</b>  \uD83C\uDFE2 '+v.almacen+'  \uD83D\uDD52 '+_offHora+'\n'
           +'\uD83D\uDED2 Cliente: <b>'+(v.cliente||'Walk-in')+'</b>\n'
           +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
-          +(_prLines2?'\uD83D\uDCE6 Productos:\n'+_prLines2+'\n':'')
+          +(_prLines?'\uD83D\uDCE6 Productos:\n'+_prLines+'\n':'')
           +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
           +'\uD83D\uDCB5 Total: <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
           +'\uD83D\uDCB3 Cobro: '+(_cb||'-')
           +(_vt?'\n\uD83D\uDD04 Vuelto: '+_vt:'')
-          +(v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?'\n\uD83D\uDCDD <i>'+v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()+'</i>':'');
+          +(_offNota?'\n\uD83D\uDCDD <i>'+_offNota+'</i>':'');
         tgSend(_offMsg,v.almacen,'venta');
       });
     }
@@ -2236,6 +2234,22 @@ async function supaInit() {
       offlineSaveVentas(); offlineSaveProds(); offlineSaveClientes();
     }
   }, 30000);
+  // Auto-refresh cajas every 45s when cajas page is active (for multi-user live view)
+  setInterval(async function(){
+    if(!_supaOnline) return;
+    var _cajasVisible=false;
+    // Check ERP module cajas tab
+    var _cajasPage=document.getElementById('cajas');
+    if(_cajasPage&&_cajasPage.classList.contains('act')) _cajasVisible=true;
+    // Check admin panel cajas tab
+    var _cajasGrid=document.getElementById('cajas-grid');
+    if(_cajasGrid&&_cajasGrid.offsetParent!==null) _cajasVisible=true;
+    if(!_cajasVisible) return;
+    // Silent refresh: reload data then re-render without spinner
+    if(typeof loadCajasData==='function') await loadCajasData();
+    if(typeof syncLoadVentas==='function') await syncLoadVentas();
+    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+  }, 45000);
 }
 
 
@@ -3566,10 +3580,7 @@ function _revertirVenta(v){
   // 1. Devolver stock
   if(v.prods && typeof PRODS!=='undefined'){
     var lineas=[];
-    // Parse prods string: "2× Prod @ $1.20, 1× Otro @ $5.00"
-    // Split on ", " then parse — handle "@ $price" suffix
     var parts=(v.prods||'').split(', ');
-    // Fallback: if splitting on ", " gives only 1 part, split on ","
     if(parts.length===1) parts=(v.prods||'').split(',');
     parts.forEach(function(p){
       var m=p.trim().match(/^(\d+)×\s*(.+?)(?:\s*@.*)?$/);
@@ -3604,32 +3615,26 @@ function _revertirVenta(v){
   var _anulDesc='Anulación venta '+(v.ticket||v.id);
   var _usr=(typeof S!=='undefined'&&S.user)||'Admin';
   var _fecha=v.fecha||today();
-  // 2. Revertir pagos cobrados → retiro de caja (se devuelve el dinero al cliente)
+  // 2. Revertir pagos → retiro de caja
   if(v.pagos&&v.pagos.length){
     v.pagos.forEach(function(p){
       if(!p.m||p.m<=0) return;
       var caja=p.caja||(p.mon+' '+(v.alm||''));
-      var retiro={
-        tipo:'retiro', fecha:_fecha, notas:_anulDesc,
-        usuario:_usr, caja_origen:caja, caja_destino:null,
-        monto_origen:p.m, monto_destino:p.m, tasa_usada:null
-      };
+      var retiro={tipo:'retiro',fecha:_fecha,notas:_anulDesc,usuario:_usr,
+        caja_origen:caja,caja_destino:null,monto_origen:p.m,monto_destino:p.m,tasa_usada:null};
       _cajasMovs.unshift(retiro);
       _supaWrite('POST','mov_cajas',retiro);
     });
   }
-  // 3. Revertir vueltos entregados → deposito de regreso a caja (se recupera el vuelto)
+  // 3. Revertir vueltos → deposito de regreso a caja
   if(v.vueltos&&v.vueltos.length){
     v.vueltos.forEach(function(vt){
       if(!vt.m||vt.m<=0) return;
       var caja=vt.caja||(vt.mon+' '+(v.alm||''));
-      var deposito={
-        tipo:'deposito', fecha:_fecha, notas:_anulDesc+' (vuelto recuperado)',
-        usuario:_usr, caja_destino:caja, caja_origen:null,
-        monto_origen:vt.m, monto_destino:vt.m, tasa_usada:null
-      };
-      _cajasMovs.unshift(deposito);
-      _supaWrite('POST','mov_cajas',deposito);
+      var dep={tipo:'deposito',fecha:_fecha,notas:_anulDesc+' (vuelto recuperado)',usuario:_usr,
+        caja_destino:caja,caja_origen:null,monto_origen:vt.m,monto_destino:vt.m,tasa_usada:null};
+      _cajasMovs.unshift(dep);
+      _supaWrite('POST','mov_cajas',dep);
     });
   }
   try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
@@ -4512,7 +4517,7 @@ function registrar(){
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCB2 '+(meta.sentido==='ingreso'?'+':'-')+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon
       +(mon!=='USD'?' \u2248 $'+fN(equivUSD)+' USD':'')+'\n'
-      +'\uD83C\uDFE6 Cuenta: '+cta;
+      +'\uD83C\uDFE0 Cuenta: '+cta;
     tgSend(_igMsg,_igAlm,'venta');
   }
   showToast('Registrado: '+desc);
