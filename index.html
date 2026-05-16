@@ -1833,15 +1833,20 @@ async function flushQueue() {
         var _cb=_pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
         var _vt=_vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
         var _tk=v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)?v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1]:'';
-        tgSend('\uD83D\uDCB0 <b>Venta POS (offline)</b>'+(_tk?' <code>'+_tk+'</code>':'')+'\n'
-          +'\uD83D\uDC64 '+(v.vendedor||'?')+' \u2022 '+v.almacen+'\n'
-          +'\uD83D\uDED2 '+(v.cliente||'Walk-in')+'\n'
-          +(_pr?'\uD83D\uDCE6 '+_pr+'\n':'')
-          +'\uD83D\uDCB5 <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
-          +'\uD83D\uDCB3 '+(_cb||'-')
+        var _prLines2=_pr?_pr.split('\n').map(function(l){return '  \u2022 '+l;}).join('\n'):'';
+        var _offMsg=''
+          +'\u2601\uFE0F <b>Venta POS</b>'+(_tk?' <code>'+_tk+'</code>':'')+' <i>(sincronizada)</i>\n'
+          +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+          +'\uD83D\uDC64 <b>'+(v.vendedor||'?')+'</b>  \uD83C\uDFE2 '+v.almacen+'\n'
+          +'\uD83D\uDED2 Cliente: <b>'+(v.cliente||'Walk-in')+'</b>\n'
+          +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+          +(_prLines2?'\uD83D\uDCE6 Productos:\n'+_prLines2+'\n':'')
+          +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+          +'\uD83D\uDCB5 Total: <b>$'+fN(parseFloat(v.total_usd||0))+'</b>\n'
+          +'\uD83D\uDCB3 Cobro: '+(_cb||'-')
           +(_vt?'\n\uD83D\uDD04 Vuelto: '+_vt:'')
-          +(v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?'\n\uD83D\uDCDD '+v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim():'')
-          +'\n\u2601\uFE0F Sincronizada offline',v.almacen,'venta');
+          +(v.notas&&v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()?'\n\uD83D\uDCDD <i>'+v.notas.replace(/\[[A-Z]{3}\d{2}-\d{3}\]\s*/,'').trim()+'</i>':'');
+        tgSend(_offMsg,v.almacen,'venta');
       });
     }
     if (_hadPosts && typeof syncLoadVentas === 'function') _reloads.push(syncLoadVentas());
@@ -2832,7 +2837,18 @@ function reservar(){
   if(TG_TOKEN&&S.cart&&S.cart.length){
     var _rP=S.cart.map(function(c){return c.q+'x '+c.n+' @ $'+fN(c.precioUSD);}).join(', ');
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
-    tgSend('\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 '+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>',S.alm,'pedido');
+    var _rHora=fmtHora12();
+    var _rProdsLines=S.cart.map(function(c){return '  \u2022 '+c.q+'\u00d7 '+c.n+' @ $'+fN(c.precioUSD);}).join('\n');
+    var _rMsg=''
+      +'\uD83D\uDCCB <b>Reserva</b>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDC64 <b>'+(S.user||'?')+'</b>  \uD83C\uDFE2 '+(S.alm||'')+'  \uD83D\uDD52 '+_rHora+'\n'
+      +'\uD83D\uDED2 Cliente: <b>'+(S.cli||'Walk-in')+'</b>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCE6 Productos:\n'+_rProdsLines+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCB5 Total: <b>$'+fN(_rT)+'</b>';
+    tgSend(_rMsg,S.alm,'pedido');
   }
   updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado \u2014 stock bloqueado');
 }
@@ -3073,7 +3089,7 @@ function confirmar(){
   if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
-    id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
+    id:venNextId++,fecha:today(),hora:fmtHora12(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
     tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
@@ -3100,18 +3116,21 @@ function confirmar(){
   // Telegram notification
   // Telegram notification
   (function(){
-    var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
+    var _tgProds=S.cart.map(function(c){return '  • '+c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
-    var _tgHora=venta.hora?' · '+venta.hora:'';
-    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
-      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+_tgHora+'\n'
-      +'\uD83D\uDED2 '+venta.cli+'\n'
-      +'\uD83D\uDCE6 '+_tgProds+'\n'
-      +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
+    var _tgMsg=''
+      +'\uD83D\uDCB0 <b>Venta POS</b>  <code>'+_ticket+'</code>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDC64 <b>'+venta.vend+'</b>  \uD83C\uDFE2 '+venta.alm+'  \uD83D\uDD52 '+venta.hora+'\n'
+      +'\uD83D\uDED2 Cliente: <b>'+(venta.cli||'Walk-in')+'</b>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCE6 Productos:\n'+_tgProds+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCB5 Total: <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob
       +(_tgVuelto?'\n\uD83D\uDD04 Vuelto: '+_tgVuelto:'')
-      +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
+      +(venta.nota?'\n\uD83D\uDCDD <i>'+venta.nota+'</i>':'');
     try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
   var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
@@ -4390,11 +4409,16 @@ function registrar(){
   if(TG_TOKEN&&tipo!=='Transferencia entre cuentas'){
     var _igIcon=meta.sentido==='ingreso'?'\uD83D\uDCB0':'\uD83D\uDCB8';
     var _igAlm=['Habana','Placetas','Xportprise'].find(function(a){return cta.indexOf(a)>=0;})||'';
-    var _igMsg=_igIcon+' <b>'+tipo+'</b>\n'
-      +'\uD83D\uDCDD '+desc+'\n'
-      +(meta.sentido==='ingreso'?'+':'-')+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon
-      +(mon!=='USD'?' \u2248 $'+fN(equivUSD):'')+'\n'
-      +'\uD83C\uDFE6 '+cta;
+    var _igHora=fmtHora12();
+    var _igMsg=''
+      +_igIcon+' <b>'+tipo+'</b>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCDD <i>'+desc+'</i>\n'
+      +'\uD83D\uDD52 '+_igHora+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCB2 '+(meta.sentido==='ingreso'?'+':'-')+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon
+      +(mon!=='USD'?' \u2248 $'+fN(equivUSD)+' USD':'')+'\n'
+      +'\uD83C\uDFE6 Cuenta: '+cta;
     tgSend(_igMsg,_igAlm,'venta');
   }
   showToast('Registrado: '+desc);
@@ -5311,11 +5335,16 @@ function registrarAbonoCli(cid){
   // Telegram notification for abono
   (function(){
     var _tgIcon=cajaTipo==='efectivo'?'\uD83D\uDCB5':'\uD83D\uDD04';
-    var _tgMsg=_tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
-      +'\uD83D\uDC64 '+c.nombre+'\n'
-      +'\uD83D\uDCB0 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
-      +(desc?'\uD83D\uDCDD '+desc:'')
-      +(caja?'\uD83C\uDFE6 '+caja:'');
+    var _tgAbHora=fmtHora12();
+    var _tgMsg=''
+      +_tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDC64 Cliente: <b>'+c.nombre+'</b>\n'
+      +'\uD83D\uDD52 Hora: '+_tgAbHora+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCB0 Monto: <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ $'+fN(equivUSD)+' USD':'')+'\n'
+      +(caja?'\uD83C\uDFE6 Cuenta: '+caja+'\n':'')
+      +(desc?'\uD83D\uDCDD <i>'+desc+'</i>':'');
     tgSend(_tgMsg, null, 'venta');
   })();
   showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
@@ -5466,7 +5495,19 @@ function crearFolioCli(cid){
   if(TG_TOKEN){
     var _fP=lineas.map(function(l){return l.q+'x '+l.prod+' @ $'+fN(l.precio);}).join(', ');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
-    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+c.nombre+' \u2022 '+alm+'\n\uD83D\uDCE6 '+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+desc,alm,'pedido');
+    var _fHora=fmtHora12();
+    var _fProdsLines=_fP.split(', ').map(function(l){return '  \u2022 '+l.trim();}).join('\n');
+    var _fMsg=''
+      +'\uD83D\uDCC4 <b>Venta a cr\u00e9dito</b>  <code>Folio '+fid+'</code>\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDC64 Cliente: <b>'+c.nombre+'</b>\n'
+      +'\uD83C\uDFE2 Almacén: '+alm+'  \uD83D\uDD52 '+_fHora+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCE6 Productos:\n'+_fProdsLines+'\n'
+      +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
+      +'\uD83D\uDCB5 Total: <b>$'+fN(_fT)+'</b>\n'
+      +(desc?'\uD83D\uDCDD <i>'+desc+'</i>':'');
+    tgSend(_fMsg,alm,'pedido');
   }
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
