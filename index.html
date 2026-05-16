@@ -1442,7 +1442,14 @@ function showToast(msg){
   clearTimeout(_gToastTimer);_gToastTimer=setTimeout(()=>t.style.opacity=0,2800);
 }
 
-function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
+function fD(s){
+  if(!s)return'—';
+  // Handle both 'YYYY-MM-DD' and full ISO '2026-05-16T14:32:11.000Z'
+  var _ds = s.length>10 ? s : s+'T00:00:00';
+  var d=new Date(_ds);
+  if(isNaN(d)) return s.slice(0,10)||'—';
+  return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});
+}
 
 function today(){return new Date().toISOString().slice(0,10);}
 
@@ -3295,8 +3302,9 @@ function filtrar_ven(){
   const caja=(document.getElementById('f-caja')?.value||'');
   const prod=(document.getElementById('f-prod').value||'').toLowerCase();
   return VENTAS.filter(v=>{
-    if(desde&&v.fecha<desde)return false;
-    if(hasta&&v.fecha>hasta)return false;
+    var _vfd=(v.fecha||'').slice(0,10);
+    if(desde&&_vfd<desde)return false;
+    if(hasta&&_vfd>hasta)return false;
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
     if(tipo&&v.tipo!==tipo)return false;
@@ -3615,8 +3623,9 @@ function renderCom(){
   const vend=document.getElementById('c-vend').value;
   const alm=document.getElementById('c-alm').value;
   const data=VENTAS.filter(v=>{
-    if(desde&&v.fecha<desde)return false;
-    if(hasta&&v.fecha>hasta)return false;
+    var _vfc=(v.fecha||'').slice(0,10);
+    if(desde&&_vfc<desde)return false;
+    if(hasta&&_vfc>hasta)return false;
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
@@ -3665,8 +3674,9 @@ function renderLiq(){
   const alm=document.getElementById('l-alm').value;
   const tasa=parseFloat(document.getElementById('l-tasa').value)||512.88;
   const data=VENTAS.filter(v=>{
-    if(desde&&v.fecha<desde)return false;
-    if(hasta&&v.fecha>hasta)return false;
+    var _vfl=(v.fecha||'').slice(0,10);
+    if(desde&&_vfl<desde)return false;
+    if(hasta&&_vfl>hasta)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
   });
@@ -3791,8 +3801,9 @@ function exportLiqCSV(){
   const hasta=document.getElementById('l-hasta').value;
   const alm=document.getElementById('l-alm').value;
   const data=VENTAS.filter(v=>{
-    if(desde&&v.fecha<desde)return false;
-    if(hasta&&v.fecha>hasta)return false;
+    var _vfe=(v.fecha||'').slice(0,10);
+    if(desde&&_vfe<desde)return false;
+    if(hasta&&_vfe>hasta)return false;
     if(alm&&v.alm!==alm)return false;
     return true;
   });
