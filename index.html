@@ -1639,7 +1639,6 @@ async function enviarStockResumen(manual) {
   var emoji = manual ? '\uD83D\uDCCB' : '\uD83D\uDDD3\uFE0F';
   for (var i=0; i<alms.length; i++) {
     var alm = alms[i];
-    // Filter products with stock > 0 for this almacen
     var prods = PRODS.filter(function(p){
       var stk = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : (p.stk||0);
       return stk > 0 && p.activo !== false;
@@ -1648,16 +1647,14 @@ async function enviarStockResumen(manual) {
       return p['en_transito_'+alm.toLowerCase()] === true && p.activo !== false;
     });
     if (!prods.length && !prodsTrans.length) continue;
-    // Sort by category then name
     prods.sort(function(a,b){ return (a.cat||'').localeCompare(b.cat||'') || a.n.localeCompare(b.n); });
-    // Group by category
     var cats = {};
     prods.forEach(function(p){
       var cat = p.cat||'Sin categoría';
       if(!cats[cat]) cats[cat]=[];
       var stk = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : (p.stk||0);
       var low = p.stock_min && stk <= p.stock_min;
-      cats[cat].push((low?'\u26A0\uFE0F ':'  \u2022 ')+p.n+' — <b>'+stk+'</b> uds'+(p.precio_min?' @ $'+fN(p.precio_min):''));
+      cats[cat].push((low?'\u26A0\uFE0F ':'  \u2022 ')+p.n+' \u2014 <b>'+stk+'</b> uds'+(p.precio_min?' @ $'+fN(p.precio_min):''));
     });
     var stockLines = Object.keys(cats).map(function(cat){
       return '\uD83D\uDCC2 <b>'+cat+'</b>\n'+cats[cat].join('\n');
@@ -1666,15 +1663,16 @@ async function enviarStockResumen(manual) {
       ? '\n\n\uD83D\uDE9A <b>En tránsito</b>\n'+prodsTrans.map(function(p){return '  \u2022 '+p.n;}).join('\n')
       : '';
     var totalUds = prods.reduce(function(a,p){ return a+((p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0)); }, 0);
-    var msg = emoji+' <b>Inventario '+alm+'</b> — '+fecha+'\n'
+    var msg = emoji+' <b>Inventario '+alm+'</b> \u2014 '+fecha+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +stockLines
       +transLines+'\n'
       +'\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n'
       +'\uD83D\uDCE6 Total: <b>'+totalUds+' uds</b> en '+prods.length+' productos'
       +(prodsTrans.length?' + '+prodsTrans.length+' en tránsito':'');
-    tgSend(msg, alm, 'pedido');
-    await new Promise(function(r){setTimeout(r,500);});
+    // Send to TG_VENTAS group (not pedidos)
+    tgSend(msg, alm, 'venta');
+    await new Promise(function(r){setTimeout(r,600);});
   }
   showToast('\uD83D\uDCCB Resumen de stock enviado a Telegram');
 }
@@ -3568,10 +3566,13 @@ function _revertirVenta(v){
   // 1. Devolver stock
   if(v.prods && typeof PRODS!=='undefined'){
     var lineas=[];
-    // Parse prods string: "2× Perfil Angular, 1× Chapa..."
-    var parts=(v.prods||'').split(',');
+    // Parse prods string: "2× Prod @ $1.20, 1× Otro @ $5.00"
+    // Split on ", " then parse — handle "@ $price" suffix
+    var parts=(v.prods||'').split(', ');
+    // Fallback: if splitting on ", " gives only 1 part, split on ","
+    if(parts.length===1) parts=(v.prods||'').split(',');
     parts.forEach(function(p){
-      var m=p.trim().match(/^(\d+)×\s*(.+)/);
+      var m=p.trim().match(/^(\d+)×\s*(.+?)(?:\s*@.*)?$/);
       if(m){lineas.push({q:parseInt(m[1]),n:m[2].trim()});}
     });
     lineas.forEach(function(l){
@@ -3580,14 +3581,11 @@ function _revertirVenta(v){
         prod.stk=(prod.stk||0)+l.q;
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
-        // Persist to Supabase
         if(v.alm&&typeof syncStockAlmacen==='function'){
           var newStk=prod.stk_alm[v.alm]||0;
           if(prod.supaId){
-            // Have supaId — update directly
             syncStockAlmacen(prod.supaId, v.alm, newStk);
           } else if(_supaOnline){
-            // No supaId — fetch id from Supabase first then update
             supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id').then(function(r){
               if(r.ok) return r.json();
             }).then(function(d){
@@ -3602,22 +3600,39 @@ function _revertirVenta(v){
     });
     if(lineas.length) offlineSaveProds();
   }
-  // 2. Revertir mov_cajas: retiro de cada pago cobrado
-  if(v.pagos&&v.pagos.length&&typeof _cajasMovs!=='undefined'){
+  if(typeof _cajasMovs==='undefined') return;
+  var _anulDesc='Anulación venta '+(v.ticket||v.id);
+  var _usr=(typeof S!=='undefined'&&S.user)||'Admin';
+  var _fecha=v.fecha||today();
+  // 2. Revertir pagos cobrados → retiro de caja (se devuelve el dinero al cliente)
+  if(v.pagos&&v.pagos.length){
     v.pagos.forEach(function(p){
+      if(!p.m||p.m<=0) return;
       var caja=p.caja||(p.mon+' '+(v.alm||''));
       var retiro={
-        tipo:'retiro', fecha:v.fecha||today(),
-        notas:'Anulación venta '+v.id,
-        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
-        caja_origen:caja, caja_destino:null,
+        tipo:'retiro', fecha:_fecha, notas:_anulDesc,
+        usuario:_usr, caja_origen:caja, caja_destino:null,
         monto_origen:p.m, monto_destino:p.m, tasa_usada:null
       };
       _cajasMovs.unshift(retiro);
       _supaWrite('POST','mov_cajas',retiro);
     });
-    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
   }
+  // 3. Revertir vueltos entregados → deposito de regreso a caja (se recupera el vuelto)
+  if(v.vueltos&&v.vueltos.length){
+    v.vueltos.forEach(function(vt){
+      if(!vt.m||vt.m<=0) return;
+      var caja=vt.caja||(vt.mon+' '+(v.alm||''));
+      var deposito={
+        tipo:'deposito', fecha:_fecha, notas:_anulDesc+' (vuelto recuperado)',
+        usuario:_usr, caja_destino:caja, caja_origen:null,
+        monto_origen:vt.m, monto_destino:vt.m, tasa_usada:null
+      };
+      _cajasMovs.unshift(deposito);
+      _supaWrite('POST','mov_cajas',deposito);
+    });
+  }
+  try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
 }
 function eliminarV(id){
   if(!confirm('¿Eliminar esta venta?'))return;
