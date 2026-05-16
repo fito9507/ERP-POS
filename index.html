@@ -1739,8 +1739,6 @@ async function enviarCierreDiario(fecha, isAuto) {
       +'\uD83D\uDDD3 '+fecha+'\n\n'
       +(numVentas===0
         ? '\uD83D\uDEAB Sin ventas registradas hoy'
-          +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:'')
-          +(cajasLines?'\n\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'')
         : '\uD83D\uDED2 <b>'+numVentas+' venta'+(numVentas!==1?'s':'')+'</b>\n\n'
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
@@ -1822,7 +1820,11 @@ async function flushQueue() {
       toProcess.filter(function(op){return op.method==='POST'&&op.path==='ventas'&&op.body;}).forEach(function(op){
         var v=op.body; if(!v||!v.almacen) return;
         // productos may be string or array
-        var _pr=Array.isArray(v.productos)?v.productos.map(function(p){return (p.q||1)+'x '+(p.n||p.nombre||'?')+' @ $'+(p.precioUSD||p.precio||0);}).join(', '):(v.productos||'');
+        var _pr=(function(){
+          if(Array.isArray(v.productos)) return v.productos.map(function(p){return (p.q||1)+'× '+(p.n||p.nombre||'?')+' @ $'+fN(p.precioUSD||p.precio||0);}).join('\n');
+          // String format: '150× Producto @ $1.20, 10× Otro @ $5.00'
+          return (v.productos||'').split(', ').map(function(p){return p.trim();}).join('\n');
+        })();
         // cobros_json may be string JSON or array
         var _cj=v.cobros_json;
         if(typeof _cj==='string'){try{_cj=JSON.parse(_cj);}catch(e){_cj=null;}}
@@ -3054,7 +3056,7 @@ function _getCajasForMon(mon, alm) {
 
 function confirmar(){
   var totalUSD=getVentaUSD();
-  var prods=S.cart.map(function(c){return c.q+'× '+c.n;}).join(', ');
+  var prods=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join(', ');
   var cobDesc=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
   var vueltoDesc=S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon;}).join(' + '):'';
   // Per-product commission
@@ -3101,9 +3103,9 @@ function confirmar(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
-    var _tgHora=(function(){var _d=new Date();try{var _c=new Date(_d.toLocaleString('en-US',{timeZone:'America/Havana'}));return _c.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}catch(e){return _d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}})();
-    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code> <i>'+_tgHora+'</i>\n'
-      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+'\n'
+    var _tgHora=venta.hora?' · '+venta.hora:'';
+    var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
+      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+_tgHora+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
       +'\uD83D\uDCE6 '+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
@@ -3112,10 +3114,7 @@ function confirmar(){
       +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
     try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
-  var _horaRecibo=(function(){var _d=new Date();try{var _c=new Date(_d.toLocaleString('en-US',{timeZone:'America/Havana'}));return _c.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}catch(e){return _d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});}})();
-  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px">'
-    +'<span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span>'
-    +'<span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+' <span style="font-weight:400;font-size:11px;color:var(--color-text-tertiary)">'+_horaRecibo+'</span></span></div>'
+  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
   +'<div class="res-line"><span>Productos</span>'
     +'<span style="text-align:right;font-size:12px;line-height:1.7">'
     +S.cart.map(function(c){return c.q+'× '+c.n;}).join('<br>')
@@ -3380,7 +3379,7 @@ function renderVentas(){
       <td style="font-size:11px">${v.alm}</td>
       <td style="font-size:11px;color:var(--color-text-secondary);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.cli}</td>
       <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo==='Mayorista'?'May':'Min'}</span></td>
-      <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.prods}</td>
+      <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.prods.replace(/ @ \$[\d.,]+/g,'')}</td>
       <td style="font-weight:600;text-align:right;white-space:nowrap">${fN(v.totalUSD)}</td>
       <td style="font-size:10px;color:var(--color-text-info);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(function(){var pp=v.pagos&&v.pagos.length?v.pagos:[{caja:v.mon+' '+(v.alm||'')}];return[...new Set(pp.map(function(p){return p.caja||p.mon;}))].join(', ');}())}">${(function(){
         var pp=v.pagos&&v.pagos.length?v.pagos:[{caja:v.mon+' '+(v.alm||'')}];
@@ -8287,7 +8286,9 @@ function buildReceiptHtml(v){
   var ck=Object.keys(cajaMap);
   var h='';
   h+='<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+v.vend+' &middot; '+v.alm+' &middot; '+(v.cli||'Walk-in')+'</div>';
-  h+='<div class="res-line"><span>Productos</span><span style="text-align:right;font-size:12px;line-height:1.7">'+v.prods.split(', ').join('<br>')+'</span></div>';
+  h+='<div class="res-line"><span>Productos</span><span style="text-align:right;font-size:12px;line-height:1.7">'
+    +v.prods.split(', ').map(function(p){var _at=p.indexOf(' @ ');return _at>0?p.slice(0,_at):p;}).join('<br>')
+    +'</span></div>';
   h+='<div class="res-line"><span>Total</span><strong>'+fN(v.totalUSD)+' USD</strong></div>';
   h+='<div class="res-line"><span></span><span style="font-size:11px;color:var(--color-text-secondary)">'+['EUR','CUP','CUPT'].map(function(m){return fN(fromUSD(v.totalUSD,m,v.alm),dFor(m))+' '+m;}).join(' &middot; ')+'</span></div>';
   h+='<div class="res-line"><span>Cobrado</span><span>'+cobDesc+'</span></div>';
