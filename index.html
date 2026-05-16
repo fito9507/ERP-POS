@@ -3069,7 +3069,7 @@ function confirmar(){
   if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
-    id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
+    id:venNextId++,fecha:new Date().toISOString(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
     tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
@@ -3099,15 +3099,16 @@ function confirmar(){
     var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
+    var _tgHora=venta.hora?' · '+venta.hora:'';
     var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
-      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+'\n'
+      +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+_tgHora+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
       +'\uD83D\uDCE6 '+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob
       +(_tgVuelto?'\n\uD83D\uDD04 Vuelto: '+_tgVuelto:'')
       +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
-    tgSend(_tgMsg, S.alm, 'venta');
+    try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
   var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
   +'<div class="res-line"><span>Productos</span>'
@@ -3304,7 +3305,7 @@ function filtrar_ven(){
     if(estcom&&v.estCom!==estcom)return false;
     if(prod&&!v.prods.toLowerCase().includes(prod))return false;
     return true;
-  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
+  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.supaId>a.supaId?-1:b.supaId<a.supaId?1:0)||(b.id-a.id));
 }
 
 // ── RENDER VENTAS ─────────────────────────────────────────
@@ -3512,6 +3513,22 @@ function _revertirVenta(v){
       };
       _cajasMovs.unshift(retiro);
       _supaWrite('POST','mov_cajas',retiro);
+    });
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+  }
+  // 3. Revertir vueltos: los vueltos fueron salidas de caja, hay que reponerlas
+  if(v.vueltos&&v.vueltos.length&&typeof _cajasMovs!=='undefined'){
+    v.vueltos.forEach(function(vt){
+      var caja=vt.caja||(vt.mon+' '+(v.alm||''));
+      var deposito={
+        tipo:'deposito', fecha:v.fecha||today(),
+        notas:'Anulación vuelto venta '+v.id,
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+        caja_origen:null, caja_destino:caja,
+        monto_origen:vt.m, monto_destino:vt.m, tasa_usada:null
+      };
+      _cajasMovs.unshift(deposito);
+      _supaWrite('POST','mov_cajas',deposito);
     });
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
   }
@@ -8311,7 +8328,7 @@ function verVenta(id){
     +'<div style="text-align:center;margin-bottom:20px">'
     +'<div style="width:52px;height:52px;border-radius:50%;background:var(--color-background-success);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 12px">&#10003;</div>'
     +'<div style="font-size:18px;font-weight:500;margin-bottom:4px">Venta #'+v.id+'</div>'
-    +'<div style="font-size:12px;color:var(--color-text-secondary)">'+fD(v.fecha)+'</div>'
+    +'<div style="font-size:12px;color:var(--color-text-secondary)">'+fD(v.fecha)+(v.hora?' · '+v.hora:'')+'</div>'
     +'</div>'
     +'<div style="margin-bottom:20px">'+buildReceiptHtml(v)+'</div>'
     +'<button class="btn" onclick="_closeVentaModal()" style="width:100%">Cerrar</button>'
