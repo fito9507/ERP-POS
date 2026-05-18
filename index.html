@@ -186,16 +186,7 @@ body{font-family:var(--font-sans);color:var(--color-text-primary);font-size:14px
 .ci-sub-alt{font-size:10px;color:var(--color-text-tertiary);margin-top:1px}
 
 .badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:100px}
-.badge-oferta{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;box-shadow:0 1px 6px rgba(239,68,68,.4);animation:bop 2.2s ease-in-out infinite}
-@keyframes bop{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
-.cat-card{background:var(--color-background-secondary);border-radius:12px;overflow:hidden;border:1px solid var(--color-border-tertiary);transition:transform .15s,box-shadow .15s}
-.cat-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.18)}
-.cat-card img,.cat-no-img{width:100%;aspect-ratio:1;display:block}
-.cat-card img{object-fit:cover}
-.cat-no-img{background:var(--color-background-tertiary);display:flex;align-items:center;justify-content:center;font-size:36px}
-.cat-card-body{padding:10px 12px 12px}
-.cat-card-name{font-size:13px;font-weight:600;margin-bottom:2px;line-height:1.3}
-.cat-card-price{font-size:12px;color:var(--color-text-secondary)}
+.badge-oferta{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;box-shadow:0 1px 6px rgba(239,68,68,.4)}
 .bg{background:var(--color-background-success);color:var(--color-text-success)}
 .ba{background:var(--color-background-warning);color:var(--color-text-warning)}
 .bb{background:var(--color-background-info);color:var(--color-text-info)}
@@ -1375,7 +1366,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div id="stock-movs-panel" style="margin-top:16px"></div>
     </div>
     <div class="module" id="mod-prestamos" style="padding:14px"><div id="prestamos-root"></div></div>
-    <div class="module" id="mod-catalogo" style="padding:14px"><div id="catalogo-root"></div></div>
     <div class="module" id="mod-backup" style="padding:14px">
       <div id="backup-root"></div>
     </div>
@@ -1454,6 +1444,7 @@ function showToast(msg){
 }
 
 function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
+function fmtHora12(){var _now=new Date();try{_now=new Date(new Date().toLocaleString('en-US',{timeZone:'America/Havana'}));}catch(e){}var _h=_now.getHours(),_m=_now.getMinutes(),_ampm=_h>=12?'PM':'AM';_h=_h%12;if(!_h)_h=12;return _h+':'+(String(_m).padStart(2,'0'))+' '+_ampm;}
 
 function today(){return new Date().toISOString().slice(0,10);}
 
@@ -2007,7 +1998,8 @@ async function syncLoadProductos() {
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
         img: row.imagen_url||'', supaId: row.id,
-        oferta: row.en_oferta===true, badgeTexto: row.badge_texto||''
+        oferta: row.en_oferta===true, badgeTexto: row.badge_texto||'',
+        precioOferta: row.precio_oferta!=null?parseFloat(row.precio_oferta):null
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2039,7 +2031,7 @@ async function syncStockAlmacen(prodId, almacen, cantidad) {
 async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
-    en_oferta:p.oferta===true, badge_texto:p.badgeTexto||null,
+    en_oferta:p.oferta===true, badge_texto:p.badgeTexto||null, precio_oferta:p.precioOferta!=null?p.precioOferta:null,
     precios_escala:p.escala&&p.escala.length?JSON.stringify(p.escala):null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
     activo:p.activo!==false,en_stock:p.enStock!==false,
@@ -2279,7 +2271,6 @@ function goMod(id,title,btn){
     if(_stFirstBtn&&!_stFirstBtn.classList.contains('act')) _stFirstBtn.click();
     else renderStock();
   }catch(e){try{renderStock();}catch(e2){}}}
-  if(id==='mod-catalogo'&&typeof renderCatalogo==='function'){try{renderCatalogo();}catch(e){}}
   if(id==='mod-backup'&&typeof renderBackup==='function'){try{renderBackup();}catch(e){}}
   if(id==='mod-prestamos'&&typeof renderPrestamos==='function'){try{renderPrestamos();}catch(e){}}
 }
@@ -2296,7 +2287,6 @@ const MOD_DEFS=[
   {key:'stock',   id:'mod-stock',  icon:'📦', label:'Stock',              section:'Inventario'},
   {key:'clientes',id:'mod-cli',    icon:'👤', label:'Cuentas clientes',   section:'Clientes'},
   {key:'ig',      id:'mod-ig',     icon:'💰', label:'Ingresos / Gastos',  section:'Finanzas'},
-    {key:'catalogo',id:'mod-catalogo',icon:'🏷️', label:'Catálogo',           section:'Inventario'},
   {key:'backup',  id:'mod-backup', icon:'💾', label:'Backup / Export',    section:'Sistema'},
   {key:'admin',   id:'mod-admin',  icon:'⚙️', label:'Administración',     section:null},
 ];
@@ -2588,7 +2578,8 @@ function renderSteps(active){
   var _rbn=document.getElementById('res-banner-n');if(_rbn)_rbn.textContent=_rn+' reserva'+(_rn===1?'':'s');
 }
 function goStep(pg,idx){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
+  var _posRoot=document.getElementById('mod-pos')||document;
+  _posRoot.querySelectorAll('.page').forEach(p=>p.classList.remove('act'));
   document.getElementById(pg).classList.add('act');
   renderSteps(idx);
   if(pg==='pg-alm'){_poblarClientesPOS();}
@@ -3089,7 +3080,7 @@ function confirmar(){
   if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
-    id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
+    id:venNextId++,fecha:today(),hora:fmtHora12(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
     tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
@@ -5884,8 +5875,10 @@ function renderFormProducto() {
     + '</div>'
     + '<div id="ep-badge-row" style="display:' + (p.oferta?'block':'none') + '">'
     + '<label class="adm-lbl-f">Texto del badge (max 20 caracteres)</label>'
-    + '<input class="adm-inp" id="ep-badge-texto" value="' + (p.badgeTexto||'Oferta') + '" placeholder="Oferta" maxlength="20" style="max-width:200px">'
-    + '<div style="margin-top:8px">' + (p.oferta&&p.badgeTexto?'<span class="badge-oferta" style="font-size:10px">'+p.badgeTexto+'</span>':'') + '</div>'
+    + '<input class="adm-inp" id="ep-badge-texto" value="' + (p.badgeTexto||'Oferta') + '" placeholder="Oferta" maxlength="20" style="max-width:200px;margin-bottom:10px">'
+    + '<label class="adm-lbl-f">Precio oferta (USD) — muestra el original tachado</label>'
+    + '<input class="adm-inp" type="number" id="ep-precio-oferta" value="' + (p.precioOferta!=null?p.precioOferta:'') + '" step="0.01" placeholder="— sin precio tachado —" style="max-width:200px">'
+    + '<div style="margin-top:8px">' + (p.oferta&&p.badgeTexto?'<span class="badge-oferta">'+p.badgeTexto+'</span>':'') + '</div>'
     + '</div></div>'
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
     + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
@@ -5967,9 +5960,11 @@ function admGuardarProd(idx) {
   var existingImg = existingProd ? (existingProd.img||'') : '';
   var oferta = !!(document.getElementById('ep-oferta')?.checked);
   var badgeTexto = oferta ? ((document.getElementById('ep-badge-texto')?.value||'').trim()||'Oferta') : '';
+  var _poV = document.getElementById('ep-precio-oferta')?.value;
+  var precioOferta = oferta && _poV!=='' && !isNaN(parseFloat(_poV)) ? parseFloat(_poV) : null;
 
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
-    img: existingImg, oferta:oferta, badgeTexto:badgeTexto,
+    img: existingImg, oferta:oferta, badgeTexto:badgeTexto, precioOferta:precioOferta,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
     ddp: isNaN(ddp) ? null : ddp };
@@ -8627,89 +8622,6 @@ window.addEventListener('load', function() {
 </script>
 
 <script>
-
-function renderCatalogo(){
-  var el=document.getElementById('catalogo-root'); if(!el) return;
-  var userAlm=typeof S!=='undefined'&&S.user&&USERS[S.user]?USERS[S.user].almacen:'';
-  var q=(window._catQ||'').toLowerCase();
-  var catF=(window._catCatF||'');
-  var almF=(window._catAlmF||userAlm||'');
-  var soloOferta=(window._catOferta||false);
-  var activos=PRODS.filter(function(p){ return p.activo!==false&&p.enStock!==false; });
-  var cats=[...new Set(activos.filter(function(p){return p.cat;}).map(function(p){return p.cat;}))].sort();
-  var alms=['Habana','Placetas'];
-  var prods=activos.filter(function(p){
-    if(q&&p.n.toLowerCase().indexOf(q)<0) return false;
-    if(catF&&p.cat!==catF) return false;
-    if(almF){
-      var stk=(p.stk_alm&&p.stk_alm[almF]!=null)?p.stk_alm[almF]:(p.stk||0);
-      var trans=p['en_transito_'+almF.toLowerCase()];
-      if(stk<=0&&!trans) return false;
-    }
-    if(soloOferta&&!p.oferta) return false;
-    return true;
-  });
-  prods.sort(function(a,b){
-    if(a.oferta&&!b.oferta) return -1;
-    if(!a.oferta&&b.oferta) return 1;
-    return a.n.localeCompare(b.n);
-  });
-  var nOferta=activos.filter(function(p){return p.oferta;}).length;
-  var h='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">';
-  h+='<div><div style="font-size:18px;font-weight:700">Cat\u00e1logo</div>';
-  h+='<div style="font-size:11px;color:var(--color-text-secondary)">'+prods.length+' producto'+(prods.length!==1?'s':'')+'</div></div>';
-  if(nOferta>0) h+='<span class="badge-oferta">'+nOferta+' en oferta</span>';
-  h+='</div>';
-  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">';
-  h+='<input class="adm-inp" placeholder="Buscar..." oninput="window._catQ=this.value;renderCatalogo()" value="'+(window._catQ||'')+'" style="flex:1;min-width:130px;max-width:240px">';
-  h+='<select class="adm-inp" onchange="window._catAlmF=this.value;renderCatalogo()" style="max-width:130px">';
-  h+='<option value="">Todos almacenes</option>';
-  alms.forEach(function(a){h+='<option'+(almF===a?' selected':'')+' value="'+a+'">'+a+'</option>';});
-  h+='</select>';
-  h+='<select class="adm-inp" onchange="window._catCatF=this.value;renderCatalogo()" style="max-width:140px">';
-  h+='<option value="">Todas categor\u00edas</option>';
-  cats.forEach(function(c){h+='<option'+(catF===c?' selected':'')+' value="'+c+'">'+c+'</option>';});
-  h+='</select>';
-  h+='<label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;white-space:nowrap">';
-  h+='<input type="checkbox"'+(soloOferta?' checked':'')+' onchange="window._catOferta=this.checked;renderCatalogo()" style="width:15px;height:15px"> Solo ofertas</label>';
-  h+='</div>';
-  if(cats.length>1){
-    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
-    h+='<button class="cat-pill'+(catF===''?' act':'')+'" onclick="window._catCatF=\'\';renderCatalogo()">Todos</button>';
-    cats.forEach(function(c){h+='<button class="cat-pill'+(catF===c?' act':'')+'" onclick="window._catCatF=\''+c+'\';renderCatalogo()">'+c+'</button>';});
-    h+='</div>';
-  }
-  if(!prods.length){
-    h+='<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin productos para mostrar</div>';
-  } else {
-    h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px">';
-    prods.forEach(function(p){
-      var stk=almF?((p.stk_alm&&p.stk_alm[almF]!=null)?p.stk_alm[almF]:0):(p.stk||0);
-      var trans=almF?p['en_transito_'+almF.toLowerCase()]:
-        (p.enTransito&&(p.enTransito.Habana||p.enTransito.Placetas||p.enTransito.Xportprise));
-      var noStk=stk<=0&&!trans;
-      var pr=p.min!=null?p.min:(p.escala&&p.escala.length?p.escala[0].precio:null);
-      h+='<div class="cat-card" style="'+(noStk?'opacity:.5;':'')+(p.oferta?'border-color:rgba(245,158,11,.5);':'')+'position:relative">';
-      if(p.img){
-        h+='<img src="'+p.img+'" alt="'+p.n+'" loading="lazy" onerror="this.outerHTML=\'<div class=\\\'cat-no-img\\\'>\u2753</div>\'">';
-      } else {
-        h+='<div class="cat-no-img" style="font-size:28px">&#x1F4E6;</div>';
-      }
-      h+='<div class="cat-card-body">';
-      if(p.oferta&&p.badgeTexto) h+='<div style="margin-bottom:5px"><span class="badge-oferta" style="font-size:9px;padding:2px 7px">'+p.badgeTexto+'</span></div>';
-      h+='<div class="cat-card-name">'+p.n+'</div>';
-      if(pr!=null) h+='<div class="cat-card-price">$'+fN(pr)+' USD</div>';
-      if(noStk) h+='<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">Sin stock</div>';
-      else if(trans) h+='<div style="font-size:10px;color:#f59e0b;margin-top:2px">En tr\u00e1nsito</div>';
-      else h+='<div style="font-size:10px;color:var(--color-text-secondary);margin-top:2px">Stk: '+stk+'</div>';
-      if(p.cat) h+='<div style="font-size:10px;color:var(--color-text-tertiary)">'+p.cat+'</div>';
-      h+='</div></div>';
-    });
-    h+='</div>';
-  }
-  el.innerHTML=h;
-}
-
 function renderStock(){
   var el=document.getElementById('stock-root');if(!el)return;
   var _isVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
