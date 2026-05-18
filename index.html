@@ -2110,8 +2110,22 @@ async function supaInit() {
     }
   }catch(e){}
   try{
-    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
-    if(reu.ok){var reud=await reu.json();if(reud&&reud[0])RATES_EURUSD=parseFloat(reud[0].valor);}
+    // Load ALL tasas from Supabase — ensures all devices use the same admin-set rates
+    var rta=await supaReq('GET','tasas?select=moneda,valor');
+    if(rta.ok){(await rta.json()||[]).forEach(function(r){
+      var v=parseFloat(r.valor);if(!v||isNaN(v))return;
+      if(r.moneda==='USD')  { RATES.CUP=v; }
+      if(r.moneda==='CUPT') { RATES.CUPT=v; }
+      if(r.moneda==='EUR')  { /* EUR stored as CUP/EUR in tasas */ } // RATES.EUR derived from RATES_EURUSD below
+      if(r.moneda==='USDEUR'){ RATES_EURUSD=v; }
+    });
+    // Recalculate RATES.EUR from authoritative RATES_EURUSD and RATES.CUP
+    if(RATES_EURUSD>0.5&&RATES.CUP>10){
+      RATES.EUR=parseFloat((RATES_EURUSD/RATES.CUP).toFixed(6));
+      if(RATES.EUR<0.001||RATES.EUR>2) RATES.EUR=parseFloat((1/RATES_EURUSD).toFixed(6));
+    }
+    try{localStorage.setItem('erp_rates',JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()}));}catch(e){}
+    }
   }catch(e){}
     if (okV || okP) {
       _supaOnline = true; updOnlineDot();
@@ -5139,6 +5153,7 @@ function renderFichaAbonar(c){
       <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
         <div><label class="lbl">Monto
           <span id="a-maxhint-${c.id}" style="margin-left:6px;font-size:10px;color:var(--color-text-tertiary);font-weight:400">Máx: ${fN(pdt)} USD</span>
+          <span id="a-maxhint-mon-${c.id}" style="margin-left:2px;font-size:10px;color:var(--color-text-tertiary);font-weight:400"></span>
         </label>
           <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
             oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
@@ -5152,7 +5167,6 @@ function renderFichaAbonar(c){
         <div><label class="lbl">Tasa <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(vacío = auto almacén)</span></label>
           <input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto"
             oninput="window['em_${c.id}']=false;calcEquivCli('${c.id}')"
-            onchange="window['em_${c.id}']=false;calcEquivCli('${c.id}')"
             onfocus="this.select()" style="width:100%"></div>
         <div><label class="lbl">Equiv. USD</label>
           <input type="number" id="a-equiv-${c.id}" step="0.01"
@@ -5193,24 +5207,27 @@ function calcEquivCli(cid){
   const tasaEl=document.getElementById('a-tasa-'+cid);
   const _cli=CLIENTES.find(x=>x.id===cid);
   const alm=_cli?(_cli.almacen||''):'';
-  // Use custom tasa if provided, else use almacén-adjusted rate
+  const pdt=_cli?pdtCli(_cli):0;
+  // Update max hint: USD + local currency equivalent
+  var _mhUSD=document.getElementById('a-maxhint-'+cid);
+  var _mhMon=document.getElementById('a-maxhint-mon-'+cid);
+  if(_mhUSD)_mhUSD.textContent='Máx: '+fN(pdt)+' USD';
+  if(_mhMon)_mhMon.textContent=mon!=='USD'&&pdt>0?'= '+fN(fromUSD(pdt,mon,alm),dFor(mon))+' '+mon:'';
+  // Equiv calculation using almacén-adjusted rate or manual tasa
   let equiv=monto;
   let tasaUsada=null;
   if(mon!=='USD'){
     const tasaManual=parseFloat(tasaEl?.value);
     if(!isNaN(tasaManual)&&tasaManual>0){
-      equiv=monto/tasaManual;
-      tasaUsada=tasaManual;
+      equiv=monto/tasaManual;tasaUsada=tasaManual;
     } else {
-      // toUSD uses almacén-adjusted rates (RATES_ALM)
       equiv=toUSD(monto,mon,alm);
-      // Back-calculate effective rate for display
-      if(monto>0&&equiv>0) tasaUsada=parseFloat((monto/equiv).toFixed(2));
-      if(tasaEl&&(!tasaEl.value||tasaEl.value==='')) tasaEl.placeholder='auto ('+fN(tasaUsada,0)+')';
+      if(monto>0&&equiv>0)tasaUsada=parseFloat((monto/equiv).toFixed(2));
+      if(tasaEl&&!tasaEl.value)tasaEl.placeholder='auto ('+fN(tasaUsada,0)+')';
     }
   }
   document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(2):'';
-  // Refresh caja options filtered by moneda
+  // Refresh caja options
   var cajaSel=document.getElementById('a-caja-'+cid);
   if(cajaSel){
     var opts=_getCajasForMon(mon,alm);
@@ -5218,32 +5235,30 @@ function calcEquivCli(cid){
     cajaSel.innerHTML=opts.map(k=>'<option'+(k===cur?' selected':'')+'>'+k+'</option>').join('');
     if(!opts.includes(cur)&&opts.length)cajaSel.value=opts[0];
   }
-  const c=_cli;const pdt=c?pdtCli(c):0;
+  const c=_cli;
   const prev=document.getElementById('a-prev-'+cid);
-  const maxHint=document.getElementById('a-maxhint-'+cid);
   const montoInp=document.getElementById('a-monto-'+cid);
   const overMax=equiv>pdt+0.01;
   if(monto>0){
     if(overMax){
-      prev.style.display='block';
-      prev.style.background='rgba(239,68,68,.12)';
-      prev.style.color='var(--color-text-danger)';
-      prev.innerHTML='⚠ El abono (<strong>'+fN(equiv)+' USD</strong>) supera el pendiente. Máx: <strong>'+fN(pdt)+' USD</strong>';
+      prev.style.display='block';prev.style.background='rgba(239,68,68,.12)';prev.style.color='var(--color-text-danger)';
+      prev.innerHTML='⚠ El abono (<strong>'+fN(equiv)+' USD</strong>) supera el pendiente. Máx: <strong>'+fN(pdt)+' USD</strong>'+(mon!=='USD'?' = <strong>'+fN(fromUSD(pdt,mon,alm),dFor(mon))+' '+mon+'</strong>':'');
       if(montoInp)montoInp.style.borderColor='var(--color-text-danger)';
-      if(maxHint)maxHint.style.color='var(--color-text-danger)';
+      if(_mhUSD)_mhUSD.style.color='var(--color-text-danger)';
+      if(_mhMon)_mhMon.style.color='var(--color-text-danger)';
     } else {
-      prev.style.display='block';
-      prev.style.background='var(--color-background-success)';
-      prev.style.color='var(--color-text-success)';
+      prev.style.display='block';prev.style.background='var(--color-background-success)';prev.style.color='var(--color-text-success)';
       prev.innerHTML='Abono: <strong>'+fN(monto,dFor(mon))+' '+mon+'</strong> = <strong>'+fN(equiv)+' USD</strong> · Pdte tras abono: <strong>'+fN(Math.max(0,pdt-equiv))+' USD</strong>';
       if(montoInp)montoInp.style.borderColor='';
-      if(maxHint)maxHint.style.color='var(--color-text-tertiary)';
+      if(_mhUSD)_mhUSD.style.color='var(--color-text-tertiary)';
+      if(_mhMon)_mhMon.style.color='var(--color-text-tertiary)';
     }
   } else {
     prev.style.display='none';
     if(montoInp)montoInp.style.borderColor='';
-    if(tasaEl&&(!tasaEl.value))tasaEl.placeholder='auto';
-    if(maxHint)maxHint.style.color='var(--color-text-tertiary)';
+    if(tasaEl&&!tasaEl.value)tasaEl.placeholder='auto';
+    if(_mhUSD)_mhUSD.style.color='var(--color-text-tertiary)';
+    if(_mhMon)_mhMon.style.color='var(--color-text-tertiary)';
   }
 }
 function toggleCajaCli(cid){ /* legacy no-op */ }
@@ -5287,20 +5302,20 @@ function registrarAbonoCli(cid){
       return;
     }
   }
-  // Validate monto doesn't exceed pendiente
-  var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
-  if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
-  // Also check total client pendiente (not just folio)
+  // Validate monto doesn't exceed total pendiente — hard block
   var _pdtTotal=pdtCli(c);
   var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon,c.almacen||'');
   if(_abonoUSD>_pdtTotal+0.01){
-    alert('⚠ El abono ('+fN(_abonoUSD)+' USD) supera la deuda total pendiente ('+fN(_pdtTotal)+' USD). Ajusta el monto.');
+    var _maxMon=mon!=='USD'?' ('+fN(fromUSD(_pdtTotal,mon,c.almacen||''),dFor(mon))+' '+mon+')':'';
+    alert('⚠ El abono ('+fN(_abonoUSD)+' USD) supera la deuda total pendiente: '+fN(_pdtTotal)+' USD'+_maxMon+'. Ajusta el monto.');
     return;
   }
+  var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
+  if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
   if(_targetCheck){
     var _pdt=pdtF(_targetCheck);
     if(_abonoUSD>_pdt+0.01){
-      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente de este folio ('+fN(_pdt)+' USD). ¿Aplicar al folio más atrasado?'))return;
+      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente de este folio ('+fN(_pdt)+' USD). ¿Aplicar igualmente?'))return;
     }
   }
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasa,equivUSD:parseFloat(equivUSD.toFixed(2)),enCaja,caja,cajaTipo};
