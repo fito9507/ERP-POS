@@ -1998,7 +1998,8 @@ async function syncLoadProductos() {
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
         img: row.imagen_url||'', supaId: row.id,
         oferta: row.en_oferta===true, badgeTexto: row.badge_texto||'',
-        precioOferta: row.precio_oferta!=null?parseFloat(row.precio_oferta):null
+        precioOfertaHabana: row.precio_oferta_habana!=null?parseFloat(row.precio_oferta_habana):null,
+        precioOfertaPlacetas: row.precio_oferta_placetas!=null?parseFloat(row.precio_oferta_placetas):null
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2030,7 +2031,9 @@ async function syncStockAlmacen(prodId, almacen, cantidad) {
 async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
-    en_oferta:p.oferta===true, badge_texto:p.badgeTexto||null, precio_oferta:p.precioOferta!=null?p.precioOferta:null,
+    en_oferta:p.oferta===true, badge_texto:p.badgeTexto||null,
+    precio_oferta_habana:p.precioOfertaHabana!=null?p.precioOfertaHabana:null,
+    precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null,
     precios_escala:p.escala&&p.escala.length?JSON.stringify(p.escala):null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
     activo:p.activo!==false,en_stock:p.enStock!==false,
@@ -2114,22 +2117,8 @@ async function supaInit() {
     }
   }catch(e){}
   try{
-    // Load ALL tasas from Supabase — ensures all devices use the same admin-set rates
-    var rta=await supaReq('GET','tasas?select=moneda,valor');
-    if(rta.ok){(await rta.json()||[]).forEach(function(r){
-      var v=parseFloat(r.valor);if(!v||isNaN(v))return;
-      if(r.moneda==='USD')  { RATES.CUP=v; }
-      if(r.moneda==='CUPT') { RATES.CUPT=v; }
-      if(r.moneda==='EUR')  { /* EUR stored as CUP/EUR in tasas */ } // RATES.EUR derived from RATES_EURUSD below
-      if(r.moneda==='USDEUR'){ RATES_EURUSD=v; }
-    });
-    // Recalculate RATES.EUR from authoritative RATES_EURUSD and RATES.CUP
-    if(RATES_EURUSD>0.5&&RATES.CUP>10){
-      RATES.EUR=parseFloat((RATES_EURUSD/RATES.CUP).toFixed(6));
-      if(RATES.EUR<0.001||RATES.EUR>2) RATES.EUR=parseFloat((1/RATES_EURUSD).toFixed(6));
-    }
-    try{localStorage.setItem('erp_rates',JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()}));}catch(e){}
-    }
+    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
+    if(reu.ok){var reud=await reu.json();if(reud&&reud[0])RATES_EURUSD=parseFloat(reud[0].valor);}
   }catch(e){}
     if (okV || okP) {
       _supaOnline = true; updOnlineDot();
@@ -2717,8 +2706,11 @@ function renderProds(){
     const stk=stkDisp(p);const ns=stk<=0;
     const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
     var _bH=p.oferta&&p.badgeTexto?`<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px">${p.badgeTexto}</div>`:'';
+    var _ofePr=p.oferta?(S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null)):null;
+    var _prShow=_ofePr!=null?_ofePr:pr;
+    var _priceHtml=_ofePr!=null?`<span style="color:#ef4444;font-weight:700">${fN(_ofePr)}</span> <span style="text-decoration:line-through;color:var(--color-text-tertiary);font-size:10px">${fN(pr)}</span>`:fN(pr);
     return `<button class="pb${ns?' no-stk':''}" onclick="${ns?'':` addCart('${p.n}')`}">
-      ${_bH}<div class="pbn">${p.n}</div><div class="pbp">${fN(pr)} USD</div>${alt}
+      ${_bH}<div class="pbn">${p.n}</div><div class="pbp">${_priceHtml} USD</div>${alt}
       <div class="pbs">${ns?'Sin stock':'Stk:'+stk}</div>
     </button>`;
   }).join('');
@@ -5156,10 +5148,7 @@ function renderFichaAbonar(c){
         <input type="text" id="a-desc-${c.id}" placeholder="Ej: Cash Placetas, Aranceles container #3..." style="width:100%"></div>
 
       <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
-        <div><label class="lbl">Monto
-          <span id="a-maxhint-${c.id}" style="margin-left:6px;font-size:10px;color:var(--color-text-tertiary);font-weight:400">Máx: ${fN(pdt)} USD</span>
-          <span id="a-maxhint-mon-${c.id}" style="margin-left:2px;font-size:10px;color:var(--color-text-tertiary);font-weight:400"></span>
-        </label>
+        <div><label class="lbl">Monto</label>
           <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
             oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
         <div><label class="lbl">Moneda</label>
@@ -5169,10 +5158,9 @@ function renderFichaAbonar(c){
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <div><label class="lbl">Tasa <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(vacío = auto almacén)</span></label>
+        <div><label class="lbl">Tasa (opcional)</label>
           <input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto"
-            oninput="window['em_${c.id}']=false;calcEquivCli('${c.id}')"
-            onfocus="this.select()" style="width:100%"></div>
+            oninput="calcEquivCli('${c.id}')" style="width:100%"></div>
         <div><label class="lbl">Equiv. USD</label>
           <input type="number" id="a-equiv-${c.id}" step="0.01"
             style="width:100%;font-size:15px;font-weight:600;background:var(--color-background-secondary)"
@@ -5210,61 +5198,25 @@ function calcEquivCli(cid){
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const tasaEl=document.getElementById('a-tasa-'+cid);
-  const _cli=CLIENTES.find(x=>x.id===cid);
-  const alm=_cli?(_cli.almacen||''):'';
-  const pdt=_cli?pdtCli(_cli):0;
-  // Update max hint: USD + local currency equivalent
-  var _mhUSD=document.getElementById('a-maxhint-'+cid);
-  var _mhMon=document.getElementById('a-maxhint-mon-'+cid);
-  if(_mhUSD)_mhUSD.textContent='Máx: '+fN(pdt)+' USD';
-  if(_mhMon)_mhMon.textContent=mon!=='USD'&&pdt>0?'= '+fN(fromUSD(pdt,mon,alm),dFor(mon))+' '+mon:'';
-  // Equiv calculation using almacén-adjusted rate or manual tasa
   let equiv=monto;
-  let tasaUsada=null;
-  if(mon!=='USD'){
-    const tasaManual=parseFloat(tasaEl?.value);
-    if(!isNaN(tasaManual)&&tasaManual>0){
-      equiv=monto/tasaManual;tasaUsada=tasaManual;
-    } else {
-      equiv=toUSD(monto,mon,alm);
-      if(monto>0&&equiv>0)tasaUsada=parseFloat((monto/equiv).toFixed(2));
-      if(tasaEl&&!tasaEl.value)tasaEl.placeholder='auto ('+fN(tasaUsada,0)+')';
-    }
-  }
+  if(mon!=='USD'){const t=parseFloat(tasaEl.value)||RATES[mon];equiv=toUSD(monto,mon);}
   document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(2):'';
-  // Refresh caja options
+  // Refresh caja options filtered by moneda
   var cajaSel=document.getElementById('a-caja-'+cid);
   if(cajaSel){
+    var _cli=CLIENTES.find(x=>x.id===cid);
+    var alm=_cli?_cli.almacen:'';
     var opts=_getCajasForMon(mon,alm);
     var cur=cajaSel.value;
     cajaSel.innerHTML=opts.map(k=>'<option'+(k===cur?' selected':'')+'>'+k+'</option>').join('');
     if(!opts.includes(cur)&&opts.length)cajaSel.value=opts[0];
   }
-  const c=_cli;
+  const c=CLIENTES.find(x=>x.id===cid);const pdt=pdtCli(c);
   const prev=document.getElementById('a-prev-'+cid);
-  const montoInp=document.getElementById('a-monto-'+cid);
-  const overMax=equiv>pdt+0.01;
   if(monto>0){
-    if(overMax){
-      prev.style.display='block';prev.style.background='rgba(239,68,68,.12)';prev.style.color='var(--color-text-danger)';
-      prev.innerHTML='⚠ El abono (<strong>'+fN(equiv)+' USD</strong>) supera el pendiente. Máx: <strong>'+fN(pdt)+' USD</strong>'+(mon!=='USD'?' = <strong>'+fN(fromUSD(pdt,mon,alm),dFor(mon))+' '+mon+'</strong>':'');
-      if(montoInp)montoInp.style.borderColor='var(--color-text-danger)';
-      if(_mhUSD)_mhUSD.style.color='var(--color-text-danger)';
-      if(_mhMon)_mhMon.style.color='var(--color-text-danger)';
-    } else {
-      prev.style.display='block';prev.style.background='var(--color-background-success)';prev.style.color='var(--color-text-success)';
-      prev.innerHTML='Abono: <strong>'+fN(monto,dFor(mon))+' '+mon+'</strong> = <strong>'+fN(equiv)+' USD</strong> · Pdte tras abono: <strong>'+fN(Math.max(0,pdt-equiv))+' USD</strong>';
-      if(montoInp)montoInp.style.borderColor='';
-      if(_mhUSD)_mhUSD.style.color='var(--color-text-tertiary)';
-      if(_mhMon)_mhMon.style.color='var(--color-text-tertiary)';
-    }
-  } else {
-    prev.style.display='none';
-    if(montoInp)montoInp.style.borderColor='';
-    if(tasaEl&&!tasaEl.value)tasaEl.placeholder='auto';
-    if(_mhUSD)_mhUSD.style.color='var(--color-text-tertiary)';
-    if(_mhMon)_mhMon.style.color='var(--color-text-tertiary)';
-  }
+    prev.style.display='block';prev.style.background='var(--color-background-success)';prev.style.color='var(--color-text-success)';
+    prev.innerHTML=`Abono: <strong>${fN(monto,dFor(mon))} ${mon}</strong> = <strong>${fN(equiv)} USD</strong> · Pdte tras abono: <strong>${fN(Math.max(0,pdt-equiv))} USD</strong>`;
+  } else prev.style.display='none';
 }
 function toggleCajaCli(cid){ /* legacy no-op */ }
 function updCajaExplicaCli(cid){
@@ -5307,20 +5259,14 @@ function registrarAbonoCli(cid){
       return;
     }
   }
-  // Validate monto doesn't exceed total pendiente — hard block
-  var _pdtTotal=pdtCli(c);
-  var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon,c.almacen||'');
-  if(_abonoUSD>_pdtTotal+0.01){
-    var _maxMon=mon!=='USD'?' ('+fN(fromUSD(_pdtTotal,mon,c.almacen||''),dFor(mon))+' '+mon+')':'';
-    alert('⚠ El abono ('+fN(_abonoUSD)+' USD) supera la deuda total pendiente: '+fN(_pdtTotal)+' USD'+_maxMon+'. Ajusta el monto.');
-    return;
-  }
+  // Validate monto doesn't exceed pendiente
   var _targetCheck=fid?c.folios.find(function(f){return f.id===fid;}):c.folios.find(function(f){return estF(f)!=='pagado';});
   if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
   if(_targetCheck){
     var _pdt=pdtF(_targetCheck);
+    var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
     if(_abonoUSD>_pdt+0.01){
-      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente de este folio ('+fN(_pdt)+' USD). ¿Aplicar igualmente?'))return;
+      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
     }
   }
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasa,equivUSD:parseFloat(equivUSD.toFixed(2)),enCaja,caja,cajaTipo};
@@ -5934,8 +5880,13 @@ function renderFormProducto() {
     + '<div id="ep-badge-row" style="display:' + (p.oferta?'block':'none') + '">'
     + '<label class="adm-lbl-f">Texto del badge (max 20 caracteres)</label>'
     + '<input class="adm-inp" id="ep-badge-texto" value="' + (p.badgeTexto||'Oferta') + '" placeholder="Oferta" maxlength="20" style="max-width:200px;margin-bottom:10px">'
-    + '<label class="adm-lbl-f">Precio oferta (USD) â muestra el original tachado</label>'
-    + '<input class="adm-inp" type="number" id="ep-precio-oferta" value="' + (p.precioOferta!=null?p.precioOferta:'') + '" step="0.01" placeholder="â sin precio tachado â" style="max-width:200px">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<div><label class="adm-lbl-f">Precio oferta Habana (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-pofe-hab" value="' + (p.precioOfertaHabana!=null?p.precioOfertaHabana:'') + '" step="0.01" placeholder="â"></div>'
+    + '<div><label class="adm-lbl-f">Precio oferta Placetas (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-pofe-plac" value="' + (p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:'') + '" step="0.01" placeholder="â"></div>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:6px">Si Placetas queda vacío usa el precio de Habana</div>'
     + '<div style="margin-top:8px">' + (p.oferta&&p.badgeTexto?'<span class="badge-oferta">'+p.badgeTexto+'</span>':'') + '</div>'
     + '</div></div>'
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
@@ -6018,11 +5969,14 @@ function admGuardarProd(idx) {
   var existingImg = existingProd ? (existingProd.img||'') : '';
   var oferta = !!(document.getElementById('ep-oferta')?.checked);
   var badgeTexto = oferta ? ((document.getElementById('ep-badge-texto')?.value||'').trim()||'Oferta') : '';
-  var _poV = document.getElementById('ep-precio-oferta')?.value;
-  var precioOferta = oferta && _poV!=='' && !isNaN(parseFloat(_poV)) ? parseFloat(_poV) : null;
+  var _pohV = document.getElementById('ep-pofe-hab')?.value;
+  var _popV = document.getElementById('ep-pofe-plac')?.value;
+  var precioOfertaHabana = oferta && _pohV!=='' && !isNaN(parseFloat(_pohV)) ? parseFloat(_pohV) : null;
+  var precioOfertaPlacetas = oferta && _popV!=='' && !isNaN(parseFloat(_popV)) ? parseFloat(_popV) : null;
 
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
-    img: existingImg, oferta:oferta, badgeTexto:badgeTexto, precioOferta:precioOferta,
+    img: existingImg, oferta:oferta, badgeTexto:badgeTexto,
+    precioOfertaHabana:precioOfertaHabana, precioOfertaPlacetas:precioOfertaPlacetas,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
     ddp: isNaN(ddp) ? null : ddp };
