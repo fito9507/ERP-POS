@@ -8522,6 +8522,7 @@ _loadRatesCache();
 
 // Auto-refresh: fetch on load + every 30 minutes
 // ── elToque API ──────────────────────────────────────────────
+// TOKEN actualizado 2026-05-20 — renovar en Edge Function update-tasas también
 var _TOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc3OTIwNzc2OSwianRpIjoiMmRiMDRkNzMtZDcwMi00NGU1LWE3M2ItN2EzMjIxMjU0YjU2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY5ZmNjM2U4ZDA3NmQ2OGM0NmFmNzg4ZCIsIm5iZiI6MTc3OTIwNzc2OSwiZXhwIjoxODEwNzQzNzY5fQ.lhPhEgDuYXn0S37SvnIphr9qYx828kRwfncjQOQnlro';
 
 async function fetchElToqueAndSave(){
@@ -8541,14 +8542,31 @@ async function fetchElToqueAndSave(){
       if (r1.ok) {
         var raw1 = await r1.json();
         // Edge Function devuelve: { ok: true, tasas: {USD, ECU, MLC, ...} }
-        if (raw1 && raw1.ok && raw1.tasas) data = raw1;
+        // Si tasas tiene campo 'msg' es un error de elToque (token expirado, etc.)
+        var tasasOk = raw1 && raw1.ok && raw1.tasas && !raw1.tasas.msg;
+        if (tasasOk) {
+          data = raw1;
+        } else if (raw1 && raw1.tasas && raw1.tasas.msg) {
+          throw new Error('elToque: ' + raw1.tasas.msg);
+        } else if (raw1 && raw1.msg) {
+          throw new Error('elToque: ' + raw1.msg);
+        }
       } else {
-        var errTxt = await r1.text().catch(function(){ return ''; });
+        var errTxt = await r1.text().catch(function(){ return '{}'; });
+        var errJson = {};
+        try { errJson = JSON.parse(errTxt); } catch(e) {}
+        if (errJson.msg) throw new Error('elToque: ' + errJson.msg);
         console.warn('update-tasas HTTP ' + r1.status + ':', errTxt.substring(0,200));
       }
-    } catch(e) { console.warn('elToque Edge Function:', e); }
+    } catch(e) {
+      // Si el error es de token, mostrarlo claramente y no continuar
+      if (e.message && e.message.indexOf('expired') >= 0) {
+        throw new Error('Token elToque expirado — actualiza el token en la Edge Function de Supabase');
+      }
+      console.warn('elToque Edge Function:', e);
+    }
 
-    // ── Estrategia 2: Leer directamente de la tabla tasas en Supabase ──
+    // ── Estrategia 2: Leer directamente de la tabla tasas en Supabase (fallback) ──
     if (!data) {
       try {
         var r2 = await supaReq('GET', 'tasas?select=moneda,valor&moneda=in.(USD,EUR,MLC)');
@@ -8557,11 +8575,17 @@ async function fetchElToqueAndSave(){
           if (Array.isArray(rows) && rows.length > 0) {
             var tasasMap = {};
             rows.forEach(function(row){ tasasMap[row.moneda] = row.valor; });
-            // Convertir al formato esperado: {USD=CUP/USD, ECU=CUP/EUR, MLC=CUP/MLC}
-            data = { ok: true, tasas: { USD: tasasMap.USD||0, ECU: tasasMap.EUR||0, MLC: tasasMap.MLC||0 } };
+            var usd = parseFloat(tasasMap.USD||0);
+            var eur = parseFloat(tasasMap.EUR||0);
+            var mlc = parseFloat(tasasMap.MLC||0);
+            if (usd > 10) {
+              // Datos válidos en la tabla
+              data = { ok: true, tasas: { USD: usd, ECU: eur||usd, MLC: mlc||usd } };
+              showToast('⚠ elToque: usando tasas guardadas (Edge Function sin respuesta)');
+            }
           }
         }
-      } catch(e) { console.warn('elToque tabla tasas:', e); }
+      } catch(e) { console.warn('elToque tabla tasas fallback:', e); }
     }
 
     if (!data || !data.tasas) throw new Error('No se pudo obtener tasas. Verifica la Edge Function update-tasas en Supabase.');
