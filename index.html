@@ -2723,6 +2723,11 @@ function addCart(n){
   // Use escala price for new quantity, fallback to escala[0] if maj/min=0
   var precioUSD = getPorEscala(p, newQty);
   if(!precioUSD && p.escala && p.escala.length) precioUSD = parseFloat(p.escala[0].precio)||0;
+  // Si el producto está en oferta, usar precio de oferta
+  if(p.oferta){
+    var ofePr=S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null);
+    if(ofePr!=null) precioUSD=ofePr;
+  }
   if(ex){if(ex.q>=stk)return;ex.q++;ex.precioUSD=precioUSD;}
   else S.cart.push({n,q:1,precioUSD,tipo:S.tipo,modified:false});
   renderCart();
