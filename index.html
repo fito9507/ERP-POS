@@ -186,6 +186,7 @@ body{font-family:var(--font-sans);color:var(--color-text-primary);font-size:14px
 .ci-sub-alt{font-size:10px;color:var(--color-text-tertiary);margin-top:1px}
 
 .badge{display:inline-block;font-size:9px;padding:1px 5px;border-radius:100px}
+.badge-oferta{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:100px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;box-shadow:0 1px 6px rgba(239,68,68,.4)}
 .bg{background:var(--color-background-success);color:var(--color-text-success)}
 .ba{background:var(--color-background-warning);color:var(--color-text-warning)}
 .bb{background:var(--color-background-info);color:var(--color-text-info)}
@@ -1995,7 +1996,10 @@ async function syncLoadProductos() {
         preventa_maj: row.precio_preventa_maj!=null?parseFloat(row.precio_preventa_maj):null,
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
-        img: row.imagen_url||'', supaId: row.id
+        img: row.imagen_url||'', supaId: row.id,
+        oferta: row.en_oferta===true, badgeTexto: row.badge_texto||'',
+        precioOfertaHabana: row.precio_oferta_habana!=null?parseFloat(row.precio_oferta_habana):null,
+        precioOfertaPlacetas: row.precio_oferta_placetas!=null?parseFloat(row.precio_oferta_placetas):null
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2038,7 +2042,10 @@ async function syncSaveProducto(p) {
     precio_min_placetas:p.min_placetas!=null?p.min_placetas:null,
     moq:p.moq||1,
     precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
-    imagen_url:p.img||null};
+    imagen_url:p.img||null,
+    en_oferta:p.oferta===true, badge_texto:p.badgeTexto||null,
+    precio_oferta_habana:p.precioOfertaHabana!=null?p.precioOfertaHabana:null,
+    precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
@@ -2698,8 +2705,11 @@ function renderProds(){
     const pr=getP(p)||(p.escala&&p.escala.length?p.escala[0].precio:0);if(pr==null||pr==='')return'';
     const stk=stkDisp(p);const ns=stk<=0;
     const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
+    var _bH=p.oferta&&p.badgeTexto?`<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px">${p.badgeTexto}</div>`:'';
+    var _ofePr=p.oferta?(S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null)):null;
+    var _priceHtml=_ofePr!=null?`<span style="color:#ef4444;font-weight:700">${fN(_ofePr)}</span> <span style="text-decoration:line-through;color:var(--color-text-tertiary);font-size:10px">${fN(pr)}</span> USD`:fN(pr)+' USD';
     return `<button class="pb${ns?' no-stk':''}" onclick="${ns?'':` addCart('${p.n}')`}">
-      <div class="pbn">${p.n}</div><div class="pbp">${fN(pr)} USD</div>${alt}
+      ${_bH}<div class="pbn">${p.n}</div><div class="pbp">${_priceHtml}</div>${alt}
       <div class="pbs">${ns?'Sin stock':'Stk:'+stk}</div>
     </button>`;
   }).join('');
