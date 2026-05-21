@@ -5971,12 +5971,21 @@ function admGuardarProd(idx) {
   var anyTransito = enTransito.Habana||enTransito.Placetas||enTransito.Xportprise;
   // Preserve existing img URL (upload handled separately)
   var existingImg = existingProd ? (existingProd.img||'') : '';
+  // Oferta / badge
+  var oferta = !!(document.getElementById('ep-oferta') && document.getElementById('ep-oferta').checked);
+  var badgeTexto = (document.getElementById('ep-badge-texto')?.value||'').trim();
+  var pOfeHabV = document.getElementById('ep-pofe-hab')?.value||'';
+  var pOfePlacV = document.getElementById('ep-pofe-plac')?.value||'';
+  var precioOfertaHabana = pOfeHabV!==''&&!isNaN(parseFloat(pOfeHabV))?parseFloat(pOfeHabV):null;
+  var precioOfertaPlacetas = pOfePlacV!==''&&!isNaN(parseFloat(pOfePlacV))?parseFloat(pOfePlacV):null;
 
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
     img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
-    ddp: isNaN(ddp) ? null : ddp };
+    ddp: isNaN(ddp) ? null : ddp,
+    oferta: oferta, badgeTexto: badgeTexto,
+    precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
