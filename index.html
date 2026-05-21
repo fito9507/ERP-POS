@@ -3362,7 +3362,10 @@ function filtrar_ven(){
     if(dc!==0)return dc;
     var hc=(b.hora||'').localeCompare(a.hora||'');
     if(hc!==0)return hc;
-    return b.id-a.id;
+    // Ordenar por número de ticket (últimos dígitos de HABmm-NNN)
+    var na=parseInt(((a.ticket||'').match(/(\d+)$/ )||[0,0])[1])||a.id||0;
+    var nb=parseInt(((b.ticket||'').match(/(\d+)$/ )||[0,0])[1])||b.id||0;
+    return nb-na;
   });
 }
 
