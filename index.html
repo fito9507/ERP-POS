@@ -3170,7 +3170,7 @@ function confirmar(){
       +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
     try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
-  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+'</span></div>'
+  var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+(venta.hora?' <span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary);margin-left:6px">⏰ '+venta.hora+'</span>':'')+'</span></div>'
   +'<div class="res-line"><span>Productos</span>'
     +'<span style="text-align:right;font-size:12px;line-height:1.7">'
     +S.cart.map(function(c){return c.q+'× '+c.n;}).join('<br>')
@@ -3441,7 +3441,7 @@ function renderVentas(){
         <div style="font-size:11px">${fD(v.fecha)}</div>
         <div style="font-size:10px;color:var(--color-text-tertiary)">
           ${v.hora?'<span style="color:var(--color-text-primary);font-weight:500">'+v.hora+'</span> &nbsp;':''}
-          <span style="opacity:.7">${v.ticket||('#'+v.id)}</span>
+          ${v.ticket?'<span style="opacity:.7">'+v.ticket+'</span>':''}
         </div>
       </td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
