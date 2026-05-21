@@ -937,6 +937,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar</button>
       </div>
       <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()">📥</button>
+      <button class="btn-sm" id="btn-retro-tickets" onclick="retroAsignarTickets()" title="Asignar tickets a ventas sin número">🎫</button>
     </div>
     <!-- Filtros en grid 2 cols -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
@@ -3314,6 +3315,45 @@ function navTo_ven(pg,btn){
 }
 
 // ── FECHAS ────────────────────────────────────────────────
+async function retroAsignarTickets(){
+  var sinTicket = VENTAS.filter(function(v){ return !v.ticket; });
+  if(!sinTicket.length){ alert('\u2705 Todas las ventas ya tienen ticket asignado.'); return; }
+  if(!confirm('Se asignarán tickets a '+sinTicket.length+' venta(s) sin número. ¿Continuar?')) return;
+  // Ordenar por fecha asc + supaId asc (las más antiguas primero)
+  sinTicket.sort(function(a,b){
+    var dc=a.fecha.localeCompare(b.fecha);
+    return dc!==0?dc:(a.supaId||0)-(b.supaId||0);
+  });
+  var codigos={Habana:'HAB',Placetas:'PLA',Xportprise:'XPR'};
+  var ok=0, err=0;
+  for(var i=0;i<sinTicket.length;i++){
+    var v=sinTicket[i];
+    var almCod=codigos[v.alm]||(v.alm||'GEN').slice(0,3).toUpperCase();
+    var fechaObj=new Date(v.fecha);
+    var mm=String(fechaObj.getMonth()+1).padStart(2,'0');
+    var key=almCod+mm;
+    if(!_ticketSeq[key])_ticketSeq[key]=0;
+    _ticketSeq[key]++;
+    var nuevoTicket=key+'-'+String(_ticketSeq[key]).padStart(3,'0');
+    // Update local
+    v.ticket=nuevoTicket;
+    // Build new notas: prepend ticket bracket
+    var notaActual=v.nota||'';
+    var horaTag=v.hora?'['+v.hora+']':'';
+    var nuevaNota='['+nuevoTicket+']'+horaTag+(notaActual?' '+notaActual:'');
+    // Update Supabase
+    if(_supaOnline && v.supaId){
+      try{
+        var r=await supaReq('PATCH','ventas?id=eq.'+v.supaId,{notas:nuevaNota});
+        if(r.ok){ok++;}else{err++;}
+      }catch(e){err++;}
+    } else { ok++; }
+  }
+  try{localStorage.setItem('erp_ticket_seq',JSON.stringify(_ticketSeq));}catch(e){}
+  offlineSaveVentas();
+  renderVentas();
+  alert('\u2705 Tickets asignados: '+ok+(err?' \u26a0\ufe0f Errores: '+err:''));
+}
 function setRange(r){
   const d=new Date(),fmt=x=>x.toISOString().slice(0,10);
   let desde,hasta=fmt(d);
