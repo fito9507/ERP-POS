@@ -1315,19 +1315,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- ══ DEUDAS ══ -->
 <div class="page" id="deuda">
-  <div class="g2">
-    <div class="card">
-      <h3>Deudas activas</h3>
-      <div id="deudas-list"></div>
-    </div>
-    <div class="card">
-      <h3>Historial de amortizaciones</h3>
-      <div id="amort-list">
-        <div style="color:var(--color-text-tertiary);font-size:12px;padding:12px 0;text-align:center">Sin amortizaciones registradas</div>
-      </div>
-    </div>
-  </div>
+  <div id="deudas-root"></div>
 </div>
+
 
 </div></div>
     <div class="module" id="mod-cli" style="padding:12px"><div id="mod-clientes"><div class="wrap">
@@ -4725,68 +4715,292 @@ async function renderCajas(){
 
 // ── DEUDAS ────────────────────────────────────────────────
 function renderDeudas(){
-  const amorts=MOVS.filter(m=>m.tipo==='Amortización deuda'||m.tipo==='Pago intereses');
-  // actualizar pendiente
-  DEUDAS.forEach(d=>{
-    const pagado=amorts.filter(m=>m.acreedor===d.acreedor).reduce((a,m)=>a+m.equivUSD,0);
-    d.pendienteUSD=Math.max(0,d.totalUSD-pagado);
-    d.pagadoUSD=pagado;
+  var el=document.getElementById('deudas-root');
+  if(!el)return;
+  var totalPagar=0,totalCobrar=0;
+  PRESTAMOS.forEach(function(p){
+    var pend=p.cuotas.reduce(function(a,c){return a+(c.pagada?0:c.total);},0);
+    var usd=p.moneda==='USD'?pend:(typeof toUSD==='function'?toUSD(pend,p.moneda):pend/(RATES[p.moneda]||1));
+    if(p.direccion==='nos_deben')totalCobrar+=usd; else totalPagar+=usd;
   });
-  document.getElementById('deudas-list').innerHTML=DEUDAS.filter(d=>d.activa).map(d=>`
-    <div style="border:.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-weight:500">${d.acreedor}</div>
-          <div style="font-size:11px;color:var(--color-text-secondary)">${d.concepto}</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:12px;color:var(--color-text-secondary)">Pendiente</div>
-          <div style="font-size:16px;font-weight:500;color:var(--color-text-danger)">${fN(d.pendienteUSD)} USD</div>
-        </div>
-      </div>
-      <!-- barra progreso -->
-      <div style="height:6px;border-radius:3px;background:var(--color-background-secondary);margin-bottom:6px">
-        <div style="height:100%;border-radius:3px;background:var(--color-text-success);width:${Math.min(100,Math.round((d.pagadoUSD||0)/d.totalUSD*100))}%"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary)">
-        <span>Pagado: ${fN(d.pagadoUSD||0)} USD / ${fN(d.totalUSD)} USD</span>
-        <span>Cuota: ${d.cuotaMes?fN(d.cuotaMes)+' EUR/mes':'—'}</span>
-      </div>
-      <div style="margin-top:8px;display:flex;gap:6px">
-        <button class="btn-sm" onclick="pagarCuotaDeuda(${d.id})">Registrar cuota</button>
-        <button class="btn-sm" style="color:var(--color-text-success)" onclick="liquidarDeuda(${d.id})">Liquidar deuda</button>
-      </div>
-    </div>`).join('')||'<div style="color:var(--color-text-success);text-align:center;padding:16px">Sin deudas activas ✓</div>';
-  // historial amorts
-  document.getElementById('amort-list').innerHTML=amorts.length?amorts.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(m=>`
-    <div class="mov-row">
-      <div class="mov-main">
-        <div class="mov-desc">${m.desc}</div>
-        <div class="mov-meta">${fD(m.fecha)} · ${m.cta} · ${m.acreedor||''}</div>
-      </div>
-      <div class="mov-amt">
-        <div class="mov-amt-main" style="color:var(--color-text-danger)">−${fN(m.monto,m.mon==='CUP'?0:2)} ${m.mon}</div>
-        ${m.mon!=='USD'?`<div class="mov-amt-sub">≈ ${fN(m.equivUSD)} USD</div>`:''}
-      </div>
-    </div>`).join(''):'<div style="color:var(--color-text-tertiary);font-size:12px;padding:12px 0;text-align:center">Sin amortizaciones</div>';
+  var pagar=PRESTAMOS.filter(function(p){return p.direccion!=='nos_deben';});
+  var cobrar=PRESTAMOS.filter(function(p){return p.direccion==='nos_deben';});
+  var html='';
+  // Header
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +'<div style="font-size:15px;font-weight:600">📋 Deudas y Préstamos</div>'
+    +'<button class="btn btn-p" style="padding:6px 14px;font-size:13px" onclick="showNuevaDeuda()">+ Nueva</button>'
+    +'</div>';
+  // Metrics cards
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'
+    +'<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:12px">'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📤 Por pagar (debemos)</div>'
+    +'<div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(totalPagar)+' USD</div>'
+    +'<div style="font-size:11px;color:var(--color-text-tertiary)">'+pagar.length+' activo'+(pagar.length!==1?'s':'')+'</div>'
+    +'</div>'
+    +'<div style="background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);border-radius:10px;padding:12px">'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📥 Por cobrar (nos deben)</div>'
+    +'<div style="font-size:20px;font-weight:700;color:var(--color-text-success)">'+fN(totalCobrar)+' USD</div>'
+    +'<div style="font-size:11px;color:var(--color-text-tertiary)">'+cobrar.length+' activo'+(cobrar.length!==1?'s':'')+'</div>'
+    +'</div>'
+    +'</div>';
+  // Two columns
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
+  // Por pagar
+  html+='<div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--color-text-danger);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(248,113,113,.2);padding-bottom:6px">📤 Por pagar</div>';
+  if(pagar.length){pagar.forEach(function(p){html+=_renderDeudaCard(p);});}
+  else html+='<div style="color:var(--color-text-success);font-size:12px;padding:20px 0;text-align:center">Sin deudas pendientes ✓</div>';
+  html+='</div>';
+  // Por cobrar
+  html+='<div>'
+    +'<div style="font-size:11px;font-weight:700;color:var(--color-text-success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(74,222,128,.2);padding-bottom:6px">📥 Por cobrar</div>';
+  if(cobrar.length){cobrar.forEach(function(p){html+=_renderDeudaCard(p);});}
+  else html+='<div style="color:var(--color-text-tertiary);font-size:12px;padding:20px 0;text-align:center">Sin cobros pendientes</div>';
+  html+='</div>';
+  html+='</div>';
+  // Historial
+  var hist=MOVS.filter(function(m){return m.tipo==='Amortización deuda'||m.tipo==='Cobro préstamo'||m.tipo==='Pago cuota';});
+  html+='<div style="border-top:1px solid var(--color-border-tertiary);padding-top:12px">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Historial de pagos/cobros</div>';
+  if(hist.length){
+    html+=hist.sort(function(a,b){return(b.fecha||'').localeCompare(a.fecha||'');}).slice(0,30).map(function(m){
+      var esG=m.sentido==='gasto';
+      return '<div class="mov-row"><div class="mov-main"><div class="mov-desc">'+m.desc+'</div>'
+        +'<div class="mov-meta">'+fD(m.fecha)+(m.cta?' · '+m.cta:'')+' · '+m.tipo+'</div></div>'
+        +'<div class="mov-amt"><div class="mov-amt-main" style="color:var(--color-text-'+(esG?'danger':'success')+')">'
+        +(esG?'−':'+')+fN(m.monto,m.mon==='CUP'?0:2)+' '+m.mon+'</div>'
+        +(m.mon!=='USD'&&m.equivUSD?'<div class="mov-amt-sub">≈ '+fN(m.equivUSD)+' USD</div>':'')
+        +'</div></div>';
+    }).join('');
+  } else {
+    html+='<div style="color:var(--color-text-tertiary);font-size:12px;padding:16px 0;text-align:center">Sin movimientos registrados</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
 }
 
-function pagarCuotaDeuda(id){
-  const d=DEUDAS.find(x=>x.id===id);if(!d)return;
-  const monto=d.cuotaMes||0;
-  MOVS.unshift({id:igNextId++,fecha:today(),tipo:'Amortización deuda',
-    desc:`Cuota ${d.concepto}`,acreedor:d.acreedor,monto,mon:'EUR',
-    equivUSD:parseFloat(toUSD(monto,'EUR').toFixed(2)),
-    cta:'EUR España',sentido:'gasto',notas:''});
+function _renderDeudaCard(p){
+  var pagadas=p.cuotas.filter(function(c){return c.pagada;}).length;
+  var pend=p.cuotas.filter(function(c){return !c.pagada;}).reduce(function(a,c){return a+c.total;},0);
+  var vencidas=p.cuotas.filter(function(c){return !c.pagada&&c.fecha&&c.fecha<today();}).length;
+  var pct=p.cuotas.length?Math.round(pagadas/p.cuotas.length*100):0;
+  var proxima=p.cuotas.find(function(c){return !c.pagada;});
+  var tipoLabel={simple:'Deuda simple',interes_simple:'Interés mensual fijo',frances:'Cuota fija (francés)'}[p.tipo]||p.tipo;
+  var esDeuda=p.direccion!=='nos_deben';
+  var acentColor=esDeuda?'248,113,113':'74,222,128';
+  var textColor=esDeuda?'var(--color-text-danger)':'var(--color-text-success)';
+  var h='<div style="border:1px solid rgba('+acentColor+',.2);border-radius:10px;padding:13px;margin-bottom:10px;background:var(--color-background-secondary)">';
+  // Header row
+  h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px">'
+    +'<div>'
+    +'<div style="font-size:13px;font-weight:600">'+p.nombre+'</div>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">'+tipoLabel
+    +(p.tasa?' · '+p.tasa+'%/mes':'')
+    +' · '+fN(p.capital,2)+' '+p.moneda
+    +(p.cta?' · <span style="color:var(--color-text-tertiary)">'+p.cta+'</span>':'')
+    +(p.notas?' · <span style="font-style:italic">'+p.notas+'</span>':'')
+    +'</div>'
+    +'</div>'
+    +'<div style="text-align:right">'
+    +'<div style="font-size:14px;font-weight:700;color:'+textColor+'">'+fN(pend,2)+' '+p.moneda+'</div>'
+    +(vencidas?'<div style="font-size:10px;color:var(--color-text-danger)">⚠ '+vencidas+' vencida'+(vencidas>1?'s':'')+'</div>':'')
+    +'</div>'
+    +'</div>';
+  // Progress bar (only for multi-cuota)
+  if(p.cuotas.length>1){
+    h+='<div style="background:var(--color-background-primary);border-radius:4px;height:5px;margin-bottom:5px">'
+      +'<div style="background:rgba('+acentColor+',1);height:5px;border-radius:4px;width:'+pct+'%;transition:width .4s"></div>'
+      +'</div>'
+      +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:9px">'+pagadas+'/'+p.cuotas.length+' cuotas · '+pct+'% completado</div>';
+  }
+  // Next cuota action
+  if(proxima){
+    h+='<div style="background:rgba('+acentColor+',.08);border-radius:7px;padding:8px 10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'
+      +'<div style="font-size:11px;color:var(--color-text-secondary)">Próxima: <strong style="color:'+textColor+'">'+fN(proxima.total,2)+' '+p.moneda+'</strong>'
+      +(proxima.fecha?' — '+fD(proxima.fecha):'')
+      +(p.tipo!=='simple'?' (cuota '+proxima.num+'/'+(p.cuotas.length)+')':'')
+      +'</div>'
+      +'<button class="btn-sm" onclick="pagarCuota(\''+p.id+'\','+proxima.num+')" style="font-size:11px;padding:4px 10px;background:rgba('+acentColor+',.15);color:'+textColor+';border:1px solid rgba('+acentColor+',.3)">'
+      +(esDeuda?'💸 Pagar':'💰 Cobrar')+'</button>'
+      +'</div>';
+  } else if(p.cuotas.length===0){
+    h+='<div style="margin-bottom:8px">'
+      +'<button class="btn-sm" onclick="liquidarDeuda_p(\''+p.id+'\')" style="font-size:11px">Registrar pago total</button>'
+      +'</div>';
+  }
+  // Cuotas detail (for multi-cuota)
+  if(p.cuotas.length>1){
+    h+='<details style="font-size:11px"><summary style="cursor:pointer;color:var(--color-text-secondary);margin-bottom:6px">Ver todas las cuotas</summary>'
+      +'<div style="overflow-x:auto"><table class="adm-table"><thead><tr>'
+      +'<th>#</th><th>Vence</th>'
+      +(p.tipo!=='simple'?'<th style="text-align:right">Capital</th><th style="text-align:right">Interés</th>':'')
+      +'<th style="text-align:right">Total</th><th>Estado</th>'
+      +'</tr></thead><tbody>'
+      +p.cuotas.map(function(c){
+        var venc=!c.pagada&&c.fecha&&c.fecha<today();
+        return '<tr style="'+(c.pagada?'opacity:.45':'')+(venc?';background:rgba(248,113,113,.07)':'')+'">'
+          +'<td>'+c.num+'</td>'
+          +'<td>'+(c.fecha?fD(c.fecha):'—')+'</td>'
+          +(p.tipo!=='simple'?'<td style="text-align:right">'+fN(c.capital,2)+'</td><td style="text-align:right">'+fN(c.interes,2)+'</td>':'')
+          +'<td style="text-align:right;font-weight:500">'+fN(c.total,2)+'</td>'
+          +'<td><button class="adm-btn-sm" onclick="pagarCuota(\''+p.id+'\','+c.num+')" style="color:'+(c.pagada?'var(--color-text-success)':venc?'var(--color-text-danger)':'var(--color-text-secondary)')+'">'+
+          (c.pagada?'✓':venc?'⚠':'Pagar')+'</button></td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div></details>';
+  }
+  // Actions
+  h+='<div style="display:flex;gap:5px;margin-top:8px;justify-content:flex-end">'
+    +'<button class="adm-btn-sm" onclick="liquidarDeuda_p(\''+p.id+'\')" style="color:var(--color-text-success);font-size:10px">✓ Liquidar todo</button>'
+    +'<button class="adm-btn-sm" onclick="eliminarPrestamo(\''+p.id+'\')" style="color:var(--color-text-danger);font-size:10px">Eliminar</button>'
+    +'</div>';
+  h+='</div>';
+  return h;
+}
+
+function showNuevaDeuda(){
+  var mo=document.getElementById('nueva-deuda-modal');
+  if(!mo){
+    mo=document.createElement('div');
+    mo.id='nueva-deuda-modal';
+    mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
+    document.body.appendChild(mo);
+  }
+  var cajas=typeof getAllCajas==='function'?getAllCajas():[];
+  mo.innerHTML='<div style="max-width:480px;width:100%;max-height:90vh;overflow-y:auto;background:var(--color-background-primary);border-radius:14px;padding:24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
+    +'<button onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<div style="font-size:16px;font-weight:600;margin-bottom:16px">Nueva deuda / préstamo</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div style="grid-column:1/-1"><label class="lbl">Nombre / Acreedor / Deudor *</label>'
+    +'<input class="adm-inp" id="nd-nombre" placeholder="Ej: Préstamo Juan García"></div>'
+    +'<div><label class="lbl">Dirección</label>'
+    +'<select class="adm-inp" id="nd-dir">'
+    +'<option value="nosotros_debemos">📤 Nosotros debemos (por pagar)</option>'
+    +'<option value="nos_deben">📥 Nos deben (por cobrar)</option>'
+    +'</select></div>'
+    +'<div><label class="lbl">Tipo</label>'
+    +'<select class="adm-inp" id="nd-tipo" onchange="updNuevaDeudaForm()">'
+    +'<option value="simple">Deuda simple (sin interés)</option>'
+    +'<option value="interes_simple">Interés mensual fijo</option>'
+    +'<option value="frances">Cuota fija — Método francés</option>'
+    +'</select></div>'
+    +'<div><label class="lbl">Capital *</label>'
+    +'<input class="adm-inp" type="number" id="nd-capital" value="0" step="0.01" oninput="updNuevaDeudaForm()"></div>'
+    +'<div><label class="lbl">Moneda</label>'
+    +'<select class="adm-inp" id="nd-mon">'+['USD','EUR','CUP','CUPT'].map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'
+    +'<div id="nd-tasa-wrap"><label class="lbl">Tasa mensual (%)</label>'
+    +'<input class="adm-inp" type="number" id="nd-tasa" value="2" step="0.1" oninput="updNuevaDeudaForm()"></div>'
+    +'<div id="nd-plazo-wrap"><label class="lbl">Plazo (meses)</label>'
+    +'<input class="adm-inp" type="number" id="nd-plazo" value="12" step="1" min="1" oninput="updNuevaDeudaForm()"></div>'
+    +'<div id="nd-venc-wrap" style="display:none"><label class="lbl">Vencimiento (opcional)</label>'
+    +'<input class="adm-inp" type="date" id="nd-venc"></div>'
+    +'<div><label class="lbl">Fecha inicio</label>'
+    +'<input class="adm-inp" type="date" id="nd-fecha" value="'+today()+'"></div>'
+    +'<div><label class="lbl">Caja asociada</label>'
+    +'<select class="adm-inp" id="nd-cta"><option value="">Sin asignar</option>'
+    +cajas.map(function(k){return '<option>'+k+'</option>';}).join('')+'</select></div>'
+    +'<div style="grid-column:1/-1"><label class="lbl">Notas</label>'
+    +'<input class="adm-inp" id="nd-notas" placeholder="Observaciones..."></div>'
+    +'</div>'
+    +'<div id="nd-preview" style="margin-top:10px;font-size:12px;color:var(--color-text-secondary);padding:10px;background:var(--color-background-secondary);border-radius:8px;display:none"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:16px">'
+    +'<button class="btn btn-p" onclick="admCrearDeuda()" style="flex:1">Crear</button>'
+    +'<button class="btn" onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'">Cancelar</button>'
+    +'</div>'
+    +'</div>';
+  mo.style.display='flex';
+  updNuevaDeudaForm();
+}
+
+function updNuevaDeudaForm(){
+  var tipo=document.getElementById('nd-tipo')?.value||'simple';
+  var tw=document.getElementById('nd-tasa-wrap');
+  var pw=document.getElementById('nd-plazo-wrap');
+  var vw=document.getElementById('nd-venc-wrap');
+  if(tw)tw.style.display=tipo==='simple'?'none':'';
+  if(pw)pw.style.display=tipo==='simple'?'none':'';
+  if(vw)vw.style.display=tipo==='simple'?'':'none';
+  var capital=parseFloat(document.getElementById('nd-capital')?.value)||0;
+  var tasa=parseFloat(document.getElementById('nd-tasa')?.value)||0;
+  var plazo=parseInt(document.getElementById('nd-plazo')?.value)||1;
+  var prev=document.getElementById('nd-preview');
+  if(!prev)return;
+  if(!capital){prev.style.display='none';return;}
+  var txt='';
+  if(tipo==='simple'){
+    txt='Capital a devolver: <strong>'+fN(capital,2)+'</strong> sin intereses';
+  } else if(tipo==='interes_simple'){
+    var intM=capital*tasa/100;
+    txt='Cuota mensual: <strong>'+fN(intM,2)+'</strong> (solo interés) · Último mes: <strong>'+fN(capital+intM,2)+'</strong> · Total: <strong>'+fN(capital+intM*plazo,2)+'</strong>';
+  } else {
+    var r=tasa/100;
+    var pmt=r===0?capital/plazo:capital*r*Math.pow(1+r,plazo)/(Math.pow(1+r,plazo)-1);
+    txt='Cuota mensual fija: <strong>'+fN(pmt,2)+'</strong> · Total a pagar: <strong>'+fN(pmt*plazo,2)+'</strong>';
+  }
+  prev.innerHTML=txt;
+  prev.style.display='block';
+}
+
+function admCrearDeuda(){
+  var nombre=(document.getElementById('nd-nombre')?.value||'').trim();
+  if(!nombre){showToast('El nombre es obligatorio');return;}
+  var capital=parseFloat(document.getElementById('nd-capital')?.value)||0;
+  if(!capital){showToast('El capital debe ser mayor que 0');return;}
+  crearPrestamo({
+    nombre:nombre,
+    tipo:document.getElementById('nd-tipo').value,
+    direccion:document.getElementById('nd-dir').value,
+    capital:capital,
+    tasa:parseFloat(document.getElementById('nd-tasa')?.value)||0,
+    plazo:parseInt(document.getElementById('nd-plazo')?.value)||1,
+    moneda:document.getElementById('nd-mon').value,
+    fechaInicio:document.getElementById('nd-fecha').value||today(),
+    vencimiento:document.getElementById('nd-venc')?.value||'',
+    cta:document.getElementById('nd-cta').value,
+    notas:document.getElementById('nd-notas').value,
+  });
+  document.getElementById('nueva-deuda-modal').style.display='none';
+  renderDeudas();
+}
+
+function liquidarDeuda_p(id){
+  if(!confirm('¿Marcar toda esta deuda/préstamo como completamente liquidada?'))return;
+  var p=PRESTAMOS.find(function(x){return x.id===id;});
+  if(!p)return;
+  var ahora=today();
+  p.cuotas.forEach(function(c){
+    if(!c.pagada){
+      c.pagada=true;
+      c.fechaPago=ahora;
+      // Register global movement
+      if(typeof igNextId!=='undefined'){
+        var esD=p.direccion!=='nos_deben';
+        MOVS.unshift({
+          id:igNextId++,fecha:ahora,
+          tipo:esD?'Amortización deuda':'Cobro préstamo',
+          desc:'Liquidación — '+p.nombre,
+          acreedor:p.nombre,monto:c.total,mon:p.moneda,
+          equivUSD:parseFloat((typeof toUSD==='function'?toUSD(c.total,p.moneda):c.total/(RATES[p.moneda]||1)).toFixed(2)),
+          cta:p.cta||'',sentido:esD?'gasto':'ingreso',notas:''
+        });
+      }
+    }
+  });
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-  renderDeudas();renderCajas();
-  showToast(`Cuota registrada — ${fN(monto)} EUR`);
+  if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
+  if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+  savePrestamos();
+  renderDeudas();
+  showToast('Deuda liquidada ✓');
 }
-function liquidarDeuda(id){
-  if(!confirm('¿Marcar esta deuda como completamente liquidada?'))return;
-  const d=DEUDAS.find(x=>x.id===id);if(d)d.activa=false;
-  renderDeudas();showToast('Deuda liquidada');
-}
+
+
+// (old DEUDAS code removed — now using PRESTAMOS unified system)
+
+
+
 
 function exportCSV(){
   const data=filtrar_ig();
@@ -7903,7 +8117,17 @@ function savePrestamos() {
 // Generate payment schedule
 function calcCuotas(p) {
   var cuotas = [];
-  if (p.tipo === 'interes_simple') {
+  if (p.tipo === 'simple') {
+    // Single payment, no interest
+    cuotas.push({
+      num: 1,
+      fecha: p.vencimiento || '',
+      capital: p.capital,
+      interes: 0,
+      total: p.capital,
+      pagada: false, fechaPago: null
+    });
+  } else if (p.tipo === 'interes_simple') {
     // Fixed monthly interest, no amortization
     var interesMensual = p.capital * (p.tasa / 100);
     for (var i = 1; i <= p.plazo; i++) {
@@ -7948,12 +8172,14 @@ function crearPrestamo(data) {
   var p = {
     id: 'pr-' + Date.now(),
     nombre: data.nombre,
-    tipo: data.tipo, // 'interes_simple' | 'frances'
+    tipo: data.tipo, // 'simple' | 'interes_simple' | 'frances'
+    direccion: data.direccion || 'nosotros_debemos', // 'nosotros_debemos' | 'nos_deben'
     capital: data.capital,
-    tasa: data.tasa,
-    plazo: data.plazo, // meses
+    tasa: data.tasa || 0,
+    plazo: data.plazo || 1,
     moneda: data.moneda,
     fechaInicio: data.fechaInicio,
+    vencimiento: data.vencimiento || '',
     notas: data.notas || '',
     cta: data.cta || '',
     cuotas: []
@@ -7961,7 +8187,7 @@ function crearPrestamo(data) {
   p.cuotas = calcCuotas(p);
   PRESTAMOS.unshift(p);
   savePrestamos();
-  showToast('Préstamo creado: ' + p.nombre);
+  showToast('Creado: ' + p.nombre);
 }
 
 function pagarCuota(prestamoId, cuotaNum) {
@@ -7971,13 +8197,30 @@ function pagarCuota(prestamoId, cuotaNum) {
   if (!c) return;
   c.pagada = !c.pagada;
   c.fechaPago = c.pagada ? today() : null;
-  // Update caja if account selected
-  if (c.pagada && p.cta && typeof CUENTAS_BASE !== 'undefined') {
-    if (!CUENTAS_BASE[p.cta]) CUENTAS_BASE[p.cta] = { ingV:0, ingIG:0, gasIG:0, mon: p.moneda };
-    CUENTAS_BASE[p.cta].gasIG += c.total;
+  // Create MOVS entry when marking paid
+  if (c.pagada && typeof igNextId !== 'undefined') {
+    var esDeuda = p.direccion !== 'nos_deben';
+    var equivUSD = p.moneda === 'USD' ? c.total
+      : (typeof toUSD === 'function' ? toUSD(c.total, p.moneda) : c.total / (RATES[p.moneda] || 1));
+    MOVS.unshift({
+      id: igNextId++,
+      fecha: today(),
+      tipo: esDeuda ? 'Amortización deuda' : 'Cobro préstamo',
+      desc: 'Cuota ' + c.num + '/' + p.cuotas.length + ' — ' + p.nombre,
+      acreedor: p.nombre,
+      monto: c.total,
+      mon: p.moneda,
+      equivUSD: parseFloat(equivUSD.toFixed(2)),
+      cta: p.cta || '',
+      sentido: esDeuda ? 'gasto' : 'ingreso',
+      notas: ''
+    });
+    try { localStorage.setItem('erp_movs', JSON.stringify(MOVS.slice(0, 500))); } catch(e) {}
+    if (typeof renderLibro === 'function') try { renderLibro(); } catch(e) {}
     if (typeof renderCajas === 'function') try { renderCajas(); } catch(e) {}
   }
   savePrestamos();
+  if (typeof renderDeudas === 'function') renderDeudas();
 }
 
 function renderPrestamos() {
