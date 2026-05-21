@@ -4844,14 +4844,29 @@ function _renderDeudaCard(p){
     +'<span>Total: '+fN(totalD,2)+' '+p.moneda+' ('+pct+'%)</span>'
     +'</div>';
 
-  // ── Pagar button (only if not liquidada) ──
+  // ── Pagar buttons ──
   if(!liquidada){
     var sugMonto=proxima?proxima.total:saldoD;
-    h+='<div style="margin-bottom:10px">'
-      +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugMonto+')" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:12px;font-weight:600;cursor:pointer">'
-      +(esDeuda?'💸 Registrar pago':'💰 Registrar cobro')
-      +(proxima&&p.tipo!=='simple'?' — Próxima cuota: '+fN(proxima.total,2)+' '+p.moneda:'')
-      +'</button></div>';
+    if(p.tipo==='interes_simple'){
+      var sugerInt=parseFloat((p.capital*(p.tasa||0)/100).toFixed(2));
+      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugerInt+',\'interes\')" style="padding:8px;border-radius:8px;border:1px solid rgba(100,149,237,.4);background:rgba(100,149,237,.1);color:#8ab4f8;font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
+        +'💳 Pagar intereses<br><span style="font-size:10px;font-weight:400;opacity:.8">'+fN(sugerInt,2)+' '+p.moneda+'/mes</span></button>'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\',0,\'amortizacion\')" style="padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
+        +(esDeuda?'🔽 Amortizar capital':'🔽 Cobrar capital')
+        +'<br><span style="font-size:10px;font-weight:400;opacity:.8">Reduce el saldo</span></button>'
+        +'</div>'
+        +'<div style="margin-bottom:10px">'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\',0,\'incremento\')" style="width:100%;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,.1);background:transparent;color:var(--color-text-tertiary);font-size:10px;cursor:pointer">'
+        +(esDeuda?'🔼 Nueva disposición (incrementar capital)':'🔼 Conceder más crédito (incrementar capital)')
+        +'</button></div>';
+    } else {
+      h+='<div style="margin-bottom:10px">'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugMonto+',\'pago\')" style="width:100%;padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:12px;font-weight:600;cursor:pointer">'
+        +(esDeuda?'💸 Registrar pago':'💰 Registrar cobro')
+        +(proxima&&p.tipo!=='simple'?' — Próxima cuota: '+fN(proxima.total,2)+' '+p.moneda:'')
+        +'</button></div>';
+    }
   }
 
   // ── Historial de pagos ──
@@ -4905,6 +4920,7 @@ function _renderDeudaCard(p){
 
   // ── Actions ──
   h+='<div style="display:flex;gap:5px;margin-top:10px;justify-content:flex-end">'
+    +'<button class="adm-btn-sm" onclick="showEditarDeudaModal(\''+p.id+'\')" style="font-size:10px">✏️ Editar</button>'
     +(liquidada?'':'<button class="adm-btn-sm" onclick="liquidarDeuda_p(\''+p.id+'\')" style="color:var(--color-text-success);font-size:10px">✓ Liquidar todo</button>')
     +'<button class="adm-btn-sm" onclick="eliminarPrestamo(\''+p.id+'\')" style="color:var(--color-text-danger);font-size:10px">🗑 Eliminar</button>'
     +'</div>';
@@ -4912,10 +4928,11 @@ function _renderDeudaCard(p){
   return h;
 }
 
-// ── MODAL: REGISTRAR PAGO (parcial o total) ─────────────
-function abrirPagoModal(prestamoId, sugMonto){
+// ── MODAL: REGISTRAR PAGO ─────────────────────────────
+function abrirPagoModal(prestamoId, sugMonto, tipoPago){
   var p=PRESTAMOS.find(function(x){return x.id===prestamoId;});
   if(!p)return;
+  tipoPago=tipoPago||'pago';
   var mo=document.getElementById('pago-deuda-modal');
   if(!mo){
     mo=document.createElement('div');
@@ -4925,23 +4942,46 @@ function abrirPagoModal(prestamoId, sugMonto){
     document.body.appendChild(mo);
   }
   var esDeuda=p.direccion!=='nos_deben';
-  var cajas=typeof getAllCajas==='function'?getAllCajas():[];
+  var cajas=typeof getAllCajas==='function'?getAllCajas():(typeof _getCajaNombres==='function'?_getCajaNombres():[]);
   var saldo=_saldoDeuda(p);
-  mo.innerHTML='<div style="max-width:400px;width:100%;background:var(--color-background-primary);border-radius:14px;padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
+  var sugerMonto=(sugMonto!=null&&sugMonto>0)?sugMonto:saldo;
+  var titulo='',bannerHtml='';
+  if(tipoPago==='interes'){
+    titulo='💳 Pago de intereses';
+    bannerHtml='<div style="font-size:11px;background:rgba(100,149,237,.1);border:1px solid rgba(100,149,237,.25);border-radius:7px;padding:8px;margin-bottom:12px">El capital <strong>no cambia</strong> — solo se registran los intereses del período.</div>';
+  } else if(tipoPago==='amortizacion'){
+    titulo='🔽 Amortización de capital';
+    bannerHtml='<div style="font-size:11px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:7px;padding:8px;margin-bottom:12px">Este pago <strong>reduce el capital</strong> pendiente y regenera el cuadro de amortización.</div>';
+    sugerMonto=sugMonto||saldo;
+  } else if(tipoPago==='incremento'){
+    titulo='🔼 Nueva disposición de capital';
+    bannerHtml='<div style="font-size:11px;background:rgba(74,222,128,.08);border:1px solid rgba(74,222,128,.2);border-radius:7px;padding:8px;margin-bottom:12px"><strong>Aumenta el capital</strong> de la deuda y regenera el cuadro. El saldo pendiente se incrementará.</div>';
+    sugerMonto=0;
+  } else {
+    titulo=esDeuda?'💸 Registrar pago':'💰 Registrar cobro';
+    bannerHtml='';
+  }
+  mo.innerHTML='<div style="max-width:420px;width:100%;background:var(--color-background-primary);border-radius:14px;padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
     +'<button onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
-    +'<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+(esDeuda?'💸 Registrar pago':'💰 Registrar cobro')+'</div>'
-    +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+p.nombre+' · Saldo: <strong>'+fN(saldo,2)+' '+p.moneda+'</strong></div>'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+titulo+'</div>'
+    +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">'+p.nombre
+    +(tipoPago!=='incremento'?' · Saldo: <strong>'+fN(saldo,2)+' '+p.moneda+'</strong>':'')
+    +(tipoPago==='interes'?' · Capital: <strong>'+fN(p.capital,2)+' '+p.moneda+'</strong>':'')
+    +'</div>'
+    +bannerHtml
+    +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">'
-    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" value="'+(sugMonto||saldo).toFixed(2)+'" step="0.01" min="0.01"></div>'
+    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01"></div>'
     +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon">'
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><label class="lbl">Fecha</label><input class="adm-inp" type="date" id="pm-fecha" value="'+today()+'"></div>'
     +'<div><label class="lbl">Caja</label><select class="adm-inp" id="pm-caja"><option value="">Sin caja</option>'
-    +cajas.map(function(k){return '<option'+(k===(p.cta||'')||p.cta&&k===p.cta?' selected':'')+'>'+k+'</option>';}).join('')+'</select></div>'
+    +cajas.map(function(k){return '<option'+(k===(p.cta||'')?' selected':'')+'>'+k+'</option>';}).join('')+'</select></div>'
     +'</div>'
-    +'<div style="margin-bottom:14px"><label class="lbl">Nota (opcional)</label><input class="adm-inp" id="pm-nota" placeholder="Ej: Pago mes mayo, abono parcial..."></div>'
+    +'<div style="margin-bottom:14px"><label class="lbl">Nota (opcional)</label>'
+    +'<input class="adm-inp" id="pm-nota" placeholder="Ej: Interés mayo, abono capital..."></div>'
     +'<div style="display:flex;gap:8px">'
     +'<button class="btn btn-p" onclick="registrarPagoDeuda(\''+prestamoId+'\')" style="flex:1">Registrar</button>'
     +'<button class="btn" onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'">Cancelar</button>'
@@ -4959,36 +4999,71 @@ function registrarPagoDeuda(prestamoId){
   var fecha=document.getElementById('pm-fecha')?.value||today();
   var caja=document.getElementById('pm-caja')?.value||'';
   var nota=document.getElementById('pm-nota')?.value||'';
+  var tipoPago=document.getElementById('pm-tipo')?.value||'pago';
   if(!p.pagos)p.pagos=[];
   var esDeuda=p.direccion!=='nos_deben';
-  // Create MOVS entry
+
+  // ── Determine movement type ──
+  var tipoMov,sentidoMov,descMov,cajaTipo;
+  if(tipoPago==='interes'){
+    tipoMov='Pago intereses';sentidoMov='gasto';
+    descMov=(nota||'Intereses')+' — '+p.nombre;
+    cajaTipo=esDeuda?'retiro':'deposito';
+  } else if(tipoPago==='amortizacion'){
+    tipoMov='Amortización deuda';sentidoMov='gasto';
+    descMov=(nota||'Amortización')+' — '+p.nombre;
+    cajaTipo=esDeuda?'retiro':'deposito';
+  } else if(tipoPago==='incremento'){
+    tipoMov='Disposición deuda';
+    sentidoMov=esDeuda?'ingreso':'gasto'; // nosotros_debemos: received cash
+    descMov=(nota||'Incremento capital')+' — '+p.nombre;
+    cajaTipo=esDeuda?'deposito':'retiro'; // money enters our caja
+  } else {
+    tipoMov=esDeuda?'Amortización deuda':'Cobro préstamo';
+    sentidoMov=esDeuda?'gasto':'ingreso';
+    descMov=(nota||'Pago')+' — '+p.nombre;
+    cajaTipo=esDeuda?'retiro':'deposito';
+  }
+
+  // ── Create MOVS entry (local book) ──
   var movId=null;
   if(typeof igNextId!=='undefined'){
     movId=igNextId++;
     var equivUSD=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
-    MOVS.unshift({id:movId,fecha:fecha,
-      tipo:esDeuda?'Amortización deuda':'Cobro préstamo',
-      desc:(nota||'Pago')+' — '+p.nombre,
+    MOVS.unshift({id:movId,fecha:fecha,tipo:tipoMov,desc:descMov,
       acreedor:p.nombre,monto:monto,mon:mon,
       equivUSD:parseFloat(equivUSD.toFixed(2)),
-      cta:caja,sentido:esDeuda?'gasto':'ingreso',notas:nota});
+      cta:caja,sentido:sentidoMov,notas:nota});
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){}
   }
-  // Get current time
+
+  // ── Push to mov_cajas (Supabase caja) ──
+  if(caja) _pushMovCajas(cajaTipo,caja,monto,descMov,fecha).catch(function(e){console.warn('mov_cajas:',e);});
+
+  // ── Modify capital if needed ──
+  if(tipoPago==='amortizacion'){
+    p.capital=Math.max(0,p.capital-monto);
+    p.cuotas=calcCuotas(p);
+  } else if(tipoPago==='incremento'){
+    p.capital+=monto;
+    p.cuotas=calcCuotas(p);
+  }
+
+  // ── Add to pagos log ──
   var ahora=new Date();
   var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
-  // Add to pagos log
+  var notaAuto=nota||(tipoPago==='interes'?'Intereses':tipoPago==='amortizacion'?'Amortización':tipoPago==='incremento'?'Incremento capital':'Pago');
   p.pagos.push({id:'pg-'+Date.now(),fecha:fecha,hora:hora,
-    monto:monto,mon:mon,nota:nota,caja:caja,movId:movId,
+    monto:monto,mon:mon,nota:notaAuto,caja:caja,movId:movId,tipoPago:tipoPago,
     user:typeof S!=='undefined'&&S.user?S.user:'—'});
-  // Auto-mark cuotas as paid based on accumulated payments
-  _autoMarcarCuotas(p);
+
+  if(tipoPago!=='interes'&&tipoPago!=='incremento') _autoMarcarCuotas(p);
   savePrestamos();
   document.getElementById('pago-deuda-modal').style.display='none';
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
   renderDeudas();
-  showToast('Pago registrado — '+fN(monto,2)+' '+mon+' ✓');
+  showToast('Registrado — '+fN(monto,2)+' '+mon+' ✓');
 }
 
 function _autoMarcarCuotas(p){
