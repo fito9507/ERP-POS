@@ -5285,11 +5285,13 @@ function updNuevaDeudaForm(){
   var pw=document.getElementById('nd-plazo-wrap');
   var vw=document.getElementById('nd-venc-wrap');
   if(tw)tw.style.display=tipo==='simple'?'none':'';
-  if(pw)pw.style.display=tipo==='simple'?'none':'';
+  // Hide plazo for bullet loans since they are technically indefinite
+  if(pw)pw.style.display=(tipo==='simple'||tipo==='interes_simple')?'none':'';
   if(vw)vw.style.display=tipo==='simple'?'':'none';
   var capital=parseFloat(document.getElementById('nd-capital')?.value)||0;
   var tasa=parseFloat(document.getElementById('nd-tasa')?.value)||0;
-  var plazo=parseInt(document.getElementById('nd-plazo')?.value)||1;
+  // If interes_simple, default to 120 months (10 years) of projected calendar schedule
+  var plazo=tipo==='interes_simple'?120:(parseInt(document.getElementById('nd-plazo')?.value)||1);
   var prev=document.getElementById('nd-preview');
   if(!prev)return;
   if(!capital){prev.style.display='none';return;}
@@ -5298,7 +5300,7 @@ function updNuevaDeudaForm(){
     txt='Capital a devolver: <strong>'+fN(capital,2)+'</strong> sin intereses';
   } else if(tipo==='interes_simple'){
     var intM=capital*tasa/100;
-    txt='Cuota mensual: <strong>'+fN(intM,2)+'</strong> (solo interés) · Último mes: <strong>'+fN(capital+intM,2)+'</strong> · Total: <strong>'+fN(capital+intM*plazo,2)+'</strong>';
+    txt='Cuota mensual: <strong>'+fN(intM,2)+'</strong> (solo interés)<br><span style="color:var(--color-text-tertiary);margin-top:4px;display:block">💡 El capital de <strong>'+fN(capital,2)+'</strong> se mantiene intacto hasta que registres amortizaciones explícitamente.</span>';
   } else {
     var r=tasa/100;
     var pmt=r===0?capital/plazo:capital*r*Math.pow(1+r,plazo)/(Math.pow(1+r,plazo)-1);
@@ -5307,6 +5309,7 @@ function updNuevaDeudaForm(){
   prev.innerHTML=txt;
   prev.style.display='block';
 }
+
 
 function admCrearDeuda(){
   var nombre=(document.getElementById('nd-nombre')?.value||'').trim();
