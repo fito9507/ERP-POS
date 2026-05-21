@@ -1887,7 +1887,9 @@ async function syncSaveVenta(v) {
     com_pct:      v.comPct || 0,
     com_usd:      v.comUSD  || 0,
     est_com:      v.estCom  || 'Pendiente',
-    notas:        (v.ticket?'['+v.ticket+'] ':'')+( v.nota||''),
+    notas:        (v.ticket?'['+v.ticket+']':'')
+                 +(v.hora?'['+v.hora+']':'')
+                 +(v.nota?' '+v.nota:''),
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[]}) : ''
   };
   // Include supaId if we already have it (for upsert)
@@ -1959,10 +1961,16 @@ async function syncLoadVentas() {
     VENTAS.length = 0;
     venNextId = 1;
     (rows || []).forEach(function(row) {
+      var _raw = row.notas||'';
+      var _tkM  = _raw.match(/\[([A-Z]{3}\d{2}-\d+)\]/);
+      var _hrM  = _raw.match(/\[(\d{2}:\d{2})\]/);
+      var _nota = _raw.replace(/\[[^\]]*\]/g,'').trim();
       VENTAS.push({
         id:       venNextId++,
         supaId:   row.id,
         fecha:    row.fecha,
+        ticket:   _tkM ? _tkM[1] : '',
+        hora:     _hrM ? _hrM[1] : '',
         vend:     row.vendedor,
         alm:      row.almacen,
         cli:      row.cliente,
@@ -1973,7 +1981,7 @@ async function syncLoadVentas() {
         comPct:   parseFloat(row.com_pct || 0),
         comUSD:   parseFloat(row.com_usd  || 0),
         estCom:   row.est_com,
-        nota:     row.notas || '',
+        nota:     _nota,
         pagos:   (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.pagos||[]; }catch(e){return [];} })(),
         vueltos: (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.vueltos||[]; }catch(e){return [];} })()
       });
@@ -3362,10 +3370,8 @@ function filtrar_ven(){
     if(dc!==0)return dc;
     var hc=(b.hora||'').localeCompare(a.hora||'');
     if(hc!==0)return hc;
-    // Ordenar por número de ticket (últimos dígitos de HABmm-NNN)
-    var na=parseInt(((a.ticket||'').match(/(\d+)$/ )||[0,0])[1])||a.id||0;
-    var nb=parseInt(((b.ticket||'').match(/(\d+)$/ )||[0,0])[1])||b.id||0;
-    return nb-na;
+    // supaId es el auto-increment de Supabase — más fiable que id local
+    return (b.supaId||b.id||0)-(a.supaId||a.id||0);
   });
 }
 
