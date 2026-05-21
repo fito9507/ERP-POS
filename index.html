@@ -3121,7 +3121,7 @@ function confirmar(){
   if(S.alm==='Placetas'&&!COM_REGLAS.some(function(r){return r.vendedor===S.user&&(r.almacen==='Placetas'||!r.almacen);}))estCom='No aplica';
   var _ticket=genTicket(S.alm);
   var venta={
-    id:venNextId++,fecha:today(),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
+    id:venNextId++,fecha:today(),hora:new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
     tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
@@ -3357,7 +3357,13 @@ function filtrar_ven(){
     if(estcom&&v.estCom!==estcom)return false;
     if(prod&&!v.prods.toLowerCase().includes(prod))return false;
     return true;
-  }).sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
+  }).sort((a,b)=>{
+    var dc=b.fecha.slice(0,10).localeCompare(a.fecha.slice(0,10));
+    if(dc!==0)return dc;
+    var hc=(b.hora||'').localeCompare(a.hora||'');
+    if(hc!==0)return hc;
+    return b.id-a.id;
+  });
 }
 
 // ── RENDER VENTAS ─────────────────────────────────────────
@@ -3422,7 +3428,10 @@ function renderVentas(){
   document.getElementById('v-body').innerHTML=data.length?data.map(v=>`
     <tr id="vrow-${v.id}">
       <td style="${_isVend?'display:none':''}"><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
-      <td style="white-space:nowrap">${fD(v.fecha)}</td>
+      <td style="white-space:nowrap">
+        <div style="font-size:11px">${fD(v.fecha)}</div>
+        <div style="font-size:10px;color:var(--color-text-tertiary)">${v.hora||''} &nbsp;<span style="color:var(--color-text-tertiary);opacity:.6">#${v.id}</span></div>
+      </td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
       <td style="font-size:11px">${v.alm}</td>
       <td style="font-size:11px;color:var(--color-text-secondary);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.cli}</td>
