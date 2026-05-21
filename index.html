@@ -23,7 +23,19 @@ html,body{height:100%;overflow:hidden;background:var(--color-background-tertiary
 input,select,textarea,button{font-family:var(--font-sans)}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--color-background-secondary)}::-webkit-scrollbar-thumb{background:var(--color-border-secondary);border-radius:2px}
 #erp-shell{display:flex;height:100%;overflow:hidden}
-#sidebar{width:188px;flex-shrink:0;background:var(--color-background-primary);border-right:1px solid var(--color-border-tertiary);display:flex;flex-direction:column;z-index:20;transition:transform .25s}
+#sidebar{width:188px;flex-shrink:0;background:var(--color-background-primary);border-right:1px solid var(--color-border-tertiary);display:flex;flex-direction:column;z-index:20;transition:width .22s,transform .25s}
+#sidebar.collapsed{width:44px}
+#sidebar.collapsed .sb-logo{padding:12px 0;justify-content:center}
+#sidebar.collapsed .sb-title,#sidebar.collapsed .sb-ver{display:none}
+#sidebar.collapsed .sb-section{display:none}
+#sidebar.collapsed .sb-lbl{display:none}
+#sidebar.collapsed .sb-item{padding:8px 0;justify-content:center;gap:0;border-left:2px solid transparent}
+#sidebar.collapsed .sb-item.act{border-left-color:#e8c547}
+#sidebar.collapsed .sb-foot{padding:10px 0;justify-content:center}
+#sidebar.collapsed .sb-foot-text{display:none}
+#sb-collapse-btn{margin-left:auto;width:22px;height:22px;display:flex;align-items:center;justify-content:center;border:1px solid var(--color-border-tertiary);border-radius:4px;cursor:pointer;color:var(--color-text-tertiary);font-size:11px;flex-shrink:0;transition:all .15s;background:transparent}
+#sb-collapse-btn:hover{border-color:var(--color-text-secondary);color:var(--color-text-primary)}
+@media(max-width:640px){#sb-collapse-btn{display:none!important}}
 .sb-logo{padding:15px 13px 11px;border-bottom:1px solid var(--color-border-tertiary);display:flex;align-items:center;gap:9px}
 .sb-mark{width:30px;height:30px;border-radius:var(--border-radius-md);background:#e8c547;color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
 .sb-title{font-size:13px;font-weight:600}.sb-ver{font-size:10px;color:var(--color-text-tertiary)}
@@ -710,14 +722,15 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div id="sidebar">
   <div class="sb-logo">
     <div class="sb-mark">C</div>
-    <div><div class="sb-title">Containers</div><div class="sb-ver">ERP v2</div></div>
+    <div style="flex:1;min-width:0"><div class="sb-title">Containers</div><div class="sb-ver">ERP v2</div></div>
+    <div id="sb-collapse-btn" onclick="toggleSidebar()" title="Colapsar/Expandir">&#xAB;</div>
   </div>
   <nav style="flex:1;overflow-y:auto;padding:6px 0" id="sb-nav">
     <div style="padding:20px;text-align:center;color:var(--color-text-tertiary);font-size:12px">Inicia sesión</div>
   </nav>
   <div class="sb-foot" onclick="erpLogout()">
     <div class="sb-av" id="sb-av">?</div>
-    <div style="flex:1;min-width:0">
+    <div class="sb-foot-text" style="flex:1;min-width:0">
       <div id="sb-uname" style="font-size:12px;font-weight:500">Sin sesión</div>
       <div style="font-size:10px;color:var(--color-text-tertiary)">Toca para salir</div>
     </div>
@@ -2308,13 +2321,30 @@ function buildSidebar(userName){
       html+='<div class="sb-section">'+m.section+'</div>';
       lastSection=m.section;
     }
-    html+='<div class="sb-item" onclick="goMod(\''+m.id+'\',\''+m.label+'\',this)"><span class="sb-icon">'+m.icon+'</span>'+m.label+'</div>';
+    html+='<div class="sb-item" onclick="goMod(\''+m.id+'\',\''+m.label+'\',this)"><span class="sb-icon">'+m.icon+'</span><span class="sb-lbl">'+m.label+'</span></div>';
   });
   nav.innerHTML=html;
   // Activate first item
   const first=nav.querySelector('.sb-item');
   if(first)first.classList.add('act');
 }
+function toggleSidebar(){
+  var sb = document.getElementById('sidebar');
+  var btn = document.getElementById('sb-collapse-btn');
+  var isCollapsed = sb.classList.toggle('collapsed');
+  if(btn) btn.innerHTML = isCollapsed ? '&#xBB;' : '&#xAB;';
+  try{ localStorage.setItem('erp_sb_collapsed', isCollapsed?'1':'0'); }catch(e){}
+}
+(function(){
+  try{
+    if(localStorage.getItem('erp_sb_collapsed')==='1'){
+      var sb=document.getElementById('sidebar');
+      var btn=document.getElementById('sb-collapse-btn');
+      if(sb){sb.classList.add('collapsed');}
+      if(btn){btn.innerHTML='&#xBB;';}
+    }
+  }catch(e){}
+})();
 function erpLogout(){
   if(typeof logout==='function')logout();
   document.getElementById('sidebar').classList.remove('mob-open');
