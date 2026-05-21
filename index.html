@@ -4785,11 +4785,21 @@ function renderDeudas(){
 
 // ── HELPERS ──────────────────────────────────────────
 function _totalDeuda(p){
+  if(p.tipo==='interes_simple') return p.capitalOriginal||p.capital;
   if(p.cuotas&&p.cuotas.length) return p.cuotas.reduce(function(a,c){return a+c.total;},0);
   return p.capital;
 }
-function _pagadoDeuda(p){return (p.pagos||[]).reduce(function(a,pg){return a+pg.monto;},0);}
-function _saldoDeuda(p){return Math.max(0,_totalDeuda(p)-_pagadoDeuda(p));}
+function _pagadoDeuda(p){
+  if(p.tipo==='interes_simple') return Math.max(0,(p.capitalOriginal||p.capital)-p.capital);
+  return (p.pagos||[]).reduce(function(a,pg){return a+pg.monto;},0);
+}
+function _saldoDeuda(p){
+  if(p.tipo==='interes_simple') return Math.max(0,p.capital);
+  return Math.max(0,_totalDeuda(p)-_pagadoDeuda(p));
+}
+function _interesesPagadosDeuda(p){
+  return (p.pagos||[]).filter(function(pg){return pg.tipoPago==='interes';}).reduce(function(a,pg){return a+pg.monto;},0);
+}
 function _migrarPagosDeuda(p){
   if(!p.pagos)p.pagos=[];
   p.cuotas.forEach(function(c){
@@ -4804,17 +4814,20 @@ function _migrarPagosDeuda(p){
 
 function _renderDeudaCard(p){
   _migrarPagosDeuda(p);
+  var esIS=(p.tipo==='interes_simple');
   var totalD=_totalDeuda(p);
   var pagadoD=_pagadoDeuda(p);
   var saldoD=_saldoDeuda(p);
+  var intPagados=_interesesPagadosDeuda(p);
+  var intMensual=esIS?parseFloat((p.capital*(p.tasa||0)/100).toFixed(2)):0;
   var pct=totalD?Math.min(100,Math.round(pagadoD/totalD*100)):0;
   var proxima=p.cuotas.find(function(c){return !c.pagada;});
   var vencidas=p.cuotas.filter(function(c){return !c.pagada&&c.fecha&&c.fecha<today();}).length;
-  var tipoLabel={simple:'Deuda simple',interes_simple:'Interés mensual fijo',frances:'Cuota fija (francés)'}[p.tipo]||p.tipo;
+  var tipoLabel={simple:'Deuda simple',interes_simple:'Solo intereses (bullet)',frances:'Cuota fija (francés)'}[p.tipo]||p.tipo;
   var esDeuda=p.direccion!=='nos_deben';
   var ac=esDeuda?'248,113,113':'74,222,128';
   var tc=esDeuda?'var(--color-text-danger)':'var(--color-text-success)';
-  var liquidada=saldoD<=0;
+  var liquidada=saldoD<=0.005;
   var h='<div style="border:1px solid rgba('+ac+','+(liquidada?'.15':'.25')+');border-radius:10px;padding:13px;margin-bottom:10px;background:var(--color-background-secondary);'+(liquidada?'opacity:.7':'')+';">';
 
   // ── Header ──
@@ -4826,23 +4839,49 @@ function _renderDeudaCard(p){
     +'</div>'
     +'<div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">'
     +tipoLabel+(p.tasa?' · '+p.tasa+'%/mes':'')
-    +' · '+fN(p.capital,2)+' '+p.moneda
+    +(esIS?'':' · '+fN(p.capital,2)+' '+p.moneda)
     +(p.cta?' · <span style="color:var(--color-text-tertiary)">'+p.cta+'</span>':'')
     +(p.notas?' · <em>'+p.notas+'</em>':'')
     +'</div></div>'
     +'<div style="text-align:right;margin-left:8px">'
-    +'<div style="font-size:10px;color:var(--color-text-tertiary)">Saldo</div>'
-    +'<div style="font-size:15px;font-weight:700;color:'+tc+'">'+fN(saldoD,2)+' '+p.moneda+'</div>'
-    +(vencidas?'<div style="font-size:10px;color:var(--color-text-danger)">⚠ '+vencidas+' vencida'+(vencidas>1?'s':'')+'</div>':'')
+    +'<div style="font-size:10px;color:var(--color-text-tertiary)">Capital pendiente</div>'
+    +'<div style="font-size:16px;font-weight:700;color:'+tc+'">'+fN(saldoD,2)+' '+p.moneda+'</div>'
+    +(vencidas&&!esIS?'<div style="font-size:10px;color:var(--color-text-danger)">⚠ '+vencidas+' vencida'+(vencidas>1?'s':'')+'</div>':'')
     +'</div></div>';
 
-  // ── Progress ──
-  h+='<div style="background:var(--color-background-primary);border-radius:4px;height:6px;margin-bottom:4px">'
-    +'<div style="background:rgba('+ac+',1);height:6px;border-radius:4px;width:'+pct+'%;transition:width .4s"></div></div>'
-    +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px">'
-    +'<span>Pagado: '+fN(pagadoD,2)+' '+p.moneda+'</span>'
-    +'<span>Total: '+fN(totalD,2)+' '+p.moneda+' ('+pct+'%)</span>'
-    +'</div>';
+  // ── Bullet loan: 3-stat grid ──
+  if(esIS){
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
+      +'<div style="background:rgba(100,149,237,.1);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Interés mensual</div>'
+      +'<div style="font-size:13px;font-weight:700;color:#8ab4f8">'+fN(intMensual,2)+'</div>'
+      +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'/mes</div>'
+      +'</div>'
+      +'<div style="background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Amortizado</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--color-text-success)">'+fN(pagadoD,2)+'</div>'
+      +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'</div>'
+      +'</div>'
+      +'<div style="background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Interés pagado</div>'
+      +'<div style="font-size:13px;font-weight:700;color:var(--color-text-secondary)">'+fN(intPagados,2)+'</div>'
+      +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'</div>'
+      +'</div>'
+      +'</div>';
+    if(pagadoD>0){
+      h+='<div style="background:var(--color-background-primary);border-radius:4px;height:5px;margin-bottom:3px">'
+        +'<div style="background:rgba('+ac+',1);height:5px;border-radius:4px;width:'+pct+'%;transition:width .4s"></div></div>'
+        +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px;text-align:center">Capital original: '+fN(p.capitalOriginal||p.capital,2)+' '+p.moneda+' · Amortizado: '+pct+'%</div>';
+    }
+  } else {
+    // ── Regular progress bar ──
+    h+='<div style="background:var(--color-background-primary);border-radius:4px;height:6px;margin-bottom:4px">'
+      +'<div style="background:rgba('+ac+',1);height:6px;border-radius:4px;width:'+pct+'%;transition:width .4s"></div></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--color-text-tertiary);margin-bottom:10px">'
+      +'<span>Pagado: '+fN(pagadoD,2)+' '+p.moneda+'</span>'
+      +'<span>Total: '+fN(totalD,2)+' '+p.moneda+' ('+pct+'%)</span>'
+      +'</div>';
+  }
 
   // ── Pagar buttons ──
   if(!liquidada){
@@ -8454,7 +8493,8 @@ function calcCuotas(p) {
       pagada: false, fechaPago: null
     });
   } else if (p.tipo === 'interes_simple') {
-    // Fixed monthly interest, no amortization
+    // BULLET LOAN: Only interest is scheduled. Capital does NOT amortize automatically.
+    // Use explicit "amortizacion" payments to reduce the principal.
     var interesMensual = p.capital * (p.tasa / 100);
     for (var i = 1; i <= p.plazo; i++) {
       var fecha = new Date(p.fechaInicio);
@@ -8462,12 +8502,13 @@ function calcCuotas(p) {
       cuotas.push({
         num: i,
         fecha: fecha.toISOString().slice(0,10),
-        capital: i === p.plazo ? p.capital : 0,
+        capital: 0,           // NO amortization in scheduled cuota
         interes: interesMensual,
-        total: i === p.plazo ? p.capital + interesMensual : interesMensual,
+        total: interesMensual, // cuota = interest only
         pagada: false, fechaPago: null
       });
     }
+    // Capital repayment done via separate 'amortizacion' type payments
   } else {
     // French method (PMT formula)
     var r = p.tasa / 100;
