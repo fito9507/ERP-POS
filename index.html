@@ -2745,19 +2745,22 @@ function renderProds(){
   }).join('');
 }
 function setCatFilter(cat){const el=document.getElementById('cat-filter');if(el)el.value=cat;renderProds();}
+// Helper: precio efectivo respetando oferta > escala > min/maj
+function _getCartPriceUSD(p, q){
+  if(p.oferta){
+    var ofePr=S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null);
+    if(ofePr!=null) return ofePr;
+  }
+  return getPorEscala(p, q);
+}
 function addCart(n){
   const p=PRODS.find(x=>x.n===n);if(!p)return;
   const stk=stkDisp(p);
   const ex=S.cart.find(c=>c.n===n&&c.tipo===S.tipo);
   const newQty = ex ? ex.q+1 : 1;
   // Use escala price for new quantity, fallback to escala[0] if maj/min=0
-  var precioUSD = getPorEscala(p, newQty);
+  var precioUSD = _getCartPriceUSD(p, newQty);
   if(!precioUSD && p.escala && p.escala.length) precioUSD = parseFloat(p.escala[0].precio)||0;
-  // Si el producto está en oferta, usar precio de oferta
-  if(p.oferta){
-    var ofePr=S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null);
-    if(ofePr!=null) precioUSD=ofePr;
-  }
   if(ex){if(ex.q>=stk)return;ex.q++;ex.precioUSD=precioUSD;}
   else S.cart.push({n,q:1,precioUSD,tipo:S.tipo,modified:false});
   renderCart();
@@ -2774,7 +2777,7 @@ function commitQty(i,val){
   const stk=stkDisp(p||{stk:9999});
   const q=Math.min(stk,Math.max(1,parseInt(val)||1));
   S.cart[i].q=q;
-  if(!S.cart[i].modified && p) S.cart[i].precioUSD=getPorEscala(p,q);
+  if(!S.cart[i].modified && p) S.cart[i].precioUSD=_getCartPriceUSD(p,q);
   renderCart();
 }
 function chQty(i,d){
@@ -2783,7 +2786,7 @@ function chQty(i,d){
   const q=Math.max(0,Math.min(stk,S.cart[i].q+d));
   if(q===0){S.cart.splice(i,1);}else{
     S.cart[i].q=q;
-    if(!S.cart[i].modified && p) S.cart[i].precioUSD=getPorEscala(p,q);
+    if(!S.cart[i].modified && p) S.cart[i].precioUSD=_getCartPriceUSD(p,q);
   }
   renderCart();
 }
