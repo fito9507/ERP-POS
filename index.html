@@ -4726,14 +4726,24 @@ function renderDeudas(){
     var usd=p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda):saldo/(RATES[p.moneda]||1));
     if(p.direccion==='nos_deben')totalCobrar+=usd; else totalPagar+=usd;
   });
-  var pagar=PRESTAMOS.filter(function(p){return p.direccion!=='nos_deben';});
-  var cobrar=PRESTAMOS.filter(function(p){return p.direccion==='nos_deben';});
+  var _mostrarLiquidadas = localStorage.getItem('erp_mostrar_liquidadas') === 'true';
+  var pagar=PRESTAMOS.filter(function(p){
+    if(p.direccion==='nos_deben') return false;
+    return _mostrarLiquidadas ? true : _saldoDeuda(p) > 0.001;
+  });
+  var cobrar=PRESTAMOS.filter(function(p){
+    if(p.direccion!=='nos_deben') return false;
+    return _mostrarLiquidadas ? true : _saldoDeuda(p) > 0.001;
+  });
   var html='';
   // Header
   html+='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
     +'<div style="font-size:15px;font-weight:600">📋 Deudas y Préstamos</div>'
+    +'<div>'
+    +'<button class="btn btn-sm" style="margin-right:8px;padding:6px 10px;font-size:12px;background:var(--color-background-tertiary);border:1px solid var(--color-border-secondary)" onclick="toggleDeudasLiquidadas()">'
+    +(_mostrarLiquidadas?'👁 Ocultar liquidadas':'🙈 Ver liquidadas')+'</button>'
     +'<button class="btn btn-p" style="padding:6px 14px;font-size:13px" onclick="showNuevaDeuda()">+ Nueva</button>'
-    +'</div>';
+    +'</div></div>';
   // Metrics cards
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'
     +'<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:12px">'
@@ -9001,11 +9011,39 @@ function admCrearPrestamo() {
 }
 
 function eliminarPrestamo(id) {
-  if (!confirm('¿Eliminar este préstamo?')) return;
-  PRESTAMOS = PRESTAMOS.filter(function(p){ return p.id !== id; });
+  var p=PRESTAMOS.find(function(x){return x.id===id;});
+  if(!p)return;
+  
+  // Safety checks
+  var hasPagos = (p.pagos && p.pagos.length>0) || (p.cuotas && p.cuotas.some(function(c){return c.pagada;}));
+  if(hasPagos) {
+    showToast('❌ No puedes eliminar una deuda con pagos registrados. Elimina los pagos primero o liquídala.');
+    return;
+  }
+  
+  if (!confirm('¿Eliminar este préstamo/deuda por completo?')) return;
+  
+  // Reverse initial capital movement if it exists
+  var descApertura = 'Apertura de préstamo/deuda — '+p.nombre;
+  if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
+    var q = 'fecha=eq.'+encodeURIComponent(p.fechaInicio||'')+'&monto_origen=eq.'+(p.capital||0)+'&notas=eq.'+encodeURIComponent(descApertura);
+    supaReq('DELETE','mov_cajas?'+q).catch(function(e){console.warn('delete inicial:',e);});
+  }
+  if(typeof _cajasMovs!=='undefined') {
+    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===p.fechaInicio && m.monto_origen===p.capital && m.notas===descApertura;});
+    if(cIdx>=0) _cajasMovs.splice(cIdx,1);
+  }
+
+  PRESTAMOS = PRESTAMOS.filter(function(x){ return x.id !== id; });
   savePrestamos();
   if(typeof renderDeudas === 'function') renderDeudas();
   else if(typeof renderPrestamos === 'function') renderPrestamos();
+}
+
+function toggleDeudasLiquidadas() {
+  var act = localStorage.getItem('erp_mostrar_liquidadas') === 'true';
+  localStorage.setItem('erp_mostrar_liquidadas', !act);
+  if(typeof renderDeudas === 'function') renderDeudas();
 }
 
 </script>
