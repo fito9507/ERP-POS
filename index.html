@@ -4862,18 +4862,18 @@ function _renderDeudaCard(p){
 
   // ── Bullet loan: 3-stat grid ──
   if(esIS){
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">'
-      +'<div style="background:rgba(100,149,237,.1);border-radius:7px;padding:8px;text-align:center">'
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
+      +'<div style="flex:1 1 30%;min-width:75px;background:rgba(100,149,237,.1);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Interés mensual</div>'
       +'<div style="font-size:13px;font-weight:700;color:#8ab4f8">'+fN(intMensual,2)+'</div>'
       +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'/mes</div>'
       +'</div>'
-      +'<div style="background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="flex:1 1 30%;min-width:75px;background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Amortizado</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--color-text-success)">'+fN(pagadoD,2)+'</div>'
       +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'</div>'
       +'</div>'
-      +'<div style="background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
+      +'<div style="flex:1 1 30%;min-width:75px;background:rgba('+ac+',.08);border-radius:7px;padding:8px;text-align:center">'
       +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">Interés pagado</div>'
       +'<div style="font-size:13px;font-weight:700;color:var(--color-text-secondary)">'+fN(intPagados,2)+'</div>'
       +'<div style="font-size:9px;color:var(--color-text-tertiary)">'+p.moneda+'</div>'
@@ -4899,10 +4899,10 @@ function _renderDeudaCard(p){
     var sugMonto=proxima?proxima.total:saldoD;
     if(p.tipo==='interes_simple'){
       var sugerInt=parseFloat((p.capital*(p.tasa||0)/100).toFixed(2));
-      h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
-        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugerInt+',\'interes\')" style="padding:8px;border-radius:8px;border:1px solid rgba(100,149,237,.4);background:rgba(100,149,237,.1);color:#8ab4f8;font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
+      h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugerInt+',\'interes\')" style="flex:1 1 45%;min-width:120px;padding:8px;border-radius:8px;border:1px solid rgba(100,149,237,.4);background:rgba(100,149,237,.1);color:#8ab4f8;font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
         +'💳 Pagar intereses<br><span style="font-size:10px;font-weight:400;opacity:.8">'+fN(sugerInt,2)+' '+p.moneda+'/mes</span></button>'
-        +'<button onclick="abrirPagoModal(\''+p.id+'\',0,\'amortizacion\')" style="padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\',0,\'amortizacion\')" style="flex:1 1 45%;min-width:120px;padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
         +(esDeuda?'🔽 Amortizar capital':'🔽 Cobrar capital')
         +'<br><span style="font-size:10px;font-weight:400;opacity:.8">Reduce el saldo</span></button>'
         +'</div>'
@@ -5110,7 +5110,8 @@ function registrarPagoDeuda(prestamoId){
   
   var montoDeuda = monto;
   if(mon !== p.moneda) {
-    var actTasa = parseFloat(document.getElementById('pm-tasa')?.value);
+    var actTasaStr = document.getElementById('pm-tasa')?.value || '';
+    var actTasa = parseFloat(actTasaStr.replace(/,/g, '.'));
     if(actTasa) {
       var _peso = {EUR:5, USD:4, MLC:3, CUP:2, CUPT:1};
       var esInverso = (_peso[mon]||0) > (_peso[p.moneda]||0);
@@ -5132,7 +5133,7 @@ function registrarPagoDeuda(prestamoId){
     var cap=(p.tipo==='interes_simple')?p.capital:sld;
     var maxVal=(tipoPago==='amortizacion')?cap:sld;
     if(montoDeuda > maxVal + 0.05) {
-      showToast('Error: El equivalente ('+fN(montoDeuda,2)+' '+p.moneda+') excede el límite permitido ('+fN(maxVal,2)+' '+p.moneda+')');
+      showToast('❌ Bloqueado: Estás intentando pagar el equivalente a '+fN(montoDeuda,2)+' '+p.moneda+', pero el saldo pendiente es de solo '+fN(maxVal,2)+' '+p.moneda+'. Reduce el monto.');
       return;
     }
   }
