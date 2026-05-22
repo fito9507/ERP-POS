@@ -5010,10 +5010,11 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +bannerHtml
     +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:4px">'
-    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
-    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\')">'
+    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" data-target="'+sugerMonto+'" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
+    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\', false, true)">'
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
+    +'<div id="pm-tasa-wrap" style="display:none;margin-bottom:4px"><label class="lbl">Tasa aplicada (<span id="pm-tasa-hint"></span>)</label><input class="adm-inp" type="number" id="pm-tasa" step="0.0001" oninput="updPmEquiv(\''+prestamoId+'\', true)"></div>'
     +'<div id="pm-equiv" style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:10px;height:14px"></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><label class="lbl">Fecha</label><input class="adm-inp" type="date" id="pm-fecha" value="'+today()+'"></div>'
@@ -5031,19 +5032,59 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
   setTimeout(function(){document.getElementById('pm-monto')&&document.getElementById('pm-monto').focus();},80);
 }
 
-function updPmEquiv(pid) {
+function updPmEquiv(pid, isManual, isMonChange) {
   var p=PRESTAMOS.find(function(x){return x.id===pid;});
   if(!p)return;
   var monto=parseFloat(document.getElementById('pm-monto')?.value)||0;
   var mon=document.getElementById('pm-mon')?.value||p.moneda;
+  
+  var cSel = document.getElementById('pm-caja');
+  if(cSel && !isManual) {
+    var currCaja = cSel.value;
+    var cajas = typeof getAllCajas==='function'?getAllCajas():[];
+    var opts = '<option value="">Sin caja</option>';
+    cajas.forEach(function(k){
+      if(typeof _getMonedaFromCaja==='function'){
+        var mCaja = _getMonedaFromCaja(k);
+        if(mCaja && mCaja !== mon) return;
+      }
+      opts += '<option'+(k===currCaja?' selected':'')+'>'+k+'</option>';
+    });
+    cSel.innerHTML = opts;
+  }
+
   var eqEl=document.getElementById('pm-equiv');
-  if(!eqEl)return;
+  var tw=document.getElementById('pm-tasa-wrap');
+  var ta=document.getElementById('pm-tasa');
+  var th=document.getElementById('pm-tasa-hint');
+
   if(mon===p.moneda) {
-    eqEl.innerHTML='';
+    if(eqEl) eqEl.innerHTML='';
+    if(tw) tw.style.display='none';
   } else {
-    var equivUSD = mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
-    var montoDeuda = p.moneda==='USD'?equivUSD:(typeof fromUSD==='function'?fromUSD(equivUSD,p.moneda):equivUSD*(RATES[p.moneda]||1));
-    eqEl.innerHTML='<span style="color:var(--color-text-warning)">≈ Reduce la deuda en: <strong>'+fN(montoDeuda,2)+' '+p.moneda+'</strong></span>';
+    if(tw) tw.style.display='';
+    var defaultTasa = 1;
+    if(p.moneda==='USD'){ defaultTasa = RATES[mon]||1; } 
+    else if(mon==='USD'){ defaultTasa = 1/(RATES[p.moneda]||1); } 
+    else { var usd = 1/(RATES[mon]||1); defaultTasa = usd * (RATES[p.moneda]||1); }
+
+    if(!isManual || !ta.value) {
+      if(ta) ta.value = parseFloat(defaultTasa.toFixed(6));
+    }
+    var actTasa = parseFloat(ta?.value)||defaultTasa;
+    if(th) th.textContent = '1 '+mon+' = '+actTasa+' '+p.moneda;
+    
+    var inputMonto = document.getElementById('pm-monto');
+    if(isMonChange && inputMonto) {
+       var target = parseFloat(inputMonto.getAttribute('data-target'))||0;
+       if(target>0) {
+          monto = target / actTasa;
+          inputMonto.value = parseFloat(monto.toFixed(2));
+       }
+    }
+
+    var montoDeuda = monto * actTasa;
+    if(eqEl) eqEl.innerHTML='<span style="color:var(--color-text-warning)">≈ Reduce la deuda en: <strong>'+fN(montoDeuda,2)+' '+p.moneda+'</strong></span>';
   }
 }
 
@@ -5054,8 +5095,16 @@ function registrarPagoDeuda(prestamoId){
   if(monto<=0){showToast('El monto debe ser mayor que 0');return;}
   var mon=document.getElementById('pm-mon')?.value||p.moneda;
   
-  var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
-  var montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda):eqU*(RATES[p.moneda]||1));
+  var montoDeuda = monto;
+  if(mon !== p.moneda) {
+    var actTasa = parseFloat(document.getElementById('pm-tasa')?.value);
+    if(actTasa) {
+      montoDeuda = monto * actTasa;
+    } else {
+      var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
+      montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda):eqU*(RATES[p.moneda]||1));
+    }
+  }
   montoDeuda=parseFloat(montoDeuda.toFixed(2));
 
   var fecha=document.getElementById('pm-fecha')?.value||today();
@@ -5255,6 +5304,21 @@ function eliminarPago(prestamoId,pagoId){
   }
   // Remove pago
   p.pagos.splice(pgIdx,1);
+  
+  // Remove from _cajasMovs
+  if(typeof _cajasMovs!=='undefined'){
+    var notaAuto=pg.nota||(pg.tipoPago==='interes'?'Intereses':pg.tipoPago==='amortizacion'?'Amortización':pg.tipoPago==='incremento'?'Incremento capital':'Pago');
+    var descMov=(notaAuto)+' — '+p.nombre;
+    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===pg.fecha && m.monto_origen===pg.monto && m.notas===descMov;});
+    if(cIdx>=0){
+      var r = _cajasMovs[cIdx];
+      _cajasMovs.splice(cIdx,1);
+      if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline && r.id){
+        supaReq('DELETE','mov_cajas',{id:r.id}).catch(function(e){});
+      }
+    }
+  }
+
   // Reset cuota marks that depended on this payment
   if(pg._cuotaNum){
     var c=p.cuotas.find(function(x){return x.num===pg._cuotaNum;});
