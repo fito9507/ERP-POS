@@ -5305,18 +5305,25 @@ function eliminarPago(prestamoId,pagoId){
   }
   // Remove pago
   p.pagos.splice(pgIdx,1);
-  
-  // Remove from _cajasMovs
+  // Remove from _cajasMovs and Supabase
+  var notaAuto=pg.nota||(pg.tipoPago==='interes'?'Intereses':pg.tipoPago==='amortizacion'?'Amortización':pg.tipoPago==='incremento'?'Incremento capital':'Pago');
+  var descMov=(notaAuto)+' — '+p.nombre;
+  var targetId = null;
+
   if(typeof _cajasMovs!=='undefined'){
-    var notaAuto=pg.nota||(pg.tipoPago==='interes'?'Intereses':pg.tipoPago==='amortizacion'?'Amortización':pg.tipoPago==='incremento'?'Incremento capital':'Pago');
-    var descMov=(notaAuto)+' — '+p.nombre;
     var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===pg.fecha && m.monto_origen===pg.monto && m.notas===descMov;});
     if(cIdx>=0){
-      var r = _cajasMovs[cIdx];
+      targetId = _cajasMovs[cIdx].id;
       _cajasMovs.splice(cIdx,1);
-      if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline && r.id){
-        supaReq('DELETE','mov_cajas',{id:r.id}).catch(function(e){});
-      }
+    }
+  }
+
+  if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
+    if(targetId) {
+      supaReq('DELETE','mov_cajas?id=eq.'+targetId).catch(function(e){});
+    } else {
+      var q = 'fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto_origen=eq.'+pg.monto+'&notas=eq.'+encodeURIComponent(descMov);
+      supaReq('DELETE','mov_cajas?'+q).catch(function(e){});
     }
   }
 
