@@ -8758,7 +8758,13 @@ function showEditarDeudaModal(id){
     +'<input class="adm-inp" type="date" id="ed-venc" value="'+(p.vencimiento||'')+'"></div>'
     +'<div><label class="lbl">Caja asociada (predeterminada)</label>'
     +'<select class="adm-inp" id="ed-cta"><option value="">Sin asignar</option>'
-    +cajas.map(function(k){return '<option'+(k===p.cta?' selected':'')+'>'+k+'</option>';}).join('')+'</select></div>'
+    +cajas.filter(function(k){
+      if(typeof _getMonedaFromCaja==='function'){
+        var mCaja=_getMonedaFromCaja(k);
+        return !mCaja || mCaja===p.moneda;
+      }
+      return true;
+    }).map(function(k){return '<option'+(k===p.cta?' selected':'')+'>'+k+'</option>';}).join('')+'</select></div>'
     +'<div style="grid-column:1/-1"><label class="lbl">Notas</label>'
     +'<input class="adm-inp" id="ed-notas" value="'+(p.notas||'')+'"></div>'
     +'</div>'
