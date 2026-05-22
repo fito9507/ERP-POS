@@ -5064,27 +5064,29 @@ function updPmEquiv(pid, isManual, isMonChange) {
     if(tw) tw.style.display='none';
   } else {
     if(tw) tw.style.display='';
-    var defaultTasa = 1;
-    if(p.moneda==='USD'){ defaultTasa = RATES[mon]||1; } 
-    else if(mon==='USD'){ defaultTasa = 1/(RATES[p.moneda]||1); } 
-    else { var usd = 1/(RATES[mon]||1); defaultTasa = usd * (RATES[p.moneda]||1); }
+    var _peso = {EUR:5, USD:4, MLC:3, CUP:2, CUPT:1};
+    var esInverso = (_peso[mon]||0) > (_peso[p.moneda]||0);
+    var baseMon = esInverso ? mon : p.moneda;
+    var targetMon = esInverso ? p.moneda : mon;
+    
+    var defaultTasa = (RATES[targetMon]||1) / (RATES[baseMon]||1);
 
     if(!isManual || !ta.value) {
       if(ta) ta.value = parseFloat(defaultTasa.toFixed(6));
     }
     var actTasa = parseFloat(ta?.value)||defaultTasa;
-    if(th) th.textContent = '1 '+mon+' = '+actTasa+' '+p.moneda;
+    if(th) th.textContent = '1 '+baseMon+' = '+actTasa+' '+targetMon;
     
     var inputMonto = document.getElementById('pm-monto');
     if(isMonChange && inputMonto) {
        var target = parseFloat(inputMonto.getAttribute('data-target'))||0;
        if(target>0) {
-          monto = target / actTasa;
+          monto = esInverso ? (target / actTasa) : (target * actTasa);
           inputMonto.value = parseFloat(monto.toFixed(2));
        }
     }
 
-    var montoDeuda = monto * actTasa;
+    var montoDeuda = esInverso ? (monto * actTasa) : (monto / actTasa);
     if(eqEl) eqEl.innerHTML='<span style="color:var(--color-text-warning)">≈ Reduce la deuda en: <strong>'+fN(montoDeuda,2)+' '+p.moneda+'</strong></span>';
   }
 }
@@ -5100,7 +5102,9 @@ function registrarPagoDeuda(prestamoId){
   if(mon !== p.moneda) {
     var actTasa = parseFloat(document.getElementById('pm-tasa')?.value);
     if(actTasa) {
-      montoDeuda = monto * actTasa;
+      var _peso = {EUR:5, USD:4, MLC:3, CUP:2, CUPT:1};
+      var esInverso = (_peso[mon]||0) > (_peso[p.moneda]||0);
+      montoDeuda = esInverso ? (monto * actTasa) : (monto / actTasa);
     } else {
       var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
       montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda):eqU*(RATES[p.moneda]||1));
