@@ -5012,7 +5012,7 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     bannerHtml='';
   }
   mo.innerHTML='<div style="max-width:420px;width:100%;background:var(--color-background-primary);border-radius:14px;padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
-    +'<button onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<button type="button" onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+titulo+'</div>'
     +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">'+p.nombre
     +(tipoPago!=='incremento'?' · Saldo: <strong>'+fN(saldo,2)+' '+p.moneda+'</strong>':'')
@@ -5035,8 +5035,8 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +'<div style="margin-bottom:14px"><label class="lbl">Nota (opcional)</label>'
     +'<input class="adm-inp" id="pm-nota" placeholder="Ej: Interés mayo, abono capital..."></div>'
     +'<div style="display:flex;gap:8px">'
-    +'<button class="btn btn-p" onclick="registrarPagoDeuda(\''+prestamoId+'\')" style="flex:1">Registrar</button>'
-    +'<button class="btn" onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'">Cancelar</button>'
+    +'<button type="button" class="btn btn-p" onclick="registrarPagoDeuda(\''+prestamoId+'\')" style="flex:1">Registrar</button>'
+    +'<button type="button" class="btn" onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'">Cancelar</button>'
     +'</div></div>';
   mo.style.display='flex';
   updPmEquiv(prestamoId);
@@ -5247,7 +5247,7 @@ function abrirEditarPagoModal(prestamoId,pagoId){
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
   mo.innerHTML='<div style="max-width:400px;width:100%;background:var(--color-background-primary);border-radius:14px;padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
-    +'<button onclick="document.getElementById(\'edit-pago-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<button type="button" onclick="document.getElementById(\'edit-pago-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:14px">✏️ Editar pago</div>'
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="ep-monto" value="'+pg.monto.toFixed(2)+'" step="0.01"></div>'
@@ -5262,8 +5262,8 @@ function abrirEditarPagoModal(prestamoId,pagoId){
     +'<div style="margin-bottom:6px"><label class="lbl">Nota</label><input class="adm-inp" id="ep-nota" value="'+(pg.nota||'').replace(/"/g,'&quot;')+'"></div>'
     +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:14px">Registrado por: '+(pg.user||'—')+(pg.hora?' a las '+pg.hora:'')+'</div>'
     +'<div style="display:flex;gap:8px">'
-    +'<button class="btn btn-p" onclick="guardarEditarPago()" style="flex:1">Guardar cambios</button>'
-    +'<button class="btn" onclick="document.getElementById(\'edit-pago-modal\').style.display=\'none\'">Cancelar</button>'
+    +'<button type="button" class="btn btn-p" onclick="guardarEditarPago()" style="flex:1">Guardar cambios</button>'
+    +'<button type="button" class="btn" onclick="document.getElementById(\'edit-pago-modal\').style.display=\'none\'">Cancelar</button>'
     +'</div></div>';
   mo.style.display='flex';
 }
@@ -5367,7 +5367,7 @@ function showNuevaDeuda(){
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
   mo.innerHTML='<div style="max-width:480px;width:100%;max-height:90vh;overflow-y:auto;background:var(--color-background-primary);border-radius:14px;padding:24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
-    +'<button onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<button type="button" onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
     +'<div style="font-size:16px;font-weight:600;margin-bottom:16px">Nueva deuda / préstamo</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +'<div style="grid-column:1/-1"><label class="lbl">Nombre / Acreedor / Deudor *</label>'
@@ -5407,8 +5407,8 @@ function showNuevaDeuda(){
     +'</div>'
     +'<div id="nd-preview" style="margin-top:10px;font-size:12px;color:var(--color-text-secondary);padding:10px;background:var(--color-background-secondary);border-radius:8px;display:none"></div>'
     +'<div style="display:flex;gap:8px;margin-top:16px">'
-    +'<button class="btn btn-p" onclick="admCrearDeuda()" style="flex:1">Crear</button>'
-    +'<button class="btn" onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'">Cancelar</button>'
+    +'<button type="button" class="btn btn-p" onclick="admCrearDeuda()" style="flex:1">Crear</button>'
+    +'<button type="button" class="btn" onclick="document.getElementById(\'nueva-deuda-modal\').style.display=\'none\'">Cancelar</button>'
     +'</div>'
     +'</div>';
   mo.style.display='flex';
@@ -8763,7 +8763,7 @@ function showEditarDeudaModal(id){
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
   mo.innerHTML='<div style="max-width:480px;width:100%;max-height:90vh;overflow-y:auto;background:var(--color-background-primary);border-radius:14px;padding:24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
-    +'<button onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<button type="button" onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
     +'<div style="font-size:16px;font-weight:600;margin-bottom:16px">Editar deuda / préstamo</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     +'<div style="grid-column:1/-1"><label class="lbl">Nombre / Acreedor / Deudor *</label>'
@@ -8796,8 +8796,8 @@ function showEditarDeudaModal(id){
     +'<input class="adm-inp" id="ed-notas" value="'+(p.notas||'')+'"></div>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:16px">'
-    +'<button class="btn btn-p" onclick="admGuardarDeuda(\''+p.id+'\')" style="flex:1">Guardar cambios</button>'
-    +'<button class="btn" onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'">Cancelar</button>'
+    +'<button type="button" class="btn btn-p" onclick="admGuardarDeuda(\''+p.id+'\')" style="flex:1">Guardar cambios</button>'
+    +'<button type="button" class="btn" onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'">Cancelar</button>'
     +'</div>'
     +'</div>';
   mo.style.display='flex';
