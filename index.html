@@ -5372,7 +5372,7 @@ function showNuevaDeuda(){
     +'<div><label class="lbl">Capital *</label>'
     +'<input class="adm-inp" type="number" id="nd-capital" value="0" step="0.01" oninput="updNuevaDeudaForm()"></div>'
     +'<div><label class="lbl">Moneda</label>'
-    +'<select class="adm-inp" id="nd-mon">'+['USD','EUR','CUP','CUPT'].map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'
+    +'<select class="adm-inp" id="nd-mon" onchange="updNuevaDeudaForm()">'+['USD','EUR','CUP','CUPT'].map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'
     +'<div id="nd-tasa-wrap"><label class="lbl">Tasa mensual (%)</label>'
     +'<input class="adm-inp" type="number" id="nd-tasa" value="2" step="0.1" oninput="updNuevaDeudaForm()"></div>'
     +'<div id="nd-plazo-wrap"><label class="lbl">Plazo (meses)</label>'
@@ -5410,6 +5410,24 @@ function updNuevaDeudaForm(){
   // Hide plazo for bullet loans since they are technically indefinite
   if(pw)pw.style.display=(tipo==='simple'||tipo==='interes_simple')?'none':'';
   if(vw)vw.style.display=tipo==='simple'?'':'none';
+  
+  // Filter Cajas by currency
+  var cSel = document.getElementById('nd-cta');
+  var mon = document.getElementById('nd-mon')?.value;
+  if(cSel && mon) {
+    var currCaja = cSel.value;
+    var cajas = typeof getAllCajas==='function'?getAllCajas():[];
+    var opts = '<option value="">Sin asignar</option>';
+    cajas.forEach(function(k){
+      if(typeof _getMonedaFromCaja==='function'){
+        var mCaja = _getMonedaFromCaja(k);
+        if(mCaja && mCaja !== mon) return;
+      }
+      opts += '<option'+(k===currCaja?' selected':'')+'>'+k+'</option>';
+    });
+    cSel.innerHTML = opts;
+  }
+
   var capital=parseFloat(document.getElementById('nd-capital')?.value)||0;
   var tasa=parseFloat(document.getElementById('nd-tasa')?.value)||0;
   // If interes_simple, default to 120 months (10 years) of projected calendar schedule
@@ -8959,7 +8977,8 @@ function eliminarPrestamo(id) {
   if (!confirm('¿Eliminar este préstamo?')) return;
   PRESTAMOS = PRESTAMOS.filter(function(p){ return p.id !== id; });
   savePrestamos();
-  renderPrestamos();
+  if(typeof renderDeudas === 'function') renderDeudas();
+  else if(typeof renderPrestamos === 'function') renderPrestamos();
 }
 
 </script>
