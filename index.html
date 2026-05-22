@@ -502,6 +502,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
   /* ── Topbar ── */
   #topbar{display:flex!important;position:sticky;top:0;z-index:50}
+  .deudas-cols{grid-template-columns:1fr!important}
 
   /* ── Padding general de módulos ── */
   #mod-ventas,#mod-stock,#mod-ig,#mod-backup,#mod-prestamos{
@@ -4747,7 +4748,7 @@ function renderDeudas(){
     +'</div>'
     +'</div>';
   // Two columns
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
+  html+='<div class="deudas-cols" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
   // Por pagar
   html+='<div>'
     +'<div style="font-size:11px;font-weight:700;color:var(--color-text-danger);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(248,113,113,.2);padding-bottom:6px">📤 Por pagar</div>';
@@ -5376,6 +5377,10 @@ function showNuevaDeuda(){
     +'<div><label class="lbl">Caja asociada</label>'
     +'<select class="adm-inp" id="nd-cta"><option value="">Sin asignar</option>'
     +cajas.map(function(k){return '<option>'+k+'</option>';}).join('')+'</select></div>'
+    +'<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin-top:6px">'
+    +'<input type="checkbox" id="nd-reg-ini" checked style="width:16px;height:16px">'
+    +'<label for="nd-reg-ini" style="font-size:12px;color:var(--color-text-primary);cursor:pointer;margin:0">Registrar este capital como un movimiento automático en la caja seleccionada</label>'
+    +'</div>'
     +'<div style="grid-column:1/-1"><label class="lbl">Notas</label>'
     +'<input class="adm-inp" id="nd-notas" placeholder="Observaciones..."></div>'
     +'</div>'
@@ -5437,6 +5442,7 @@ function admCrearDeuda(){
     fechaInicio:document.getElementById('nd-fecha').value||today(),
     vencimiento:document.getElementById('nd-venc')?.value||'',
     cta:document.getElementById('nd-cta').value,
+    regIni:document.getElementById('nd-reg-ini')?.checked,
     notas:document.getElementById('nd-notas').value,
   });
   document.getElementById('nueva-deuda-modal').style.display='none';
@@ -8666,8 +8672,89 @@ function crearPrestamo(data) {
   };
   p.cuotas = calcCuotas(p);
   PRESTAMOS.unshift(p);
+
+  if (data.regIni && p.cta) {
+    var esDeuda = p.direccion !== 'nos_deben';
+    var cajaTipo = esDeuda ? 'deposito' : 'retiro';
+    var descMov = 'Apertura de préstamo/deuda — ' + p.nombre;
+    var cRow = {
+      tipo: cajaTipo, fecha: p.fechaInicio, notas: descMov, 
+      usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+      caja_origen: cajaTipo === 'retiro' ? p.cta : null,
+      caja_destino: cajaTipo === 'deposito' ? p.cta : null,
+      monto_origen: p.capital, monto_destino: p.capital
+    };
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(cRow);
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('POST', 'mov_cajas', cRow).catch(function(e){console.warn('mov_cajas:',e);});
+    }
+  }
+
   savePrestamos();
   showToast('Creado: ' + p.nombre);
+}
+
+function showEditarDeudaModal(id){
+  var p=PRESTAMOS.find(function(x){return x.id===id;});
+  if(!p)return;
+  var mo=document.getElementById('edit-deuda-modal');
+  if(!mo){
+    mo=document.createElement('div');
+    mo.id='edit-deuda-modal';
+    mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
+    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
+    document.body.appendChild(mo);
+  }
+  var cajas=typeof getAllCajas==='function'?getAllCajas():[];
+  mo.innerHTML='<div style="max-width:480px;width:100%;max-height:90vh;overflow-y:auto;background:var(--color-background-primary);border-radius:14px;padding:24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
+    +'<button onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
+    +'<div style="font-size:16px;font-weight:600;margin-bottom:16px">Editar deuda / préstamo</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    +'<div style="grid-column:1/-1"><label class="lbl">Nombre / Acreedor / Deudor *</label>'
+    +'<input class="adm-inp" id="ed-nombre" value="'+(p.nombre||'')+'"></div>'
+    +'<div><label class="lbl">Dirección</label>'
+    +'<select class="adm-inp" id="ed-dir" disabled>'
+    +'<option value="nosotros_debemos"'+(p.direccion==='nosotros_debemos'?' selected':'')+'>📤 Nosotros debemos</option>'
+    +'<option value="nos_deben"'+(p.direccion==='nos_deben'?' selected':'')+'>📥 Nos deben</option>'
+    +'</select></div>'
+    +'<div><label class="lbl">Tipo</label>'
+    +'<select class="adm-inp" id="ed-tipo" disabled>'
+    +'<option value="'+p.tipo+'" selected>'+p.tipo+'</option>'
+    +'</select></div>'
+    +'<div><label class="lbl">Moneda</label>'
+    +'<select class="adm-inp" id="ed-mon" disabled><option>'+p.moneda+'</option></select></div>'
+    +'<div><label class="lbl">Fecha inicio</label>'
+    +'<input class="adm-inp" type="date" id="ed-fecha" value="'+(p.fechaInicio||'')+'"></div>'
+    +'<div><label class="lbl">Vencimiento</label>'
+    +'<input class="adm-inp" type="date" id="ed-venc" value="'+(p.vencimiento||'')+'"></div>'
+    +'<div><label class="lbl">Caja asociada (predeterminada)</label>'
+    +'<select class="adm-inp" id="ed-cta"><option value="">Sin asignar</option>'
+    +cajas.map(function(k){return '<option'+(k===p.cta?' selected':'')+'>'+k+'</option>';}).join('')+'</select></div>'
+    +'<div style="grid-column:1/-1"><label class="lbl">Notas</label>'
+    +'<input class="adm-inp" id="ed-notas" value="'+(p.notas||'')+'"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:16px">'
+    +'<button class="btn btn-p" onclick="admGuardarDeuda(\''+p.id+'\')" style="flex:1">Guardar cambios</button>'
+    +'<button class="btn" onclick="document.getElementById(\'edit-deuda-modal\').style.display=\'none\'">Cancelar</button>'
+    +'</div>'
+    +'</div>';
+  mo.style.display='flex';
+}
+
+function admGuardarDeuda(id){
+  var p=PRESTAMOS.find(function(x){return x.id===id;});
+  if(!p)return;
+  var nombre=(document.getElementById('ed-nombre')?.value||'').trim();
+  if(!nombre){showToast('El nombre es obligatorio');return;}
+  p.nombre=nombre;
+  p.fechaInicio=document.getElementById('ed-fecha')?.value||p.fechaInicio;
+  p.vencimiento=document.getElementById('ed-venc')?.value||'';
+  p.cta=document.getElementById('ed-cta')?.value||'';
+  p.notas=document.getElementById('ed-notas')?.value||'';
+  savePrestamos();
+  document.getElementById('edit-deuda-modal').style.display='none';
+  renderDeudas();
+  showToast('Deuda actualizada ✓');
 }
 
 function pagarCuota(prestamoId, cuotaNum) {
