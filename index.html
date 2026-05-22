@@ -5077,7 +5077,19 @@ function registrarPagoDeuda(prestamoId){
   }
 
   // ── Push to mov_cajas (Supabase caja) ──
-  if(caja) _pushMovCajas(cajaTipo,caja,monto,descMov,fecha).catch(function(e){console.warn('mov_cajas:',e);});
+  if(caja) {
+    var cRow = {
+      tipo: cajaTipo, fecha: fecha, notas: descMov, 
+      usuario: (typeof S!=='undefined'&&S.user)||'Admin',
+      caja_origen: cajaTipo==='retiro' ? caja : null,
+      caja_destino: cajaTipo==='deposito' ? caja : null,
+      monto_origen: monto, monto_destino: monto
+    };
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(cRow);
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('POST','mov_cajas',cRow).catch(function(e){console.warn('mov_cajas:',e);});
+    }
+  }
 
   // ── Modify capital if needed ──
   if(tipoPago==='amortizacion'){
