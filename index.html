@@ -5487,9 +5487,9 @@ function liquidarDeuda_p(id){
     if(!c.pagada){
       c.pagada=true;
       c.fechaPago=ahora;
+      var esD=p.direccion!=='nos_deben';
       // Register global movement
       if(typeof igNextId!=='undefined'){
-        var esD=p.direccion!=='nos_deben';
         MOVS.unshift({
           id:igNextId++,fecha:ahora,
           tipo:esD?'Amortización deuda':'Cobro préstamo',
@@ -5498,6 +5498,23 @@ function liquidarDeuda_p(id){
           equivUSD:parseFloat((typeof toUSD==='function'?toUSD(c.total,p.moneda):c.total/(RATES[p.moneda]||1)).toFixed(2)),
           cta:p.cta||'',sentido:esD?'gasto':'ingreso',notas:''
         });
+      }
+      
+      // Sync with Supabase Cajas
+      var cajaTipo = esD ? 'retiro' : 'deposito';
+      var descMov = 'Liquidación — ' + p.nombre;
+      if(p.cta) {
+        var cRow = {
+          tipo: cajaTipo, fecha: ahora, notas: descMov,
+          usuario: (typeof S!=='undefined'&&S.user)||'Admin',
+          caja_origen: cajaTipo==='retiro' ? p.cta : null,
+          caja_destino: cajaTipo==='deposito' ? p.cta : null,
+          monto_origen: c.total, monto_destino: c.total
+        };
+        if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(cRow);
+        if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
+          supaReq('POST','mov_cajas',cRow).catch(function(e){console.warn('mov_cajas:',e);});
+        }
       }
     }
   });
