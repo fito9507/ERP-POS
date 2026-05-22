@@ -4791,14 +4791,14 @@ function _totalDeuda(p){
 }
 function _pagadoDeuda(p){
   if(p.tipo==='interes_simple') return Math.max(0,(p.capitalOriginal||p.capital)-p.capital);
-  return (p.pagos||[]).reduce(function(a,pg){return a+pg.monto;},0);
+  return (p.pagos||[]).reduce(function(a,pg){return a+(pg.montoDeuda!=null?pg.montoDeuda:pg.monto);},0);
 }
 function _saldoDeuda(p){
   if(p.tipo==='interes_simple') return Math.max(0,p.capital);
   return Math.max(0,_totalDeuda(p)-_pagadoDeuda(p));
 }
 function _interesesPagadosDeuda(p){
-  return (p.pagos||[]).filter(function(pg){return pg.tipoPago==='interes';}).reduce(function(a,pg){return a+pg.monto;},0);
+  return (p.pagos||[]).filter(function(pg){return pg.tipoPago==='interes';}).reduce(function(a,pg){return a+(pg.montoDeuda!=null?pg.montoDeuda:pg.monto);},0);
 }
 function _migrarPagosDeuda(p){
   if(!p.pagos)p.pagos=[];
@@ -5009,11 +5009,12 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +'</div>'
     +bannerHtml
     +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
-    +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:10px">'
-    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01"></div>'
-    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon">'
+    +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:4px">'
+    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
+    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\')">'
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
+    +'<div id="pm-equiv" style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:10px;height:14px"></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><label class="lbl">Fecha</label><input class="adm-inp" type="date" id="pm-fecha" value="'+today()+'"></div>'
     +'<div><label class="lbl">Caja</label><select class="adm-inp" id="pm-caja"><option value="">Sin caja</option>'
@@ -5026,7 +5027,24 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +'<button class="btn" onclick="document.getElementById(\'pago-deuda-modal\').style.display=\'none\'">Cancelar</button>'
     +'</div></div>';
   mo.style.display='flex';
+  updPmEquiv(prestamoId);
   setTimeout(function(){document.getElementById('pm-monto')&&document.getElementById('pm-monto').focus();},80);
+}
+
+function updPmEquiv(pid) {
+  var p=PRESTAMOS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  var monto=parseFloat(document.getElementById('pm-monto')?.value)||0;
+  var mon=document.getElementById('pm-mon')?.value||p.moneda;
+  var eqEl=document.getElementById('pm-equiv');
+  if(!eqEl)return;
+  if(mon===p.moneda) {
+    eqEl.innerHTML='';
+  } else {
+    var equivUSD = mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
+    var montoDeuda = p.moneda==='USD'?equivUSD:(typeof fromUSD==='function'?fromUSD(equivUSD,p.moneda):equivUSD*(RATES[p.moneda]||1));
+    eqEl.innerHTML='<span style="color:var(--color-text-warning)">≈ Reduce la deuda en: <strong>'+fN(montoDeuda,2)+' '+p.moneda+'</strong></span>';
+  }
 }
 
 function registrarPagoDeuda(prestamoId){
@@ -5035,10 +5053,26 @@ function registrarPagoDeuda(prestamoId){
   var monto=parseFloat(document.getElementById('pm-monto')?.value)||0;
   if(monto<=0){showToast('El monto debe ser mayor que 0');return;}
   var mon=document.getElementById('pm-mon')?.value||p.moneda;
+  
+  var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
+  var montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda):eqU*(RATES[p.moneda]||1));
+  montoDeuda=parseFloat(montoDeuda.toFixed(2));
+
   var fecha=document.getElementById('pm-fecha')?.value||today();
   var caja=document.getElementById('pm-caja')?.value||'';
   var nota=document.getElementById('pm-nota')?.value||'';
   var tipoPago=document.getElementById('pm-tipo')?.value||'pago';
+  
+  if(tipoPago!=='incremento' && tipoPago!=='interes'){
+    var sld=_saldoDeuda(p);
+    var cap=(p.tipo==='interes_simple')?p.capital:sld;
+    var maxVal=(tipoPago==='amortizacion')?cap:sld;
+    if(montoDeuda > maxVal + 0.05) {
+      showToast('Error: El equivalente ('+fN(montoDeuda,2)+' '+p.moneda+') excede el límite permitido ('+fN(maxVal,2)+' '+p.moneda+')');
+      return;
+    }
+  }
+
   if(!p.pagos)p.pagos=[];
   var esDeuda=p.direccion!=='nos_deben';
 
@@ -5093,10 +5127,10 @@ function registrarPagoDeuda(prestamoId){
 
   // ── Modify capital if needed ──
   if(tipoPago==='amortizacion'){
-    p.capital=Math.max(0,p.capital-monto);
+    p.capital=Math.max(0,p.capital-montoDeuda);
     p.cuotas=calcCuotas(p);
   } else if(tipoPago==='incremento'){
-    p.capital+=monto;
+    p.capital+=montoDeuda;
     p.cuotas=calcCuotas(p);
   }
 
@@ -5105,7 +5139,7 @@ function registrarPagoDeuda(prestamoId){
   var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
   var notaAuto=nota||(tipoPago==='interes'?'Intereses':tipoPago==='amortizacion'?'Amortización':tipoPago==='incremento'?'Incremento capital':'Pago');
   p.pagos.push({id:'pg-'+Date.now(),fecha:fecha,hora:hora,
-    monto:monto,mon:mon,nota:notaAuto,caja:caja,movId:movId,tipoPago:tipoPago,
+    monto:monto,mon:mon,montoDeuda:montoDeuda,nota:notaAuto,caja:caja,movId:movId,tipoPago:tipoPago,
     user:typeof S!=='undefined'&&S.user?S.user:'—'});
 
   if(tipoPago!=='interes'&&tipoPago!=='incremento') _autoMarcarCuotas(p);
