@@ -4849,7 +4849,7 @@ function _renderDeudaCard(p){
     +(liquidada?'<span style="font-size:10px;background:rgba(74,222,128,.15);color:var(--color-text-success);padding:2px 6px;border-radius:4px;font-weight:500">✓ Liquidada</span>':'')
     +'</div>'
     +'<div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">'
-    +tipoLabel+(p.tasa?' · '+p.tasa+'%/mes':'')
+    +tipoLabel+(p.tasa && p.tipo!=='simple'?' · '+p.tasa+'%/mes':'')
     +(esIS?'':' · '+fN(p.capital,2)+' '+p.moneda)
     +(p.cta?' · <span style="color:var(--color-text-tertiary)">'+p.cta+'</span>':'')
     +(p.notas?' · <em>'+p.notas+'</em>':'')
@@ -5024,7 +5024,7 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +bannerHtml
     +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:4px">'
-    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" data-target="'+sugerMonto+'" value="'+sugerMonto.toFixed(2)+'" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
+    +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" data-target="'+sugerMonto+'" value="'+(sugerMonto>0?sugerMonto.toFixed(2):'')+'" placeholder="0.00" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
     +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\', false, true)">'
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
@@ -5398,7 +5398,7 @@ function showNuevaDeuda(){
     +'<option value="frances">Cuota fija — Método francés</option>'
     +'</select></div>'
     +'<div><label class="lbl">Capital *</label>'
-    +'<input class="adm-inp" type="number" id="nd-capital" value="0" step="0.01" oninput="updNuevaDeudaForm()"></div>'
+    +'<input class="adm-inp" type="number" id="nd-capital" placeholder="0.00" step="0.01" oninput="updNuevaDeudaForm()"></div>'
     +'<div><label class="lbl">Moneda</label>'
     +'<select class="adm-inp" id="nd-mon" onchange="updNuevaDeudaForm()">'+['USD','EUR','CUP','CUPT'].map(function(m){return '<option>'+m+'</option>';}).join('')+'</select></div>'
     +'<div id="nd-tasa-wrap"><label class="lbl">Tasa mensual (%)</label>'
