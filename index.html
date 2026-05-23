@@ -4757,16 +4757,16 @@ function renderDeudas(){
     +'<div style="font-size:11px;color:var(--color-text-tertiary)">'+cobrar.length+' activo'+(cobrar.length!==1?'s':'')+'</div>'
     +'</div>'
     +'</div>';
-  // Two columns
-  html+='<div class="deudas-cols" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">';
+  // Two columns (Responsive flex-wrap)
+  html+='<div class="deudas-cols" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">';
   // Por pagar
-  html+='<div>'
+  html+='<div style="flex:1 1 300px;min-width:0">'
     +'<div style="font-size:11px;font-weight:700;color:var(--color-text-danger);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(248,113,113,.2);padding-bottom:6px">📤 Por pagar</div>';
   if(pagar.length){pagar.forEach(function(p){html+=_renderDeudaCard(p);});}
   else html+='<div style="color:var(--color-text-success);font-size:12px;padding:20px 0;text-align:center">Sin deudas pendientes ✓</div>';
   html+='</div>';
   // Por cobrar
-  html+='<div>'
+  html+='<div style="flex:1 1 300px;min-width:0">'
     +'<div style="font-size:11px;font-weight:700;color:var(--color-text-success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(74,222,128,.2);padding-bottom:6px">📥 Por cobrar</div>';
   if(cobrar.length){cobrar.forEach(function(p){html+=_renderDeudaCard(p);});}
   else html+='<div style="color:var(--color-text-tertiary);font-size:12px;padding:20px 0;text-align:center">Sin cobros pendientes</div>';
