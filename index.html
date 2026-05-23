@@ -4921,7 +4921,10 @@ function _renderDeudaCard(p){
 
   // ── Historial de pagos ──
   var pagos=p.pagos||[];
+  var necesitaGuardarId = false;
   if(pagos.length){
+    pagos.forEach(function(pg, i){ if(!pg.id){ pg.id='pg-'+Date.now()+'-'+i; necesitaGuardarId=true; } });
+    if(necesitaGuardarId && typeof savePrestamos==='function') savePrestamos();
     h+='<details open><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:6px;list-style:none;display:flex;justify-content:space-between">'
       +'<span>📋 Historial de pagos ('+pagos.length+')</span>'
       +'<span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary)">clic para plegar</span>'
@@ -5347,6 +5350,16 @@ function eliminarPago(prestamoId,pagoId){
     var c=p.cuotas.find(function(x){return x.num===pg._cuotaNum;});
     if(c){c.pagada=false;c.fechaPago=null;}
   }
+
+  // Restore capital if it was amortization or increment
+  if(pg.tipoPago==='amortizacion'){
+    p.capital = (p.capital||0) + (pg.montoDeuda||pg.monto);
+    if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
+  } else if(pg.tipoPago==='incremento'){
+    p.capital = Math.max(0, (p.capital||0) - (pg.montoDeuda||pg.monto));
+    if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
+  }
+
   _autoMarcarCuotas(p);
   savePrestamos();
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
