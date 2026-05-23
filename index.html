@@ -5315,21 +5315,26 @@ function eliminarPago(prestamoId,pagoId){
   if(pgIdx<0)return;
   var pg=p.pagos[pgIdx];
   if(!confirm('¿Eliminar este pago de '+fN(pg.monto,2)+' '+pg.mon+'?\nEsta acción también eliminará el movimiento del libro contable.'))return;
+  var notaAuto=pg.nota||(pg.tipoPago==='interes'?'Intereses':pg.tipoPago==='amortizacion'?'Amortización':pg.tipoPago==='incremento'?'Incremento capital':'Pago');
+  var descMov=(notaAuto)+' — '+p.nombre;
+  var descLiq='Liquidación — '+p.nombre;
+
   // Remove from MOVS
   if(pg.movId!=null){
     var mi=MOVS.findIndex(function(m){return m.id===pg.movId;});
     if(mi>=0)MOVS.splice(mi,1);
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){}
+  } else {
+    var mi=MOVS.findIndex(function(m){return m.fecha===pg.fecha && m.monto===pg.monto && (m.desc===descMov || m.desc===descLiq);});
+    if(mi>=0) { MOVS.splice(mi,1); try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){} }
   }
-  // Remove pago
-  p.pagos.splice(pgIdx,1);
-  // Remove from _cajasMovs and Supabase
-  var notaAuto=pg.nota||(pg.tipoPago==='interes'?'Intereses':pg.tipoPago==='amortizacion'?'Amortización':pg.tipoPago==='incremento'?'Incremento capital':'Pago');
-  var descMov=(notaAuto)+' — '+p.nombre;
-  var targetId = null;
 
+  p.pagos.splice(pgIdx, 1);
+
+  // Remove from _cajasMovs and Supabase
+  var targetId = null;
   if(typeof _cajasMovs!=='undefined'){
-    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===pg.fecha && m.monto_origen===pg.monto && m.notas===descMov;});
+    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===pg.fecha && m.monto_origen===pg.monto && (m.notas===descMov || m.notas===descLiq);});
     if(cIdx>=0){
       targetId = _cajasMovs[cIdx].id;
       _cajasMovs.splice(cIdx,1);
@@ -5340,7 +5345,7 @@ function eliminarPago(prestamoId,pagoId){
     if(targetId) {
       supaReq('DELETE','mov_cajas?id=eq.'+targetId).catch(function(e){});
     } else {
-      var q = 'fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto_origen=eq.'+pg.monto+'&notas=eq.'+encodeURIComponent(descMov);
+      var q = 'fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto_origen=eq.'+pg.monto+'&notas=in.('+encodeURIComponent('"'+descMov+'","'+descLiq+'"')+')';
       supaReq('DELETE','mov_cajas?'+q).catch(function(e){});
     }
   }
