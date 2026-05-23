@@ -4813,12 +4813,19 @@ function _interesesPagadosDeuda(p){
 }
 function _migrarPagosDeuda(p){
   if(!p.pagos)p.pagos=[];
+  var acum=_pagadoDeuda(p);
+  var corriendo=0;
   p.cuotas.forEach(function(c){
+    corriendo+=c.total;
     if(c.pagada&&c.fechaPago){
       var ya=p.pagos.some(function(pg){return pg._cuotaNum===c.num;});
-      if(!ya) p.pagos.push({id:'pg-mig-'+p.id+'-'+c.num,fecha:c.fechaPago,hora:'',
-        monto:c.total,mon:p.moneda,nota:'Cuota '+c.num+'/'+p.cuotas.length,
-        caja:p.cta||'',movId:null,_cuotaNum:c.num});
+      if(!ya && corriendo > acum + 0.001) {
+        var faltante = Math.min(c.total, corriendo - acum);
+        p.pagos.push({id:'pg-mig-'+p.id+'-'+c.num,fecha:c.fechaPago,hora:'',
+          monto:faltante,mon:p.moneda,nota:'Cuota '+c.num+'/'+p.cuotas.length,
+          caja:p.cta||'',movId:null,_cuotaNum:c.num});
+        acum += faltante;
+      }
     }
   });
 }
@@ -5508,49 +5515,62 @@ function admCrearDeuda(){
 }
 
 function liquidarDeuda_p(id){
-  if(!confirm('¿Marcar toda esta deuda/préstamo como completamente liquidada?'))return;
   var p=PRESTAMOS.find(function(x){return x.id===id;});
   if(!p)return;
+  var saldo = _saldoDeuda(p);
+  if(saldo<=0) { showToast('La deuda ya está liquidada'); return; }
+  if(!confirm('¿Marcar toda esta deuda/préstamo como completamente liquidada por el saldo de '+fN(saldo,2)+' '+p.moneda+'?'))return;
+
   var ahora=today();
-  p.cuotas.forEach(function(c){
-    if(!c.pagada){
-      c.pagada=true;
-      c.fechaPago=ahora;
-      var esD=p.direccion!=='nos_deben';
-      // Register global movement
-      if(typeof igNextId!=='undefined'){
-        MOVS.unshift({
-          id:igNextId++,fecha:ahora,
-          tipo:esD?'Amortización deuda':'Cobro préstamo',
-          desc:'Liquidación — '+p.nombre,
-          acreedor:p.nombre,monto:c.total,mon:p.moneda,
-          equivUSD:parseFloat((typeof toUSD==='function'?toUSD(c.total,p.moneda):c.total/(RATES[p.moneda]||1)).toFixed(2)),
-          cta:p.cta||'',sentido:esD?'gasto':'ingreso',notas:''
-        });
-      }
-      
-      // Sync with Supabase Cajas
-      var cajaTipo = esD ? 'retiro' : 'deposito';
-      var descMov = 'Liquidación — ' + p.nombre;
-      if(p.cta) {
-        var cRow = {
-          tipo: cajaTipo, fecha: ahora, notas: descMov,
-          usuario: (typeof S!=='undefined'&&S.user)||'Admin',
-          caja_origen: cajaTipo==='retiro' ? p.cta : null,
-          caja_destino: cajaTipo==='deposito' ? p.cta : null,
-          monto_origen: c.total, monto_destino: c.total
-        };
-        if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(cRow);
-        if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
-          supaReq('POST','mov_cajas',cRow).catch(function(e){console.warn('mov_cajas:',e);});
-        }
-      }
+  var hora=String(new Date().getHours()).padStart(2,'0')+':'+String(new Date().getMinutes()).padStart(2,'0');
+  var esD=p.direccion!=='nos_deben';
+  var tipoMov=esD?'Amortización deuda':'Cobro préstamo';
+  var sentidoMov=esD?'gasto':'ingreso';
+  var descMov='Liquidación — '+p.nombre;
+  var cajaTipo=esD?'retiro':'deposito';
+  var movId=null;
+
+  if(typeof igNextId!=='undefined'){
+    movId=igNextId++;
+    var equivUSD=p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda):saldo/(RATES[p.moneda]||1));
+    MOVS.unshift({
+      id:movId,fecha:ahora,tipo:tipoMov,desc:descMov,
+      acreedor:p.nombre,monto:saldo,mon:p.moneda,
+      equivUSD:parseFloat(equivUSD.toFixed(2)),
+      cta:p.cta||'',sentido:sentidoMov,notas:''
+    });
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+  }
+  
+  if(p.cta) {
+    var cRow = {
+      tipo: cajaTipo, fecha: ahora, notas: descMov,
+      usuario: (typeof S!=='undefined'&&S.user)||'Admin',
+      caja_origen: cajaTipo==='retiro' ? p.cta : null,
+      caja_destino: cajaTipo==='deposito' ? p.cta : null,
+      monto_origen: saldo, monto_destino: saldo
+    };
+    if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(cRow);
+    if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
+      supaReq('POST','mov_cajas',cRow).catch(function(e){console.warn('mov_cajas:',e);});
     }
-  });
-  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+  }
+
+  var tipoP = (p.tipo==='interes_simple') ? 'amortizacion' : 'pago';
+  if(!p.pagos) p.pagos=[];
+  p.pagos.push({id:'pg-'+Date.now(),fecha:ahora,hora:hora,
+    monto:saldo,mon:p.moneda,montoDeuda:saldo,nota:'Liquidación',caja:p.cta||'',movId:movId,tipoPago:tipoP,
+    user:typeof S!=='undefined'&&S.user?S.user:'—'});
+
+  if(p.tipo==='interes_simple') {
+    p.capital = 0;
+    if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
+  }
+
+  _autoMarcarCuotas(p);
+  savePrestamos();
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
-  savePrestamos();
   renderDeudas();
   showToast('Deuda liquidada ✓');
 }
