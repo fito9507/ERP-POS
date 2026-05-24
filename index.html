@@ -3283,10 +3283,6 @@ async function loadComReglas(){
 // Get commission % for a vendedor+producto+almacen
 // Priority: vendedor+producto > vendedor+categoria > vendedor+almacen > vendedor global
 function getComPct(vend, prod, cat, alm){
-  if(!COM_REGLAS.length){
-    // fallback to COM_DEF
-    return (COM_DEF[vend]&&COM_DEF[vend][alm])||0;
-  }
   var rules=COM_REGLAS.filter(function(r){return r.vendedor===vend||r.vendedor==='*';});
   // Most specific first
   var byProd=rules.find(function(r){return r.producto&&r.producto===prod&&(!r.almacen||r.almacen===alm);});
@@ -3297,7 +3293,9 @@ function getComPct(vend, prod, cat, alm){
   if(byAlm) return byAlm.pct;
   var global=rules.find(function(r){return !r.producto&&!r.categoria&&!r.almacen;});
   if(global) return global.pct;
-  return 0;
+  
+  // fallback to COM_DEF if no custom rules apply
+  return (COM_DEF[vend]&&COM_DEF[vend][alm])||0;
 }
 let liquidaciones=(function(){try{const d=localStorage.getItem('erp_liquidaciones');return d?JSON.parse(d):[];}catch(e){return [];}})();
 
