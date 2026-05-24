@@ -4937,7 +4937,7 @@ function _renderDeudaCard(p){
       +'<span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary)">clic para plegar</span>'
       +'</summary>'
       +'<div style="border:1px solid var(--color-border-tertiary);border-radius:6px;overflow:hidden;margin-bottom:8px">';
-    pagos.slice().sort(function(a,b){return(b.fecha||'').localeCompare(a.fecha||'');}).forEach(function(pg,i){
+    pagos.slice().sort(function(a,b){return((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||''));}).forEach(function(pg,i){
       var esPar=i%2===0;
       var htmlMontoDeuda = '';
       if (pg.mon !== p.moneda && pg.montoDeuda != null) {
@@ -4948,6 +4948,7 @@ function _renderDeudaCard(p){
         +'<div style="font-size:11px;font-weight:500">'+fN(pg.monto,2)+' '+pg.mon+htmlMontoDeuda+'</div>'
         +'<div style="font-size:10px;color:var(--color-text-tertiary)">'
         +(pg.fecha?fD(pg.fecha):'—')+(pg.hora?' '+pg.hora:'')
+        +(pg.user?' · 👤 '+(pg.user==='—'?'Admin':pg.user):'')
         +(pg.caja?' · '+pg.caja:'')
         +(pg.nota?' · <em>'+pg.nota+'</em>':'')
         +(pg._cuotaNum?'<span style="margin-left:4px;opacity:.5">[migrado]</span>':'')
@@ -4982,6 +4983,24 @@ function _renderDeudaCard(p){
       +'</tbody></table></div></details>';
   }
 
+  // ── Registro de auditoría (Inborrable) ──
+  if (p.auditLog && p.auditLog.length > 0) {
+    h+='<details><summary style="cursor:pointer;font-size:10px;font-weight:600;color:var(--color-text-tertiary);margin-top:12px;list-style:none;display:flex;justify-content:space-between">'
+      +'<span>🛡️ Registro de auditoría (Inborrable)</span>'
+      +'<span style="font-size:10px;font-weight:400">clic para expandir</span>'
+      +'</summary>'
+      +'<div style="border:1px solid var(--color-border-tertiary);border-radius:6px;overflow:hidden;margin-top:8px;background:rgba(0,0,0,0.1)">';
+    p.auditLog.slice().reverse().forEach(function(log,i){
+      var esPar=i%2===0;
+      h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;'+(esPar?'':'background:rgba(255,255,255,.02)')+';border-bottom:1px solid var(--color-border-tertiary)">'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:10px;font-weight:500;color:var(--color-text-secondary)">'+log.action+'</div>'
+        +'<div style="font-size:9px;color:var(--color-text-tertiary)">'
+        +(log.fecha?fD(log.fecha):'')+' '+(log.hora||'')+' · 👤 '+(log.user||'Admin')
+        +'</div></div></div>';
+    });
+    h+='</div></details>';
+  }
   // ── Actions ──
   h+='<div style="display:flex;gap:5px;margin-top:10px;justify-content:flex-end">'
     +'<button class="adm-btn-sm" onclick="showEditarDeudaModal(\''+p.id+'\')" style="font-size:10px">✏️ Editar</button>'
@@ -5283,6 +5302,7 @@ function registrarPagoDeuda(prestamoId){
     user:typeof S!=='undefined'&&S.user?S.user:'—'});
 
   if(tipoPago!=='interes'&&tipoPago!=='incremento') _autoMarcarCuotas(p);
+  _addAuditLog(p, 'Registro de pago: ' + fN(monto,2) + ' ' + mon + (tipoPago!=='pago'?' ('+tipoPago+')':''));
   savePrestamos();
   document.getElementById('pago-deuda-modal').style.display='none';
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
@@ -5371,6 +5391,7 @@ function guardarEditarPago(){
   // Update pagos entry
   pg.monto=nuevoMonto;pg.mon=nuevoMon;pg.fecha=nuevaFecha;pg.caja=nuevaCaja;pg.nota=nuevaNota;
   _autoMarcarCuotas(p);
+  _addAuditLog(p, 'Edición de pago: ' + fN(pg.monto,2) + ' ' + pg.mon);
   savePrestamos();
   document.getElementById('edit-pago-modal').style.display='none';
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
@@ -5437,6 +5458,7 @@ function eliminarPago(prestamoId,pagoId){
   }
 
   _autoMarcarCuotas(p);
+  _addAuditLog(p, 'Eliminación de pago: ' + fN(pg.monto,2) + ' ' + pg.mon);
   savePrestamos();
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
@@ -5636,6 +5658,7 @@ function liquidarDeuda_p(id){
   }
 
   _autoMarcarCuotas(p);
+  _addAuditLog(p, 'Liquidación total (Marcada)');
   savePrestamos();
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
@@ -8756,6 +8779,17 @@ var PRESTAMOS = (function(){
   try { return JSON.parse(localStorage.getItem('erp_prestamos')||'[]'); } catch(e) { return []; }
 })();
 
+function _addAuditLog(p, action) {
+  if (!p.auditLog) p.auditLog = [];
+  var ahora = new Date();
+  p.auditLog.push({
+    fecha: ahora.toISOString().slice(0, 10),
+    hora: String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0'),
+    user: (typeof S!=='undefined'&&S.user?S.user:'Admin'),
+    action: action
+  });
+}
+
 function savePrestamos() {
   try { localStorage.setItem('erp_prestamos', JSON.stringify(PRESTAMOS)); } catch(e) {}
   if (typeof renderPrestamos === 'function') renderPrestamos();
@@ -8853,6 +8887,7 @@ function crearPrestamo(data) {
     }
   }
 
+  _addAuditLog(p, 'Registro de deuda creado: ' + fN(p.capital,2) + ' ' + p.moneda);
   savePrestamos();
   showToast('Creado: ' + p.nombre);
 }
@@ -8919,6 +8954,7 @@ function admGuardarDeuda(id){
   p.vencimiento=document.getElementById('ed-venc')?.value||'';
   p.cta=document.getElementById('ed-cta')?.value||'';
   p.notas=document.getElementById('ed-notas')?.value||'';
+  _addAuditLog(p, 'Edición de detalles de la deuda');
   savePrestamos();
   document.getElementById('edit-deuda-modal').style.display='none';
   renderDeudas();
