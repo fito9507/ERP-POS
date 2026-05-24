@@ -5036,7 +5036,11 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
     +'<div id="pm-tasa-wrap" style="display:none;margin-bottom:4px"><label class="lbl">Tasa aplicada (<span id="pm-tasa-hint"></span>)</label><input class="adm-inp" type="number" id="pm-tasa" step="0.0001" oninput="updPmEquiv(\''+prestamoId+'\', true)"></div>'
-    +'<div id="pm-equiv" style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:10px;height:14px"></div>'
+    +'<div id="pm-equiv-wrap" style="display:none;align-items:center;font-size:12px;color:var(--color-text-warning);margin-bottom:10px;height:26px">'
+    +'<span>≈ Reduce la deuda en: </span>'
+    +'<input class="adm-inp" type="number" id="pm-equiv-monto" style="width:100px;height:26px;padding:2px 8px;margin:0 6px;font-size:13px;font-weight:600;color:var(--color-text-warning);background:rgba(255,255,255,0.05)" step="0.01" min="0.01" oninput="updPmEquivInv(\''+prestamoId+'\')">'
+    +'<strong id="pm-equiv-mon">'+p.moneda+'</strong>'
+    +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
     +'<div><label class="lbl">Fecha</label><input class="adm-inp" type="date" id="pm-fecha" value="'+today()+'"></div>'
     +'<div><label class="lbl">Caja</label><select class="adm-inp" id="pm-caja"><option value="">Sin caja</option>'
@@ -5080,7 +5084,8 @@ function updPmEquiv(pid, isManual, isMonChange) {
   var th=document.getElementById('pm-tasa-hint');
 
   if(mon===p.moneda) {
-    if(eqEl) eqEl.innerHTML='';
+    var eqWrap = document.getElementById('pm-equiv-wrap');
+    if(eqWrap) eqWrap.style.display='none';
     if(tw) tw.style.display='none';
   } else {
     if(tw) tw.style.display='';
@@ -5124,8 +5129,35 @@ function updPmEquiv(pid, isManual, isMonChange) {
        }
     }
 
+    var eqWrap = document.getElementById('pm-equiv-wrap');
+    var eqInput = document.getElementById('pm-equiv-monto');
     var montoDeuda = esInverso ? (monto * actTasa) : (monto / actTasa);
-    if(eqEl) eqEl.innerHTML='<span style="color:var(--color-text-warning)">≈ Reduce la deuda en: <strong>'+fN(montoDeuda,2)+' '+p.moneda+'</strong></span>';
+    if(eqWrap) eqWrap.style.display='flex';
+    if(eqInput && document.activeElement !== eqInput) {
+      eqInput.value = montoDeuda ? parseFloat(montoDeuda.toFixed(2)) : '';
+    }
+  }
+}
+
+function updPmEquivInv(pid) {
+  var p=PRESTAMOS.find(function(x){return x.id===pid;});
+  if(!p)return;
+  var equivInput = document.getElementById('pm-equiv-monto');
+  var montoDeuda = parseFloat(equivInput?.value)||0;
+  var mon = document.getElementById('pm-mon')?.value||p.moneda;
+  if(mon === p.moneda) return;
+  
+  var actTasaStr = document.getElementById('pm-tasa')?.value || '';
+  var actTasa = parseFloat(actTasaStr.replace(/,/g, '.'));
+  if(!actTasa) return;
+  
+  var _peso = {EUR:5, USD:4, MLC:3, CUP:2, CUPT:1};
+  var esInverso = (_peso[mon]||0) > (_peso[p.moneda]||0);
+  
+  var monto = esInverso ? (montoDeuda / actTasa) : (montoDeuda * actTasa);
+  var inputMonto = document.getElementById('pm-monto');
+  if(inputMonto) {
+    inputMonto.value = monto ? parseFloat(monto.toFixed(2)) : '';
   }
 }
 
