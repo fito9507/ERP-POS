@@ -1055,9 +1055,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Tasa CUP/USD</label>
         <input type="number" id="l-tasa" value="512.88" step="0.01"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
-        <select id="l-mon-pago" onchange="renderLiqCuentas()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
-      <div class="ff"><label class="lbl">Cuenta de pago</label>
-        <select id="l-caja-pago"></select></div>
+        <select id="l-mon-pago"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
       <button class="btn btn-p" style="align-self:flex-end" onclick="renderLiq()">Generar</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiq();renderLiq()">Semana actual</button>
     </div>
@@ -3766,7 +3764,7 @@ function renderCom(){
     return true;
   }).filter(v=>v.estCom!=='No aplica');
   const totCom=data.reduce((a,v)=>a+v.comUSD,0);
-  var isPdteR=function(v){return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica');};
+  var isPdteR=function(v){return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0);};
   const pdte=data.filter(isPdteR).reduce((a,v)=>a+v.comUSD,0);
   document.getElementById('c-metrics').innerHTML=`
     <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD</div></div>
@@ -3792,28 +3790,11 @@ function renderCom(){
 }
 
 // ── LIQUIDACIÓN ───────────────────────────────────────────
-function renderLiqCuentas(){
-  var mon = document.getElementById('l-mon-pago')?.value||'CUP';
-  var alm = document.getElementById('l-alm')?.value||'';
-  var sel = document.getElementById('l-caja-pago'); if(!sel) return;
-  var cajas = typeof _cajasData!=='undefined' ? _cajasData : [];
-  var opts = cajas.filter(function(c){
-    var monMatch = c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0;
-    var almMatch = !alm || (c.nombre&&c.nombre.indexOf(alm)>=0);
-    return monMatch && almMatch;
-  });
-  if(!opts.length) opts = cajas.filter(function(c){ return c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0; });
-  if(!opts.length) opts = cajas;
-  var cur = sel.value;
-  sel.innerHTML = opts.map(function(c){ return '<option'+(c.nombre===cur?' selected':'')+'>'+c.nombre+'</option>'; }).join('');
-}
 function renderLiq(){
   const desde=document.getElementById('l-desde').value;
   const hasta=document.getElementById('l-hasta').value;
   const alm=document.getElementById('l-alm').value;
   const targetMon=document.getElementById('l-mon-pago')?.value||'CUP';
-  renderLiqCuentas();
-  const cuentaPago=document.getElementById('l-caja-pago')?.value||'';
   const tasa=parseFloat(document.getElementById('l-tasa').value)||512.88;
   const oldAjuste=parseFloat(document.getElementById('liq-ajuste')?.value||0);
   const data=VENTAS.filter(v=>{
@@ -3828,16 +3809,10 @@ function renderLiq(){
   
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
-  // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
-  var isPdte = function(v){ return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica'); };
-
-  // DEBUG: log estCom values
-  console.log('renderLiq data:', data.length, 'ventas. estCom values:', data.map(function(v){return v.estCom+'('+v.comUSD+')'}).join(', '));
-  console.log('isPdte count:', data.filter(isPdte).length);
-  data.filter(isPdte).forEach(function(v,i){
-    console.log('venta',i,'mon='+v.mon,'pagos='+JSON.stringify(v.pagos),'comUSD='+v.comUSD,'totalUSD='+v.totalUSD);
-  });
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
+  
+  // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
+  var isPdte = function(v){ return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0); };
 
   var ventaDetalleAcum = {};
   var comDetalleAcum   = {};
@@ -3849,9 +3824,8 @@ function renderLiq(){
       : [{mon: v.mon||'USD', monto: (v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon||'USD'))}];
     pagos.forEach(function(p){
       var m = p.mon||'USD';
-      var amt = p.monto!=null?p.monto:(p.m!=null?p.m:0);
-      ventaDetalleAcum[m] = (ventaDetalleAcum[m]||0) + amt;
-      comDetalleAcum[m]   = (comDetalleAcum[m]||0) + parseFloat((amt * pct / 100).toFixed(4));
+      ventaDetalleAcum[m] = (ventaDetalleAcum[m]||0) + p.monto;
+      comDetalleAcum[m]   = (comDetalleAcum[m]||0) + parseFloat((p.monto * pct / 100).toFixed(4));
     });
   });
 
@@ -3873,8 +3847,6 @@ function renderLiq(){
         <div style="font-size:14px;font-weight:500">${semLabel} · ${almLabel}</div>
       </div>
       <div style="text-align:right"><div class="lbl">Tasa CUP/USD</div><div style="font-weight:500">${fN(tasa,2)}</div></div>
-      ${cuentaPago?'<div style="font-size:12px;color:var(--color-text-secondary)">Cuenta: <strong>'+cuentaPago+'</strong></div>':''}
-
     </div>
     
     <div class="liq-sec">
@@ -3936,19 +3908,19 @@ function renderLiq(){
 
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
       <button class="btn-sm" onclick="exportLiqCSV()">Exportar CSV</button>
-      <button class="btn" onclick='guardarLiq("${desde}","${hasta}","${almLabel}",${totVentaUSD},${totComPdteUSD},${totalPago},"${targetMon}",${JSON.stringify(comDetalleAcum)},"${cuentaPago}")'>Crear Liquidación Pendiente</button>
+      <button class="btn" onclick='guardarLiq("${desde}","${hasta}","${almLabel}",${totVentaUSD},${totComPdteUSD},${totalPago},"${targetMon}",${JSON.stringify(comDetalleAcum)})'>Crear Liquidación Pendiente</button>
     </div>
   </div>`;
 }
 
-function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cuentaPago){
+function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle){
   var ajuste = parseFloat(document.getElementById('liq-ajuste')?.value||0);
   var totalPago = totalPagoBase + ajuste;
 
   const liq={
     id:'liq-'+Date.now(),
     semana:`${fD(desde)}–${fD(hasta)}`,
-    desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon, cuenta: cuentaPago||'',
+    desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon,
     comDetalle: comDetalle,
     vend: typeof S!=='undefined'?S.user:'',
     estado:'Pendiente',
@@ -4000,42 +3972,82 @@ function refreshLiqHist(){
 function pagarLiq(i) {
   var liq = liquidaciones[i];
   if(liq.estado === 'Pagado') return;
-  
-  var promptStr = '¿Desde qué cuenta pagarás los ' + fN(liq.totalCUP || liq.comCUP || 0,0) + ' CUP?\\n\\nOpciones comunes:\\n';
-  Object.keys(CUENTAS_BASE).forEach(function(k){ promptStr += '- ' + k + '\\n'; });
-  
-  var cta = prompt(promptStr, 'Efectivo CUP');
-  if(!cta) return;
-  
+  var mon = liq.mon || 'CUP';
+  var monto = liq.totalCUP || liq.comCUP || 0;
+  var cajas = typeof _cajasData!=='undefined'?_cajasData:[];
+  var cajasF = cajas.filter(function(c){ return c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0; });
+  if(!cajasF.length) cajasF = cajas;
+  // Pre-select cuenta if saved on liq
+  var preSel = liq.cuenta || '';
+  var cajaOpts = cajasF.map(function(c){
+    return '<option'+(c.nombre===preSel?' selected':'')+' value="'+c.nombre+'">'+c.nombre+'</option>';
+  }).join('');
+  // Show modal
+  var overlay = document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML='<div style="background:var(--color-background-primary);border-radius:12px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4)">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:16px">Pagar liquidación</div>'
+    +'<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:4px">Vendedor / Semana</div>'
+    +'<div style="font-weight:500">'+liq.vend+' · '+liq.semana+'</div></div>'
+    +'<div style="margin-bottom:16px"><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:4px">Total a pagar</div>'
+    +'<div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon+'</div></div>'
+    +'<div style="margin-bottom:20px"><label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:6px">Cuenta de pago</label>'
+    +'<select id="pliq-caja" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px">'+cajaOpts+'</select></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn-sm" onclick="this.closest(\"[style*=fixed]\").remove()">Cancelar</button>'
+    +'<button class="btn btn-p" onclick="confirmarPagarLiq('+i+',this)">Confirmar pago</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+}
+
+function confirmarPagarLiq(i, btn) {
+  var liq = liquidaciones[i];
+  var cta = document.getElementById('pliq-caja')?.value;
+  if(!cta){showToast('Selecciona una cuenta','error');return;}
+  btn.closest('[style*="fixed"]').remove();
+  var mon = liq.mon || 'CUP';
+  var monto = liq.totalCUP || liq.comCUP || 0;
   liq.estado = 'Pagado';
   liq.cuenta = cta;
   liq.fechaPago = today();
-  
-  var montoCUP = liq.totalCUP || liq.comCUP || 0;
-  
+  // Descontar de la caja
+  var cajaObj = typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cta;}):null;
+  if(cajaObj){
+    cajaObj.saldo = (cajaObj.saldo||0) - monto;
+    // Save mov_cajas
+    var movCaja = {fecha:today(),tipo:'Pago comisión',
+      caja_origen:cta,caja_destino:null,
+      monto_origen:monto,monto_destino:null,
+      tasa_usada:RATES.CUP||512.88,
+      notas:'Comisión '+liq.vend+' '+liq.semana,
+      usuario:typeof S!=='undefined'?S.user:'',created_at:new Date().toISOString()};
+    if(typeof supaReq!=='undefined'&&_supaOnline){
+      supaReq('POST','mov_cajas',movCaja).catch(function(e){console.warn('mov_cajas:',e);});
+    }
+    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+  }
+  // I/G movement
   if(typeof MOVS!=='undefined'){
     MOVS.unshift({id:Date.now(),fecha:today(),tipo:'Comision vendedor',
       desc:'Pago Liq. '+liq.vend+' '+liq.semana,
-      vend:liq.vend,alm:liq.alm,monto:montoCUP,mon:'CUP',
-      equivUSD:parseFloat((montoCUP/(RATES.CUP||512.88)).toFixed(2)),cta:cta,sentido:'gasto',notas:''});
-    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+      vend:liq.vend,alm:liq.alm,monto:monto,mon:mon,
+      equivUSD:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(2)),
+      cta:cta,sentido:'gasto',notas:''});
   }
-  
-  VENTAS.forEach(v => {
-    if(v.liqId === liq.id || (liq.ventas && liq.ventas.includes(v.id))) {
-      v.estCom = 'Pagada';
-      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId, {est_com: 'Pagada'}).catch(e=>{});
+  VENTAS.forEach(function(v){
+    if(v.liqId===liq.id||(liq.ventas&&liq.ventas.includes(v.id))){
+      v.estCom='Pagada';
+      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId,{est_com:'Pagada'}).catch(function(e){});
     }
   });
   if(typeof offlineSaveVentas==='function') offlineSaveVentas();
-  
   try{localStorage.setItem('erp_liquidaciones',JSON.stringify(liquidaciones));}catch(e){}
   if(typeof supaReq!=='undefined'&&_supaOnline){
-    supaReq('PATCH','liquidaciones?id=eq.'+liq.id, {estado:'Pagado', cuenta:cta}).catch(e=>{});
+    supaReq('PATCH','liquidaciones?id=eq.'+liq.id,{estado:'Pagado',cuenta:cta}).catch(function(e){});
   }
   refreshLiqHist();
   renderLiq();
-  showToast('Liquidación pagada');
+  showToast('✓ Liquidación pagada — '+fN(monto,mon==='CUP'?0:2)+' '+mon+' descontados de '+cta);
 }
 
 function eliminarLiq(i) {
