@@ -3809,10 +3809,10 @@ function renderLiq(){
   
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
-  var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
-  
   // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
   var isPdte = function(v){ return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0); };
+
+  var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
 
   var ventaDetalleAcum = {};
   var comDetalleAcum   = {};
