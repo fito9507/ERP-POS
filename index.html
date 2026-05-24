@@ -3764,7 +3764,7 @@ function renderCom(){
     return true;
   }).filter(v=>v.estCom!=='No aplica');
   const totCom=data.reduce((a,v)=>a+v.comUSD,0);
-  var isPdteR=function(v){return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0);};
+  var isPdteR=function(v){return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica');};
   const pdte=data.filter(isPdteR).reduce((a,v)=>a+v.comUSD,0);
   document.getElementById('c-metrics').innerHTML=`
     <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD</div></div>
@@ -3810,7 +3810,7 @@ function renderLiq(){
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
   // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
-  var isPdte = function(v){ return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0); };
+  var isPdte = function(v){ return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica'); };
 
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
 
