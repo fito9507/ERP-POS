@@ -3772,10 +3772,10 @@ function renderCom(){
     <div class="metric"><div class="lbl">Ventas totales</div><div class="val">${fN(data.reduce((a,v)=>a+v.totalUSD,0))}</div><div class="sub">USD</div></div>`;
   const grupos={};
   data.forEach(v=>{
-    const k=v.vend+'|'+v.alm+'|'+(v.comPct||0);
-    if(!grupos[k])grupos[k]={vend:v.vend,alm:v.alm,pct:v.comPct||0,vUSD:0,comUSD:0,pdte:0};
+    const k=v.vend+'|'+v.alm;
+    if(!grupos[k])grupos[k]={vend:v.vend,alm:v.alm,pct:v.comPct,vUSD:0,comUSD:0,pdte:0};
     grupos[k].vUSD+=v.totalUSD;grupos[k].comUSD+=v.comUSD;
-    if(!v.estCom||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)')grupos[k].pdte+=v.comUSD;
+    if(v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)')grupos[k].pdte+=v.comUSD;
   });
   document.getElementById('c-grupos').innerHTML=Object.values(grupos).map(g=>`<tr>
     <td><strong>${g.vend}</strong></td><td>${g.alm}</td>
@@ -3808,42 +3808,37 @@ function renderLiq(){
   
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
-  const totComPdteUSD=data.filter(v=>v.estCom==='Pendiente').reduce((a,v)=>a+v.comUSD,0);
+  const totComPdteUSD=data.filter(isPdte).reduce((a,v)=>a+v.comUSD,0);
   
-  const ventaDetalleAcum = { USD:0, EUR:0, CUP:0, CUPT:0 };
-  const comDetalleAcum = { USD:0, EUR:0, CUP:0, CUPT:0 };
-  
-  data.filter(v=>v.estCom==='Pendiente').forEach(v=>{
-    // Commission
-    var det = v.comDetalle && Object.keys(v.comDetalle).length ? v.comDetalle : { [v.mon]: fromUSD(v.comUSD, v.mon) };
-    Object.keys(det).forEach(m => comDetalleAcum[m] = (comDetalleAcum[m]||0) + det[m]);
-    
-    // Sales
-    var isOld = (!v.pagos || !v.pagos.length);
-    if(isOld) {
-       ventaDetalleAcum[v.mon] = (ventaDetalleAcum[v.mon]||0) + fromUSD(v.totalUSD, v.mon);
-    } else {
-       v.pagos.forEach(p => {
-          ventaDetalleAcum[p.mon] = (ventaDetalleAcum[p.mon]||0) + p.monto;
-       });
-    }
+  // isPdte: treat null estCom with comUSD>0 as Pendiente
+  var isPdte = function(v){ return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0); };
+
+  const ventaDetalleAcum = {};
+  const comDetalleAcum   = {};
+
+  data.filter(isPdte).forEach(v=>{
+    var pct = v.comPct||0;
+    // Use actual payment breakdown if available, else use cobro moneda
+    var pagos = (v.pagos && v.pagos.length)
+      ? v.pagos
+      : [{mon: v.mon||'USD', monto: (v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon))}];
+    pagos.forEach(function(p){
+      var m = p.mon||'USD';
+      ventaDetalleAcum[m] = (ventaDetalleAcum[m]||0) + p.monto;
+      // Commission = % of actual collected amount in that currency
+      comDetalleAcum[m]   = (comDetalleAcum[m]||0) + parseFloat((p.monto * pct / 100).toFixed(4));
+    });
   });
-  
+
   const t_EURUSD = typeof RATES_EURUSD!=='undefined'?RATES_EURUSD:1.08;
-  var totalPago = 0;
-  if(targetMon === 'CUP') {
-     totalPago = (comDetalleAcum.CUP || 0) + (comDetalleAcum.CUPT || 0) 
-               + ((comDetalleAcum.USD || 0) * tasa) 
-               + ((comDetalleAcum.EUR || 0) * t_EURUSD * tasa);
-  } else if (targetMon === 'USD') {
-     totalPago = (comDetalleAcum.USD || 0)
-               + ((comDetalleAcum.EUR || 0) * t_EURUSD)
-               + (((comDetalleAcum.CUP || 0) + (comDetalleAcum.CUPT || 0)) / tasa);
-  } else if (targetMon === 'EUR') {
-     totalPago = (comDetalleAcum.EUR || 0)
-               + ((comDetalleAcum.USD || 0) / t_EURUSD)
-               + (((comDetalleAcum.CUP || 0) + (comDetalleAcum.CUPT || 0)) / tasa / t_EURUSD);
+  function toTargetMon(monto, mon){
+    if(mon===targetMon) return monto;
+    var usd = mon==='USD'?monto : mon==='EUR'?monto*t_EURUSD : monto/tasa;
+    if(targetMon==='USD') return usd;
+    if(targetMon==='EUR') return usd/t_EURUSD;
+    return usd*tasa; // CUP or CUPT
   }
+  var totalPago = Object.keys(comDetalleAcum).reduce(function(s,m){return s+toTargetMon(comDetalleAcum[m]||0,m);},0);
                
   document.getElementById('liq-out').innerHTML=`
   <div class="card">
@@ -3857,10 +3852,21 @@ function renderLiq(){
     
     <div class="liq-sec">
       <div class="liq-sec-h">DESGLOSE DE VENTAS Y COMISIONES POR MONEDA</div>
-      <div class="liq-r"><span>USD</span><span><span style="color:var(--color-text-secondary);margin-right:12px">Vendido: ${fN(ventaDetalleAcum.USD||0)}</span> <strong style="color:var(--color-text-warning)">Comisión: ${fN(comDetalleAcum.USD||0)}</strong></span></div>
-      <div class="liq-r"><span>EUR</span><span><span style="color:var(--color-text-secondary);margin-right:12px">Vendido: ${fN(ventaDetalleAcum.EUR||0)}</span> <strong style="color:var(--color-text-warning)">Comisión: ${fN(comDetalleAcum.EUR||0)}</strong></span></div>
-      <div class="liq-r"><span>CUP</span><span><span style="color:var(--color-text-secondary);margin-right:12px">Vendido: ${fN(ventaDetalleAcum.CUP||0, 0)}</span> <strong style="color:var(--color-text-warning)">Comisión: ${fN(comDetalleAcum.CUP||0, 0)}</strong></span></div>
-      <div class="liq-r"><span>CUPT</span><span><span style="color:var(--color-text-secondary);margin-right:12px">Vendido: ${fN(ventaDetalleAcum.CUPT||0, 0)}</span> <strong style="color:var(--color-text-warning)">Comisión: ${fN(comDetalleAcum.CUPT||0, 0)}</strong></span></div>
+      ${(function(){
+        var mons=Object.keys(ventaDetalleAcum).filter(function(m){return (ventaDetalleAcum[m]||0)>0.001||(comDetalleAcum[m]||0)>0.001;});
+        if(!mons.length) return '<div class="liq-r" style="color:var(--color-text-tertiary)">Sin ventas pendientes en este periodo</div>';
+        return mons.map(function(m){
+          var dec=(m==='CUP'||m==='CUPT')?0:2;
+          var sym=m==='EUR'?'\u20ac':m==='USD'?'$':'\u20b1';
+          return '<div class="liq-r"><span style="font-weight:600">'+m+'</span>'
+            +'<span style="display:flex;gap:20px">'
+            +'<span><span style="color:var(--color-text-secondary);font-size:11px">Vendido </span>'
+            +'<span style="font-weight:500">'+sym+' '+fN(ventaDetalleAcum[m]||0,dec)+'</span></span>'
+            +'<span><span style="color:var(--color-text-secondary);font-size:11px">Comisión </span>'
+            +'<strong style="color:var(--color-text-warning)">'+sym+' '+fN(comDetalleAcum[m]||0,dec)+'</strong></span>'
+            +'</span></div>';
+        }).join('');
+      })()}
     </div>
     
     <div class="liq-sec">
@@ -3891,7 +3897,7 @@ function renderLiq(){
             </tr>
           </thead>
           <tbody>
-            ${data.filter(v=>v.estCom==='Pendiente').map(v => `<tr>
+            ${data.filter(isPdte).map(v => `<tr>
               <td style="padding:6px;white-space:nowrap">${fD(v.fecha)}</td>
               <td style="padding:6px">${v.alm}</td>
               <td style="padding:6px;max-width:200px;white-space:normal">${v.prods}</td>
