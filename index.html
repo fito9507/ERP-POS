@@ -5508,6 +5508,8 @@ function showNuevaDeuda(){
     +'<input class="adm-inp" type="number" id="nd-tasa" value="9.5" step="0.01" oninput="updNuevaDeudaForm()"></div>'
     +'<div id="nd-plazo-wrap"><label class="lbl">Plazo (meses)</label>'
     +'<input class="adm-inp" type="number" id="nd-plazo" value="12" step="1" min="1" oninput="updNuevaDeudaForm()"></div>'
+    +'<div id="nd-cuota-wrap" style="display:none"><label class="lbl">Cuota mensual fija</label>'
+    +'<input class="adm-inp" type="number" id="nd-cuota" value="280" step="0.01" oninput="updNuevaDeudaForm()"></div>'
     +'<div id="nd-venc-wrap" style="display:none"><label class="lbl">Vencimiento (opcional)</label>'
     +'<input class="adm-inp" type="date" id="nd-venc"></div>'
     +'<div><label class="lbl">Fecha inicio</label>'
@@ -5536,9 +5538,11 @@ function updNuevaDeudaForm(){
   var tipo=document.getElementById('nd-tipo')?.value||'simple';
   var tw=document.getElementById('nd-tasa-wrap');
   var pw=document.getElementById('nd-plazo-wrap');
+  var cw=document.getElementById('nd-cuota-wrap');
   var vw=document.getElementById('nd-venc-wrap');
   if(tw)tw.style.display=tipo==='simple'?'none':'';
   if(pw)pw.style.display=(tipo==='simple'||tipo==='interes_simple'||tipo==='revolving')?'none':'';
+  if(cw)cw.style.display=tipo==='revolving'?'':'none';
   if(vw)vw.style.display=tipo==='simple'?'':'none';
   
   // Filter Cajas by currency
@@ -5563,18 +5567,46 @@ function updNuevaDeudaForm(){
   var tasaTipo=document.getElementById('nd-tasa-tipo')?.value||'mensual';
   if (tasaTipo === 'anual') tasa = tasa / 12;
 
-  // If interes_simple or revolving, default to 120 months (10 years) of projected calendar schedule
-  var plazo=(tipo==='interes_simple'||tipo==='revolving')?120:(parseInt(document.getElementById('nd-plazo')?.value)||1);
+  // If interes_simple, default to 120 months (10 years) of projected calendar schedule
+  var plazo=tipo==='interes_simple'?120:(parseInt(document.getElementById('nd-plazo')?.value)||1);
+  var cuotaFija=parseFloat(document.getElementById('nd-cuota')?.value)||0;
+  
   var prev=document.getElementById('nd-preview');
   if(!prev)return;
   if(!capital){prev.style.display='none';return;}
   var txt='';
   if(tipo==='simple'){
     txt='Capital a devolver: <strong>'+fN(capital,2)+'</strong> sin intereses';
-  } else if(tipo==='interes_simple' || tipo==='revolving'){
+  } else if(tipo==='interes_simple'){
     var intM=capital*tasa/100;
-    var descTipo = tipo==='revolving' ? 'Línea de crédito (revolving)' : 'Solo interés';
-    txt='Interés inicial estimado: <strong>'+fN(intM,2)+' / mes</strong> ('+descTipo+')<br><span style="color:var(--color-text-tertiary);margin-top:4px;display:block">💡 El capital de <strong>'+fN(capital,2)+'</strong> generará interés mensualmente sobre el saldo pendiente. Puedes hacer pagos libres.</span>';
+    txt='Interés inicial estimado: <strong>'+fN(intM,2)+' / mes</strong> (Solo interés)<br><span style="color:var(--color-text-tertiary);margin-top:4px;display:block">💡 El capital de <strong>'+fN(capital,2)+'</strong> generará interés mensualmente sobre el saldo pendiente. Puedes hacer pagos libres.</span>';
+  } else if (tipo==='revolving') {
+    var intM = capital * tasa / 100;
+    if (cuotaFija <= intM) {
+      txt='<span style="color:var(--color-text-danger)">⚠️ La cuota fija de '+fN(cuotaFija,2)+' no cubre siquiera el primer interés mensual de '+fN(intM,2)+'. La deuda crecerá infinitamente. Sube la cuota.</span>';
+    } else {
+      var sld = capital;
+      var count = 0;
+      var totalProy = 0;
+      var r = tasa / 100;
+      while (sld > 0.01 && count < 600) {
+        var intP = sld * r;
+        var amP = cuotaFija - intP;
+        if (sld < amP) {
+          totalProy += (sld + intP);
+          sld = 0;
+        } else {
+          totalProy += cuotaFija;
+          sld -= amP;
+        }
+        count++;
+      }
+      if (count >= 600) {
+         txt='Cuota fija de <strong>'+fN(cuotaFija,2)+'</strong> terminaría en más de 50 años.';
+      } else {
+         txt='Cuota mensual fija: <strong>'+fN(cuotaFija,2)+'</strong> · Plazo estimado: <strong>'+count+' meses</strong><br><span style="color:var(--color-text-tertiary);margin-top:4px;display:block">Total proyectado a pagar: '+fN(totalProy,2)+'</span>';
+      }
+    }
   } else {
     var r=tasa/100;
     var pmt=r===0?capital/plazo:capital*r*Math.pow(1+r,plazo)/(Math.pow(1+r,plazo)-1);
@@ -5593,14 +5625,25 @@ function admCrearDeuda(){
   var rawTasa = parseFloat(document.getElementById('nd-tasa')?.value)||0;
   var tasaTipo = document.getElementById('nd-tasa-tipo')?.value||'mensual';
   var finalTasa = tasaTipo === 'anual' ? rawTasa / 12 : rawTasa;
+  var tipoD = document.getElementById('nd-tipo').value;
+  var cuotaFija = parseFloat(document.getElementById('nd-cuota')?.value)||0;
+
+  if (tipoD === 'revolving') {
+     var intPrimerMes = capital * finalTasa / 100;
+     if (cuotaFija <= intPrimerMes) {
+        showToast('La cuota fija no cubre los intereses. La deuda sería impagable.');
+        return;
+     }
+  }
 
   crearPrestamo({
     nombre:nombre,
-    tipo:document.getElementById('nd-tipo').value,
+    tipo:tipoD,
     direccion:document.getElementById('nd-dir').value,
     capital:capital,
     tasa:finalTasa,
     plazo:parseInt(document.getElementById('nd-plazo')?.value)||1,
+    cuotaFija:cuotaFija,
     moneda:document.getElementById('nd-mon').value,
     fechaInicio:document.getElementById('nd-fecha').value||today(),
     vencimiento:document.getElementById('nd-venc')?.value||'',
@@ -8821,8 +8864,8 @@ function calcCuotas(p) {
       total: p.capital,
       pagada: false, fechaPago: null
     });
-  } else if (p.tipo === 'interes_simple' || p.tipo === 'revolving') {
-    // BULLET/REVOLVING LOAN: Only interest is scheduled. Capital does NOT amortize automatically.
+  } else if (p.tipo === 'interes_simple') {
+    // BULLET LOAN: Only interest is scheduled. Capital does NOT amortize automatically.
     // Use explicit "amortizacion" payments to reduce the principal.
     var interesMensual = p.capital * (p.tasa / 100);
     for (var i = 1; i <= p.plazo; i++) {
@@ -8838,6 +8881,39 @@ function calcCuotas(p) {
       });
     }
     // Capital repayment done via separate 'amortizacion' type payments
+  } else if (p.tipo === 'revolving') {
+    // REVOLVING FIXED QUOTA
+    var r = p.tasa / 100;
+    var saldo = p.capital;
+    var cuotaF = p.cuotaFija || 0;
+    var maxIter = 600;
+    var i = 1;
+    while (saldo > 0.01 && i <= maxIter) {
+      var interes = saldo * r;
+      var amort = cuotaF - interes;
+      var pagoTotal = cuotaF;
+      
+      if (saldo < amort) {
+        amort = saldo;
+        pagoTotal = saldo + interes;
+        saldo = 0;
+      } else {
+        saldo -= amort;
+      }
+      
+      var fecha = new Date(p.fechaInicio);
+      fecha.setMonth(fecha.getMonth() + i);
+      cuotas.push({
+        num: i,
+        fecha: fecha.toISOString().slice(0,10),
+        capital: amort,
+        interes: interes,
+        total: pagoTotal,
+        saldoRestante: saldo,
+        pagada: false, fechaPago: null
+      });
+      i++;
+    }
   } else {
     // French method (PMT formula)
     var r = p.tasa / 100;
@@ -8878,6 +8954,7 @@ function crearPrestamo(data) {
     vencimiento: data.vencimiento || '',
     notas: data.notas || '',
     cta: data.cta || '',
+    cuotaFija: data.cuotaFija || 0,
     cuotas: []
   };
   p.cuotas = calcCuotas(p);
