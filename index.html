@@ -9839,17 +9839,29 @@ async function fetchElToqueAndSave(){
     // ── Estrategia 2: Leer directamente de la tabla tasas en Supabase (fallback) ──
     if (!data) {
       try {
-        var r2 = await supaReq('GET', 'tasas?select=moneda,valor&moneda=in.(USD,EUR,MLC)');
+        var r2 = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste&moneda=in.(USD,EUR,MLC)');
         if (r2.ok) {
           var rows = await r2.json();
           if (Array.isArray(rows) && rows.length > 0) {
-            var tasasMap = {};
-            rows.forEach(function(row){ tasasMap[row.moneda] = row.valor; });
+            var tasasMap = {}, adjMap = {};
+            rows.forEach(function(row){ 
+              // Usamos tasa_mkt como TRMI. Si no existe, usamos valor - ajuste.
+              var _trmi = (row.tasa_mkt && row.tasa_mkt > 10) ? row.tasa_mkt : (row.valor - (row.ajuste||0));
+              tasasMap[row.moneda] = _trmi;
+              adjMap[row.moneda] = row.ajuste || 0;
+            });
             var usd = parseFloat(tasasMap.USD||0);
             var eur = parseFloat(tasasMap.EUR||0);
             var mlc = parseFloat(tasasMap.MLC||0);
             if (usd > 10) {
-              // Datos válidos en la tabla
+              // Sincronizar ajustes globales en este dispositivo
+              var localAdj = {};
+              try { localAdj = JSON.parse(localStorage.getItem('erp_rates_adj')||'{}'); } catch(e) {}
+              localAdj.USD = adjMap.USD;
+              localAdj.EUR = adjMap.EUR;
+              localAdj.CUPT = adjMap.MLC;
+              try { localStorage.setItem('erp_rates_adj', JSON.stringify(localAdj)); } catch(e) {}
+              
               data = { ok: true, tasas: { USD: usd, ECU: eur||usd, MLC: mlc||usd } };
               showToast('⚠ elToque: usando tasas guardadas (Edge Function sin respuesta)');
             }
@@ -9883,6 +9895,9 @@ async function fetchElToqueAndSave(){
     // RATES_EURUSD = CUP_EUR/CUP_USD (ratio for display panel)
     if(cup>0 && ecu>0) { RATES_EURUSD=parseFloat((ecu/cup).toFixed(4)); try{localStorage.setItem('erp_eurusd',RATES_EURUSD.toString());}catch(e){} }
     RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
+    
+    // Guardar tasas localmente para que el próximo inicio no muestre valores desactualizados
+    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
 
     showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
     renderAdminTasas();
