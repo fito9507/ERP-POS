@@ -5089,7 +5089,25 @@ function updPmEquiv(pid, isManual, isMonChange) {
     var baseMon = esInverso ? mon : p.moneda;
     var targetMon = esInverso ? p.moneda : mon;
     
-    var defaultTasa = (RATES[targetMon]||1) / (RATES[baseMon]||1);
+    var almToUse = null;
+    var cSel = document.getElementById('pm-caja');
+    var currCaja = cSel ? cSel.value : '';
+    if(currCaja && typeof _cajasData !== 'undefined') {
+      var cObj = _cajasData.find(function(c){return c.nombre===currCaja;});
+      if(cObj) almToUse = cObj.almacen;
+    }
+    if(!almToUse && p.cta && typeof _cajasData !== 'undefined') {
+      var pObj = _cajasData.find(function(c){return c.nombre===p.cta;});
+      if(pObj) almToUse = pObj.almacen;
+    }
+
+    var defaultTasa = 1;
+    if(typeof toUSD==='function' && typeof fromUSD==='function') {
+      var usdEq = toUSD(1, baseMon, almToUse);
+      defaultTasa = fromUSD(usdEq, targetMon, almToUse);
+    } else {
+      defaultTasa = (RATES[targetMon]||1) / (RATES[baseMon]||1);
+    }
 
     if(!isManual || !ta.value) {
       if(ta) ta.value = parseFloat(defaultTasa.toFixed(6));
@@ -5127,8 +5145,14 @@ function registrarPagoDeuda(prestamoId){
       var esInverso = (_peso[mon]||0) > (_peso[p.moneda]||0);
       montoDeuda = esInverso ? (monto * actTasa) : (monto / actTasa);
     } else {
-      var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
-      montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda):eqU*(RATES[p.moneda]||1));
+      var almToUse = null;
+      var cajaStr = document.getElementById('pm-caja')?.value || p.cta || '';
+      if(cajaStr && typeof _cajasData !== 'undefined') {
+        var cObj = _cajasData.find(function(c){return c.nombre===cajaStr;});
+        if(cObj) almToUse = cObj.almacen;
+      }
+      var eqU=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon,almToUse):monto/(RATES[mon]||1));
+      montoDeuda=p.moneda==='USD'?eqU:(typeof fromUSD==='function'?fromUSD(eqU,p.moneda,almToUse):eqU*(RATES[p.moneda]||1));
     }
   }
   montoDeuda=parseFloat(montoDeuda.toFixed(2));
@@ -5177,7 +5201,13 @@ function registrarPagoDeuda(prestamoId){
   var movId=null;
   if(typeof igNextId!=='undefined'){
     movId=igNextId++;
-    var equivUSD=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon):monto/(RATES[mon]||1));
+    var almToUse = null;
+    var cajaStr = caja || p.cta || '';
+    if(cajaStr && typeof _cajasData !== 'undefined') {
+      var cObj = _cajasData.find(function(c){return c.nombre===cajaStr;});
+      if(cObj) almToUse = cObj.almacen;
+    }
+    var equivUSD=mon==='USD'?monto:(typeof toUSD==='function'?toUSD(monto,mon,almToUse):monto/(RATES[mon]||1));
     MOVS.unshift({id:movId,fecha:fecha,tipo:tipoMov,desc:descMov,
       acreedor:p.nombre,monto:monto,mon:mon,
       equivUSD:parseFloat(equivUSD.toFixed(2)),
@@ -5532,7 +5562,12 @@ function liquidarDeuda_p(id){
 
   if(typeof igNextId!=='undefined'){
     movId=igNextId++;
-    var equivUSD=p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda):saldo/(RATES[p.moneda]||1));
+    var almToUse = null;
+    if(p.cta && typeof _cajasData !== 'undefined') {
+      var pObj = _cajasData.find(function(c){return c.nombre===p.cta;});
+      if(pObj) almToUse = pObj.almacen;
+    }
+    var equivUSD=p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda,almToUse):saldo/(RATES[p.moneda]||1));
     MOVS.unshift({
       id:movId,fecha:ahora,tipo:tipoMov,desc:descMov,
       acreedor:p.nombre,monto:saldo,mon:p.moneda,
