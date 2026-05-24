@@ -5002,7 +5002,6 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     mo=document.createElement('div');
     mo.id='pago-deuda-modal';
     mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
-    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
     document.body.appendChild(mo);
   }
   var esDeuda=p.direccion!=='nos_deben';
@@ -5319,7 +5318,6 @@ function abrirEditarPagoModal(prestamoId,pagoId){
     mo=document.createElement('div');
     mo.id='edit-pago-modal';
     mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
-    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
     document.body.appendChild(mo);
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
@@ -5454,7 +5452,6 @@ function showNuevaDeuda(){
     mo=document.createElement('div');
     mo.id='nueva-deuda-modal';
     mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
-    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
     document.body.appendChild(mo);
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
@@ -8868,7 +8865,6 @@ function showEditarDeudaModal(id){
     mo=document.createElement('div');
     mo.id='edit-deuda-modal';
     mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
-    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
     document.body.appendChild(mo);
   }
   var cajas=typeof getAllCajas==='function'?getAllCajas():[];
@@ -9457,7 +9453,6 @@ function verVenta(id){
     mo=document.createElement('div');
     mo.id='venta-detail-modal';
     mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box';
-    mo.addEventListener('click',function(e){if(e.target===mo)mo.style.display='none';});
     document.body.appendChild(mo);
   }
   // Parsear ticket/hora desde nota si no vinieron del mapeo de Supabase
@@ -9866,3 +9861,4 @@ function renderStock(){
 </script>
 </body>
 </html>
+
