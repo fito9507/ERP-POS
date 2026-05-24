@@ -3595,14 +3595,14 @@ async function updComPct(id,val){
     if(netCobrado[m] > 0) v.comDetalle[m] = parseFloat((netCobrado[m] * (v.comPct / 100)).toFixed(4));
   });
   renderVentas();
-  if(typeof supaReq!=='undefined') await supaReq('PATCH','ventas?id=eq.'+id,{comPct:v.comPct,comUSD:v.comUSD,comDetalle:v.comDetalle});
+  if(typeof syncSaveVenta==='function') syncSaveVenta(v);
 }
 async function setEstCom(id,est){
   const v=VENTAS.find(x=>x.id===id);if(!v)return;
   v.estCom=est;
   if(est==='No aplica'){v.comPct=0;v.comUSD=0;v.comDetalle={};}
   renderVentas();
-  if(typeof supaReq!=='undefined') await supaReq('PATCH','ventas?id=eq.'+id,{estCom:v.estCom,comPct:v.comPct,comUSD:v.comUSD,comDetalle:v.comDetalle});
+  if(typeof syncSaveVenta==='function') syncSaveVenta(v);
 }
 
 // ── Revertir venta: devuelve stock + cajas ────────────────
