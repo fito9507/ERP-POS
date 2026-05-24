@@ -982,10 +982,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <h3 style="margin:0" id="v-count-lbl">Ventas filtradas</h3>
     </div>
     <div style="overflow-x:auto">
-    <table id="v-table" style="table-layout:fixed;width:100%">
+    <table id="v-table" style="table-layout:fixed;width:100%;min-width:1000px">
       <thead><tr>
         <th id="th-chkall" style="width:30px"><input type="checkbox" id="v-chk-all" onchange="toggleAllV(this)"></th>
-        <th style="width:62px">Fecha</th>
+        <th style="width:85px">Fecha</th>
         <th style="width:72px">Vendedor</th>
         <th style="width:68px">Almacén</th>
         <th style="width:68px">Cliente</th>
@@ -3483,11 +3483,8 @@ function renderVentas(){
     <tr id="vrow-${v.id}">
       <td style="${_isVend?'display:none':''}"><input type="checkbox" class="row-chk" data-id="${v.id}"></td>
       <td style="white-space:nowrap">
-        <div style="font-size:11px">${fD(v.fecha)}</div>
-        <div style="font-size:10px;color:var(--color-text-tertiary)">
-          ${v.hora?'<span style="color:var(--color-text-primary);font-weight:500">'+v.hora+'</span> &nbsp;':''}
-          ${v.ticket?'<span style="opacity:.7">'+v.ticket+'</span>':''}
-        </div>
+        <div style="font-size:11px">${fD(v.fecha)} ${v.hora?'<span style="color:var(--color-text-secondary);font-weight:500">'+v.hora+'</span>':''}</div>
+        ${v.ticket?'<div style="font-size:9px;color:var(--color-text-tertiary);opacity:.8;margin-top:2px">'+v.ticket+'</div>':''}
       </td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
       <td style="font-size:11px">${v.alm}</td>
