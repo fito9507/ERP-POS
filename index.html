@@ -3815,6 +3815,9 @@ function renderLiq(){
   // DEBUG: log estCom values
   console.log('renderLiq data:', data.length, 'ventas. estCom values:', data.map(function(v){return v.estCom+'('+v.comUSD+')'}).join(', '));
   console.log('isPdte count:', data.filter(isPdte).length);
+  data.filter(isPdte).forEach(function(v,i){
+    console.log('venta',i,'mon='+v.mon,'pagos='+JSON.stringify(v.pagos),'comUSD='+v.comUSD,'totalUSD='+v.totalUSD);
+  });
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
 
   var ventaDetalleAcum = {};
