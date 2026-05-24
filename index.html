@@ -1788,8 +1788,16 @@ function loadQueue() {
     var q = localStorage.getItem('erp_queue');
     if (q) {
       var loaded = JSON.parse(q);
-      // Drop items older than 1 hour to avoid infinite retry
-      var cutoff = Date.now() - 604800000; // 7 days
+      // Auto-correct corrupted queue items from previous bug
+      loaded.forEach(function(op){
+        if (op.path === 'ventas' && op.method === 'POST' && op.body && op.body.id) {
+          op.method = 'PATCH';
+          op.path = 'ventas?id=eq.'+op.body.id;
+          delete op.body.id;
+        }
+      });
+      // Drop items older than 7 days to avoid infinite retry
+      var cutoff = Date.now() - 604800000;
       _syncQueue = loaded.filter(function(op){ return !op.ts || op.ts > cutoff; });
     }
   } catch(e) { _syncQueue = []; }
@@ -1881,13 +1889,13 @@ async function syncSaveVenta(v) {
                  +(v.nota?' '+v.nota:''),
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[],comDetalle:v.comDetalle||{}}) : ''
   };
-  // Include supaId if we already have it (for upsert)
-  if(v.supaId) row.id = v.supaId;
+  // Solo incluir id si NO es PATCH (para evitar errores en update)
+  var path = v.supaId ? 'ventas?id=eq.'+v.supaId : 'ventas';
+  var method = v.supaId ? 'PATCH' : 'POST';
+  if(v.supaId && method !== 'PATCH') row.id = v.supaId;
 
   if (_supaOnline) {
     try {
-      var path = v.supaId ? 'ventas?id=eq.'+v.supaId : 'ventas';
-      var method = v.supaId ? 'PATCH' : 'POST';
       var r = await supaReq(method, path, row);
       if (r.ok) {
         if(!v.supaId){
@@ -1904,14 +1912,14 @@ async function syncSaveVenta(v) {
         var errText = await r.text();
         console.error('syncSaveVenta error:', r.status, errText);
         // Queue for retry
-        enqueue({ method: 'POST', path: 'ventas', body: row });
+        enqueue({ method: method, path: path, body: row });
       }
     } catch(e) {
       console.error('syncSaveVenta:', e);
-      enqueue({ method: 'POST', path: 'ventas', body: row });
+      enqueue({ method: method, path: path, body: row });
     }
   } else {
-    enqueue({ method: 'POST', path: 'ventas', body: row });
+    enqueue({ method: method, path: path, body: row });
   }
   return false;
 }
