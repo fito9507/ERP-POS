@@ -5293,15 +5293,15 @@ function registrarPagoDeuda(prestamoId){
 }
 
 function _autoMarcarCuotas(p){
-  // Mark cuotas as paid if total pagado covers them
+  // Mark cuotas as paid if total pagado covers them, unmark otherwise
   var acum=_pagadoDeuda(p);
   var corriendo=0;
   p.cuotas.forEach(function(c){
     corriendo+=c.total;
-    if(corriendo<=acum+0.001&&!c.pagada){
-      c.pagada=true;c.fechaPago=today();
-    } else if(corriendo>acum+0.001&&c.pagada&&!p.pagos.some(function(pg){return pg._cuotaNum===c.num;})){
-      // Don't unmark if it was manually marked
+    if(corriendo<=acum+0.001){
+      if(!c.pagada) { c.pagada=true; c.fechaPago=today(); }
+    } else {
+      if(c.pagada) { c.pagada=false; c.fechaPago=null; }
     }
   });
 }
