@@ -2128,7 +2128,7 @@ async function supaInit() {
   try {
     (function(){var _d=document.getElementById('sync-dot'),_l=document.getElementById('sync-lbl');if(_d)_d.style.background='#fbbf24';if(_l)_l.textContent='⏳ Sincronizando...';})();
     await flushQueue();
-    var [okP, okV] = await Promise.all([syncLoadProductos(), syncLoadVentas()]);
+    var [okP, okV, okC] = await Promise.all([syncLoadProductos(), syncLoadVentas(), typeof loadComReglas === 'function' ? loadComReglas() : Promise.resolve()]);
   try{
     var ra=await supaReq('GET','tasas_almacen?select=almacen,moneda,ajuste');
     if(ra.ok){(await ra.json()||[]).forEach(function(r){
@@ -3267,12 +3267,16 @@ renderSteps(0);
 
 // Commission rules loaded from Supabase com_reglas
 var COM_REGLAS = []; // [{vendedor,producto,categoria,almacen,pct}]
+try { var _cr = localStorage.getItem('erp_com_reglas'); if(_cr) COM_REGLAS = JSON.parse(_cr); } catch(e){}
 var COM_DEF = {Keiler:{Habana:4,Placetas:1.5},Padre:{Habana:4,Placetas:1.5}}; // fallback
 
 async function loadComReglas(){
   try{
     var r=await supaReq('GET','com_reglas?select=*&order=id.asc');
-    if(r.ok){ COM_REGLAS=await r.json(); }
+    if(r.ok){ 
+      COM_REGLAS=await r.json(); 
+      try { localStorage.setItem('erp_com_reglas', JSON.stringify(COM_REGLAS)); } catch(e){}
+    }
   }catch(e){ console.warn('loadComReglas:',e); }
 }
 
