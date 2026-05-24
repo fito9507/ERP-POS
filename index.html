@@ -3736,12 +3736,17 @@ function cambiarEstadoSel(est){
 function aplicarComGlobal(){
   const pct=parseFloat(document.getElementById('com-global').value)||4;
   const ids=getSelIds().length>0?getSelIds():visibleIds;
+  const updated=[];
   ids.forEach(id=>{
     const v=VENTAS.find(x=>x.id===id);if(!v||v.estCom==='No aplica')return;
     v.comPct=pct;v.comUSD=parseFloat((v.totalUSD*pct/100).toFixed(2));
+    updated.push(v);
   });
   renderVentas();
-  showToast(`${pct}% aplicado a ${ids.length} ventas`);
+  showToast(`${pct}% aplicado a ${updated.length} ventas — guardando...`);
+  Promise.all(updated.map(v=>typeof syncSaveVenta==='function'?syncSaveVenta(v):Promise.resolve()))
+    .then(()=>showToast(`✓ ${updated.length} ventas guardadas`))
+    .catch(e=>showToast('Error al guardar: '+e.message,'error'));
 }
 function exportVentasCSV(){
   const data=filtrar_ven();
