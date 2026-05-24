@@ -1038,7 +1038,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div class="g1">
     <div class="card">
       <h3>Resumen Acumulado por Vendedor y Almacén</h3>
-      <table><thead><tr><th>Vendedor</th><th>Almacén</th><th>% com.</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Estado</th></tr></thead>
+      <table style="width:100%;border-collapse:collapse"><thead><tr style="color:var(--color-text-secondary);font-size:11px"><th style="text-align:left;padding:6px 8px">Vendedor</th><th style="text-align:left;padding:6px 8px">Almacén</th><th style="text-align:center;padding:6px 8px">% com.</th><th style="text-align:right;padding:6px 8px">Venta USD</th><th style="text-align:right;padding:6px 8px">Com. USD</th><th style="text-align:right;padding:6px 8px">Com. EUR</th><th style="text-align:right;padding:6px 8px">Com. CUP</th><th style="text-align:left;padding:6px 8px">Estado</th></tr></thead>
       <tbody id="c-grupos"></tbody></table>
     </div>
   </div>
@@ -3736,17 +3736,12 @@ function cambiarEstadoSel(est){
 function aplicarComGlobal(){
   const pct=parseFloat(document.getElementById('com-global').value)||4;
   const ids=getSelIds().length>0?getSelIds():visibleIds;
-  const updated=[];
   ids.forEach(id=>{
     const v=VENTAS.find(x=>x.id===id);if(!v||v.estCom==='No aplica')return;
     v.comPct=pct;v.comUSD=parseFloat((v.totalUSD*pct/100).toFixed(2));
-    updated.push(v);
   });
   renderVentas();
-  showToast(`${pct}% aplicado a ${updated.length} ventas — guardando...`);
-  Promise.all(updated.map(v=>typeof syncSaveVenta==='function'?syncSaveVenta(v):Promise.resolve()))
-    .then(()=>showToast(`✓ ${updated.length} ventas guardadas`))
-    .catch(e=>showToast('Error al guardar: '+e.message,'error'));
+  showToast(`${pct}% aplicado a ${ids.length} ventas`);
 }
 function exportVentasCSV(){
   const data=filtrar_ven();
@@ -3775,18 +3770,23 @@ function renderCom(){
     <div class="metric"><div class="lbl">Pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD</div></div>
     <div class="metric"><div class="lbl">Pagada</div><div class="val" style="color:var(--color-text-success)">${fN(totCom-pdte)}</div><div class="sub">USD</div></div>
     <div class="metric"><div class="lbl">Ventas totales</div><div class="val">${fN(data.reduce((a,v)=>a+v.totalUSD,0))}</div><div class="sub">USD</div></div>`;
+  // Group by vendedor + almacén + comPct so different rates show separate rows
   const grupos={};
   data.forEach(v=>{
-    const k=v.vend+'|'+v.alm;
-    if(!grupos[k])grupos[k]={vend:v.vend,alm:v.alm,pct:v.comPct,vUSD:0,comUSD:0,pdte:0};
-    grupos[k].vUSD+=v.totalUSD;grupos[k].comUSD+=v.comUSD;
+    const k=v.vend+'|'+v.alm+'|'+(v.comPct||0);
+    if(!grupos[k])grupos[k]={vend:v.vend,alm:v.alm,pct:v.comPct||0,vUSD:0,comUSD:0,pdte:0,nVentas:0};
+    grupos[k].vUSD+=v.totalUSD;
+    grupos[k].comUSD+=v.comUSD;
+    grupos[k].nVentas++;
     if(v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)')grupos[k].pdte+=v.comUSD;
   });
-  document.getElementById('c-grupos').innerHTML=Object.values(grupos).map(g=>`<tr>
-    <td><strong>${g.vend}</strong></td><td>${g.alm}</td>
-    <td><span class="badge bb">${g.pct}%</span></td>
+  const rows=Object.values(grupos).sort((a,b)=>a.vend.localeCompare(b.vend)||a.alm.localeCompare(b.alm)||(b.pct-a.pct));
+  document.getElementById('c-grupos').innerHTML=rows.map(g=>`<tr>
+    <td style="white-space:nowrap"><strong>${g.vend}</strong></td>
+    <td style="white-space:nowrap">${g.alm}</td>
+    <td style="text-align:center"><span class="badge bb">${g.pct}%</span></td>
     <td style="text-align:right">${fN(g.vUSD)}</td>
-    <td style="text-align:right;color:var(--color-text-warning);font-weight:500">${fN(g.comUSD)}</td>
+    <td style="text-align:right;color:var(--color-text-warning);font-weight:600">${fN(g.comUSD)}</td>
     <td style="text-align:right">${fN(fromUSD(g.comUSD,'EUR'))}</td>
     <td style="text-align:right">${fN(fromUSD(g.comUSD,'CUP'),0)}</td>
     <td><span class="badge ${g.pdte<0.01?'bg':'ba'}">${g.pdte<0.01?'Liquidado':fN(g.pdte)+' pdte.'}</span></td>
