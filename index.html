@@ -3812,6 +3812,9 @@ function renderLiq(){
   // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
   var isPdte = function(v){ return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica'); };
 
+  // DEBUG: log estCom values
+  console.log('renderLiq data:', data.length, 'ventas. estCom values:', data.map(function(v){return v.estCom+'('+v.comUSD+')'}).join(', '));
+  console.log('isPdte count:', data.filter(isPdte).length);
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
 
   var ventaDetalleAcum = {};
