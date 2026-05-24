@@ -4939,9 +4939,13 @@ function _renderDeudaCard(p){
       +'<div style="border:1px solid var(--color-border-tertiary);border-radius:6px;overflow:hidden;margin-bottom:8px">';
     pagos.slice().sort(function(a,b){return(b.fecha||'').localeCompare(a.fecha||'');}).forEach(function(pg,i){
       var esPar=i%2===0;
+      var htmlMontoDeuda = '';
+      if (pg.mon !== p.moneda && pg.montoDeuda != null) {
+        htmlMontoDeuda = '<span style="font-size:10px;font-weight:400;color:var(--color-text-warning);margin-left:6px">(Amortiza '+fN(pg.montoDeuda,2)+' '+p.moneda+')</span>';
+      }
       h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;'+(esPar?'':'background:rgba(255,255,255,.02)')+';border-bottom:1px solid var(--color-border-tertiary)">'
         +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:11px;font-weight:500">'+fN(pg.monto,2)+' '+pg.mon+'</div>'
+        +'<div style="font-size:11px;font-weight:500">'+fN(pg.monto,2)+' '+pg.mon+htmlMontoDeuda+'</div>'
         +'<div style="font-size:10px;color:var(--color-text-tertiary)">'
         +(pg.fecha?fD(pg.fecha):'—')+(pg.hora?' '+pg.hora:'')
         +(pg.caja?' · '+pg.caja:'')
