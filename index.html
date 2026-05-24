@@ -4937,7 +4937,7 @@ function _renderDeudaCard(p){
       +'<span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary)">clic para plegar</span>'
       +'</summary>'
       +'<div style="border:1px solid var(--color-border-tertiary);border-radius:6px;overflow:hidden;margin-bottom:8px">';
-    pagos.slice().sort(function(a,b){return((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||''));}).forEach(function(pg,i){
+    pagos.slice().sort(function(a,b){var c=((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')); return c!==0?c:(b.id||'').localeCompare(a.id||'');}).forEach(function(pg,i){
       var esPar=i%2===0;
       var htmlMontoDeuda = '';
       if (pg.mon !== p.moneda && pg.montoDeuda != null) {
