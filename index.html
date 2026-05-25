@@ -1941,7 +1941,8 @@ async function syncLoadMovsIG(){
       equivUSD:parseFloat(r.equiv_usd||r.monto||0),
       cta:r.cuenta||r.cta||'',
       sentido:(typeof TIPO_META!=='undefined'&&TIPO_META[r.tipo]?TIPO_META[r.tipo].sentido:'gasto'),
-      notas:r.notas||'', vend:r.vendedor||r.vend||'', alm:''
+      notas:r.notas||'', vend:r.vendedor||r.vend||'', alm:'',
+      ts:r.created_at||(r.fecha+'T00:00:00Z')
     };});
     if(_rd.length){
       igNextId=Math.max(igNextId,_rd.reduce(function(a,r){return Math.max(a,r.id||0);},0)+1);
@@ -4048,7 +4049,7 @@ function confirmarPagarLiq(i, btn) {
       desc:'Pago Liq. '+liq.vend+' '+liq.semana,
       vend:liq.vend,alm:liq.alm,monto:monto,mon:mon,
       equivUSD:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(2)),
-      cta:cta,sentido:'gasto',notas:''});
+      cta:cta,sentido:'gasto',notas:'',ts:new Date().toISOString()});
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
     if(typeof _supaWrite==='function') {
       _supaWrite('POST','movimientos_ig',{
@@ -4188,7 +4189,7 @@ function eliminarLiq(i) {
         desc:_notasRev,
         vend:liq.vend,alm:liq.alm,monto:amt,mon:_mon,
         equivUSD:_equivUSD,
-        cta:cajaNom,sentido:'ingreso',notas:''});
+        cta:cajaNom,sentido:'ingreso',notas:'',ts:new Date().toISOString()});
       try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
     }
     if(typeof _supaWrite==='function'){
@@ -4555,7 +4556,7 @@ function filtrar_ig(){
 // ── RENDER LIBRO ──────────────────────────────────────────
 function renderLibro(){
   // Sort and group transfer pairs together
-  const _rawData=filtrar_ig().sort((a,b)=>b.fecha.localeCompare(a.fecha)||(b.id-a.id));
+  const _rawData=filtrar_ig().sort((a,b)=>(b.ts||(b.fecha+'T00:00:00Z')).localeCompare(a.ts||(a.fecha+'T00:00:00Z'))||(b.id-a.id));
   // Re-group: after each transfer salida, insert its matching entrada immediately after
   const _seen=new Set();
   const data=[];
@@ -4608,6 +4609,7 @@ function renderLibro(){
     var isTransferSalida=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0;
     var isTransferEntrada=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(entrada)')>=0;
     if(isTransferSalida) isGasto=true;
+    var timeStr = m.ts && !isNaN(new Date(m.ts).getTime()) ? new Date(m.ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '';
     return `<div class="mov-row">
       <div class="mov-icon" style="background:var(--color-background-secondary)">${tm.icon}</div>
       <div class="mov-main">
@@ -4618,7 +4620,7 @@ function renderLibro(){
         </div>
         <div class="mov-meta">
           <span class="tipo-tag ${tm.cls}">${m.tipo}</span>
-          &nbsp;${fD(m.fecha)} · ${m.cta}
+          &nbsp;${fD(m.fecha)}${timeStr?' '+timeStr:''} · ${m.cta}
           ${m.notas?` · <em>${m.notas}</em>`:''}
         </div>
       </div>
@@ -4753,7 +4755,7 @@ function registrar(){
     }
   }
   const equivUSD=parseFloat(toUSD(monto,mon).toFixed(2));
-  const mov={id:igNextId++,fecha,tipo,desc,monto,mon,equivUSD,cta,sentido:meta.sentido,notas};
+  const mov={id:igNextId++,fecha,tipo,desc,monto,mon,equivUSD,cta,sentido:meta.sentido,notas,ts:new Date().toISOString()};
   if(tipo==='Comisión vendedor'){mov.vend=document.getElementById('n-vend').value;mov.alm=document.getElementById('n-alm-venta').value;}
   if(['Amortización deuda','Pago intereses','Préstamo recibido'].includes(tipo)){mov.acreedor=document.getElementById('n-acreedor').value;}
   // si es transferencia, registrar también la entrada en cuenta destino
