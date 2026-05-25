@@ -3971,7 +3971,7 @@ function refreshLiqHist(){
     var vs = (l.ventas||[]).map(id=>VENTAS.find(v=>v.id===id)).filter(Boolean);
     var subRows = vs.length ? vs.map(v=>{
       var txt = (v.cart||[]).map(c=>`${c.qty}x ${c.n}`).join(', ');
-      return `<tr style="background:var(--color-bg-alt);font-size:12px;opacity:0.9">
+      return `<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none">
         <td style="padding-left:20px;border-bottom:1px solid rgba(255,255,255,0.05)">↳ ${fD(v.fecha)}</td>
         <td style="border-bottom:1px solid rgba(255,255,255,0.05)">${v.alm}</td>
         <td style="text-align:right;color:var(--color-text-warning);border-bottom:1px solid rgba(255,255,255,0.05)">${fN(v.comUSD||0)} USD</td>
@@ -3979,9 +3979,9 @@ function refreshLiqHist(){
         <td style="border-bottom:1px solid rgba(255,255,255,0.05)">Venta: ${fN(v.totUSD)} USD</td>
         <td style="border-bottom:1px solid rgba(255,255,255,0.05);${_isV?'display:none':''}"></td>
       </tr>`;
-    }).join('') : `<tr style="background:var(--color-bg-alt);font-size:12px;opacity:0.9"><td colspan="${_isV?6:7}" style="padding-left:20px;border-bottom:1px solid rgba(255,255,255,0.05)">Sin detalles de ventas</td></tr>`;
+    }).join('') : `<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;border-bottom:1px solid rgba(255,255,255,0.05)">Sin detalles de ventas</td></tr>`;
 
-    return `<tr onclick="var s=document.getElementById('liq-sub-${i}');s.style.display=s.style.display==='none'?'table-row-group':'none';var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=s.style.display==='none'?'▶':'▼';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
+    return `<tr onclick="var rows=document.querySelectorAll('.liq-subrow-${i}');var isHidden=rows[0]&&rows[0].style.display==='none';rows.forEach(r=>r.style.display=isHidden?'table-row':'none');var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=isHidden?'▼':'▶';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
     <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}</td><td>${l.alm}</td>
     <td style="text-align:right;color:var(--color-text-warning);font-weight:bold">${fN(l.comUSD)} USD</td>
     <td style="text-align:right;font-weight:bold">${fN(l.totalCUP || l.comCUP || 0, l.mon==='CUP'?0:2)} ${l.mon||'CUP'}</td>
@@ -3992,7 +3992,7 @@ function refreshLiqHist(){
       ${!_isV ? `<button class="btn-sm" style="color:var(--color-text-danger);border-color:var(--color-border-danger)" onclick="eliminarLiq(${i})">Borrar</button>` : ''}
     </td>
   </tr>
-  <tbody id="liq-sub-${i}" style="display:none">${subRows}</tbody>`;
+  ${subRows}`;
   }).join('');
   var thAcc = document.getElementById('th-liq-acc');
   if(thAcc) thAcc.style.display = _isV ? 'none' : '';
