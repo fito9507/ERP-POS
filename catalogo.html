@@ -757,7 +757,7 @@ function transitCardHTML(p){
   var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
   var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
   var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
-  var saving = hasDiscount ? fN(normPrice - pvPrice) : null;
+  var savingVal = normPrice - pvPrice; var savingStr = hasDiscount ? fPrice(savingVal, MON, ALM) : null;
 
   // If no price at all show placeholder
   var showPrice = pvPrice > 0;
@@ -765,7 +765,7 @@ function transitCardHTML(p){
     +'<div class="card-img" style="position:relative">'
     +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>'
-    +(hasDiscount?'<div style="position:absolute;bottom:8px;right:8px;z-index:10;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras $'+saving+'</div>':'')
+    +(hasDiscount?'<div style="position:absolute;bottom:8px;right:8px;z-index:10;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras '+savingStr+'</div>':'')
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
