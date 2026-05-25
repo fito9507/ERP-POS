@@ -4159,17 +4159,9 @@ function eliminarLiq(i) {
       var vendOk=!liq.vend||v.vend===liq.vend;
       return dateOk&&almOk&&vendOk&&(v.estCom==='Pagada'||v.liqId===liq.id);
     });
-    var revertCajas={};
-    ventasLiq.forEach(function(v){
-      var pagos=(v.pagos&&v.pagos.length)?v.pagos:[{mon:v.mon||'CUP',caja:liq.cuenta,m:(v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon||'CUP'))}];
-      pagos.forEach(function(p){
-        var cajaNom=p.caja||liq.cuenta||'';if(!cajaNom)return;
-        var amt=p.monto!=null?p.monto:(p.m!=null?p.m:0);
-        revertCajas[cajaNom]=(revertCajas[cajaNom]||0)+parseFloat((amt*(v.comPct||0)/100).toFixed(2));
-      });
-    });
-    Object.keys(revertCajas).forEach(function(cajaNom){
-      var amt=parseFloat(revertCajas[cajaNom].toFixed(2));if(amt<=0)return;
+    var amt = liq.totalCUP || liq.comCUP || 0;
+    var cajaNom = liq.cuenta;
+    if(cajaNom && amt > 0) {
       var cajaObj=typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cajaNom;}):null;
       if(cajaObj) cajaObj.saldo=parseFloat(((cajaObj.saldo||0)+amt).toFixed(2));
       var movRev={fecha:today(),tipo:'deposito',
@@ -4183,7 +4175,7 @@ function eliminarLiq(i) {
       if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',movRev);
       else if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','mov_cajas',movRev).catch(function(e){});
       if(typeof supaReq!=='undefined'&&_supaOnline&&cajaObj&&cajaObj.id) supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
-    });
+    }
     
     // Remove from I/G
     var _notas='Pago Liq. '+liq.vend+' '+liq.semana;
