@@ -922,7 +922,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <button id="btn-com-nav" onclick="navTo_ven('comisiones',this)">Resumen de Comisiones</button>
   <button id="btn-liq-nav" onclick="navTo_ven('liquidacion',this)">Liquidación semanal</button>
   <button id="btn-micaja-nav" onclick="navTo_ven('micaja',this)" style="display:none">💰 Mi Caja</button>
-  <button id="btn-micom-nav" onclick="navTo_ven('micomision',this)" style="display:none">🏆 Mi Comisión</button>
 </div>
 
 <!-- ══ REGISTRO VENTAS ══ -->
@@ -1046,6 +1045,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- ══ LIQUIDACIÓN ══ -->
 <div class="page" id="liquidacion">
+  <div id="liq-micomision-root"></div>
   <div class="fbar">
     <div class="frow">
       <div class="ff"><label class="lbl">Desde</label><input type="date" id="l-desde"></div>
@@ -1074,10 +1074,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <!-- ══ MI CAJA ══ -->
 <div class="page" id="micaja">
   <div id="micaja-root"></div>
-</div>
-
-<div class="page" id="micomision">
-  <div id="micomision-root" style="padding:4px"></div>
 </div>
 
 <!-- ══ NUEVA VENTA ══ -->
@@ -3331,8 +3327,8 @@ function navTo_ven(pg,btn){
   btn.classList.add('act');
   if(pg==='ventas')renderVentas();
   if(pg==='comisiones')renderCom();
-  if(pg==='micomision')renderMiComision();
   if(pg==='liquidacion'){
+    renderMiComision();
     var _isV=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
     var _aCom=_isV&&USERS[S.user]&&USERS[S.user].aComision!==false;
     var fbar=document.querySelector('#liquidacion .fbar');
@@ -7094,33 +7090,31 @@ async function delComRegla(id){
 }
 
 function renderMiComision(){
-  var el=document.getElementById('micomision-root');if(!el)return;
+  var el=document.getElementById('liq-micomision-root');if(!el)return;
   var vend=S.user;
   var misVentas=VENTAS.filter(function(v){return v.vend===vend&&v.estCom!=='No aplica';});
   var pendiente=misVentas.filter(function(v){return v.estCom==='Pendiente';}).reduce(function(a,v){return a+v.comUSD;},0);
   var pagado=misVentas.filter(function(v){return v.estCom==='Pagada'||v.estCom==='Liquidada (Pdte)';}).reduce(function(a,v){return a+v.comUSD;},0);
   var total=pendiente+pagado;
 
-  // Group by moneda from comDetalle
-  var porMon={};
-  misVentas.forEach(function(v){
-    var det = v.comDetalle && Object.keys(v.comDetalle).length ? v.comDetalle : { [v.mon]: fromUSD(v.comUSD, v.mon) };
-    Object.keys(det).forEach(function(m){
-      if(!porMon[m]) porMon[m]={pdte:0,pag:0};
-      if(v.estCom==='Pendiente') porMon[m].pdte+=det[m];
-      else porMon[m].pag+=det[m];
-    });
-  });
-
-  // Recent ventas with commission
-  var recientes=misVentas.slice().sort(function(a,b){return b.fecha.localeCompare(a.fecha);}).slice(0,20);
-
-  el.innerHTML='<div style="padding:8px">'    +'<div style="font-size:16px;font-weight:700;margin-bottom:16px">🏆 Mi Comisión</div>'    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-bottom:16px">'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">ACUMULADA</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-warning)">$'+fN(total)+'</div>'    +'</div>'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">PENDIENTE</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-danger)">$'+fN(pendiente)+'</div>'    +'</div>'    +'<div class="card" style="text-align:center">'    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">COBRADA</div>'    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-success)">$'+fN(pagado)+'</div>'    +'</div>'    +'</div>'    +Object.entries(porMon).filter(function(e){return e[1].pdte>0||e[1].pag>0;}).map(function(e){
-      var m=e[0],d=e[1];var dec=m==='CUP'||m==='CUPT'?0:2;
-      return '<div class="card" style="margin-bottom:8px">'        +'<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">'+m+'</div>'        +'<div style="display:flex;justify-content:space-between"><span style="font-size:12px">Pendiente</span><span style="color:var(--color-text-danger);font-weight:600">'+fN(d.pdte,dec)+' '+m+'</span></div>'        +'<div style="display:flex;justify-content:space-between"><span style="font-size:12px">Cobrada</span><span style="color:var(--color-text-success);font-weight:600">'+fN(d.pag,dec)+' '+m+'</span></div>'        +'</div>';
-    }).join('')    +'<div class="card">'    +'<div style="font-size:12px;font-weight:600;margin-bottom:10px">Últimas ventas con comisión</div>'    +recientes.map(function(v){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--color-border-tertiary)">'        +'<div>'        +'<div style="font-size:12px">'+v.cli+'</div>'        +'<div style="font-size:10px;color:var(--color-text-tertiary)">'+fD(v.fecha)+' · '+v.alm+'</div>'        +'</div>'        +'<div style="text-align:right">'        +'<div style="font-size:12px;font-weight:600;color:var(--color-text-warning)">$'+fN(v.comUSD)+'</div>'        +'<div style="font-size:10px;padding:1px 6px;border-radius:10px;background:'+(v.estCom==='Pendiente'?'rgba(251,191,36,.15)':'rgba(74,222,128,.15)')+';color:'+(v.estCom==='Pendiente'?'var(--color-text-warning)':'var(--color-text-success)')+'">'+v.estCom+'</div>'        +'</div>'        +'</div>';
-    }).join('')    +'</div>'    +'</div>';
+  // Render metrics box only
+  el.innerHTML='<div style="padding:4px;margin-bottom:12px">'
+    +'<div style="font-size:16px;font-weight:700;margin-bottom:16px">🏆 Mi Comisión</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">'
+    +'<div class="card" style="text-align:center;margin:0">'
+    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">ACUMULADA</div>'
+    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-warning)">$'+fN(total)+'</div>'
+    +'</div>'
+    +'<div class="card" style="text-align:center;margin:0">'
+    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">PENDIENTE</div>'
+    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-danger)">$'+fN(pendiente)+'</div>'
+    +'</div>'
+    +'<div class="card" style="text-align:center;margin:0">'
+    +'<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px">COBRADA</div>'
+    +'<div style="font-size:22px;font-weight:800;color:var(--color-text-success)">$'+fN(pagado)+'</div>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
 }
 
 
@@ -8849,10 +8843,13 @@ function getSelectedModulos() {
   window.erpSetUser = function(name, bg, tc) {
     _origSetUser && _origSetUser(name, bg, tc);
     var isAdm = typeof USERS!=='undefined' && USERS[name] && USERS[name].rol==='admin';
-    // Hide "Liquidación semanal" nav button for vendedores
+    // Show unified Liquidaciones & Comisiones tab
     setTimeout(function(){
       var btn = document.getElementById('btn-liq-nav');
-      if (btn) btn.style.display = isAdm ? '' : 'none';
+      if (btn) {
+        btn.style.display = '';
+        btn.innerHTML = isAdm ? 'Liquidaciones / Comisiones' : '🏆 Mis Comisiones';
+      }
       // Hide liquidar buttons inside comisiones page
       document.querySelectorAll('.btn-liq,.liq-btn,[onclick*="liquidar"]').forEach(function(el){
         el.style.display = isAdm ? '' : 'none';
