@@ -4031,15 +4031,15 @@ function confirmarPagarLiq(i, btn) {
   if(cajaObj){
     cajaObj.saldo = (cajaObj.saldo||0) - monto;
     // Save mov_cajas
-    var movCaja = {fecha:today(),tipo:'Pago comisión',
+    var movCaja = {fecha:today(),tipo:'retiro',
       caja_origen:cta,caja_destino:null,
-      monto_origen:monto,monto_destino:null,
-      tasa_usada:RATES.CUP||512.88,
+      monto_origen:monto,monto_destino:monto,
+      tasa_usada:null,
       notas:'Comisión '+liq.vend+' '+liq.semana,
-      usuario:typeof S!=='undefined'?S.user:'',created_at:new Date().toISOString()};
-    if(typeof supaReq!=='undefined'&&_supaOnline){
-      supaReq('POST','mov_cajas',movCaja).catch(function(e){console.warn('mov_cajas:',e);});
-    }
+      usuario:(typeof S!=='undefined'&&S.user)||'Admin'};
+    if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(movCaja);
+    if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',movCaja);
+    else if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','mov_cajas',movCaja).catch(function(e){});
     if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
   }
   // I/G movement
