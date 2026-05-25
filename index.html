@@ -1055,7 +1055,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Tasa CUP/USD</label>
         <input type="number" id="l-tasa" value="512.88" step="0.01"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
-        <select id="l-mon-pago"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
+        <select id="l-mon-pago" onchange="renderLiqCuentas()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
+      <div class="ff"><label class="lbl">Cuenta de pago</label>
+        <select id="l-caja-pago"></select></div>
       <button class="btn btn-p" style="align-self:flex-end" onclick="renderLiq()">Generar</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiq();renderLiq()">Semana actual</button>
     </div>
@@ -3790,11 +3792,24 @@ function renderCom(){
 }
 
 // ── LIQUIDACIÓN ───────────────────────────────────────────
+function renderLiqCuentas(){
+  var mon=document.getElementById('l-mon-pago')?.value||'CUP';
+  var alm=document.getElementById('l-alm')?.value||'';
+  var sel=document.getElementById('l-caja-pago'); if(!sel) return;
+  var cajas=typeof _cajasData!=='undefined'?_cajasData:[];
+  var opts=cajas.filter(function(c){return c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0&&(!alm||c.nombre.indexOf(alm)>=0);});
+  if(!opts.length) opts=cajas.filter(function(c){return c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0;});
+  if(!opts.length) opts=cajas;
+  var cur=sel.value;
+  sel.innerHTML=opts.map(function(c){return '<option'+(c.nombre===cur?' selected':'')+' value="'+c.nombre+'">'+c.nombre+'</option>';}).join('');
+}
 function renderLiq(){
   const desde=document.getElementById('l-desde').value;
   const hasta=document.getElementById('l-hasta').value;
   const alm=document.getElementById('l-alm').value;
   const targetMon=document.getElementById('l-mon-pago')?.value||'CUP';
+  renderLiqCuentas();
+  const cuentaPago=document.getElementById('l-caja-pago')?.value||'';
   const tasa=parseFloat(document.getElementById('l-tasa').value)||512.88;
   const oldAjuste=parseFloat(document.getElementById('liq-ajuste')?.value||0);
   const data=VENTAS.filter(v=>{
@@ -3908,19 +3923,19 @@ function renderLiq(){
 
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
       <button class="btn-sm" onclick="exportLiqCSV()">Exportar CSV</button>
-      <button class="btn" onclick='guardarLiq("${desde}","${hasta}","${almLabel}",${totVentaUSD},${totComPdteUSD},${totalPago},"${targetMon}",${JSON.stringify(comDetalleAcum)})'>Crear Liquidación Pendiente</button>
+      <button class="btn" onclick='guardarLiq("${desde}","${hasta}","${almLabel}",${totVentaUSD},${totComPdteUSD},${totalPago},"${targetMon}",${JSON.stringify(comDetalleAcum)},"${cuentaPago}")'>Crear Liquidación Pendiente</button>
     </div>
   </div>`;
 }
 
-function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle){
+function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cuentaPago){
   var ajuste = parseFloat(document.getElementById('liq-ajuste')?.value||0);
   var totalPago = totalPagoBase + ajuste;
 
   const liq={
     id:'liq-'+Date.now(),
     semana:`${fD(desde)}–${fD(hasta)}`,
-    desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon,
+    desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon, cuenta: cuentaPago||'',
     comDetalle: comDetalle,
     vend: typeof S!=='undefined'?S.user:'',
     estado:'Pendiente',
