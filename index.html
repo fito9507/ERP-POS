@@ -4177,17 +4177,25 @@ function eliminarLiq(i) {
       if(typeof supaReq!=='undefined'&&_supaOnline&&cajaObj&&cajaObj.id) supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
     }
     
-    // Remove from I/G
-    var _notas='Pago Liq. '+liq.vend+' '+liq.semana;
+    // Add Reversal to I/G to keep a record
+    var _notasRev = 'Reversión liq. '+liq.vend+' '+(liq.semana||'');
+    var _mon = liq.mon || 'CUP';
+    var _equivUSD = parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(2));
     if(typeof MOVS!=='undefined'){
-      var movIdx = MOVS.findIndex(m => m.tipo==='Comision vendedor' && m.desc.includes(liq.semana) && m.vend===liq.vend);
-      if(movIdx >= 0) {
-        MOVS.splice(movIdx, 1);
-        try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-      }
+      MOVS.unshift({id:Date.now(),fecha:today(),tipo:'Ingreso no-venta',
+        desc:_notasRev,
+        vend:liq.vend,alm:liq.alm,monto:amt,mon:_mon,
+        equivUSD:_equivUSD,
+        cta:cajaNom,sentido:'ingreso',notas:''});
+      try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
     }
-    if(typeof supaReq!=='undefined'&&_supaOnline){
-       supaReq('DELETE','movimientos_ig?descripcion=eq.'+encodeURIComponent(_notas)).catch(e=>{});
+    if(typeof _supaWrite==='function'){
+      _supaWrite('POST','movimientos_ig',{
+        fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
+        monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,caja:cajaNom,
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+        vendedor:liq.vend,almacen:liq.alm,notas:''
+      });
     }
 
     // Revert ventas to Pendiente
