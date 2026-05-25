@@ -532,7 +532,7 @@ const MON_DEC = { USD:2, EUR:2, CUP:0, CUPT:0 };
 function fN(n, dec){ 
   if(isNaN(n)||n==null) return '—';
   var d = dec ?? 2;
-  var v=parseFloat(n);var maxD=d;if(d>0&&d<4){var str=v.toString();if(str.includes('.')){var decs=str.split('.')[1].length;if(decs>d&&decs<=4)maxD=decs;}}return v.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:maxD});
+  var v=parseFloat(n);var maxD=d;if(d>0&&d<4){var rounded=Math.round(v*10000)/10000;var str=rounded.toString();if(str.includes('.')){var decs=str.split('.')[1].length;if(decs>d&&decs<=4)maxD=decs;}}return v.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:maxD});
 }
 function fromUSD(usd, mon, alm){
   if(mon==='USD') return usd;

@@ -1433,7 +1433,7 @@ function fromUSD(u,mon,alm){
   }
   return u*(RATES[mon]||1);
 }
-function fN(n,d=2){if(n==null||isNaN(n))return'—';var v=parseFloat(n);var maxD=d;if(d>0&&d<4){var str=v.toString();if(str.includes('.')){var decs=str.split('.')[1].length;if(decs>d&&decs<=4)maxD=decs;}}return v.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:maxD});}
+function fN(n,d=2){if(n==null||isNaN(n))return'—';var v=parseFloat(n);var maxD=d;if(d>0&&d<4){var rounded=Math.round(v*10000)/10000;var str=rounded.toString();if(str.includes('.')){var decs=str.split('.')[1].length;if(decs>d&&decs<=4)maxD=decs;}}return v.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:maxD});}
 function dFor(m){return m==='CUP'||m==='CUPT'?0:2;}
 
 let _gToastTimer;
