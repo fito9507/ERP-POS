@@ -4049,6 +4049,14 @@ function confirmarPagarLiq(i, btn) {
       vend:liq.vend,alm:liq.alm,monto:monto,mon:mon,
       equivUSD:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(2)),
       cta:cta,sentido:'gasto',notas:''});
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
+    if(typeof _supaWrite==='function') {
+      _supaWrite('POST','movimientos_ig',{
+        fecha:today(),tipo:'Comision vendedor',descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
+        monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,caja:cta,usuario:typeof S!=='undefined'?S.user:'',
+        vendedor:liq.vend,almacen:liq.alm,notas:''
+      });
+    }
   }
   // Match ventas by date range + almacén + vendedor (liqId not always set)
   var liqDesde=liq.desde||''; var liqHasta=liq.hasta||''; var liqAlm=liq.alm||'';
@@ -4164,18 +4172,32 @@ function eliminarLiq(i) {
       var amt=parseFloat(revertCajas[cajaNom].toFixed(2));if(amt<=0)return;
       var cajaObj=typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cajaNom;}):null;
       if(cajaObj) cajaObj.saldo=parseFloat(((cajaObj.saldo||0)+amt).toFixed(2));
-      var movRev={fecha:today(),tipo:'Reversión comisión',
-        caja_origen:null,caja_origen_id:null,
-        caja_destino:cajaNom,caja_destino_id:cajaObj?cajaObj.id:null,
-        monto_origen:null,monto_destino:amt,
-        tasa_usada:RATES.CUP||512.88,
+      var movRev={fecha:today(),tipo:'deposito',
+        caja_origen:null,
+        caja_destino:cajaNom,
+        monto_origen:amt,monto_destino:amt,
+        tasa_usada:null,
         notas:'Reversión liq. '+liq.vend+' '+(liq.semana||''),
-        usuario:typeof S!=='undefined'?S.user:'',created_at:new Date().toISOString()};
-      if(typeof supaReq!=='undefined'&&_supaOnline){
-        supaReq('POST','mov_cajas',movRev).catch(function(e){});
-        if(cajaObj&&cajaObj.id) supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
-      }
+        usuario:(typeof S!=='undefined'&&S.user)||'Admin'};
+      if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(movRev);
+      if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',movRev);
+      else if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','mov_cajas',movRev).catch(function(e){});
+      if(typeof supaReq!=='undefined'&&_supaOnline&&cajaObj&&cajaObj.id) supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
     });
+    
+    // Remove from I/G
+    var _notas='Pago Liq. '+liq.vend+' '+liq.semana;
+    if(typeof MOVS!=='undefined'){
+      var movIdx = MOVS.findIndex(m => m.tipo==='Comision vendedor' && m.desc.includes(liq.semana) && m.vend===liq.vend);
+      if(movIdx >= 0) {
+        MOVS.splice(movIdx, 1);
+        try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
+      }
+    }
+    if(typeof supaReq!=='undefined'&&_supaOnline){
+       supaReq('DELETE','movimientos_ig?descripcion=eq.'+encodeURIComponent(_notas)).catch(e=>{});
+    }
+
     // Revert ventas to Pendiente
     ventasLiq.forEach(function(v){
       v.estCom='Pendiente'; delete v.liqId;
