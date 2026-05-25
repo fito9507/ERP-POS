@@ -3822,12 +3822,12 @@ function renderLiq(){
   const semLabel=desde&&hasta?`${fD(desde)} – ${fD(hasta)}`:'(sin filtro)';
   const almLabel=alm||'Todos';
   
+  // isPdte — declare FIRST before any usage
+  var isPdte = function(v){ return !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(v.comUSD>0&&v.estCom!=='Liquidada'&&v.estCom!=='No aplica'); };
+
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
-  
-  // isPdte: null estCom with comUSD>0 counts as Pendiente (old records)
-  var isPdte = function(v){ return v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)'||(!v.estCom&&v.comUSD>0); };
 
   var ventaDetalleAcum = {};
   var comDetalleAcum   = {};
@@ -3839,8 +3839,9 @@ function renderLiq(){
       : [{mon: v.mon||'USD', monto: (v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon||'USD'))}];
     pagos.forEach(function(p){
       var m = p.mon||'USD';
-      ventaDetalleAcum[m] = (ventaDetalleAcum[m]||0) + p.monto;
-      comDetalleAcum[m]   = (comDetalleAcum[m]||0) + parseFloat((p.monto * pct / 100).toFixed(4));
+      var amt = p.monto!=null?p.monto:(p.m!=null?p.m:0);
+      ventaDetalleAcum[m] = (ventaDetalleAcum[m]||0) + amt;
+      comDetalleAcum[m]   = (comDetalleAcum[m]||0) + parseFloat((amt * pct / 100).toFixed(4));
     });
   });
 
