@@ -1811,6 +1811,11 @@ async function flushQueue() {
   updOnlineDot();
   for (var op of toProcess) {
     try {
+      if (op.path.includes('movimientos_ig') && op.body) {
+        if (op.body.descripcion !== undefined) { op.body.concepto = op.body.descripcion; delete op.body.descripcion; }
+        if (op.body.cuenta !== undefined) { op.body.caja = op.body.cuenta; delete op.body.cuenta; }
+        if (op.body.vendedor !== undefined) { op.body.usuario = op.body.vendedor; delete op.body.vendedor; }
+      }
       var r = await supaReq(op.method, op.path, op.body);
       if (!r.ok) {
         console.warn('Queue op failed:', r.status, op.path);
@@ -4065,10 +4070,10 @@ function confirmarPagarLiq(i, btn) {
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
     if(typeof _supaWrite==='function') {
       _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Comision vendedor',descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
+        fecha:today(),tipo:'Comision vendedor',concepto:'Pago Liq. '+liq.vend+' '+liq.semana,
         monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,
         equiv_usd:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(4)),
-        cuenta:cta, vendedor:liq.vend, notas:''
+        caja:cta, usuario:liq.vend, notas:''
       });
     }
   }
@@ -4205,10 +4210,10 @@ function eliminarLiq(i) {
     }
     if(typeof _supaWrite==='function'){
       _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
+        fecha:today(),tipo:'Ingreso no-venta',concepto:_notasRev,
         monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,
         equiv_usd:parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(4)),
-        cuenta:cajaNom, vendedor:liq.vend, notas:''
+        caja:cajaNom, usuario:liq.vend, notas:''
       });
     }
 
@@ -4778,21 +4783,21 @@ function registrar(){
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
   // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
   if(typeof supaReq!=='undefined'){
-    // Schema: descripcion, moneda, cuenta, vendedor — _supaWrite handles offline queue
+    // Schema: concepto, moneda, caja, usuario — _supaWrite handles offline queue
     _supaWrite('POST','movimientos_ig',{
-      fecha:mov.fecha, tipo:mov.tipo, descripcion:mov.desc,
+      fecha:mov.fecha, tipo:mov.tipo, concepto:mov.desc,
       monto:parseFloat(parseFloat(mov.monto).toFixed(4)),
       moneda:mov.mon,
       equiv_usd:parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
-      cuenta:mov.cta, vendedor:mov.vend||'', notas:mov.notas||''
+      caja:mov.cta, usuario:mov.vend||'', notas:mov.notas||''
     });
     // If transferencia, also save the entrada entry
     if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1){
       var _e=MOVS.find(function(m){return m.sentido==='ingreso'&&(m.desc||'').indexOf('(entrada)')>=0;});
       if(!_e) _e=MOVS[1];
       if(_e){
-      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
-        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),cuenta:_e.cta,vendedor:'',notas:_e.notas||''})
+      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,concepto:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
+        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),caja:_e.cta,usuario:'',notas:_e.notas||''})
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
       }
     }
@@ -6692,9 +6697,9 @@ function registrarAbonoCli(cid){
     MOVS.push(igMov);
     // Always write — _supaWrite handles online/offline queuing
     _supaWrite('POST','movimientos_ig',{
-      fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
+      fecha:fecha,tipo:igTipo,concepto:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
-      cuenta:igCta,vendedor:(typeof S!=='undefined'&&S.user)||'',notas:''
+      caja:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
