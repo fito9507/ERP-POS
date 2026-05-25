@@ -4053,7 +4053,9 @@ function confirmarPagarLiq(i, btn) {
     if(typeof _supaWrite==='function') {
       _supaWrite('POST','movimientos_ig',{
         fecha:today(),tipo:'Comision vendedor',descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
-        monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,caja:cta,usuario:typeof S!=='undefined'?S.user:'',
+        monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,
+        equiv_usd:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(4)),
+        cuenta:cta,usuario:typeof S!=='undefined'?S.user:'',
         vendedor:liq.vend,almacen:liq.alm,notas:''
       });
     }
@@ -4192,7 +4194,9 @@ function eliminarLiq(i) {
     if(typeof _supaWrite==='function'){
       _supaWrite('POST','movimientos_ig',{
         fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
-        monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,caja:cajaNom,
+        monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,
+        equiv_usd:parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(4)),
+        cuenta:cajaNom,
         usuario:(typeof S!=='undefined'&&S.user)||'Admin',
         vendedor:liq.vend,almacen:liq.alm,notas:''
       });
