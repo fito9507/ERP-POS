@@ -4050,20 +4050,74 @@ function confirmarPagarLiq(i, btn) {
       equivUSD:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(2)),
       cta:cta,sentido:'gasto',notas:''});
   }
-  VENTAS.forEach(function(v){
-    if(v.liqId===liq.id||(liq.ventas&&liq.ventas.includes(v.id))){
-      v.estCom='Pagada';
-      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId,{est_com:'Pagada'}).catch(function(e){});
+  // Match ventas by date range + almacén + vendedor (liqId not always set)
+  var liqDesde=liq.desde||''; var liqHasta=liq.hasta||''; var liqAlm=liq.alm||'';
+  var ventasLiq=VENTAS.filter(function(v){
+    if(v.liqId&&liq.id&&v.liqId===liq.id) return true; // exact match
+    var dateOk = (!liqDesde||v.fecha>=liqDesde) && (!liqHasta||v.fecha<=liqHasta);
+    var almOk  = !liqAlm||liqAlm==='Todos'||v.alm===liqAlm;
+    var vendOk = !liq.vend||v.vend===liq.vend;
+    var pdteOk = !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)';
+    return dateOk&&almOk&&vendOk&&pdteOk;
+  });
+
+  // Deduct from each caja based on actual payment data
+  var cajaDeductions={};
+  ventasLiq.forEach(function(v){
+    var pagos=(v.pagos&&v.pagos.length)?v.pagos:[{mon:v.mon||'CUP',caja:cta,m:(v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon||'CUP'))}];
+    pagos.forEach(function(p){
+      var cajaNom=p.caja||cta;
+      var amt=p.monto!=null?p.monto:(p.m!=null?p.m:0);
+      var pct=v.comPct||0;
+      var comAmt=parseFloat((amt*pct/100).toFixed(2));
+      if(!cajaDeductions[cajaNom]) cajaDeductions[cajaNom]=0;
+      cajaDeductions[cajaNom]+=comAmt;
+    });
+  });
+
+  // Apply deductions to each caja
+  Object.keys(cajaDeductions).forEach(function(cajaNom){
+    var comAmt=cajaDeductions[cajaNom];
+    var cajaObj=typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cajaNom;}):null;
+    if(cajaObj){
+      cajaObj.saldo=(cajaObj.saldo||0)-comAmt;
+      // Save to Supabase
+      if(typeof supaReq!=='undefined'&&_supaOnline&&cajaObj.supaId){
+        supaReq('PATCH','cajas?id=eq.'+cajaObj.supaId,{saldo:cajaObj.saldo}).catch(function(e){console.warn('caja saldo:',e);});
+      }
+      var movCaja={fecha:today(),tipo:'Pago comisión',
+        caja_origen:cajaNom,caja_destino:null,
+        monto_origen:comAmt,monto_destino:null,
+        tasa_usada:RATES.CUP||512.88,
+        notas:'Comisión '+liq.vend+' '+(liq.semana||''),
+        usuario:typeof S!=='undefined'?S.user:'',
+        created_at:new Date().toISOString()};
+      if(typeof supaReq!=='undefined'&&_supaOnline){
+        supaReq('POST','mov_cajas',movCaja).catch(function(e){console.warn('mov_cajas:',e);});
+      }
+    }
+  });
+  if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+
+  // Mark ventas as Pagada
+  ventasLiq.forEach(function(v){
+    v.estCom='Pagada';
+    v.liqId=liq.id;
+    if(typeof supaReq!=='undefined'&&_supaOnline&&v.supaId){
+      supaReq('PATCH','ventas?id=eq.'+v.supaId,{est_com:'Pagada'}).catch(function(e){});
     }
   });
   if(typeof offlineSaveVentas==='function') offlineSaveVentas();
+  if(typeof renderVentas==='function')try{renderVentas();}catch(e){}
+
   try{localStorage.setItem('erp_liquidaciones',JSON.stringify(liquidaciones));}catch(e){}
   if(typeof supaReq!=='undefined'&&_supaOnline){
     supaReq('PATCH','liquidaciones?id=eq.'+liq.id,{estado:'Pagado',cuenta:cta}).catch(function(e){});
   }
   refreshLiqHist();
   renderLiq();
-  showToast('✓ Liquidación pagada — '+fN(monto,mon==='CUP'?0:2)+' '+mon+' descontados de '+cta);
+  var cajasStr=Object.keys(cajaDeductions).map(function(k){return fN(cajaDeductions[k],0)+' de '+k;}).join(', ');
+  showToast('✓ Liquidación pagada · '+ventasLiq.length+' ventas · '+cajasStr);
 }
 
 function eliminarLiq(i) {
