@@ -7250,7 +7250,7 @@ function renderFormProducto() {
     + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precio especial de reserva. Si vacío usa el precio normal.</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div><label class="adm-lbl-f">Preventa (USD)</label>'
-    + '<input class="adm-inp" type="text" id="ep-preventa-min" value="' + (p.preventa_min != null ? p.preventa_min : '') + '" placeholder="USD o %" onblur="var v=this.value.trim();if(v.endsWith(\'%\')){var b=parseFloat(document.getElementById(\'ep-min\').value)||0;if(b>0){var p=parseFloat(v);if(!isNaN(p)){var s=v.startsWith(\'+\')?1:-1;this.value=(b*(1+s*Math.abs(p)/100)).toFixed(2);}}}else if(v!==\'\'&&!isNaN(parseFloat(v))){this.value=parseFloat(v).toFixed(2);}"></div>'
+    + '<input class="adm-inp" type="text" id="ep-preventa-min" value="' + (p.preventa_min != null ? p.preventa_min : '') + '" placeholder="USD o %" onblur="var v=this.value.trim();if(v.endsWith(\'%\')){var b=parseFloat(document.getElementById(\'ep-min\').value)||parseFloat(document.getElementById(\'ep-maj\').value)||0;if(b>0){var pct=parseFloat(v);if(!isNaN(pct)){var s=v.startsWith(\'+\')?1:-1;this.value=(b*(1+s*Math.abs(pct)/100)).toFixed(2);}}}else if(v!==\'\'&&!isNaN(parseFloat(v))){this.value=parseFloat(v).toFixed(2);}"></div>'
     + '<div><label class="adm-lbl-f">MOQ preventa (mín. reserva)</label>'
     + '<input class="adm-inp" type="number" id="ep-moq" value="' + (p.moq || 1) + '" min="1" step="1" placeholder="1"></div>'
     + '</div>'
@@ -7296,7 +7296,7 @@ function admGuardarProd(idx) {
   var min_placetas_v = document.getElementById('ep-min-plac')?.value;
   var preventa_min_v = (document.getElementById('ep-preventa-min')?.value||'').trim();
   if(preventa_min_v.endsWith('%')){
-     var b=parseFloat(document.getElementById('ep-min').value)||0;
+     var b=parseFloat(document.getElementById('ep-min').value)||parseFloat(document.getElementById('ep-maj').value)||0;
      var p_pct=parseFloat(preventa_min_v);
      if(b>0 && !isNaN(p_pct)){
         var s=preventa_min_v.startsWith('+')?1:-1;
