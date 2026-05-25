@@ -3967,17 +3967,33 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
 
 function refreshLiqHist(){
   var _isV=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-  document.getElementById('liq-hist').innerHTML=liquidaciones.map((l,i)=>`<tr>
-    <td>${l.semana}</td><td>${l.alm}</td>
-    <td style="text-align:right;color:var(--color-text-warning)">${fN(l.comUSD)} USD</td>
-    <td style="text-align:right">${fN(l.totalCUP || l.comCUP || 0, l.mon==='CUP'?0:2)} ${l.mon||'CUP'}</td>
+  document.getElementById('liq-hist').innerHTML=liquidaciones.map((l,i)=>{
+    var vs = (l.ventas||[]).map(id=>VENTAS.find(v=>v.id===id)).filter(Boolean);
+    var subRows = vs.length ? vs.map(v=>{
+      var txt = (v.cart||[]).map(c=>`${c.qty}x ${c.n}`).join(', ');
+      return `<tr style="background:var(--color-bg-alt);font-size:12px;opacity:0.9">
+        <td style="padding-left:20px;border-bottom:1px solid rgba(255,255,255,0.05)">↳ ${fD(v.fecha)}</td>
+        <td style="border-bottom:1px solid rgba(255,255,255,0.05)">${v.alm}</td>
+        <td style="text-align:right;color:var(--color-text-warning);border-bottom:1px solid rgba(255,255,255,0.05)">${fN(v.comUSD||0)} USD</td>
+        <td colspan="2" style="font-size:11px;color:var(--color-text-secondary);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,0.05)" title="${txt.replace(/"/g,'&quot;')}">${txt}</td>
+        <td style="border-bottom:1px solid rgba(255,255,255,0.05)">Venta: ${fN(v.totUSD)} USD</td>
+        <td style="border-bottom:1px solid rgba(255,255,255,0.05);${_isV?'display:none':''}"></td>
+      </tr>`;
+    }).join('') : `<tr style="background:var(--color-bg-alt);font-size:12px;opacity:0.9"><td colspan="${_isV?6:7}" style="padding-left:20px;border-bottom:1px solid rgba(255,255,255,0.05)">Sin detalles de ventas</td></tr>`;
+
+    return `<tr onclick="var s=document.getElementById('liq-sub-${i}');s.style.display=s.style.display==='none'?'table-row-group':'none';var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=s.style.display==='none'?'▶':'▼';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
+    <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}</td><td>${l.alm}</td>
+    <td style="text-align:right;color:var(--color-text-warning);font-weight:bold">${fN(l.comUSD)} USD</td>
+    <td style="text-align:right;font-weight:bold">${fN(l.totalCUP || l.comCUP || 0, l.mon==='CUP'?0:2)} ${l.mon||'CUP'}</td>
     <td style="font-size:11px;color:var(--color-text-secondary)">${l.cuenta&&!l.cuenta.startsWith('{')?l.cuenta:'—'}</td>
     <td><span class="badge ${l.estado==='Pagado'?'bg':'ba'}">${l.estado}</span></td>
-    <td style="${_isV?'display:none':''}">
+    <td style="${_isV?'display:none':''}" onclick="event.stopPropagation()">
       ${!_isV && l.estado==='Pendiente'?`<button class="btn-sm btn-p" onclick="pagarLiq(${i})" style="margin-right:4px">Pagar</button>`:''}
       ${!_isV ? `<button class="btn-sm" style="color:var(--color-text-danger);border-color:var(--color-border-danger)" onclick="eliminarLiq(${i})">Borrar</button>` : ''}
     </td>
-  </tr>`).join('');
+  </tr>
+  <tbody id="liq-sub-${i}" style="display:none">${subRows}</tbody>`;
+  }).join('');
   var thAcc = document.getElementById('th-liq-acc');
   if(thAcc) thAcc.style.display = _isV ? 'none' : '';
 }
