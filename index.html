@@ -7220,6 +7220,9 @@ function renderAdminProductos() {
   var bajoStk  = PRODS.filter(function(p) { return (p.stk || 0) <= (p.stk_min || 10); }).length;
 
   var rows = PRODS.filter(function(p) { return !q || p.n.toLowerCase().indexOf(q) >= 0; });
+  rows.sort(function(a, b) {
+    return (a.n || '').localeCompare(b.n || '', undefined, { sensitivity: 'base', numeric: true });
+  });
 
   var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">'
     + '<div class="adm-card"><div class="adm-lbl">Productos</div><div class="adm-val">' + PRODS.length + '</div></div>'
