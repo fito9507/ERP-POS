@@ -7214,12 +7214,21 @@ function renderAdminProductos() {
 
   if (editingProd !== null) { renderFormProducto(); return; }
 
+  var inp = document.getElementById('adm-prod-q');
+  if (inp) window._admProdQ = inp.value;
   var q = (window._admProdQ || '').toLowerCase();
+
+  var catInp = document.getElementById('adm-prod-cat');
+  if (catInp) window._admProdCat = catInp.value;
+  var selectedCat = window._admProdCat || '';
 
   var totalStk = PRODS.reduce(function(a, p) { return a + (p.stk || 0); }, 0);
   var bajoStk  = PRODS.filter(function(p) { return (p.stk || 0) <= (p.stk_min || 10); }).length;
 
-  var rows = PRODS.filter(function(p) { return !q || p.n.toLowerCase().indexOf(q) >= 0; });
+  var rows = PRODS.filter(function(p) {
+    if (selectedCat && p.cat !== selectedCat) return false;
+    return !q || p.n.toLowerCase().indexOf(q) >= 0;
+  });
   rows.sort(function(a, b) {
     return (a.n || '').localeCompare(b.n || '', undefined, { sensitivity: 'base', numeric: true });
   });
@@ -7230,7 +7239,18 @@ function renderAdminProductos() {
     + '<div class="adm-card"><div class="adm-lbl">Stock bajo</div><div class="adm-val" style="color:var(--color-text-warning)">' + bajoStk + '</div></div>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
-    + '<input class="adm-inp" id="adm-prod-q" placeholder="Buscar producto..." oninput="_dRender(renderAdminProductos)" style="flex:1;max-width:260px" value="' + q + '">'
+    + '<div style="display:flex;gap:8px;flex:1;max-width:460px;flex-wrap:wrap">'
+    + '<input class="adm-inp" id="adm-prod-q" placeholder="Buscar producto..." oninput="_dRender(renderAdminProductos)" style="flex:1;min-width:180px" value="' + q + '">'
+    + '<select class="adm-inp" id="adm-prod-cat" onchange="renderAdminProductos()" style="flex:1;min-width:150px">'
+    + '<option value="">Todas las categorías</option>'
+    + (function(){
+        var _cats = getCategorias();
+        return _cats.map(function(c){
+          return '<option' + (selectedCat === c ? ' selected' : '') + ' value="' + c + '">' + c + '</option>';
+        }).join('');
+      })()
+    + '</select>'
+    + '</div>'
     + '<button class="adm-btn adm-btn-p" onclick="editingProd=-1;renderAdminContent()">+ Nuevo producto</button>'
     + '</div>'
     + '<div id="prod-sel-bar" style="display:none;padding:8px 10px;background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-bottom:8px;flex-wrap:wrap;align-items:center;gap:8px">'
