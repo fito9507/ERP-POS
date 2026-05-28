@@ -3749,9 +3749,34 @@ function aplicarComGlobal(){
 }
 function exportVentasCSV(){
   const data=filtrar_ven();
-  let csv='Fecha,Vendedor,Almacén,Cliente,Tipo,Productos,Total USD,Moneda,% Com.,Com. USD,Estado\n';
-  data.forEach(v=>{csv+=`${v.fecha},${v.vend},${v.alm},${v.cli},${v.tipo},"${v.prods}",${v.totalUSD},${v.mon},${v.comPct},${v.comUSD},${v.estCom}\n`;});
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='ventas.csv';a.click();
+  let csv='Fecha;Producto;Cantidad;Almacén;Tipo de Venta;Precio Unitario;Moneda;Total en Moneda\n';
+  data.forEach(v=>{
+    var fechaParts = v.fecha.split('-');
+    var fDate = fechaParts.length === 3 ? `${fechaParts[2]}/${fechaParts[1]}/${fechaParts[0]}` : v.fecha;
+    var rx = /(\d+)×\s+(.+?)\s+@\s+\$([\d,.-]+)/g;
+    var match;
+    var hasMatch = false;
+    while((match = rx.exec(v.prods)) !== null) {
+      hasMatch = true;
+      var qty = match[1];
+      var prod = match[2].replace(/"/g, '""');
+      var priceStr = match[3];
+      var priceNum = parseFloat(priceStr.replace(/\./g, '').replace(',', '.'));
+      var totalNum = parseInt(qty, 10) * priceNum;
+      var totalStr = totalNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
+      csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";USD;"${totalStr}"\n`;
+    }
+    if(!hasMatch) {
+      var prodsClean = (v.prods||'').replace(/"/g, '""');
+      csv += `${fDate};"${prodsClean}";1;${v.alm||''};${v.tipo||''};"${fN(v.totalUSD)}";USD;"${fN(v.totalUSD)}"\n`;
+    }
+  });
+  var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
+  var blob = new Blob([bom, csv], {type: 'text/csv;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='registro_ventas.csv';
+  a.click();
 }
 
 // ── COMISIONES ────────────────────────────────────────────
@@ -5920,7 +5945,7 @@ function updNuevaDeudaForm(){
     cajas.forEach(function(k){
       if(typeof _getMonedaFromCaja==='function'){
         var mCaja = _getMonedaFromCaja(k);
-        if(mCaja && mCaja !== mon) return;
+        if(mCaja && mCaja !== mon && !(mon === 'CUPT' && mCaja === 'CUP')) return;
       }
       opts += '<option'+(k===currCaja?' selected':'')+'>'+k+'</option>';
     });
