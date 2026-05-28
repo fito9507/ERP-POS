@@ -3766,32 +3766,41 @@ function exportVentasCSV(){
 
     if(matches.length > 0) {
       var allHavePrice = matches.every(m => m[3]);
+      var dec = (mon_cobro==='CUP'||mon_cobro==='CUPT') ? 0 : 2;
 
-      if (allHavePrice || matches.length === 1) {
+      if (allHavePrice) {
+        // All products have individual prices — use them
         matches.forEach(match => {
           var qty = match[1];
           var prod = match[2].trim().replace(/"/g, '""');
-          var priceUSD, totalUSD;
-          if (match[3]) {
-            priceUSD = parseFloat(match[3].replace(/\./g, '').replace(',', '.'));
-            totalUSD = parseInt(qty, 10) * priceUSD;
-          } else {
-            var qInt = parseInt(qty, 10);
-            priceUSD = qInt > 0 ? (v.totalUSD / qInt) : 0;
-            totalUSD = v.totalUSD;
-          }
-          var dec = (mon_cobro==='CUP'||mon_cobro==='CUPT') ? 0 : 2;
+          var priceUSD = parseFloat(match[3].replace(/\./g, '').replace(',', '.'));
+          var totalUSD = parseInt(qty, 10) * priceUSD;
           var priceInMon = (typeof fromUSD==='function') ? fromUSD(priceUSD, mon_cobro, v.alm) : priceUSD;
           var totalInMon = (typeof fromUSD==='function') ? fromUSD(totalUSD, mon_cobro, v.alm) : totalUSD;
           var priceStr = priceInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
           var totalStr = totalInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
           csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";${mon_label};"${totalStr}"\n`;
         });
-        return;
+      } else {
+        // Products without individual prices — split total equally among products
+        var usdPerProd = v.totalUSD / matches.length;
+        matches.forEach(match => {
+          var qty = match[1];
+          var prod = match[2].trim().replace(/"/g, '""');
+          var qInt = parseInt(qty, 10);
+          var priceUSD = qInt > 0 ? (usdPerProd / qInt) : 0;
+          var totalUSD = usdPerProd;
+          var priceInMon = (typeof fromUSD==='function') ? fromUSD(priceUSD, mon_cobro, v.alm) : priceUSD;
+          var totalInMon = (typeof fromUSD==='function') ? fromUSD(totalUSD, mon_cobro, v.alm) : totalUSD;
+          var priceStr = priceInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+          var totalStr = totalInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+          csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";${mon_label};"${totalStr}"\n`;
+        });
       }
+      return;
     }
 
-    // Fallback for >1 products without price or no matches at all
+    // Fallback: truly unparseable — output as single row
     var dec2 = (mon_cobro==='CUP'||mon_cobro==='CUPT') ? 0 : 2;
     var totalInMon2 = (typeof fromUSD==='function') ? fromUSD(v.totalUSD, mon_cobro, v.alm) : v.totalUSD;
     var prodsClean = (v.prods||'').replace(/"/g, '""');
