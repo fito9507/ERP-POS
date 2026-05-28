@@ -3753,24 +3753,41 @@ function exportVentasCSV(){
   data.forEach(v=>{
     var fechaParts = v.fecha.split('-');
     var fDate = fechaParts.length === 3 ? `${fechaParts[2]}/${fechaParts[1]}/${fechaParts[0]}` : v.fecha;
-    var rx = /(\d+)×\s+(.+?)\s+@\s+\$([\d,.-]+)/g;
-    var match;
-    var hasMatch = false;
-    while((match = rx.exec(v.prods)) !== null) {
-      hasMatch = true;
-      var qty = match[1];
-      var prod = match[2].replace(/"/g, '""');
-      var priceStr = match[3];
-      var priceNum = parseFloat(priceStr.replace(/\./g, '').replace(',', '.'));
-      var totalNum = parseInt(qty, 10) * priceNum;
-      var totalStr = totalNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
-      csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";USD;"${totalStr}"\n`;
+    
+    var rx = /(\d+)[x×]\s+([\s\S]+?)(?:\s+@\s+\$([\d,.-]+))?(?=(?:,\s*\d+[x×]|$))/g;
+    var matches = Array.from(v.prods.matchAll(rx));
+    
+    if(matches.length > 0) {
+      var allHavePrice = matches.every(m => m[3]);
+      
+      if (allHavePrice || matches.length === 1) {
+        matches.forEach(match => {
+          var qty = match[1];
+          var prod = match[2].trim().replace(/"/g, '""');
+          var priceNum, totalNum;
+          if (match[3]) {
+            priceNum = parseFloat(match[3].replace(/\./g, '').replace(',', '.'));
+            totalNum = parseInt(qty, 10) * priceNum;
+          } else {
+            // Inference for single old product
+            var qInt = parseInt(qty, 10);
+            priceNum = qInt > 0 ? (v.totalUSD / qInt) : 0;
+            totalNum = v.totalUSD;
+          }
+          
+          var priceStr = priceNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
+          var totalStr = totalNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
+          csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";USD;"${totalStr}"\n`;
+        });
+        return; // Next sale
+      }
     }
-    if(!hasMatch) {
-      var prodsClean = (v.prods||'').replace(/"/g, '""');
-      csv += `${fDate};"${prodsClean}";1;${v.alm||''};${v.tipo||''};"${fN(v.totalUSD)}";USD;"${fN(v.totalUSD)}"\n`;
-    }
+    
+    // Fallback for >1 products without price or no matches at all
+    var prodsClean = (v.prods||'').replace(/"/g, '""');
+    csv += `${fDate};"${prodsClean}";1;${v.alm||''};${v.tipo||''};"${fN(v.totalUSD)}";USD;"${fN(v.totalUSD)}"\n`;
   });
+  
   var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
   var blob = new Blob([bom, csv], {type: 'text/csv;charset=utf-8'});
   const a=document.createElement('a');
