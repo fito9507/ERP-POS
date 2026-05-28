@@ -7124,6 +7124,7 @@ function setAdminTab(tab) {
 }
 
 function renderAdminContent() {
+  if (editingProd === null || editingProd >= 0) { window.clonedProdData = null; }
   if      (adminTab === 'productos') renderAdminProductos();
   else if (adminTab === 'usuarios')  renderAdminUsuarios();
   else if (adminTab === 'tasas')     renderAdminTasas();
@@ -7262,6 +7263,7 @@ function renderAdminProductos() {
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enWeb\')" title="Web">'+(p.enWeb===false?'🚫':'🌐')+'</button></td>'
       + '<td style="white-space:nowrap">'
       + '<button class="adm-btn-sm" onclick="editingProd=' + idx + ';renderAdminContent()">✏️</button> '
+      + '<button class="adm-btn-sm" onclick="admCloneProd(' + idx + ')" title="Clonar">📋</button> '
       + '<button class="adm-btn-sm" onclick="admElimProd(' + idx + ')" style="color:var(--color-text-danger)">×</button>'
       + '</td></tr>';
   });
@@ -7290,7 +7292,36 @@ function renderFormProducto() {
   var el = document.getElementById('admin-content');
   if (!el) return;
   var isNew = (editingProd === -1);
-  var p = isNew ? {n:'', min:null, maj:null, ddp:null, stk:0, stk_alm:{Habana:0,Placetas:0,Xportprise:0}, stk_min:10} : PRODS[editingProd];
+  var p = isNew 
+    ? (window.clonedProdData 
+        ? {
+            n: window.clonedProdData.n + ' (Copia)',
+            cat: window.clonedProdData.cat||'',
+            activo: window.clonedProdData.activo!==false,
+            enStock: window.clonedProdData.enStock!==false,
+            enWeb: window.clonedProdData.enWeb!==false,
+            enTransito: window.clonedProdData.enTransito ? JSON.parse(JSON.stringify(window.clonedProdData.enTransito)) : {Habana:false, Placetas:false, Xportprise:false},
+            min: window.clonedProdData.min,
+            maj: window.clonedProdData.maj,
+            escala: window.clonedProdData.escala ? JSON.parse(JSON.stringify(window.clonedProdData.escala)) : [],
+            ddp: window.clonedProdData.ddp,
+            oferta: window.clonedProdData.oferta===true,
+            badgeTexto: window.clonedProdData.badgeTexto||'',
+            precioOfertaHabana: window.clonedProdData.precioOfertaHabana,
+            precioOfertaPlacetas: window.clonedProdData.precioOfertaPlacetas,
+            min_placetas: window.clonedProdData.min_placetas,
+            maj_placetas: window.clonedProdData.maj_placetas,
+            stk_min: window.clonedProdData.stk_min||10,
+            preventa_min: window.clonedProdData.preventa_min,
+            moq: window.clonedProdData.moq||1,
+            preventa_maj: window.clonedProdData.preventa_maj,
+            img: window.clonedProdData.img||'',
+            stk: 0,
+            stk_alm: {Habana:0, Placetas:0, Xportprise:0}
+          }
+        : {n:'', min:null, maj:null, ddp:null, stk:0, stk_alm:{Habana:0,Placetas:0,Xportprise:0}, stk_min:10}
+      )
+    : PRODS[editingProd];
 
   // Stock managed via Movimientos de Stock module
 
@@ -7531,6 +7562,14 @@ function admToggleProd(idx, field){
   showToast((field==='activo'?(p.activo?'✅ Activado en POS':'⛔ Desactivado de POS'):
             (field==='enStock'?(p.enStock?'📦 Visible en Stock':'🚫 Oculto de Stock'):
             (p.enWeb?'🌐 Visible en la Web':'🚫 Oculto de la Web')))+': '+p.n);
+}
+function admCloneProd(idx) {
+  var orig = PRODS[idx];
+  if (!orig) return;
+  window.clonedProdData = orig;
+  editingProd = -1;
+  renderAdminContent();
+  showToast('✓ Plantilla cargada desde ' + orig.n);
 }
 function admGetSelProds(){
   return [...document.querySelectorAll('.prod-chk:checked')].map(function(c){return parseInt(c.dataset.idx);});
