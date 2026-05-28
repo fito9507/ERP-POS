@@ -1381,7 +1381,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 
 // ═══ SHARED GLOBALS ═══
-const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595};
+const RATES={USD:1,EUR:0.870,CUP:509.56,CUPT:595,DTO_PREVENTA:0};
 var RATES_ALM={Habana:{USD:0,EUR:0,MLC:0},Placetas:{USD:0,EUR:0,MLC:0},Xportprise:{USD:0,EUR:0,MLC:0}};
 try{ var _ra=JSON.parse(localStorage.getItem('erp_rates_alm')||'{}'); if(Object.keys(_ra).length) RATES_ALM=_ra; }catch(e){}
 var RATES_EURUSD=0;
@@ -6833,6 +6833,9 @@ function _getPrecioNF(p, alm, qty){
   var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj||p.min||0);
   var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min||p.maj||0);
   var q = qty || 1;
+  var isTransit = p.enTransito && p.enTransito[alm];
+  if(isTransit && p.preventa_min != null) return p.preventa_min;
+
   if(p.escala && p.escala.length){
     var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
     for(var i=0;i<sorted.length;i++){
@@ -6841,7 +6844,10 @@ function _getPrecioNF(p, alm, qty){
     }
     return parseFloat(p.escala[0].precio)||maj||min;
   }
-  return maj||min;
+  
+  var basePrice = maj||min;
+  if(isTransit && RATES.DTO_PREVENTA > 0) return Number((basePrice * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
+  return basePrice;
 }
 function addNFLCli(cid){
   if(!window['nfl_'+cid])window['nfl_'+cid]=[];
@@ -7802,7 +7808,10 @@ function admGuardarTasas() {
   var aEurUsd = parseFloat(document.getElementById('eurusd-adj')?.value) || 0;
   try { localStorage.setItem('erp_eurusd_adj', aEurUsd.toString()); } catch(e) {}
 
-  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
+  var dtoPrev = parseFloat(document.getElementById('dto-preventa')?.value) || 0;
+  RATES.DTO_PREVENTA = dtoPrev;
+
+  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:dtoPrev,ts:Date.now()})); } catch(e) {}
 
   // Save to Supabase
   if (_supaOnline) {
@@ -7810,6 +7819,7 @@ function admGuardarTasas() {
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'EUR',valor:finalEUR,tasa_mkt:mkt.EUR||finalEUR,ajuste:aEUR}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'CUPT',valor:RATES.CUPT,tasa_mkt:mCUPT,ajuste:aCUPT}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:parseFloat((mEUR/mUSD).toFixed(4)),ajuste:parseFloat((RATES_EURUSD-(mEUR/mUSD)).toFixed(4))}).catch(function(e){});
+    supaReq('POST','tasas?on_conflict=moneda',{moneda:'DTO_PREVENTA',valor:dtoPrev,tasa_mkt:0,ajuste:0}).catch(function(e){});
   }
 
   showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
@@ -7911,6 +7921,13 @@ function renderAdminTasas() {
           + '<div id="eurusd-fin" style="font-size:24px;font-weight:800;color:var(--color-text-success)">'+fN(_final,2)+'</div>'
           + '</div></div></div>';
       })()
+    + '<div class="card" style="margin-top:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">Descuento Preventa Global (%) <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(Se aplica al stock en tránsito. Ignorado si se define un precio de preventa específico)</span></div>'
+    + '<div style="display:flex;align-items:center;gap:16px;">'
+    + '<input type="number" id="dto-preventa" value="'+(RATES.DTO_PREVENTA||0)+'" style="width:100px;text-align:center;font-size:18px;font-weight:600;height:40px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary)">'
+    + '<span style="font-size:14px;color:var(--color-text-secondary);font-weight:600">% descuento</span>'
+    + '</div>'
+    + '</div>'
     + '<h3 style="margin:16px 0 10px">Ajustes por almacén</h3>'
     + _renderAlmAdjTable()
     + '<button class="adm-btn adm-btn-p" onclick="admGuardarAjustesAlm()" style="width:100%;padding:10px;margin-top:8px">💾 Guardar ajustes almacén</button>'
@@ -10244,7 +10261,7 @@ async function fetchElToqueAndSave(){
     // ── Estrategia 2: Leer directamente de la tabla tasas en Supabase (fallback) ──
     if (!data) {
       try {
-        var r2 = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste&moneda=in.(USD,EUR,MLC)');
+        var r2 = await supaReq('GET', 'tasas?select=moneda,valor,tasa_mkt,ajuste&moneda=in.(USD,EUR,MLC,DTO_PREVENTA)');
         if (r2.ok) {
           var rows = await r2.json();
           if (Array.isArray(rows) && rows.length > 0) {
@@ -10258,6 +10275,8 @@ async function fetchElToqueAndSave(){
             var usd = parseFloat(tasasMap.USD||0);
             var eur = parseFloat(tasasMap.EUR||0);
             var mlc = parseFloat(tasasMap.MLC||0);
+            var dto = parseFloat(tasasMap.DTO_PREVENTA||0);
+            if(dto>0) RATES.DTO_PREVENTA = dto;
             if (usd > 10) {
               // Sincronizar ajustes globales en este dispositivo
               var localAdj = {};
@@ -10302,7 +10321,7 @@ async function fetchElToqueAndSave(){
     RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
     
     // Guardar tasas localmente para que el próximo inicio no muestre valores desactualizados
-    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,ts:Date.now()})); } catch(e) {}
+    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:RATES.DTO_PREVENTA,ts:Date.now()})); } catch(e) {}
 
     showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
     renderAdminTasas();

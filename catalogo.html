@@ -483,7 +483,7 @@ function tgSend(msg, alm){
 }
 
 // Exchange rates (loaded from Supabase tasas table)
-let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270 };
+let RATES = { USD:1, EUR:1.12, CUP:370, CUPT:270, DTO_PREVENTA:0 };
 let RATES_EURUSD = 1.13;
 let RATES_ALM = { Habana:{USD:0,EUR:0,MLC:0,CUPT:10}, Placetas:{USD:0,EUR:0,MLC:0,CUPT:10} };
 // CUPT_PCT = % extra sobre precio CUP para transferencia
@@ -598,6 +598,7 @@ async function init(){
           if(t.moneda==='CUPT')   RATES.CUPT     = parseFloat(t.valor)||270;
           if(t.moneda==='CUP')    RATES.CUP      = RATES.CUP||parseFloat(t.valor)||370;
           if(t.moneda==='EUR')    { var _cupEUR=parseFloat(t.valor); if(_cupEUR>10) RATES_EURUSD=parseFloat((_cupEUR/RATES.CUP).toFixed(4)); }
+          if(t.moneda==='DTO_PREVENTA') RATES.DTO_PREVENTA = parseFloat(t.valor)||0;
         });
         // Load per-almacen adjustments
         try{
@@ -760,9 +761,18 @@ function transitCardHTML(p){
   var moq = p.moq || 1;
   var moq = p.moq || 1;
   var qty = cartItem ? cartItem.qty : moq;
-  var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
   var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
-  var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
+  
+  var pvPrice = null;
+  if (p.preventa_min != null) {
+    pvPrice = p.preventa_min;
+  } else if (RATES.DTO_PREVENTA > 0) {
+    pvPrice = Number((normPrice * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
+  } else {
+    pvPrice = normPrice;
+  }
+
+  var hasDiscount = normPrice > 0 && pvPrice < normPrice;
   var savingVal = normPrice - pvPrice; var savingStr = hasDiscount ? fSaving(savingVal, MON, ALM) : null;
 
   // If no price at all show placeholder
@@ -1067,7 +1077,18 @@ function getCartPrice(i){
   var MIN_MAY = p.min_may || 10;
   var isMay = i.qty >= MIN_MAY && maj > 0;
   var isTransit = p.enTransito && p.enTransito[ALM];
-  if(isTransit && p.preventa_min!=null) return {price:p.preventa_min, isMay:false, MIN_MAY:MIN_MAY, isTransit:true};
+  
+  if(isTransit) {
+    var baseTPrice = isMay ? (maj||min||0) : (min||maj||0);
+    var pvPrice = null;
+    if (p.preventa_min != null) {
+      pvPrice = p.preventa_min;
+    } else if (RATES.DTO_PREVENTA > 0) {
+      pvPrice = Number((baseTPrice * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
+    }
+    if (pvPrice != null) return {price:pvPrice, isMay:false, MIN_MAY:MIN_MAY, isTransit:true};
+  }
+  
   var ofertaPrice = p.oferta ? (isPlac ? (p.precioOfertaPlacetas||p.precioOfertaHabana||null) : (p.precioOfertaHabana||null)) : null;
   if(ofertaPrice!=null && ofertaPrice>0) return {price:ofertaPrice, isMay:false, MIN_MAY:MIN_MAY, isTransit:false, isOferta:true};
   var escalaPrice = getEscalaPrice(p, i.qty);
