@@ -649,7 +649,7 @@ async function init(){
         precioOfertaHabana: r.precio_oferta_habana!=null?parseFloat(r.precio_oferta_habana):null,
         precioOfertaPlacetas: r.precio_oferta_placetas!=null?parseFloat(r.precio_oferta_placetas):null
       };
-    }).filter(function(p){ return p.activo !== false && p.enStock !== false; });
+    }).filter(function(p){ return p.enWeb !== false; });
 
 
 
@@ -705,13 +705,13 @@ function render(){
   var grid = document.getElementById('prod-grid');
   var allProds = window.ALL_PRODS || PRODS;
   // Transit products for this almacen
-  var transitProds = allProds.filter(function(p){ return p.activo!==false && p.enTransito && p.enTransito[ALM]; });
+  var transitProds = allProds.filter(function(p){ return p.enWeb!==false && p.enTransito && p.enTransito[ALM]; });
   // Normal products (exclude transit-only, apply search/cat filters)
   var q = (document.getElementById('search-inp')||{}).value||'';
   var cat = document.getElementById('cat-sel').value;
   var normalProds = allProds.filter(function(p){
     if(p.enTransito && p.enTransito[ALM]) return false; // handled in transit section
-    if(p.activo===false || p.enStock===false) return false;
+    if(p.enWeb===false) return false;
     var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
     if(stk <= 0) return false;
     if(cat && p.cat !== cat) return false;

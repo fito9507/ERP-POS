@@ -2015,7 +2015,7 @@ async function syncLoadProductos() {
         escala: (function(v){ try{ return v ? (typeof v==='string'?JSON.parse(v):v) : null; }catch(e){ return null; } })(row.precios_escala),
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
-        activo: row.activo !== false, enStock: row.en_stock !== false,
+        activo: row.activo !== false, enStock: row.en_stock !== false, enWeb: row.en_web !== false,
         enTransito: {Habana:row.en_transito_habana===true, Placetas:row.en_transito_placetas===true, Xportprise:row.en_transito_xportprise===true},
         preventa_min: row.precio_preventa_min!=null?parseFloat(row.precio_preventa_min):null,
         moq: row.moq!=null?parseInt(row.moq):1,
@@ -2059,7 +2059,7 @@ async function syncSaveProducto(p) {
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
     precios_escala:p.escala&&p.escala.length?JSON.stringify(p.escala):null,
     precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
-    activo:p.activo!==false,en_stock:p.enStock!==false,
+    activo:p.activo!==false,en_stock:p.enStock!==false,en_web:p.enWeb!==false,
     en_transito_habana:!!(p.enTransito&&p.enTransito.Habana),
     en_transito_placetas:!!(p.enTransito&&p.enTransito.Placetas),
     en_transito_xportprise:!!(p.enTransito&&p.enTransito.Xportprise),
@@ -7235,13 +7235,15 @@ function renderAdminProductos() {
     + '<button class="adm-btn-sm" onclick="admSelProdToggle(false,\'activo\')">✅ Act. POS</button>'
     + '<button class="adm-btn-sm" onclick="admSelProdToggle(true,\'enStock\')">🚫 Ocultar Stk</button>'
     + '<button class="adm-btn-sm" onclick="admSelProdToggle(false,\'enStock\')">📦 Mostrar Stk</button>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(true,\'enWeb\')">🚫 Ocultar Web</button>'
+    + '<button class="adm-btn-sm" onclick="admSelProdToggle(false,\'enWeb\')">🌐 Mostrar Web</button>'
     + '<button class="adm-btn-sm" style="margin-left:auto" onclick="admDeselProds()">✕</button>'
     + '</div>'
     + '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
     + '<th style="width:20px"><input type="checkbox" id="prod-chk-all" onchange="admChkAllProds(this.checked)"></th>'
     + '<th>Producto</th><th style="text-align:right">Min</th><th style="text-align:right">May</th>'
     + '<th style="text-align:right">DDP</th><th style="text-align:right">Stock</th>'
-    + '<th style="text-align:right">Mín</th><th style="text-align:center">POS</th><th style="text-align:center">Stk</th><th></th>'
+    + '<th style="text-align:right">Mín</th><th style="text-align:center">POS</th><th style="text-align:center">Stk</th><th style="text-align:center">Web</th><th></th>'
     + '</tr></thead><tbody>';
 
   rows.forEach(function(p) {
@@ -7257,6 +7259,7 @@ function renderAdminProductos() {
       + '<td style="text-align:center"><input type="checkbox" class="prod-chk" data-idx="'+idx+'" style="width:15px;height:15px"></td>'
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'activo\')" title="POS">'+(p.activo===false?'⛔':'✅')+'</button></td>'
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enStock\')" title="Stock">'+(p.enStock===false?'🚫':'📦')+'</button></td>'
+      + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enWeb\')" title="Web">'+(p.enWeb===false?'🚫':'🌐')+'</button></td>'
       + '<td style="white-space:nowrap">'
       + '<button class="adm-btn-sm" onclick="editingProd=' + idx + ';renderAdminContent()">✏️</button> '
       + '<button class="adm-btn-sm" onclick="admElimProd(' + idx + ')" style="color:var(--color-text-danger)">×</button>'
@@ -7307,6 +7310,10 @@ function renderFormProducto() {
     + '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;grid-column:1/-1">'
     + '<label class="adm-lbl-f" style="margin:0;flex:1">Visible en Stock</label>'
     + '<input type="checkbox" id="ep-en-stock"' + (p.enStock!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;grid-column:1/-1">'
+    + '<label class="adm-lbl-f" style="margin:0;flex:1">Visible en la Web (Catálogo)</label>'
+    + '<input type="checkbox" id="ep-en-web"' + (p.enWeb!==false?' checked':'') + ' style="width:18px;height:18px;cursor:pointer">'
     + '</div>'
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
     + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
@@ -7403,6 +7410,7 @@ function admGuardarProd(idx) {
   var cat = (document.getElementById('ep-cat')?.value||'').trim();
   var activo = document.getElementById('ep-activo') ? document.getElementById('ep-activo').checked : true;
   var enStock = document.getElementById('ep-en-stock') ? document.getElementById('ep-en-stock').checked : true;
+  var enWeb = document.getElementById('ep-en-web') ? document.getElementById('ep-en-web').checked : true;
   var enTransito = {
     Habana: document.getElementById('ep-transito-hab') ? document.getElementById('ep-transito-hab').checked : false,
     Placetas: document.getElementById('ep-transito-plac') ? document.getElementById('ep-transito-plac').checked : false,
@@ -7419,7 +7427,7 @@ function admGuardarProd(idx) {
   var precioOfertaHabana = pOfeHabV!==''&&!isNaN(parseFloat(pOfeHabV))?parseFloat(pOfeHabV):null;
   var precioOfertaPlacetas = pOfePlacV!==''&&!isNaN(parseFloat(pOfePlacV))?parseFloat(pOfePlacV):null;
 
-  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
+  var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enWeb:enWeb, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
     img: existingImg,
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
@@ -7516,10 +7524,13 @@ function admToggleProd(idx, field){
   var p=PRODS[idx]; if(!p) return;
   if(field==='activo') p.activo=p.activo===false?true:false;
   else if(field==='enStock') p.enStock=p.enStock===false?true:false;
+  else if(field==='enWeb') p.enWeb=p.enWeb===false?true:false;
   offlineSaveProds();
   if(typeof syncSaveProducto==='function') syncSaveProducto(p);
   renderAdminProductos();
-  showToast((field==='activo'?(p.activo?'✅ Activado en POS':'⛔ Desactivado de POS'):(p.enStock?'📦 Visible en Stock':'🚫 Oculto de Stock'))+': '+p.n);
+  showToast((field==='activo'?(p.activo?'✅ Activado en POS':'⛔ Desactivado de POS'):
+            (field==='enStock'?(p.enStock?'📦 Visible en Stock':'🚫 Oculto de Stock'):
+            (p.enWeb?'🌐 Visible en la Web':'🚫 Oculto de la Web')))+': '+p.n);
 }
 function admGetSelProds(){
   return [...document.querySelectorAll('.prod-chk:checked')].map(function(c){return parseInt(c.dataset.idx);});
@@ -7546,7 +7557,8 @@ async function admSelProdToggle(disable, field){
   idxs.forEach(function(idx){
     var p=PRODS[idx]; if(!p) return;
     if(field==='activo') p.activo=!disable;
-    else p.enStock=!disable;
+    else if(field==='enStock') p.enStock=!disable;
+    else if(field==='enWeb') p.enWeb=!disable;
   });
   offlineSaveProds();
   // Save to Supabase in parallel
@@ -8660,15 +8672,15 @@ async function exportBackupSQL(returnSQL) {
       var pd = await prods.json();
       pd.forEach(function(r){
         var esc = function(v){ return v ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
-        sql += "INSERT INTO productos (nombre,categoria,precio_min,precio_maj,precio_ddp,stk_min,activo,en_stock,en_transito,imagen_url) VALUES ("
+        sql += "INSERT INTO productos (nombre,categoria,precio_min,precio_maj,precio_ddp,stk_min,activo,en_stock,en_web,en_transito,imagen_url) VALUES ("
           + esc(r.nombre)+','+esc(r.categoria)+','
           + (r.precio_min!=null?r.precio_min:'NULL')+','
           + (r.precio_maj!=null?r.precio_maj:'NULL')+','
           + (r.precio_ddp!=null?r.precio_ddp:'NULL')+','
           + (r.stk_min||10)+','
-          + r.activo+','+r.en_stock+','+(r.en_transito||false)+','
+          + r.activo+','+r.en_stock+','+(r.en_web!==false)+','+(r.en_transito||false)+','
           + esc(r.imagen_url)
-          + ') ON CONFLICT (nombre) DO UPDATE SET categoria=EXCLUDED.categoria,precio_min=EXCLUDED.precio_min,precio_maj=EXCLUDED.precio_maj,precio_ddp=EXCLUDED.precio_ddp,stk_min=EXCLUDED.stk_min,activo=EXCLUDED.activo,en_stock=EXCLUDED.en_stock,en_transito=EXCLUDED.en_transito,imagen_url=EXCLUDED.imagen_url;\n';
+          + ') ON CONFLICT (nombre) DO UPDATE SET categoria=EXCLUDED.categoria,precio_min=EXCLUDED.precio_min,precio_maj=EXCLUDED.precio_maj,precio_ddp=EXCLUDED.precio_ddp,stk_min=EXCLUDED.stk_min,activo=EXCLUDED.activo,en_stock=EXCLUDED.en_stock,en_web=EXCLUDED.en_web,en_transito=EXCLUDED.en_transito,imagen_url=EXCLUDED.imagen_url;\n';
       });
     }
 
