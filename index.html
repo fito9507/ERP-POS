@@ -3753,39 +3753,49 @@ function exportVentasCSV(){
   data.forEach(v=>{
     var fechaParts = v.fecha.split('-');
     var fDate = fechaParts.length === 3 ? `${fechaParts[2]}/${fechaParts[1]}/${fechaParts[0]}` : v.fecha;
-    
+
+    // Determine real payment currency from v.pagos
+    var pagos = v.pagos || [];
+    var monedas_pago = [];
+    pagos.forEach(function(p){ if(p.mon && monedas_pago.indexOf(p.mon)===-1) monedas_pago.push(p.mon); });
+    var mon_cobro = monedas_pago.length > 0 ? monedas_pago[0] : (v.mon || 'USD');
+    var mon_label = monedas_pago.length > 0 ? monedas_pago.join('/') : (v.mon || 'USD');
+
     var rx = /(\d+)[x×]\s+([\s\S]+?)(?:\s+@\s+\$([\d,.-]+))?(?=(?:,\s*\d+[x×]|$))/g;
     var matches = Array.from(v.prods.matchAll(rx));
-    
+
     if(matches.length > 0) {
       var allHavePrice = matches.every(m => m[3]);
-      
+
       if (allHavePrice || matches.length === 1) {
         matches.forEach(match => {
           var qty = match[1];
           var prod = match[2].trim().replace(/"/g, '""');
-          var priceNum, totalNum;
+          var priceUSD, totalUSD;
           if (match[3]) {
-            priceNum = parseFloat(match[3].replace(/\./g, '').replace(',', '.'));
-            totalNum = parseInt(qty, 10) * priceNum;
+            priceUSD = parseFloat(match[3].replace(/\./g, '').replace(',', '.'));
+            totalUSD = parseInt(qty, 10) * priceUSD;
           } else {
-            // Inference for single old product
             var qInt = parseInt(qty, 10);
-            priceNum = qInt > 0 ? (v.totalUSD / qInt) : 0;
-            totalNum = v.totalUSD;
+            priceUSD = qInt > 0 ? (v.totalUSD / qInt) : 0;
+            totalUSD = v.totalUSD;
           }
-          
-          var priceStr = priceNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
-          var totalStr = totalNum.toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2});
-          csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";USD;"${totalStr}"\n`;
+          var dec = (mon_cobro==='CUP'||mon_cobro==='CUPT') ? 0 : 2;
+          var priceInMon = (typeof fromUSD==='function') ? fromUSD(priceUSD, mon_cobro, v.alm) : priceUSD;
+          var totalInMon = (typeof fromUSD==='function') ? fromUSD(totalUSD, mon_cobro, v.alm) : totalUSD;
+          var priceStr = priceInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+          var totalStr = totalInMon.toLocaleString('es-ES', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+          csv += `${fDate};"${prod}";${qty};${v.alm||''};${v.tipo||''};"${priceStr}";${mon_label};"${totalStr}"\n`;
         });
-        return; // Next sale
+        return;
       }
     }
-    
+
     // Fallback for >1 products without price or no matches at all
+    var dec2 = (mon_cobro==='CUP'||mon_cobro==='CUPT') ? 0 : 2;
+    var totalInMon2 = (typeof fromUSD==='function') ? fromUSD(v.totalUSD, mon_cobro, v.alm) : v.totalUSD;
     var prodsClean = (v.prods||'').replace(/"/g, '""');
-    csv += `${fDate};"${prodsClean}";1;${v.alm||''};${v.tipo||''};"${fN(v.totalUSD)}";USD;"${fN(v.totalUSD)}"\n`;
+    csv += `${fDate};"${prodsClean}";1;${v.alm||''};${v.tipo||''};"${fN(totalInMon2, dec2)}";${mon_label};"${fN(totalInMon2, dec2)}"\n`;
   });
   
   var bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
