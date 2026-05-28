@@ -7250,13 +7250,13 @@ function renderAdminProductos() {
     var idx = PRODS.indexOf(p);
     var bajo = (p.stk || 0) <= (p.stk_min || 10);
     html += '<tr' + (bajo ? ' class="bajo"' : '') + (p.activo===false ? ' style="opacity:.45"' : '') + '>'
+      + '<td style="text-align:center"><input type="checkbox" class="prod-chk" data-idx="'+idx+'" style="width:15px;height:15px"></td>'
       + '<td style="font-size:12px">' + p.n + (p.cat ? '<div style="font-size:9px;color:var(--color-text-tertiary);margin-top:1px">' + p.cat + '</div>' : '') + '</td>'
       + '<td style="text-align:right">' + (p.min != null ? fN(p.min) : '—') + '</td>'
       + '<td style="text-align:right">' + (p.maj != null ? fN(p.maj) : '—') + '</td>'
       + '<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">' + (p.ddp != null ? fN(p.ddp) : '—') + '</td>'
       + '<td style="text-align:right;font-weight:600' + (bajo ? ';color:var(--color-text-warning)' : '') + '">' + fN(p.stk || 0, 0) + '</td>'
       + '<td style="text-align:right;font-size:11px;color:var(--color-text-tertiary)">' + (p.stk_min || 10) + '</td>'
-      + '<td style="text-align:center"><input type="checkbox" class="prod-chk" data-idx="'+idx+'" style="width:15px;height:15px"></td>'
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'activo\')" title="POS">'+(p.activo===false?'⛔':'✅')+'</button></td>'
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enStock\')" title="Stock">'+(p.enStock===false?'🚫':'📦')+'</button></td>'
       + '<td style="text-align:center"><button class="btn-sm" style="font-size:12px;padding:2px 6px" onclick="admToggleProd('+idx+',\'enWeb\')" title="Web">'+(p.enWeb===false?'🚫':'🌐')+'</button></td>'

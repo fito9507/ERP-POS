@@ -644,6 +644,7 @@ async function init(){
         min_placetas: r.precio_min_placetas!=null ? parseFloat(r.precio_min_placetas) : null,
         maj_placetas: r.precio_maj_placetas!=null ? parseFloat(r.precio_maj_placetas) : null,
         activo: r.activo!==false,
+        enWeb: r.en_web!==false,
         oferta: r.en_oferta===true,
         badgeTexto: r.badge_texto||'',
         precioOfertaHabana: r.precio_oferta_habana!=null?parseFloat(r.precio_oferta_habana):null,
