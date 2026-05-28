@@ -570,10 +570,10 @@ function fPrice(usd, mon, alm){
   return MON_SYM[mon] + ' ' + fN(v, MON_DEC[mon]);
 }
 function fSaving(usd, mon, alm){
-  // Use 4 decimals for USD/EUR savings so small amounts are visible
+  // Use 4 decimals max for USD/EUR savings so small amounts are visible, minimum 2
   var v = fromUSD(usd, mon, alm||ALM);
-  var dec = (mon==='CUP'||mon==='CUPT') ? 0 : 4;
-  return MON_SYM[mon] + ' ' + fN(v, dec);
+  if (mon === 'CUP' || mon === 'CUPT') return MON_SYM[mon] + ' ' + fN(v, 0);
+  return MON_SYM[mon] + ' ' + v.toLocaleString('es-ES', {minimumFractionDigits: 2, maximumFractionDigits: 4});
 }
 
 // ── SUPABASE ──────────────────────────────────────────────
