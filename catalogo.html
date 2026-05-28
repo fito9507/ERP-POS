@@ -569,6 +569,12 @@ function fPrice(usd, mon, alm){
   var v = fromUSD(usd, mon, alm||ALM);
   return MON_SYM[mon] + ' ' + fN(v, MON_DEC[mon]);
 }
+function fSaving(usd, mon, alm){
+  // Use 4 decimals for USD/EUR savings so small amounts are visible
+  var v = fromUSD(usd, mon, alm||ALM);
+  var dec = (mon==='CUP'||mon==='CUPT') ? 0 : 4;
+  return MON_SYM[mon] + ' ' + fN(v, dec);
+}
 
 // ── SUPABASE ──────────────────────────────────────────────
 async function supa(path){
@@ -757,7 +763,7 @@ function transitCardHTML(p){
   var pvPrice = p.preventa_min != null ? p.preventa_min : (p.min||p.maj||0);
   var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
   var hasDiscount = p.preventa_min != null && normPrice > 0 && pvPrice < normPrice;
-  var savingVal = normPrice - pvPrice; var savingStr = hasDiscount ? fPrice(savingVal, MON, ALM) : null;
+  var savingVal = normPrice - pvPrice; var savingStr = hasDiscount ? fSaving(savingVal, MON, ALM) : null;
 
   // If no price at all show placeholder
   var showPrice = pvPrice > 0;
