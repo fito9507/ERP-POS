@@ -1853,7 +1853,7 @@ async function flushQueue() {
         var _vueltos=(_cj&&Array.isArray(_cj.vueltos))?_cj.vueltos:[];
         var _cb=_pagos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
         var _vt=_vueltos.map(function(c){return fN(c.m||c.monto||0,2)+' '+(c.mon||c.moneda||'USD')+(c.caja?' ('+c.caja+')':'');}).join(' + ');
-        var _tk=v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)?v.notas.match(/([A-Z]{3}\d{2}-\d{3})/)[1]:'';
+        var _tk=v.notas&&v.notas.match(/\[([A-Z0-9]{3,5}-\d+)\]/)?v.notas.match(/\[([A-Z0-9]{3,5}-\d+)\]/)[1]:(v.notas&&v.notas.match(/([A-Z]{3}\d{2}-\d+)/)?v.notas.match(/([A-Z]{3}\d{2}-\d+)/)[1]:'');
         tgSend('\uD83D\uDCB0 <b>Venta POS (offline)</b>'+(_tk?' <code>'+_tk+'</code>':'')+'\n'
           +'\uD83D\uDC64 '+(v.vendedor||'?')+' \u2022 '+v.almacen+'\n'
           +'\uD83D\uDED2 '+(v.cliente||'Walk-in')+'\n'
@@ -9292,7 +9292,7 @@ async function updateCajasFromVenta(pagos, vueltos, alm) {
     CUENTAS_BASE[k].gasIG += (v.m || 0);
   });
   // Write to Supabase mov_cajas — same schema as admRegistrarMovCaja (no created_at, no null fields)
-  if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
+  if (typeof _supaOnline !== 'undefined' && typeof supaReq === 'function') {
     var fecha = today();
     var usuario = (typeof S !== 'undefined' ? S.user : '');
     for (var i = 0; i < pagos.length; i++) {
@@ -9338,13 +9338,19 @@ async function updateCajasFromVenta(pagos, vueltos, alm) {
         tasa_usada: null
       };
       try {
-        var rv = await supaReq('POST', 'mov_cajas', rowV);
-        if (!rv.ok) {
-          var errTextV = await rv.text();
-          console.warn('mov_cajas vuelto 400:', errTextV);
+        if(_supaOnline){
+          var rv = await supaReq('POST', 'mov_cajas', rowV);
+          if (!rv.ok) {
+            var errTextV = await rv.text();
+            console.warn('mov_cajas vuelto 400:', errTextV);
+            enqueue({method:'POST',path:'mov_cajas',body:rowV});
+          } else {
+            var savedV = await rv.json();
+            if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]);
+          }
         } else {
-          var savedV = await rv.json();
-          if (savedV&&savedV[0]&&typeof _cajasMovs!=='undefined') _cajasMovs.unshift(savedV[0]);
+          _cajasMovs.unshift(rowV); // optimistic
+          enqueue({method:'POST',path:'mov_cajas',body:rowV});
         }
       } catch(e) { console.warn('updateCajasFromVenta vuelto:', e); }
     }
