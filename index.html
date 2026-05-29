@@ -2601,16 +2601,22 @@ function _prestamoToRow(p) {
   return {
     id: p.id,
     nombre: p.nombre,
-    direccion: p.direccion || '',
+    // 'tipo' en Supabase = tipo interno del préstamo (interes_simple, frances, simple, revolving...)
+    tipo: p.tipoInteres || p.tipo || 'interes_simple',
+    // 'tasa' en Supabase = el interés anual
+    tasa: p.interes != null ? p.interes : (p.tasa != null ? p.tasa : 0),
+    plazo: p.plazo != null ? p.plazo : 0,
     capital: p.capital != null ? p.capital : 0,
-    interes: p.interes != null ? p.interes : 0,
-    tipo_interes: p.tipoInteres || p.tipo || 'simple',
-    frecuencia: p.frecuencia || '',
     moneda: p.moneda || 'USD',
-    fecha_inicio: p.fechaInicio || '',
-    vencimiento: p.vencimiento || '',
-    notas: p.notas || '',
+    fecha_inicio: p.fechaInicio || null,
     cta: p.cta || '',
+    notas: p.notas || '',
+    // Columnas extra que añadimos nosotros
+    direccion: p.direccion || '',
+    interes: p.interes != null ? p.interes : 0,
+    tipo_interes: p.tipoInteres || p.tipo || 'interes_simple',
+    frecuencia: p.frecuencia || '',
+    vencimiento: p.vencimiento || '',
     cuota_fija: p.cuotaFija != null ? p.cuotaFija : 0,
     pagos: JSON.stringify(p.pagos || []),
     cuotas: JSON.stringify(p.cuotas || []),
@@ -2620,14 +2626,19 @@ function _prestamoToRow(p) {
 
 function _rowToPrestamo(row) {
   var _j = function(v) { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch(e) { return []; } };
+  // 'tasa' o 'interes' según qué columna tenga valor
+  var interes = row.interes != null ? parseFloat(row.interes) : (row.tasa != null ? parseFloat(row.tasa) : 0);
+  var tipo = row.tipo_interes || row.tipo || 'simple';
   return {
     id: row.id,
     nombre: row.nombre,
     direccion: row.direccion || '',
     capital: row.capital != null ? parseFloat(row.capital) : 0,
-    interes: row.interes != null ? parseFloat(row.interes) : 0,
-    tipoInteres: row.tipo_interes || 'simple',
-    tipo: row.tipo_interes || 'simple',
+    interes: interes,
+    tasa: row.tasa != null ? parseFloat(row.tasa) : interes,
+    tipoInteres: tipo,
+    tipo: tipo,
+    plazo: row.plazo != null ? parseInt(row.plazo) : 0,
     frecuencia: row.frecuencia || '',
     moneda: row.moneda || 'USD',
     fechaInicio: row.fecha_inicio || '',
