@@ -655,10 +655,12 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   /* Historial mov_cajas table */
   #admin-content .adm-table-wrap{overflow-x:auto}
 
-  /* ══ MÓDULO PRÉSTAMOS ══ */
-  #prestamos-root .adm-card{padding:10px!important}
-  #prestamos-root .g2,#prestamos-root .g3{grid-template-columns:1fr!important}
-  #prestamos-root .adm-table{min-width:440px}
+  /* ══ MÓDULO PRÉSTAMOS Y DEUDAS ══ */
+  #prestamos-root .adm-card, #deudas-root .adm-card{padding:10px!important}
+  #prestamos-root .g2,#prestamos-root .g3,#deudas-root .g2,#deudas-root .g3{grid-template-columns:1fr!important}
+  #prestamos-root .adm-table,#deudas-root .adm-table{min-width:440px}
+  .deudas-cols{flex-direction:column!important}
+  .deudas-cols > div{flex:1 1 100%!important}
 
   /* ══ MÓDULO BACKUP ══ */
   #mod-backup .adm-card{padding:10px!important}
@@ -5171,7 +5173,7 @@ function renderDeudas(){
     +'<button class="btn btn-p" style="padding:6px 14px;font-size:13px" onclick="showNuevaDeuda()">+ Nueva</button>'
     +'</div></div>';
   // Metrics cards
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">'
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">'
     +'<div style="background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:10px;padding:12px">'
     +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📤 Por pagar (debemos)</div>'
     +'<div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(totalPagar)+' USD</div>'
