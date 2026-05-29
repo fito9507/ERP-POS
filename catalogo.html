@@ -718,14 +718,13 @@ function render(){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
     return true;
-  }).sort(function(a,b) { return a.n.localeCompare(b.n, undefined, {numeric: true, sensitivity: 'base'}); });
-  
+  });
   // Also filter transit by search/cat
   var filteredTransit = transitProds.filter(function(p){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
     return true;
-  }).sort(function(a,b) { return a.n.localeCompare(b.n, undefined, {numeric: true, sensitivity: 'base'}); });
+  });
 
   var transitBanner = '';
   var transitCards = '';
