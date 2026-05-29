@@ -5362,7 +5362,7 @@ function _renderDeudaCard(p){
   var necesitaGuardarId = false;
   if(pagos.length){
     pagos.forEach(function(pg, i){ if(!pg.id){ pg.id='pg-'+Date.now()+'-'+i; necesitaGuardarId=true; } });
-    if(necesitaGuardarId && typeof savePrestamos==='function') savePrestamos();
+    if(necesitaGuardarId && typeof savePrestamos==='function') savePrestamos(p);
     h+='<details open><summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:6px;list-style:none;display:flex;justify-content:space-between">'
       +'<span>📋 Historial de pagos ('+pagos.length+')</span>'
       +'<span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary)">clic para plegar</span>'
