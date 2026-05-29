@@ -2158,6 +2158,7 @@ async function supaInit() {
       showToast('✓ ' + VENTAS.length + ' ventas · ' + PRODS.length + ' productos');
     await syncLoadUsers();
     await syncLoadClientes();
+    await syncLoadPrestamos();
     await syncLoadMovsIG();
     } else {
       _supaOnline = false; updOnlineDot();
@@ -2564,6 +2565,95 @@ async function syncPushAllClientes(){
     }
   }
   showToast('✓ Clientes sincronizados con Supabase');
+}
+
+// ── PRESTAMOS / DEUDAS SYNC ────────────────────────────────────
+async function syncLoadPrestamos() {
+  if (!_supaOnline || typeof supaReq !== 'function') return false;
+  try {
+    var r = await supaReq('GET', 'prestamos?select=*&order=fecha_inicio.desc');
+    if (!r.ok) return false;
+    var data = await r.json();
+    if (!Array.isArray(data)) return false;
+
+    // Migración automática: si la nube está vacía pero hay datos locales, los subimos
+    if (data.length === 0 && PRESTAMOS && PRESTAMOS.length > 0) {
+      console.log('[PRESTAMOS] Migrando datos locales a Supabase:', PRESTAMOS.length);
+      for (var _pm of PRESTAMOS) {
+        await supaReq('POST', 'prestamos?on_conflict=id', _prestamoToRow(_pm));
+      }
+      // Releer desde la nube
+      r = await supaReq('GET', 'prestamos?select=*&order=fecha_inicio.desc');
+      if (!r.ok) return false;
+      data = await r.json();
+      if (!Array.isArray(data)) return false;
+    }
+
+    PRESTAMOS = data.map(function(row) { return _rowToPrestamo(row); });
+    try { localStorage.setItem('erp_prestamos', JSON.stringify(PRESTAMOS)); } catch(e) {}
+    if (typeof renderPrestamos === 'function') try { renderPrestamos(); } catch(e) {}
+    console.log('[PRESTAMOS] Cargados desde Supabase:', PRESTAMOS.length);
+    return true;
+  } catch(e) { console.warn('syncLoadPrestamos:', e); return false; }
+}
+
+function _prestamoToRow(p) {
+  return {
+    id: p.id,
+    nombre: p.nombre,
+    direccion: p.direccion || '',
+    capital: p.capital != null ? p.capital : 0,
+    interes: p.interes != null ? p.interes : 0,
+    tipo_interes: p.tipoInteres || p.tipo || 'simple',
+    frecuencia: p.frecuencia || '',
+    moneda: p.moneda || 'USD',
+    fecha_inicio: p.fechaInicio || '',
+    vencimiento: p.vencimiento || '',
+    notas: p.notas || '',
+    cta: p.cta || '',
+    cuota_fija: p.cuotaFija != null ? p.cuotaFija : 0,
+    pagos: JSON.stringify(p.pagos || []),
+    cuotas: JSON.stringify(p.cuotas || []),
+    audit_log: JSON.stringify(p.auditLog || [])
+  };
+}
+
+function _rowToPrestamo(row) {
+  var _j = function(v) { try { return typeof v === 'string' ? JSON.parse(v) : (v || []); } catch(e) { return []; } };
+  return {
+    id: row.id,
+    nombre: row.nombre,
+    direccion: row.direccion || '',
+    capital: row.capital != null ? parseFloat(row.capital) : 0,
+    interes: row.interes != null ? parseFloat(row.interes) : 0,
+    tipoInteres: row.tipo_interes || 'simple',
+    tipo: row.tipo_interes || 'simple',
+    frecuencia: row.frecuencia || '',
+    moneda: row.moneda || 'USD',
+    fechaInicio: row.fecha_inicio || '',
+    vencimiento: row.vencimiento || '',
+    notas: row.notas || '',
+    cta: row.cta || '',
+    cuotaFija: row.cuota_fija != null ? parseFloat(row.cuota_fija) : 0,
+    pagos: _j(row.pagos),
+    cuotas: _j(row.cuotas),
+    auditLog: _j(row.audit_log)
+  };
+}
+
+async function _syncSavePrestamo(p) {
+  if (typeof supaReq !== 'function' || !_supaOnline) return;
+  try {
+    var r = await supaReq('POST', 'prestamos?on_conflict=id', _prestamoToRow(p));
+    if (!r.ok) console.warn('[PRESTAMOS] Error saving to Supabase:', r.status);
+  } catch(e) { console.warn('_syncSavePrestamo:', e); }
+}
+
+async function _syncDeletePrestamo(id) {
+  if (typeof supaReq !== 'function' || !_supaOnline) return;
+  try {
+    await supaReq('DELETE', 'prestamos?id=eq.' + encodeURIComponent(id));
+  } catch(e) { console.warn('_syncDeletePrestamo:', e); }
 }
 
 
@@ -5736,7 +5826,7 @@ function registrarPagoDeuda(prestamoId){
 
   if(tipoPago!=='interes'&&tipoPago!=='incremento') _autoMarcarCuotas(p);
   _addAuditLog(p, 'Registro de pago: ' + fN(monto,2) + ' ' + mon + (tipoPago!=='pago'?' ('+tipoPago+')':''));
-  savePrestamos();
+  savePrestamos(p);
   document.getElementById('pago-deuda-modal').style.display='none';
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
@@ -5831,7 +5921,7 @@ function guardarEditarPago(){
   pg.monto=nuevoMonto;pg.mon=nuevoMon;pg.fecha=nuevaFecha;pg.caja=nuevaCaja;pg.nota=nuevaNota;
   _autoMarcarCuotas(p);
   _addAuditLog(p, 'Edición de pago: ' + fN(pg.monto,2) + ' ' + pg.mon);
-  savePrestamos();
+  savePrestamos(p);
   document.getElementById('edit-pago-modal').style.display='none';
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
@@ -5892,7 +5982,7 @@ function eliminarPago(prestamoId,pagoId){
 
   _autoMarcarCuotas(p);
   _addAuditLog(p, 'Eliminación de pago: ' + fN(pg.monto,2) + ' ' + pg.mon);
-  savePrestamos();
+  savePrestamos(p);
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
   renderDeudas();
@@ -6143,7 +6233,7 @@ function liquidarDeuda_p(id){
 
   _autoMarcarCuotas(p);
   _addAuditLog(p, 'Liquidación total (Marcada)');
-  savePrestamos();
+  savePrestamos(p);
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
   renderDeudas();
@@ -9344,9 +9434,12 @@ function _addAuditLog(p, action) {
   });
 }
 
-function savePrestamos() {
+function savePrestamos(p, deletedId) {
   try { localStorage.setItem('erp_prestamos', JSON.stringify(PRESTAMOS)); } catch(e) {}
   if (typeof renderPrestamos === 'function') renderPrestamos();
+  // Sincronizar con Supabase
+  if (p && typeof _syncSavePrestamo === 'function') _syncSavePrestamo(p);
+  if (deletedId && typeof _syncDeletePrestamo === 'function') _syncDeletePrestamo(deletedId);
 }
 
 // Generate payment schedule
@@ -9476,7 +9569,7 @@ function crearPrestamo(data) {
   }
 
   _addAuditLog(p, 'Registro de deuda creado: ' + fN(p.capital,2) + ' ' + p.moneda);
-  savePrestamos();
+  savePrestamos(p);
   showToast('Creado: ' + p.nombre);
 }
 
@@ -9543,7 +9636,7 @@ function admGuardarDeuda(id){
   p.cta=document.getElementById('ed-cta')?.value||'';
   p.notas=document.getElementById('ed-notas')?.value||'';
   _addAuditLog(p, 'Edición de detalles de la deuda');
-  savePrestamos();
+  savePrestamos(p);
   document.getElementById('edit-deuda-modal').style.display='none';
   renderDeudas();
   showToast('Deuda actualizada ✓');
@@ -9578,7 +9671,7 @@ function pagarCuota(prestamoId, cuotaNum) {
     if (typeof renderLibro === 'function') try { renderLibro(); } catch(e) {}
     if (typeof renderCajas === 'function') try { renderCajas(); } catch(e) {}
   }
-  savePrestamos();
+  savePrestamos(p);
   if (typeof renderDeudas === 'function') renderDeudas();
 }
 
@@ -9765,7 +9858,7 @@ function eliminarPrestamo(id) {
   }
 
   PRESTAMOS = PRESTAMOS.filter(function(x){ return x.id !== id; });
-  savePrestamos();
+  savePrestamos(null, id);
   if(typeof renderDeudas === 'function') renderDeudas();
   else if(typeof renderPrestamos === 'function') renderPrestamos();
 }
