@@ -2148,13 +2148,21 @@ async function supaInit() {
     }
   }catch(e){}
   try{
-    var rTasas=await supaReq('GET','tasas?select=moneda,valor&moneda=in.(USDEUR,WA_PLACETAS)');
+    var rTasas=await supaReq('GET','tasas?select=moneda,valor&moneda=in.(USDEUR,WA_PLACETAS,DTO_PREVENTA)');
     if(rTasas.ok){
       var dTasas=await rTasas.json();
       (dTasas||[]).forEach(function(t){
         if(t.moneda==='USDEUR') RATES_EURUSD=parseFloat(t.valor);
         if(t.moneda==='WA_PLACETAS') RATES.WA_PLACETAS=String(Math.round(parseFloat(t.valor)*1000000));
+        if(t.moneda==='DTO_PREVENTA') RATES.DTO_PREVENTA=parseFloat(t.valor)||0;
       });
+      // Persist to localStorage so admin panel loads correctly even before network
+      try{
+        var _rc=JSON.parse(localStorage.getItem('erp_rates')||'{}');
+        _rc.DTO_PREVENTA=RATES.DTO_PREVENTA;
+        _rc.WA_PLACETAS=RATES.WA_PLACETAS;
+        localStorage.setItem('erp_rates',JSON.stringify(_rc));
+      }catch(e){}
     }
   }catch(e){}
     if (okV || okP) {
@@ -10398,6 +10406,8 @@ function _loadRatesCache() {
       }
       if (cached.CUP) RATES.CUP = cached.CUP;
       if (cached.CUPT) RATES.CUPT = cached.CUPT;
+      if (cached.DTO_PREVENTA != null) RATES.DTO_PREVENTA = cached.DTO_PREVENTA;
+      if (cached.WA_PLACETAS) RATES.WA_PLACETAS = String(cached.WA_PLACETAS);
       // Also populate market rates cache if not set
       try {
         if (!localStorage.getItem('erp_rates_mkt') && cached.CUP) {
@@ -10528,7 +10538,7 @@ async function fetchElToqueAndSave(){
     RATES.CUPT = (cupt || cup) + (adj.CUPT || 0);
     
     // Guardar tasas localmente para que el próximo inicio no muestre valores desactualizados
-    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:RATES.DTO_PREVENTA,ts:Date.now()})); } catch(e) {}
+    try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:RATES.DTO_PREVENTA,WA_PLACETAS:RATES.WA_PLACETAS,ts:Date.now()})); } catch(e) {}
 
     showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
     renderAdminTasas();
