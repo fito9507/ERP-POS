@@ -8975,6 +8975,54 @@ async function exportBackupSQL(returnSQL) {
       }
     } catch(e){}
 
+    // 11. Préstamos
+    sql += '\n-- ── PRESTAMOS ───────────────────────────\n';
+    try {
+      var prs = await supaReq('GET','prestamos?select=*&order=fecha_inicio.desc');
+      if(prs.ok){
+        var prd = await prs.json();
+        prd.forEach(function(r){
+          sql += "INSERT INTO prestamos (id,nombre,tipo,capital,tasa,plazo,moneda,fecha_inicio,cta,notas,pagos,cuotas,direccion,interes,tipo_interes,frecuencia,vencimiento,cuota_fija)"
+            + " VALUES ("+esc(r.id)+","+esc(r.nombre)+","+esc(r.tipo)+","+(r.capital||0)+","+(r.tasa||0)+","+(r.plazo||0)+","+esc(r.moneda||'USD')+","+esc(r.fecha_inicio)+","+esc(r.cta)+","+esc(r.notas)
+            + ",'"+JSON.stringify(r.pagos||[]).replace(/'/g,"''")+  "'::jsonb"
+            + ",'"+JSON.stringify(r.cuotas||[]).replace(/'/g,"''")+  "'::jsonb"
+            + ","+esc(r.direccion)+","+(r.interes||0)+","+esc(r.tipo_interes||'simple')+","+esc(r.frecuencia)+","+esc(r.vencimiento)+","+(r.cuota_fija||0)
+            + ") ON CONFLICT (id) DO UPDATE SET nombre=EXCLUDED.nombre,tipo=EXCLUDED.tipo,capital=EXCLUDED.capital,tasa=EXCLUDED.tasa,plazo=EXCLUDED.plazo,moneda=EXCLUDED.moneda,fecha_inicio=EXCLUDED.fecha_inicio,cta=EXCLUDED.cta,notas=EXCLUDED.notas,pagos=EXCLUDED.pagos,cuotas=EXCLUDED.cuotas,direccion=EXCLUDED.direccion,interes=EXCLUDED.interes,tipo_interes=EXCLUDED.tipo_interes,frecuencia=EXCLUDED.frecuencia,vencimiento=EXCLUDED.vencimiento,cuota_fija=EXCLUDED.cuota_fija;\n";
+        });
+      }
+    } catch(e){ sql += '-- (error al leer prestamos: '+e.message+')\n'; }
+
+    // 12. Reglas de comisión
+    sql += '\n-- ── COMISIONES ──────────────────────────\n';
+    try {
+      var com = await supaReq('GET','comisiones?select=*');
+      if(com.ok){
+        var comd = await com.json();
+        comd.forEach(function(r){
+          sql += "INSERT INTO comisiones (vendedor,tipo,pct,activa) VALUES ("+esc(r.vendedor)+","+esc(r.tipo)+","+(r.pct||0)+","+(r.activa!==false)+") ON CONFLICT (vendedor,tipo) DO UPDATE SET pct=EXCLUDED.pct,activa=EXCLUDED.activa;\n";
+        });
+      }
+    } catch(e){ sql += '-- (sin tabla comisiones o error: '+e.message+')\n'; }
+
+    // 13. Pedidos catálogo
+    sql += '\n-- ── PEDIDOS ─────────────────────────────\n';
+    try {
+      var ped = await supaReq('GET','pedidos?select=*&order=created_at.desc&limit=5000');
+      if(ped.ok){
+        var pedd = await ped.json();
+        pedd.forEach(function(r){
+          sql += "INSERT INTO pedidos (id,nombre,telefono,almacen,productos_json,total_usd,moneda,notas,estado,created_at)"
+            + " VALUES ("+esc(r.id)+","+esc(r.nombre)+","+esc(r.telefono)+","+esc(r.almacen)
+            + ",'"+JSON.stringify(r.productos_json||[]).replace(/'/g,"''")+  "'::jsonb"
+            + ","+(r.total_usd||0)+","+esc(r.moneda)+","+esc(r.notas)+","+esc(r.estado||'pendiente')+","+esc(r.created_at)
+            + ") ON CONFLICT (id) DO NOTHING;\n";
+        });
+      }
+    } catch(e){ sql += '-- (sin tabla pedidos o error: '+e.message+')\n'; }
+
+    // 14. Número de pedido configurable (tasas tabla, clave PEDIDO_NUM_*)
+    // Ya cubierto en sección TASAS arriba
+
     if(returnSQL) return sql;
     // Download
     var blob = new Blob([sql], {type:'text/sql'});
@@ -8991,14 +9039,18 @@ async function exportBackupSQL(returnSQL) {
 
 function exportJSON() {
   var data = {
-    version: 1,
+    version: 2,
     fecha: new Date().toISOString(),
     USERS: USERS,
     PRODS: PRODS,
     VENTAS: typeof VENTAS !== 'undefined' ? VENTAS : [],
     CLIENTES: typeof CLIENTES !== 'undefined' ? CLIENTES : [],
     MOVS: typeof MOVS !== 'undefined' ? MOVS : [],
+    PRESTAMOS: typeof _prestamosData !== 'undefined' ? _prestamosData : [],
+    CAJAS: typeof _cajasData !== 'undefined' ? _cajasData : [],
+    CAJAS_MOVS: typeof _cajasMovs !== 'undefined' ? _cajasMovs : [],
     RATES: RATES,
+    RATES_ALM: typeof RATES_ALM !== 'undefined' ? RATES_ALM : {},
   };
   var json = JSON.stringify(data, null, 2);
   var blob = new Blob([json], {type: 'application/json'});
