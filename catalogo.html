@@ -599,7 +599,7 @@ async function init(){
           if(t.moneda==='CUP')    RATES.CUP      = RATES.CUP||parseFloat(t.valor)||370;
           if(t.moneda==='EUR')    { var _cupEUR=parseFloat(t.valor); if(_cupEUR>10) RATES_EURUSD=parseFloat((_cupEUR/RATES.CUP).toFixed(4)); }
           if(t.moneda==='DTO_PREVENTA') RATES.DTO_PREVENTA = parseFloat(t.valor)||0;
-          if(t.moneda==='WA_PLACETAS') WA.Placetas = String(t.valor).trim()||'5353425247';
+          if(t.moneda==='WA_PLACETAS') { var pn = Math.round(parseFloat(t.valor)*1000000); if(pn>0) WA.Placetas = String(pn); }
         });
         // Load per-almacen adjustments
         try{

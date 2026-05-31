@@ -2153,7 +2153,7 @@ async function supaInit() {
       var dTasas=await rTasas.json();
       (dTasas||[]).forEach(function(t){
         if(t.moneda==='USDEUR') RATES_EURUSD=parseFloat(t.valor);
-        if(t.moneda==='WA_PLACETAS') RATES.WA_PLACETAS=t.valor;
+        if(t.moneda==='WA_PLACETAS') RATES.WA_PLACETAS=String(Math.round(parseFloat(t.valor)*1000000));
       });
     }
   }catch(e){}
@@ -8011,7 +8011,7 @@ function admGuardarTasas() {
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'CUPT',valor:RATES.CUPT,tasa_mkt:mCUPT,ajuste:aCUPT}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:parseFloat((mEUR/mUSD).toFixed(4)),ajuste:parseFloat((RATES_EURUSD-(mEUR/mUSD)).toFixed(4))}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'DTO_PREVENTA',valor:dtoPrev,tasa_mkt:0,ajuste:0}).catch(function(e){});
-    if (waPlac) supaReq('POST','tasas?on_conflict=moneda',{moneda:'WA_PLACETAS',valor:waPlac,tasa_mkt:0,ajuste:0}).catch(function(e){});
+    if (waPlac) supaReq('POST','tasas?on_conflict=moneda',{moneda:'WA_PLACETAS',valor:(parseFloat(waPlac)/1000000),tasa_mkt:0,ajuste:0}).catch(function(e){});
   }
 
   showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
