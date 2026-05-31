@@ -8859,26 +8859,52 @@ async function exportBackupSQL(returnSQL) {
   var sql = '-- BACKUP Marin Metal PDL\n-- Fecha: ' + new Date().toISOString() + '\n\n';
 
   try {
-    // 1. Productos
+    var esc = function(v){ return (v!=null && v!==undefined && v!=='') ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
+    var escN = function(v){ return (v!=null && v!==undefined) ? parseFloat(v) : 'NULL'; };
+    var escB = function(v){ return v === true ? 'true' : v === false ? 'false' : 'false'; };
+    var escJ = function(v){ return v!=null ? "'"+JSON.stringify(v).replace(/'/g,"''")+"'::jsonb" : "'[]'::jsonb"; };
+
+    // 1. Productos — TODOS los campos
     sql += '-- ── PRODUCTOS ──────────────────────────\n';
     var prods = await supaReq('GET','productos?select=*&order=nombre.asc');
     if(prods.ok){
       var pd = await prods.json();
       pd.forEach(function(r){
-        var esc = function(v){ return v ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
-        sql += "INSERT INTO productos (nombre,categoria,precio_min,precio_maj,precio_ddp,stk_min,activo,en_stock,en_web,en_transito,imagen_url) VALUES ("
-          + esc(r.nombre)+','+esc(r.categoria)+','
-          + (r.precio_min!=null?r.precio_min:'NULL')+','
-          + (r.precio_maj!=null?r.precio_maj:'NULL')+','
-          + (r.precio_ddp!=null?r.precio_ddp:'NULL')+','
-          + (r.stk_min||10)+','
-          + r.activo+','+r.en_stock+','+(r.en_web!==false)+','+(r.en_transito||false)+','
-          + esc(r.imagen_url)
-          + ') ON CONFLICT (nombre) DO UPDATE SET categoria=EXCLUDED.categoria,precio_min=EXCLUDED.precio_min,precio_maj=EXCLUDED.precio_maj,precio_ddp=EXCLUDED.precio_ddp,stk_min=EXCLUDED.stk_min,activo=EXCLUDED.activo,en_stock=EXCLUDED.en_stock,en_web=EXCLUDED.en_web,en_transito=EXCLUDED.en_transito,imagen_url=EXCLUDED.imagen_url;\n';
+        sql += "INSERT INTO productos ("
+          + "nombre,categoria,precio_min,precio_maj,precio_ddp,stk_min,activo,en_stock,en_web,"
+          + "imagen_url,en_transito,precio_min_placetas,precio_maj_placetas,"
+          + "en_transito_habana,en_transito_placetas,en_transito_xportprise,"
+          + "precio_preventa_min,precio_preventa_maj,moq,precios_escala,"
+          + "en_oferta,badge_texto,precio_oferta,precio_oferta_habana,precio_oferta_placetas"
+          + ") VALUES ("
+          + esc(r.nombre)+","+esc(r.categoria)+","
+          + escN(r.precio_min)+","+escN(r.precio_maj)+","+escN(r.precio_ddp)+","
+          + (r.stk_min||10)+","
+          + escB(r.activo)+","+escB(r.en_stock)+","+escB(r.en_web)+","
+          + esc(r.imagen_url)+","
+          + escB(r.en_transito)+","
+          + escN(r.precio_min_placetas)+","+escN(r.precio_maj_placetas)+","
+          + escB(r.en_transito_habana)+","+escB(r.en_transito_placetas)+","+escB(r.en_transito_xportprise)+","
+          + escN(r.precio_preventa_min)+","+escN(r.precio_preventa_maj)+","
+          + (r.moq||1)+","
+          + escJ(r.precios_escala)+","
+          + escB(r.en_oferta)+","+esc(r.badge_texto)+","
+          + escN(r.precio_oferta)+","+escN(r.precio_oferta_habana)+","+escN(r.precio_oferta_placetas)
+          + ") ON CONFLICT (nombre) DO UPDATE SET "
+          + "categoria=EXCLUDED.categoria,precio_min=EXCLUDED.precio_min,precio_maj=EXCLUDED.precio_maj,"
+          + "precio_ddp=EXCLUDED.precio_ddp,stk_min=EXCLUDED.stk_min,activo=EXCLUDED.activo,"
+          + "en_stock=EXCLUDED.en_stock,en_web=EXCLUDED.en_web,imagen_url=EXCLUDED.imagen_url,"
+          + "en_transito=EXCLUDED.en_transito,precio_min_placetas=EXCLUDED.precio_min_placetas,"
+          + "precio_maj_placetas=EXCLUDED.precio_maj_placetas,en_transito_habana=EXCLUDED.en_transito_habana,"
+          + "en_transito_placetas=EXCLUDED.en_transito_placetas,en_transito_xportprise=EXCLUDED.en_transito_xportprise,"
+          + "precio_preventa_min=EXCLUDED.precio_preventa_min,precio_preventa_maj=EXCLUDED.precio_preventa_maj,"
+          + "moq=EXCLUDED.moq,precios_escala=EXCLUDED.precios_escala,en_oferta=EXCLUDED.en_oferta,"
+          + "badge_texto=EXCLUDED.badge_texto,precio_oferta=EXCLUDED.precio_oferta,"
+          + "precio_oferta_habana=EXCLUDED.precio_oferta_habana,precio_oferta_placetas=EXCLUDED.precio_oferta_placetas;\n";
       });
     }
 
-    // 2. Stock
+    // 2. Stock por almacén
     sql += '\n-- ── STOCK ──────────────────────────────\n';
     var stk = await supaReq('GET','stock_almacen?select=producto_id,almacen,cantidad,productos(nombre)');
     if(stk.ok){
@@ -8914,7 +8940,6 @@ async function exportBackupSQL(returnSQL) {
     var usrs = await supaReq('GET','usuarios?select=*');
     if(usrs.ok){
       var ud = await usrs.json();
-      var esc = function(v){ return v ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
       ud.forEach(function(r){
         sql += "INSERT INTO usuarios (nombre,pin,rol,almacen,color,tc,activo,puede_vender,a_comision) VALUES ("+esc(r.nombre)+","+esc(r.pin)+","+esc(r.rol)+","+esc(r.almacen)+","+esc(r.color)+","+esc(r.tc)+","+(r.activo!==false)+","+(r.puede_vender!==false)+","+(r.a_comision!==false)+") ON CONFLICT (nombre) DO UPDATE SET pin=EXCLUDED.pin,rol=EXCLUDED.rol,almacen=EXCLUDED.almacen,color=EXCLUDED.color,tc=EXCLUDED.tc,activo=EXCLUDED.activo,puede_vender=EXCLUDED.puede_vender,a_comision=EXCLUDED.a_comision;\n";
       });
@@ -8923,7 +8948,6 @@ async function exportBackupSQL(returnSQL) {
     // 6. Ventas (TODAS)
     sql += '\n-- ── VENTAS ──────────────────────────────\n';
     var vts = await supaReq('GET','ventas?select=*&order=fecha.desc&limit=10000');
-    var esc = function(v){ return v!=null ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
     if(vts.ok){
       var vd = await vts.json();
       vd.forEach(function(r){
