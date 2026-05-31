@@ -1746,15 +1746,16 @@ async function enviarCierreDiario(fecha, isAuto) {
     var msg='\uD83D\uDCCA <b>Cierre \u2014 '+alm+'</b>\n'
       +'\uD83D\uDDD3 '+fecha+'\n\n'
       +(numVentas===0
-        ? '\uD83D\uDEAB Sin ventas registradas hoy'
+        ? '\uD83D\uDEAB Sin ventas registradas hoy\n'
         : '\uD83D\uDED2 <b>'+numVentas+' venta'+(numVentas!==1?'s':'')+'</b>\n\n'
         +(cobrosLines?'<b>Cobrado:</b>\n'+cobrosLines+'\n':'')
         +(vueltosLines?'\n<b>Vueltos:</b>\n'+vueltosLines+'\n':'')
         +(netoLines?'\n<b>\uD83D\uDCB5 Neto por moneda:</b>\n'+netoLines+'\n':'')
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
-        +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines:'')
-        +(igLines?'\n\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines:'')
-        +(cajasLines?'\n\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:''))
+        +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines+'\n':'')
+      )
+      +(igLines?'\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines+'\n':'')
+      +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'');
     tgSend(msg, alm, 'venta');
   }
   if(isAuto){ try{ await enviarBackupTelegram(); }catch(e){} }
@@ -2147,8 +2148,14 @@ async function supaInit() {
     }
   }catch(e){}
   try{
-    var reu=await supaReq('GET','tasas?select=valor&moneda=eq.USDEUR');
-    if(reu.ok){var reud=await reu.json();if(reud&&reud[0])RATES_EURUSD=parseFloat(reud[0].valor);}
+    var rTasas=await supaReq('GET','tasas?select=moneda,valor&moneda=in.(USDEUR,WA_PLACETAS)');
+    if(rTasas.ok){
+      var dTasas=await rTasas.json();
+      (dTasas||[]).forEach(function(t){
+        if(t.moneda==='USDEUR') RATES_EURUSD=parseFloat(t.valor);
+        if(t.moneda==='WA_PLACETAS') RATES.WA_PLACETAS=t.valor;
+      });
+    }
   }catch(e){}
     if (okV || okP) {
       _supaOnline = true; updOnlineDot();
@@ -7991,8 +7998,11 @@ function admGuardarTasas() {
 
   var dtoPrev = parseFloat(document.getElementById('dto-preventa')?.value) || 0;
   RATES.DTO_PREVENTA = dtoPrev;
+  
+  var waPlac = document.getElementById('wa-placetas')?.value;
+  if (waPlac) RATES.WA_PLACETAS = waPlac;
 
-  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:dtoPrev,ts:Date.now()})); } catch(e) {}
+  try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:dtoPrev,WA_PLACETAS:RATES.WA_PLACETAS,ts:Date.now()})); } catch(e) {}
 
   // Save to Supabase
   if (_supaOnline) {
@@ -8001,6 +8011,7 @@ function admGuardarTasas() {
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'CUPT',valor:RATES.CUPT,tasa_mkt:mCUPT,ajuste:aCUPT}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'USDEUR',valor:RATES_EURUSD,tasa_mkt:parseFloat((mEUR/mUSD).toFixed(4)),ajuste:parseFloat((RATES_EURUSD-(mEUR/mUSD)).toFixed(4))}).catch(function(e){});
     supaReq('POST','tasas?on_conflict=moneda',{moneda:'DTO_PREVENTA',valor:dtoPrev,tasa_mkt:0,ajuste:0}).catch(function(e){});
+    if (waPlac) supaReq('POST','tasas?on_conflict=moneda',{moneda:'WA_PLACETAS',valor:waPlac,tasa_mkt:0,ajuste:0}).catch(function(e){});
   }
 
   showToast('✓ Tasas aplicadas — USD ' + fN(finalUSD,0) + ' · EUR ' + fN(finalEUR,0) + ' · MLC ' + fN(finalCUPT,0) + ' CUP');
@@ -8107,6 +8118,12 @@ function renderAdminTasas() {
     + '<div style="display:flex;align-items:center;gap:16px;">'
     + '<input type="number" id="dto-preventa" value="'+(RATES.DTO_PREVENTA||0)+'" style="width:100px;text-align:center;font-size:18px;font-weight:600;height:40px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary)">'
     + '<span style="font-size:14px;color:var(--color-text-secondary);font-weight:600">% descuento</span>'
+    + '</div>'
+    + '</div>'
+    + '<div class="card" style="margin-top:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:12px">WhatsApp Pedidos Placetas <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(Catálogo)</span></div>'
+    + '<div style="display:flex;align-items:center;gap:16px;">'
+    + '<input type="number" id="wa-placetas" value="'+(RATES.WA_PLACETAS||5353425247)+'" style="width:160px;text-align:center;font-size:18px;font-weight:600;height:40px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary)">'
     + '</div>'
     + '</div>'
     + '<h3 style="margin:16px 0 10px">Ajustes por almacén</h3>'
