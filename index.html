@@ -3758,7 +3758,7 @@ function _revertirVenta(v){
     var parts=(v.prods||'').split(',');
     parts.forEach(function(p){
       var m=p.trim().match(/^(\d+)×\s*(.+)/);
-      if(m){lineas.push({q:parseInt(m[1]),n:m[2].trim()});}
+      if(m){lineas.push({q:parseInt(m[1]),n:m[2].split(' @ $')[0].trim()});}
     });
     lineas.forEach(function(l){
       var prod=PRODS.find(function(p){return p.n===l.n;});
