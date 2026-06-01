@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#1a1c23">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
-<title>Antigravity ERP</title>
+<title>Marin Metal ERP/POS</title>
 <style>
 :root{
   --color-background-primary:#1a1a1a;--color-background-secondary:#242424;
@@ -729,8 +729,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <div id="sidebar">
   <div class="sb-logo">
-    <div class="sb-mark">C</div>
-    <div style="flex:1;min-width:0"><div class="sb-title">Containers</div><div class="sb-ver">ERP v2</div></div>
+    <div class="sb-mark">M</div>
+    <div style="flex:1;min-width:0"><div class="sb-title">Marin Metal</div><div class="sb-ver">ERP/POS</div></div>
     <div id="sb-collapse-btn" onclick="toggleSidebar()" title="Colapsar/Expandir">&#xAB;</div>
   </div>
   <nav style="flex:1;overflow-y:auto;padding:6px 0" id="sb-nav">
@@ -8856,7 +8856,7 @@ async function importarBackupSQL(input) {
 async function exportBackupSQL(returnSQL) {
   if(!_supaOnline){ showToast('⚠ Necesitas conexión para generar el backup SQL'); return; }
   showToast('⏳ Generando backup SQL...');
-  var sql = '-- BACKUP Marin Metal PDL\n-- Fecha: ' + new Date().toISOString() + '\n\n';
+  var sql = '-- BACKUP Marin Metal ERP/POS\n-- Fecha: ' + new Date().toISOString() + '\n\n';
 
   try {
     var esc = function(v){ return (v!=null && v!==undefined && v!=='') ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
