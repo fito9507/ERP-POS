@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Marin Metal PDL — Catálogo</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -709,7 +710,7 @@ function render(){
   // Transit products for this almacen
   var transitProds = allProds.filter(function(p){ return p.enWeb!==false && p.enTransito && p.enTransito[ALM]; });
   // Normal products (exclude transit-only, apply search/cat filters)
-  var q = (document.getElementById('search-inp')||{}).value||'';
+  var q = (document.getElementById('search')||{}).value||'';
   var cat = document.getElementById('cat-sel').value;
   var normalProds = allProds.filter(function(p){
     if(p.enTransito && p.enTransito[ALM]) return false; // handled in transit section
