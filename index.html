@@ -2843,7 +2843,7 @@ function getPorEscala(p, q){
     return parseFloat(p.escala[0].precio)||maj||min;
   }
   if(S.tipo==='Preventa'){
-    if (p.precio_preventa_min != null) return parseFloat(p.precio_preventa_min);
+    if (p.preventa_min != null) return parseFloat(p.preventa_min);
     if (RATES.DTO_PREVENTA > 0) return Number((min * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
     return min||maj;
   }
