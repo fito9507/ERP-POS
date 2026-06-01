@@ -3279,11 +3279,11 @@ function confirmar(){
   var _ticket=genTicket(S.alm);
   var venta={
     id:venNextId++,fecha:today(),hora:new Date().toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}),vend:S.user,alm:S.alm,cli:S.cli||'Walk-in',
-    tipo:S.tipo,mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
+    tipo:(S.tipo==='Preventa'?'Mayorista':S.tipo),mon:S.cartMon,prods:prods,totalUSD:totalUSD,ticket:_ticket,
     comPct:estCom==='No aplica'?0:comPct,
     comUSD:estCom==='No aplica'?0:comUSD,
     comDetalle:estCom==='No aplica'?{}:comDetalle,
-    estCom:estCom,nota:(document.getElementById('venta-nota')?.value||''),
+    estCom:estCom,nota:(S.tipo==='Preventa'?'[Pre-venta] ':'')+(document.getElementById('venta-nota')?.value||''),
     pagos:S.pagos.map(function(p){return {m:p.m,mon:p.mon,caja:p.caja||(p.mon+' '+S.alm)};}),
     vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};})  
   };
