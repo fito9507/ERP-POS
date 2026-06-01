@@ -820,6 +820,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <div class="toggle-group">
           <button class="tg-btn act" id="tb-min" onclick="selTipo('Minorista',this)">Minorista</button>
           <button class="tg-btn" id="tb-may" onclick="selTipo('Mayorista',this)">Mayorista</button>
+          <button class="tg-btn" id="tb-pre" onclick="selTipo('Preventa',this)">Pre-venta</button>
         </div>
         <input id="srch" placeholder="Buscar..." oninput="_dRender(renderProds)" style="flex:1;min-width:100px">
       </div>
@@ -2812,7 +2813,7 @@ function goProductos(){
   if(_cliId){var _c=CLIENTES.find(function(c){return c.id===_cliId;});S.cli=_c?_c.nombre:'Walk-in';S.cliId=_cliId;}
   else{S.cli='Walk-in';S.cliId=null;}
   S.cart=[];S.tipo='Minorista';S.cartMon='USD';
-  document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
+  document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');if(document.getElementById('tb-pre'))document.getElementById('tb-pre').classList.remove('act');
   document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
   goStep('pg-prod',2);
 }
@@ -2840,6 +2841,11 @@ function getPorEscala(p, q){
     }
     // No range matched — use first range as fallback
     return parseFloat(p.escala[0].precio)||maj||min;
+  }
+  if(S.tipo==='Preventa'){
+    if (p.precio_preventa_min != null) return parseFloat(p.precio_preventa_min);
+    if (RATES.DTO_PREVENTA > 0) return Number((min * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
+    return min||maj;
   }
   if(S.tipo==='Minorista') return min||maj;
   return maj||min;
@@ -3359,7 +3365,7 @@ function nuevaVenta(){
 }
 function otraVentaMismoAlmacen(){
   S.cart=[];S.pagos=[];S.vueltos=[];S.tipo='Minorista';S.cartMon='USD';
-  document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');
+  document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');if(document.getElementById('tb-pre'))document.getElementById('tb-pre').classList.remove('act');
   document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
   goStep('pg-prod',2);
 }
