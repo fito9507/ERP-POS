@@ -10,3 +10,6 @@ Este sistema se encarga de gestionar ventas, stock, préstamos, deudas y control
 
 ## Notas Rápidas
 Puedes crear nuevas notas en esta carpeta y enlazarlas usando `[[NombreDeLaNota]]`. Obsidian se encargará de crear el gráfico de conocimientos.
+
+
+
