@@ -8856,7 +8856,7 @@ async function importarBackupSQL(input) {
 async function exportBackupSQL(returnSQL) {
   if(!_supaOnline){ showToast('⚠ Necesitas conexión para generar el backup SQL'); return; }
   showToast('⏳ Generando backup SQL...');
-  var sql = '-- BACKUP Marin Metal ERP/POS\n-- Fecha: ' + new Date().toISOString() + '\n\n';
+  var sql = '-- BACKUP Marin Metal PDL\n-- Fecha: ' + new Date().toISOString() + '\n\n';
 
   try {
     var esc = function(v){ return (v!=null && v!==undefined && v!=='') ? "'"+String(v).replace(/'/g,"''")+"'" : 'NULL'; };
@@ -9080,7 +9080,7 @@ function exportJSON() {
   var blob = new Blob([json], {type: 'application/json'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'containers-erp-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'marinmetal-erp-backup-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   showToast('JSON descargado ✓');
 }
@@ -9166,7 +9166,7 @@ function exportExcel() {
 
   // ── Hoja 5: RESUMEN ──
   var resData = [
-    ['Containers ERP — Backup', new Date().toLocaleDateString('es-ES')],
+    ['Marin Metal ERP — Backup', new Date().toLocaleDateString('es-ES')],
     [],
     ['Productos activos', PRODS.filter(function(p){return p.activo!==false;}).length],
     ['Total ventas', (typeof VENTAS!=='undefined'?VENTAS.length:0)],
@@ -9179,7 +9179,7 @@ function exportExcel() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resData), 'Resumen');
 
   var fecha = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, 'containers-erp-' + fecha + '.xlsx');
+  XLSX.writeFile(wb, 'marinmetal-erp-' + fecha + '.xlsx');
   showToast('Excel descargado ✓');
 }
 
