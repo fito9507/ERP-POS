@@ -7482,7 +7482,7 @@ function renderFormProducto() {
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:560px">'
     + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Nombre *</label>'
-    + '<input class="adm-inp" id="ep-n" value="' + (p.n || '') + '" placeholder="Nombre del producto"></div>'
+    + '<input class="adm-inp" id="ep-n" value="' + (p.n || '').replace(/"/g,'&quot;') + '" placeholder="Nombre del producto"></div>'
     + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Categor\u00eda</label>'
     + (function(){var _cats=getCategorias();var o='<option value="">(Sin categoría)</option>'+_cats.map(function(c){return '<option'+(p.cat===c?' selected':'')+' value="'+c+'">'+c+'</option>';}).join('');return '<select class="adm-inp" id="ep-cat">'+o+'</select>';})()+'</div>'
     + '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;grid-column:1/-1">'
