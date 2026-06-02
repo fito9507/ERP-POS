@@ -67,10 +67,6 @@ Deno.serve(async (_req: Request): Promise<Response> => {
       const ventasHoy = ventas ?? [];
       console.log(alm, 'ventas:', ventasHoy.length);
 
-      if (ventasHoy.length === 0) {
-        await tgSend(chatId, `📊 <b>Cierre — ${alm}</b>\n🗓 ${hoy}\n\n🛒 Sin ventas hoy`);
-        continue;
-      }
 
       const cobros: Record<string,number> = {};
       const vueltosMon: Record<string,number> = {};
@@ -177,7 +173,7 @@ Deno.serve(async (_req: Request): Promise<Response> => {
       const parts = [
         `📊 <b>Cierre — ${alm}</b>`,
         `🗓 ${hoy}`,
-        `\n🛒 <b>${ventasHoy.length} venta${ventasHoy.length!==1?'s':''}</b>`,
+        `\n🛒 ${ventasHoy.length===0?'<b>Sin ventas hoy</b>':`<b>${ventasHoy.length} venta${ventasHoy.length!==1?'s':''}</b>`}`,
         cobrosLines?`\n<b>Cobrado:</b>\n${cobrosLines}`:'',
         vueltosLines?`\n<b>Vueltos:</b>\n${vueltosLines}`:'',
         netoLines?`\n<b>💵 Neto por moneda:</b>\n${netoLines}${netoTotal}`:'',
