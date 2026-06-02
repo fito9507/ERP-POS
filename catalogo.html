@@ -1176,7 +1176,7 @@ function sendWA(){
   if(!items.length){ alert('Agrega productos al pedido primero'); return; }
   var lines = items.map(function(i){
     var r = getCartPrice(i);
-    return '• '+i.qty+'× '+i.prod.n+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
+    return '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
   });
   var total = items.reduce(function(a,i){
     return a + getCartPrice(i).price * i.qty;
