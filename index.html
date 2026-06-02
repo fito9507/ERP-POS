@@ -10146,7 +10146,7 @@ function renderStockMovimientos() {
       + '</select></div>'
       + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Producto</label>'
       + '<select class="adm-inp" id="smov-prod">'
-      + PRODS.filter(function(p){return p.activo!==false;}).map(function(p){
+      + PRODS.filter(function(p){return p.activo!==false;}).sort(function(a,b){return a.n.localeCompare(b.n);}).map(function(p){
           return '<option value="'+p.n+'">'+p.n+'</option>';
         }).join('')
       + '</select></div>'
