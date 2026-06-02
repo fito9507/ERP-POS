@@ -1197,7 +1197,7 @@ function sendWA(){
   // Notify Telegram group
   var tgMsg = '\uD83D\uDED2 <b>Pedido cat\u00e1logo — '+ALM+'</b>\n'
     + '\uD83D\uDC64 <b>'+nombre+'</b>'+(tel?' · \uD83D\uDCDE '+tel:'')+'\n\n'
-    + items.map(function(i){var r=getCartPrice(i);return '• '+i.qty+'\u00d7 '+i.prod.n+' \u2192 '+fPrice(r.price*i.qty,CART_MON);}).join('\n')
+    + items.map(function(i){var r=getCartPrice(i);return '• '+i.qty+'\u00d7 '+i.prod.n+' @ '+fPrice(r.price,CART_MON)+' \u2192 '+fPrice(r.price*i.qty,CART_MON);}).join('\n')
     + '\n\n\uD83D\uDCB0 <b>Total: '+fPrice(items.reduce(function(a,i){return a+getCartPrice(i).price*i.qty;},0),CART_MON)+'</b>'
     + (nota?'\n\uD83D\uDCDD '+nota:'');
   tgSend(tgMsg, ALM);
