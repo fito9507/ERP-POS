@@ -10669,7 +10669,7 @@ function renderStock(){
     if(catF&&p.cat!==catF)return false;
     if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
     return true;
-  });
+  }).sort(function(a,b){return a.n.localeCompare(b.n, undefined, {numeric: true});});
   var visAlms=almF?[almF]:alms;
   // Valor del inventario (DDP × stock) — solo admin
   var valorTotal = activos.reduce(function(a,p){return a+(p.ddp||0)*(p.stk||0);},0);
