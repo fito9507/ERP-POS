@@ -10066,6 +10066,7 @@ function registrarMovStock(data) {
   // Save to Supabase
   if (_supaOnline) {
     supaReq('POST','stock_movimientos',{
+      id: mov.id,
       fecha: mov.fecha,
       tipo: mov.tipo,
       producto: mov.producto,
@@ -10077,7 +10078,7 @@ function registrarMovStock(data) {
     }).catch(function(e){console.warn('mov supabase:',e);});
   } else {
     enqueue({method:'POST',path:'stock_movimientos',body:{
-      fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
+      id:mov.id,fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
       almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
       cantidad:mov.cantidad,motivo:mov.motivo||'',usuario:mov.usuario
     }});
