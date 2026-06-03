@@ -845,13 +845,12 @@ function cardHTML(p){
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var pidx = PRODS.indexOf(p);
   var _isRes = (p.badgeTexto === 'RESERVADO' || p.reservado === true);
-  // Override stkLabel for reserved products
-  if(_isRes && !_transit) stkLabel = '<span style="color:#7c3aed;font-weight:600">🔒 Reservado</span>';
+  // Override stkLabel for reserved products (regardless of transit)
+  if(_isRes) stkLabel = '<span style="color:#7c3aed;font-weight:600">🔒 Reservado</span>';
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +(_transit?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
-    +(_isRes&&!_transit?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto&&!_isRes&&!_transit?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':''))
+    +(_isRes?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(_transit?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':(p.oferta&&p.badgeTexto?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':'')))
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
