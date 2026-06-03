@@ -2030,7 +2030,8 @@ async function syncLoadProductos() {
         min_placetas: row.precio_min_placetas!=null ? parseFloat(row.precio_min_placetas) : null,
         maj_placetas: row.precio_maj_placetas!=null ? parseFloat(row.precio_maj_placetas) : null,
         img: row.imagen_url||'', supaId: row.id,
-        oferta: row.en_oferta===true, badgeTexto: row.badge_texto||'',
+        oferta: row.en_oferta===true && row.badge_texto!=='RESERVADO', 
+        badgeTexto: row.badge_texto==='RESERVADO' ? '' : (row.badge_texto||''),
         precioOfertaHabana: row.precio_oferta_habana!=null?parseFloat(row.precio_oferta_habana):null,
         precioOfertaPlacetas: row.precio_oferta_placetas!=null?parseFloat(row.precio_oferta_placetas):null,
         reservado: row.badge_texto==='RESERVADO'
@@ -2077,8 +2078,7 @@ async function syncSaveProducto(p) {
     moq:p.moq||1,
     precio_maj_placetas:p.maj_placetas!=null?p.maj_placetas:null,
     imagen_url:p.img||null,
-    en_oferta:p.oferta===true||(p.reservado===true),
-    badge_texto:p.reservado?'RESERVADO':(p.badgeTexto||null),
+    en_oferta:p.oferta===true, badge_texto:p.reservado?'RESERVADO':(p.badgeTexto||null),
     precio_oferta_habana:p.precioOfertaHabana!=null?p.precioOfertaHabana:null,
     precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null};
 
@@ -7461,7 +7461,7 @@ function renderFormProducto() {
             escala: window.clonedProdData.escala ? JSON.parse(JSON.stringify(window.clonedProdData.escala)) : [],
             ddp: window.clonedProdData.ddp,
             oferta: window.clonedProdData.oferta===true,
-            badgeTexto: window.clonedProdData.badgeTexto||'',
+            badgeTexto: window.clonedProdData.badgeTexto==='RESERVADO' ? '' : (window.clonedProdData.badgeTexto||''),
             precioOfertaHabana: window.clonedProdData.precioOfertaHabana,
             precioOfertaPlacetas: window.clonedProdData.precioOfertaPlacetas,
             min_placetas: window.clonedProdData.min_placetas,
