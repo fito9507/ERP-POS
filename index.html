@@ -1843,11 +1843,9 @@ async function flushQueue() {
     if(_hadPosts&&typeof TG_TOKEN!=='undefined'&&TG_TOKEN){
       toProcess.filter(function(op){return op.method==='POST'&&op.path==='ventas'&&op.body;}).forEach(function(op){
         var v=op.body; if(!v||!v.almacen) return;
-        // productos may be string or array
         var _pr=(function(){
-          if(Array.isArray(v.productos)) return v.productos.map(function(p){return (p.q||1)+'× '+(p.n||p.nombre||'?')+' @ $'+fN(p.precioUSD||p.precio||0);}).join('\n');
-          // String format: '150× Producto @ $1.20, 10× Otro @ $5.00'
-          return (v.productos||'').split(', ').map(function(p){return p.trim();}).join('\n');
+          if(v.productos_json) return v.productos_json.map(function(p){return '  • '+p.q+'x '+p.n+' @ $'+fN(p.p||0)+' = $'+fN(p.q*(p.p||0));}).join('\n');
+          return (v.productos||'').split(', ').map(function(p){return '  • '+p.trim();}).join('\n');
         })();
         // cobros_json may be string JSON or array
         var _cj=v.cobros_json;
@@ -3021,9 +3019,9 @@ function reservar(){
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
   if(TG_TOKEN&&S.cart&&S.cart.length){
-    var _rP=S.cart.map(function(c){return c.q+'x '+c.n+' @ $'+fN(c.precioUSD);}).join(', ');
+    var _rP=S.cart.map(function(c){return '  • '+c.q+'x '+c.n+' @ $'+fN(c.precioUSD)+' = $'+fN(c.q*c.precioUSD);}).join('\n');
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
-    tgSend('\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 '+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>',S.alm,'pedido');
+    tgSend('\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>',S.alm,'pedido');
   }
   updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado \u2014 stock bloqueado');
 }
@@ -3309,14 +3307,14 @@ function confirmar(){
   // Telegram notification
   // Telegram notification
   (function(){
-    var _tgProds=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join('\n');
+    var _tgProds=S.cart.map(function(c){return '  • '+c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0)+' = $'+fN(c.q*(c.precioUSD||0));}).join('\n');
     var _tgCob=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + ');
     var _tgVuelto=S.vueltos&&S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon+(v.caja?' ('+v.caja+')':'');}).join(' + '):'';
     var _tgHora=venta.hora?' · '+venta.hora:'';
     var _tgMsg='\uD83D\uDCB0 <b>Venta POS</b> <code>'+_ticket+'</code>\n'
       +'\uD83D\uDC64 '+venta.vend+' \u2022 '+venta.alm+_tgHora+'\n'
       +'\uD83D\uDED2 '+venta.cli+'\n'
-      +'\uD83D\uDCE6 '+_tgProds+'\n'
+      +'\uD83D\uDCE6 <b>Productos:</b>\n'+_tgProds+'\n'
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob
       +(_tgVuelto?'\n\uD83D\uDD04 Vuelto: '+_tgVuelto:'')
@@ -7078,7 +7076,7 @@ function crearFolioCli(cid){
   })();
   if(TG_TOKEN){
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
-    var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio);}).join('\n');
+    var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
     tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'pedido');
   }
