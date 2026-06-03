@@ -779,6 +779,7 @@ function transitCardHTML(p){
   // Add to PRODS if not already there so qty controls work
   if(PRODS.indexOf(p) < 0) PRODS.push(p);
   var pidx = PRODS.indexOf(p);
+  var _isRes = (p.badgeTexto === 'RESERVADO' || p.reservado === true);
   var cartItem = CART[p.n];
   var moq = p.moq || 1;
   var moq = p.moq || 1;
@@ -802,7 +803,14 @@ function transitCardHTML(p){
   return '<div class="card" style="border:1px solid rgba(245,158,11,.35);position:relative">'
     +'<div class="card-img" style="position:relative">'
     +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>'
+    +(function(){
+        var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
+        b+='<div style="background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
+        if(_isRes)   b+='<div style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(124,58,237,.5)">\uD83D\uDD12 RESERVADO</div>';
+        else if(p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(239,68,68,.5)">'+esc(p.badgeTexto)+'</div>';
+        b+='</div>';
+        return b;
+      }())
     +(hasDiscount?'<div style="position:absolute;bottom:8px;right:8px;z-index:10;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras '+savingStr+'</div>':'')
     +'</div>'
     +'<div class="card-body">'
@@ -820,9 +828,11 @@ function transitCardHTML(p){
     +'<span class="qty-disp" id="qd-tr-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
     +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
     +'</div>'
-    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
-    +(cartItem?'\u2713 Reservado':'+ Reservar')
-    +'</button></div>'
+    +(_isRes
+        ?'<button class="add-btn" style="background:rgba(124,58,237,.18);color:#7c3aed;border-color:rgba(124,58,237,.4);cursor:not-allowed;opacity:.85" disabled type="button">\uD83D\uDD12 Reservado</button>'
+        :'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'\u2713 Agregado':'+ Reservar')+'</button>'
+    )
+    +'</div>'
     +'</button></div>'
     +'</div></div>';
 }
