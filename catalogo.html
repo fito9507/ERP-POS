@@ -848,7 +848,7 @@ function cardHTML(p){
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(_transit?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
-    +(p.badge_texto==='RESERVADO'&&!_transit?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto&&!_transit?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':''))
+    +(p.badgeTexto==='RESERVADO'&&!_transit?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto&&p.badgeTexto!=='RESERVADO'&&!_transit?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':''))
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
@@ -936,6 +936,11 @@ function _qdBlur(el, idx){
   var isT = p.enTransito && p.enTransito[ALM];
   var moq = isT ? (p.moq||1) : 1;
   v = Math.max(moq, v);
+  // Cap at available stock (non-transit products)
+  if(!isT){
+    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    if(maxStk > 0) v = Math.min(v, maxStk);
+  }
   el.textContent = v;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   updCardPrices(cardId, p, v);
@@ -949,6 +954,11 @@ function chgQtyIdx(idx, d){
   var moq = isT ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
+  // Cap at available stock for non-transit products
+  if(!isT && d > 0){
+    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    if(maxStk > 0) v = Math.min(v, maxStk);
+  }
   sp.textContent = v;
   updCardPrices(cardId, p, v);
 }
