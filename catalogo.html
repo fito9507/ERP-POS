@@ -850,7 +850,14 @@ function cardHTML(p){
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'+(_transit?'<div style="background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')+(_isRes?'<div class="badge-reservado-cat" style="position:static">\ud83d\udd12 RESERVADO</div>':(!_transit&&p.oferta&&p.badgeTexto?'<div class="badge-oferta-cat" style="position:static">'+esc(p.badgeTexto)+'</div>':''))+'</div>'
+    +(function(){
+        var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
+        if(_transit) b+='<div style="background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
+        if(_isRes)   b+='<div style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(124,58,237,.5)">\uD83D\uDD12 RESERVADO</div>';
+        else if(!_transit&&p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(239,68,68,.5)">'+esc(p.badgeTexto)+'</div>';
+        b+='</div>';
+        return b;
+      }())
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
