@@ -844,11 +844,14 @@ function cardHTML(p){
   var price = hasEscala ? escalaPrice : (isMay ? priceMaj : priceMin);
   var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var pidx = PRODS.indexOf(p);
+  var _isRes = (p.badgeTexto === 'RESERVADO' || p.reservado === true);
+  // Override stkLabel for reserved products
+  if(_isRes && !_transit) stkLabel = '<span style="color:#7c3aed;font-weight:600">🔒 Reservado</span>';
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(_transit?'<div style="position:absolute;top:8px;left:8px;z-index:10;background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>':'')
-    +(p.badgeTexto==='RESERVADO'&&!_transit?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto&&p.badgeTexto!=='RESERVADO'&&!_transit?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':''))
+    +(_isRes&&!_transit?'<div class="badge-reservado-cat">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto&&!_isRes&&!_transit?'<div class="badge-oferta-cat">'+esc(p.badgeTexto)+'</div>':''))
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
@@ -887,15 +890,16 @@ function cardHTML(p){
       }).join('')
     +'</div>'
     +(stk>0||_transit?
-      '<div class="qty-row">'
+      +'<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">−</button>'
       +'<span class="qty-disp" id="qd-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
       +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
       +'</div>'
-      +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'
-      +(cartItem?'✓ Agregado':'+ Agregar')
-      +'</button>'
+      +(_isRes
+        ?'<button class="add-btn" style="background:rgba(124,58,237,.18);color:#7c3aed;border-color:rgba(124,58,237,.4);cursor:not-allowed;opacity:.85" disabled type="button">🔒 Reservado</button>'
+        :'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'✓ Agregado':'+ Agregar')+'</button>'
+      )
       +'</div>':'')
     +'</div>'
     +'</div>';
