@@ -3014,14 +3014,19 @@ function renderCart(){
 }
 function reservar(){
   if(!S.cart.length)return;
-  S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli,
+  var nota = prompt("Añadir nota o nombre para la reserva (Opcional):", "");
+  if(nota === null) return; // cancelado
+  nota = nota.trim();
+  S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli, nota:nota,
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
   if(TG_TOKEN&&S.cart&&S.cart.length){
     var _rP=S.cart.map(function(c){return '  • '+c.q+'x '+c.n+' @ $'+fN(c.precioUSD)+' = $'+fN(c.q*c.precioUSD);}).join('\n');
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
-    tgSend('\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>',S.alm,'pedido');
+    var tgMsg = '\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>';
+    if(nota) tgMsg += '\n\uD83D\uDCDD ' + String(nota).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    tgSend(tgMsg,S.alm,'pedido');
   }
   updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado \u2014 stock bloqueado');
 }
@@ -3049,6 +3054,7 @@ function openRes(){
         <span style="font-weight:500">${r.cli||'Walk-in'} · ${r.user} · ${r.alm} · ${r.fecha}</span>
         <span style="font-weight:500">${fN(r.totalUSD)} USD</span>
       </div>
+      ${r.nota?`<div style="font-size:12px;color:var(--color-primary);background:var(--color-bg-secondary);padding:4px 8px;border-radius:4px;margin-bottom:6px">📝 ${r.nota}</div>`:''}
       <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">${r.lineas.map(l=>l.q+'× '+l.n).join(' · ')}</div>
       <div style="display:flex;gap:6px">
         ${_mia?`<button class="btn btn-p" style="flex:1;font-size:12px;padding:8px" onclick="cobrarReserva(${r.id})">Cobrar ahora</button>`:''}
