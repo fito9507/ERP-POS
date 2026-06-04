@@ -3041,7 +3041,7 @@ function ventaCreditoPOS() {
     var p=PRODS.find(function(x){return x.n===l.prod;});
     if(!p){stockError='Producto no encontrado: '+l.prod;return;}
     var disponible=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
-    if(l.q>disponible && !(p.enTransito&&p.enTransito[alm])) stockError='Stock insuficiente: '+l.prod+' (disp: '+disponible+', ped: '+l.q+')';
+    if(l.q>disponible) stockError='Stock insuficiente: '+l.prod+' (disp: '+disponible+', ped: '+l.q+')';
   });
   if(stockError){alert(stockError);return;}
   

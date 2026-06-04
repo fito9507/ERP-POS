@@ -956,11 +956,9 @@ function _qdBlur(el, idx){
   var isT = p.enTransito && p.enTransito[ALM];
   var moq = isT ? (p.moq||1) : 1;
   v = Math.max(moq, v);
-  // Cap at available stock (non-transit products)
-  if(!isT){
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-    if(maxStk > 0) v = Math.min(v, maxStk);
-  }
+  // Cap at available stock (including transit products)
+  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+  if(maxStk > 0) v = Math.min(v, maxStk);
   el.textContent = v;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   updCardPrices(cardId, p, v);
@@ -974,8 +972,8 @@ function chgQtyIdx(idx, d){
   var moq = isT ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
-  // Cap at available stock for non-transit products
-  if(!isT && d > 0){
+  // Cap at available stock 
+  if(d > 0){
     var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
     if(maxStk > 0) v = Math.min(v, maxStk);
   }
@@ -1041,18 +1039,18 @@ function addToCartIdx(idx){
   var isT = p.enTransito && p.enTransito[ALM];
   var moq = isT ? (p.moq||1) : 1;
   var qty = sp ? Math.max(moq, parseInt(sp.textContent)||moq) : moq;
-  if(!isT) {
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-    if(qty > maxStk) {
-      qty = Math.max(0, maxStk);
-      if(sp) sp.textContent = qty;
-      if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
-    }
-    if(qty <= 0) {
-      if(typeof showToast==='function') showToast("Producto sin stock disponible");
-      return;
-    }
+  
+  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+  if(qty > maxStk) {
+    qty = Math.max(0, maxStk);
+    if(sp) sp.textContent = qty;
+    if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
   }
+  if(qty <= 0) {
+    if(typeof showToast==='function') showToast("Producto sin stock disponible");
+    return;
+  }
+  
   CART[p.n] = {prod:p, qty:qty};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
   if(btn){ btn.textContent = (p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'; btn.classList.add('added'); }
@@ -1165,12 +1163,10 @@ function updCartQty(name, val){
   var isTransit = p.enTransito && p.enTransito[ALM];
   var minQty = isTransit ? (p.moq||1) : 1;
   var qty = Math.max(minQty, parseInt(val)||minQty);
-  if(!isTransit) {
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-    if(qty > maxStk) {
-      qty = Math.max(0, maxStk);
-      if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
-    }
+  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+  if(qty > maxStk) {
+    qty = Math.max(0, maxStk);
+    if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
   }
   CART[name].qty = qty;
   renderCart(); updCart(); saveCartState();
