@@ -857,9 +857,12 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         </div>
         <div class="total-alts" id="cart-tot-alts"></div>
       </div>
-      <div style="margin-top:10px">
-        <button class="btn btn-p" onclick="goPago()">Cobrar →</button>
-        <button class="btn btn-w" onclick="reservar()">Reservar sin cobrar</button>
+      <div style="margin-top:10px; display:flex; flex-direction:column; gap:8px">
+        <button class="btn btn-p" onclick="goPago()">Cobrar al contado →</button>
+        <div style="display:flex; gap:8px">
+          <button class="btn btn-w" style="flex:1; border-color:var(--color-primary); color:var(--color-primary)" onclick="ventaCreditoPOS()">Venta a crédito</button>
+          <button class="btn btn-w" style="flex:1" onclick="reservar()">Solo Reservar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3011,6 +3014,81 @@ function renderCart(){
   document.getElementById('cart-tot-main').textContent=fN(fromUSD(totUSD,m,S.alm),dFor(m))+' '+m;
   document.getElementById('cart-tot-alts').innerHTML=MONEDAS.filter(x=>x!==m)
     .map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x,S.alm),dFor(x))} ${x}</span>`).join('');
+}
+
+function ventaCreditoPOS() {
+  if(!S.cart.length){alert('Añade productos al carrito primero.');return;}
+  if(!S.cli || S.cli==='Walk-in'){alert('⚠️ Selecciona un cliente válido arriba a la izquierda para poder darle crédito.\n\n(No puedes dar crédito a "Walk-in")');return;}
+  var c = CLIENTES.find(x => x.nombre === S.cli);
+  if(!c){alert('Cliente no encontrado en la base de datos. Por favor, selecciona un cliente registrado.');return;}
+  
+  var desc = prompt("Descripción del pedido a crédito (Opcional):", "Venta desde POS");
+  if(desc===null) return; // cancelado
+  var iniStr = prompt("Abono inicial pagado ahora en USD (Opcional, 0 por defecto):", "0");
+  if(iniStr===null) return;
+  var ini = parseFloat(iniStr)||0;
+  
+  var lineas = S.cart.map(c => ({prod: c.n, q: c.q, precio: c.precioUSD, mon: 'USD'}));
+  var alm = S.alm;
+  var mon = 'USD';
+  var fecha = today();
+  var abonos = ini>0?[{id:'a'+(nextAid++),fecha:fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:'USD',tasa:null,equivUSD:ini,enCaja:false,caja:null,cajaTipo:null}]:[];
+  var fid = String(nextFid++);
+  
+  // stock check
+  var stockError = null;
+  lineas.forEach(function(l){
+    var p=PRODS.find(function(x){return x.n===l.prod;});
+    if(!p){stockError='Producto no encontrado: '+l.prod;return;}
+    var disponible=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+    if(l.q>disponible && !(p.enTransito&&p.enTransito[alm])) stockError='Stock insuficiente: '+l.prod+' (disp: '+disponible+', ped: '+l.q+')';
+  });
+  if(stockError){alert(stockError);return;}
+  
+  var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+  c.folios.push(newFolio);
+  
+  // discount stock
+  lineas.forEach(function(l){
+    var p=PRODS.find(function(x){return x.n===l.prod;});
+    if(p&&alm){
+      p.stk=Math.max(0,(p.stk||0)-l.q);
+      if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q}],alm);
+    }
+  });
+  
+  var _ventaFolio={
+    id:venNextId++, fecha:fecha,
+    vend:(typeof S!=='undefined'&&S.user)||'Admin',
+    alm:alm, cli:c.nombre, tipo:'Mayorista', mon:mon,
+    prods:lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
+    totalUSD:lineas.reduce(function(a,l){return a+l.q*l.precio;},0),
+    comPct:0, comUSD:0, estCom:'No aplica',
+    nota:'Folio '+fid+' — '+desc,
+    pagos:[], vueltos:[]
+  };
+  VENTAS.unshift(_ventaFolio);
+  offlineSaveVentas();
+  offlineSaveClientes();
+  (async function(){
+    try{
+      await syncSaveCliente(c);
+      await syncSaveFolio(c.id, newFolio);
+      for(var _ab of (newFolio.abonos||[])){ await syncSaveAbono(c.id, newFolio.id, _ab); }
+      await syncSaveVenta(_ventaFolio);
+      offlineSaveVentas();
+    }catch(e){console.warn('folio sync:',e);}
+  })();
+  if(TG_TOKEN){
+    var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+    var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
+    var _fT=lineas.reduce(function(a,l){return a+l.q*l.precio;},0);
+    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'pedido');
+  }
+  showToast(`Folio a crédito creado para ${c.nombre}`);
+  
+  S.cart=[]; renderCart(); renderProds();
 }
 function reservar(){
   if(!S.cart.length)return;
