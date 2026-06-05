@@ -3890,8 +3890,8 @@ function _revertirVenta(v){
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
   }
 }
-function eliminarV(id){
-  if(!confirm('¿Eliminar esta venta?'))return;
+function eliminarV(id, skipConfirm){
+  if(!skipConfirm && !confirm('¿Eliminar esta venta?'))return;
   var v=VENTAS.find(x=>x.id===id);
   _revertirVenta(v);
   VENTAS=VENTAS.filter(x=>x.id!==id);
@@ -6631,6 +6631,7 @@ function renderFichaFolios(c){
               <span style="font-size:13px;font-weight:500">Folio ${f.id}</span>
               <span class="badge ${EC[est]}">${EL[est]}</span>
               <span style="font-size:11px;color:var(--color-text-secondary)">${fD(f.fecha)} · ${f.alm}</span>
+              ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
             <div style="font-size:11px;color:var(--color-text-secondary)">${f.desc}</div>
             <div class="pay-bar" style="width:200px;margin:5px 0 2px"><div class="pay-bar-fill" style="width:${pct}%"></div></div>
@@ -6698,6 +6699,45 @@ function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.foli
 function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;renderFichaFolios(c);}
 function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);renderFichaFolios(c);}
 function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
+function elimFolioCli(cid,fid){
+  if(!confirm('¿Eliminar este folio completo? Esto devolverá el stock a los productos y borrará la venta del libro de ventas.')) return;
+  const c=CLIENTES.find(x=>x.id===cid);
+  const idx=c?.folios.findIndex(x=>x.id===fid);
+  if(idx==null||idx<0) return;
+  var f=c.folios[idx];
+  var targetVenta=VENTAS.find(v=>(v.notas||v.nota||v.desc||'').includes('Folio '+fid));
+  if(targetVenta){
+    eliminarV(targetVenta.id, true);
+  } else {
+    if(f.lineas){
+      f.lineas.forEach(l=>{
+        var prod=PRODS.find(p=>p.n===l.prod||p.n===l.n);
+        if(prod){
+          prod.stk=(prod.stk||0)+l.q;
+          if(f.alm){
+            if(!prod.stk_alm)prod.stk_alm={};
+            prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
+            if(typeof syncStockAlmacen==='function'&&prod.supaId){
+              syncStockAlmacen(prod.supaId,f.alm,prod.stk_alm[f.alm]);
+            }
+          }
+        }
+      });
+      if(typeof renderProds==='function') renderProds();
+    }
+  }
+  c.folios.splice(idx,1);
+  offlineSaveClientes();
+  if(typeof supaReq!=='undefined'&&_supaOnline){
+    supaReq('DELETE','folios?id=eq.'+fid).catch(e=>{});
+    supaReq('DELETE','abonos?folio_id=eq.'+fid).catch(e=>{});
+  } else {
+    enqueue({method:'DELETE',path:'folios?id=eq.'+fid});
+    enqueue({method:'DELETE',path:'abonos?folio_id=eq.'+fid});
+  }
+  renderFichaFolios(c);
+  showToast('Folio y venta eliminados con éxito');
+}
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
 async function elimA(cid,fid,aid){
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol!=='admin'){
