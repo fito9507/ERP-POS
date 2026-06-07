@@ -8810,17 +8810,32 @@ function _renderGestionarCajas() {
     + '<div class="card">'
     + '<h3 style="margin-bottom:12px">Cajas activas</h3>'
     + '<div style="display:flex;flex-direction:column;gap:6px">'
-    + _cajasData.map(function(c){
+    + _cajasData.filter(function(c){return c.activa;}).map(function(c){
         var saldo = _getSaldoCaja(c.nombre);
-        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
+        var cid = 'caja-edit-'+c.id;
+        return '<div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);margin-bottom:4px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px">'
           + '<div>'
           + '<span style="font-weight:600">'+c.nombre+'</span>'
           + '<span style="margin-left:8px;font-size:11px;color:var(--color-text-tertiary)">'+c.moneda+' · '+c.almacen+'</span>'
           + '</div>'
           + '<div style="display:flex;align-items:center;gap:12px">'
           + '<span style="font-size:14px;font-weight:700;color:'+(saldo>=0?'var(--color-text-success)':'var(--color-text-danger)')+'">'+fN(saldo,2)+'</span>'
-          + '<button class="btn-sm" onclick="admEditarCaja(\''+c.id+'\')" style="color:var(--color-text-info);font-size:11px">Editar</button>'
+          + '<button class="btn-sm" onclick="admToggleEditCaja(\''+c.id+'\')" style="color:var(--color-text-info);font-size:11px">Editar</button>'
           + '<button class="btn-sm" onclick="admDesactivarCaja(\''+c.id+'\')" style="color:var(--color-text-danger);font-size:11px">Archivar</button>'
+          + '</div>'
+          + '</div>'
+          + '<div id="'+cid+'" style="display:none;padding:10px 12px;border-top:1px solid var(--color-border-secondary)">'
+          + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:flex-end">'
+          + '<div><label class="adm-lbl-f" style="font-size:10px">Nombre</label><input class="adm-inp" id="'+cid+'-nombre" value="'+c.nombre+'" style="height:34px;font-size:13px"></div>'
+          + '<div><label class="adm-lbl-f" style="font-size:10px">Moneda</label><select class="adm-inp" id="'+cid+'-moneda" style="height:34px;font-size:13px">'
+          + ['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===c.moneda?' selected':'')+'>'+m+'</option>';}).join('')
+          + '</select></div>'
+          + '<div><label class="adm-lbl-f" style="font-size:10px">Almacén</label><select class="adm-inp" id="'+cid+'-almacen" style="height:34px;font-size:13px">'
+          + ['Habana','Placetas','Xportprise','USA','General'].map(function(a){return '<option'+(a===c.almacen?' selected':'')+'>'+a+'</option>';}).join('')
+          + '</select></div>'
+          + '<button class="adm-btn adm-btn-p" onclick="admGuardarEditCaja(\''+c.id+'\',\''+c.nombre+'\')" style="padding:6px 12px;font-size:12px;height:34px">✓ Guardar</button>'
+          + '</div>'
           + '</div>'
           + '</div>';
       }).join('')
@@ -8917,6 +8932,39 @@ async function admEditarCaja(id) {
     }
   } else {
     showToast('Sin conexión');
+  }
+}
+
+function admToggleEditCaja(id) {
+  var panel = document.getElementById('caja-edit-'+id);
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+}
+
+async function admGuardarEditCaja(id, nombreAnterior) {
+  var cid = 'caja-edit-'+id;
+  var nuevoNombre = (document.getElementById(cid+'-nombre')?.value||'').trim();
+  var nuevaMoneda = document.getElementById(cid+'-moneda')?.value;
+  var nuevoAlmacen = document.getElementById(cid+'-almacen')?.value;
+
+  if (!nuevoNombre) { showToast('El nombre no puede estar vacío'); return; }
+
+  if (!_supaOnline) { showToast('Sin conexión'); return; }
+
+  var r = await supaReq('PATCH', 'cajas?id=eq.'+id, { nombre: nuevoNombre, moneda: nuevaMoneda, almacen: nuevoAlmacen });
+  if (r.ok) {
+    if (nuevoNombre !== nombreAnterior) {
+      // Update historical records referencing the old name
+      supaReq('PATCH', 'mov_cajas?caja_origen=eq.'+encodeURIComponent(nombreAnterior), { caja_origen: nuevoNombre });
+      supaReq('PATCH', 'mov_cajas?caja_destino=eq.'+encodeURIComponent(nombreAnterior), { caja_destino: nuevoNombre });
+      supaReq('PATCH', 'movimientos_ig?cta=eq.'+encodeURIComponent(nombreAnterior), { cta: nuevoNombre });
+    }
+    showToast('✓ Caja actualizada');
+    await loadCajasData();
+    renderAdminCajas();
+  } else {
+    var err = await r.text();
+    showToast(err.includes('unique') ? 'Ese nombre ya existe' : 'Error al actualizar');
   }
 }
 
