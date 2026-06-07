@@ -8645,12 +8645,33 @@ function _onMcTipoChange() {
 
 function _onMcCajaChange() {
   var tipo=document.getElementById('mc-tipo')?.value;
-  var orig=document.getElementById('mc-origen')?.value||'';
-  var dest=document.getElementById('mc-destino')?.value||'';
-  var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dest);
-  var moEl=document.getElementById('mc-mon-orig-lbl'), mdEl=document.getElementById('mc-mon-dest-lbl');
+  var origSel=document.getElementById('mc-origen');
+  var destSel=document.getElementById('mc-destino');
+  var orig=origSel?.value||'';
+  var monO=_getMonedaFromCaja(orig);
+  var moEl=document.getElementById('mc-mon-orig-lbl');
   var hiEl=document.getElementById('mc-tasa-hint');
   if(moEl) moEl.textContent=monO;
+
+  // Rebuild destino options filtered by tipo
+  if (destSel && (tipo==='transferencia' || tipo==='cambio')) {
+    var prevDest = destSel.value;
+    var allCajas = _cajasData.filter(function(c){ return c.activa; });
+    var filteredCajas;
+    if (tipo==='transferencia') {
+      // Only same currency, different caja
+      filteredCajas = allCajas.filter(function(c){ return c.moneda===monO && c.nombre!==orig; });
+    } else {
+      // cambio: only different currency
+      filteredCajas = allCajas.filter(function(c){ return c.moneda!==monO; });
+    }
+    destSel.innerHTML = filteredCajas.map(function(c){ return '<option'+(c.nombre===prevDest?' selected':'')+'>'+c.nombre+'</option>'; }).join('');
+    if (!destSel.value && filteredCajas.length) destSel.value = filteredCajas[0].nombre;
+  }
+
+  var dest=destSel?.value||'';
+  var monD=_getMonedaFromCaja(dest);
+  var mdEl=document.getElementById('mc-mon-dest-lbl');
   if(mdEl) mdEl.textContent=monD;
   if (tipo==='cambio') {
     var tasa=_getTasaDefault(monO,monD);
