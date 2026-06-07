@@ -8707,6 +8707,13 @@ async function admRegistrarMovCaja() {
 
   if (!monto) { showToast('Introduce el monto'); return; }
 
+  if (tipo === 'transferencia') {
+    if (_getMonedaFromCaja(orig) !== _getMonedaFromCaja(dest)) {
+      showToast('Para transferir, ambas cajas deben tener la misma moneda. Usa "Cambio de divisa".');
+      return;
+    }
+  }
+
   var cajaOrig = (tipo==='deposito') ? null : orig;
   var cajaDest = (tipo==='retiro')   ? null : (tipo==='deposito'?orig:dest);
 
