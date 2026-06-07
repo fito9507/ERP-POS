@@ -8791,6 +8791,7 @@ function _renderGestionarCajas() {
           + '</div>'
           + '<div style="display:flex;align-items:center;gap:12px">'
           + '<span style="font-size:14px;font-weight:700;color:'+(saldo>=0?'var(--color-text-success)':'var(--color-text-danger)')+'">'+fN(saldo,2)+'</span>'
+          + '<button class="btn-sm" onclick="admEditarCaja(\''+c.id+'\')" style="color:var(--color-text-info);font-size:11px">Editar</button>'
           + '<button class="btn-sm" onclick="admDesactivarCaja(\''+c.id+'\')" style="color:var(--color-text-danger);font-size:11px">Archivar</button>'
           + '</div>'
           + '</div>';
@@ -8845,6 +8846,50 @@ async function admCrearCaja() {
       showToast(err.includes('unique')?'Ya existe una caja con ese nombre':'Error al crear caja');
     }
   } else { showToast('Sin conexión'); }
+}
+
+async function admEditarCaja(id) {
+  var caja = _cajasData.find(function(c) { return c.id === id; });
+  if (!caja) return;
+  
+  var nuevoNombre = prompt('Nuevo nombre para la caja:', caja.nombre);
+  if (nuevoNombre === null) return;
+  nuevoNombre = nuevoNombre.trim();
+  if (!nuevoNombre) { showToast('El nombre no puede estar vacío'); return; }
+
+  var nuevaMoneda = prompt('Nueva moneda (USD, EUR, CUP, CUPT):', caja.moneda);
+  if (nuevaMoneda === null) return;
+  nuevaMoneda = nuevaMoneda.trim().toUpperCase();
+  if (['USD','EUR','CUP','CUPT'].indexOf(nuevaMoneda) < 0) {
+    showToast('Moneda inválida. Debe ser USD, EUR, CUP o CUPT');
+    return;
+  }
+
+  if (nuevoNombre === caja.nombre && nuevaMoneda === caja.moneda) return;
+
+  if (_supaOnline) {
+    if (nuevoNombre !== caja.nombre) {
+      if (!confirm('Atención: Si cambias el nombre, se intentarán actualizar los movimientos previos asociados. ¿Continuar?')) return;
+    }
+    
+    var r = await supaReq('PATCH', 'cajas?id=eq.'+id, { nombre: nuevoNombre, moneda: nuevaMoneda });
+    if (r.ok) {
+      if (nuevoNombre !== caja.nombre) {
+        // Update historical records asynchronously
+        supaReq('PATCH', 'mov_cajas?caja_origen=eq.'+encodeURIComponent(caja.nombre), { caja_origen: nuevoNombre });
+        supaReq('PATCH', 'mov_cajas?caja_destino=eq.'+encodeURIComponent(caja.nombre), { caja_destino: nuevoNombre });
+        supaReq('PATCH', 'movimientos_ig?cta=eq.'+encodeURIComponent(caja.nombre), { cta: nuevoNombre });
+      }
+      showToast('✓ Caja actualizada');
+      await loadCajasData();
+      renderAdminCajas();
+    } else {
+      var err = await r.text();
+      showToast(err.includes('unique') ? 'Ese nombre ya existe' : 'Error al actualizar caja');
+    }
+  } else {
+    showToast('Sin conexión');
+  }
 }
 
 async function admDesactivarCaja(id) {
