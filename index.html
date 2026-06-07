@@ -2238,10 +2238,14 @@ async function supaInit() {
 
 function goMod(id,title,btn){
   // Check permission
-  // Map module id to key using MOD_DEFS
   var _modDef = typeof MOD_DEFS!=='undefined' ? MOD_DEFS.find(function(m){return m.id===id;}) : null;
   var modKey = _modDef ? _modDef.key : id.replace('mod-','');
-  if(typeof S!=='undefined'&&S.user&&USERS[S.user]){
+  if(typeof S!=='undefined' && (!S.user || S.step === 0)){
+    if(id !== 'mod-pos'){
+      showToast('Debes iniciar sesión primero');
+      return;
+    }
+  } else if(typeof S!=='undefined'&&S.user&&USERS[S.user]){
     const allowed = USERS[S.user].modulos||[];
     if(!allowed.includes(modKey)&&USERS[S.user].rol!=='admin'){
       showToast('Sin acceso a este módulo'); return;
@@ -2470,7 +2474,7 @@ async function syncLoadUsers(){
     });
     saveUsers();
     if(typeof renderLoginCards==='function')renderLoginCards();
-    if(typeof S!=='undefined'&&S.user&&typeof buildSidebar==='function')buildSidebar(S.user);
+    if(typeof S!=='undefined'&&S.user&&S.step>0&&typeof buildSidebar==='function')buildSidebar(S.user);
   }catch(e){console.warn('syncLoadUsers:',e);}
 }
 
