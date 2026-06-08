@@ -906,7 +906,7 @@ function cardHTML(p){
       }).join('')
     +'</div>'
     +(stk>0||_transit?
-      +'<div class="qty-row">'
+      '<div class="qty-row">'
       +'<div class="qty-ctrl">'
       +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">−</button>'
       +'<span class="qty-disp" id="qd-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
