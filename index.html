@@ -11020,7 +11020,7 @@ function renderStock(){
   }
   if(!_isVend) h+='<button class="adm-btn adm-btn-p" onclick="syncLoadProductos().then(function(){renderStock();showToast(\'✓ Stock sincronizado\');})" style="margin-bottom:8px;width:100%">🔄 Sincronizar stock desde Supabase</button>';
   h+='<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
-    +'<input id="stock-search-inp" class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;renderStock()" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
+    +'<input id="stock-search-inp" class="adm-inp" placeholder="Buscar..." oninput="window._stockQ=this.value;_dRender(renderStock)" style="flex:1;max-width:240px" value="'+(window._stockQ||'')+'">'
     +'<select class="adm-inp" onchange="window._stockAlm=this.value;renderStock()" style="max-width:130px"><option value="">Todos almacenes</option>'
     +alms.map(function(a){return'<option'+(almF===a?' selected':'')+'>'+a+'</option>';}).join('')+'</select>'
     +'<select class="adm-inp" onchange="window._stockCat=this.value;renderStock()" style="max-width:130px"><option value="">Todas cats</option>'
@@ -11045,7 +11045,7 @@ function renderStock(){
   });}
   h+='</tbody></table></div>';
   el.innerHTML=h;
-  if(wasFocused){ var inp=document.getElementById('stock-search-inp'); if(inp){ inp.focus(); try{inp.setSelectionRange(selStart, selStart);}catch(e){} } }
+  if(wasFocused){ var inp=document.getElementById('stock-search-inp'); if(inp){ inp.focus(); try{inp.setSelectionRange(selStart, typeof selEnd!=='undefined'?selEnd:selStart);}catch(e){} } }
   if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}
 }
 </script>
