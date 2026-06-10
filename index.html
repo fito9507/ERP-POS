@@ -6894,7 +6894,7 @@ function renderFichaAbonar(c){
         <div><label class="lbl">Equiv. USD</label>
           <input type="number" id="a-equiv-${c.id}" step="0.01"
             style="width:100%;font-size:15px;font-weight:600;background:var(--color-background-secondary)"
-            oninput="window['em_${c.id}']=true"></div>
+            oninput="window['em_${c.id}']=true;updPrevCli('${c.id}')"></div>
       </div>
 
       <div class="caja-section" id="cajasec-${c.id}" style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:10px">
@@ -6923,27 +6923,44 @@ function renderFichaAbonar(c){
   window['cajaon_'+c.id]=false;
 }
 
+// Actualiza solo la barra de preview usando el equiv actual (manual o auto)
+function updPrevCli(cid){
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
+  const mon=document.getElementById('a-mon-'+cid).value;
+  const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
+  const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
+  const pdt=pdtCli(c);
+  const prev=document.getElementById('a-prev-'+cid);
+  if(monto>0&&equiv>0){
+    prev.style.display='block';prev.style.background='var(--color-background-success)';prev.style.color='var(--color-text-success)';
+    prev.innerHTML='Abono: <strong>'+fN(monto,dFor(mon))+' '+mon+'</strong> = <strong>'+fN(equiv)+' USD</strong> · Pdte tras abono: <strong>'+fN(Math.max(0,pdt-equiv))+' USD</strong>';
+  } else prev.style.display='none';
+}
 function calcEquivCli(cid){
-  if(window['em_'+cid])return;
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const tasaEl=document.getElementById('a-tasa-'+cid);
   const tasaManual=parseFloat(tasaEl.value)||0;
-  let equiv=monto;
-  if(mon!=='USD'){
+  const equivEl=document.getElementById('a-equiv-'+cid);
+  let equiv;
+  if(window['em_'+cid]){
+    // Usuario editó equiv directamente — respetar ese valor
+    equiv=parseFloat(equivEl.value)||0;
+  } else if(mon!=='USD'){
     if(tasaManual>0){
-      // Tasa manual: monto / tasa para CUP/CUPT/MLC, monto * tasa para EUR
-      if(mon==='EUR'){ equiv=monto*tasaManual; }
-      else { equiv=monto/tasaManual; }
+      equiv=(mon==='EUR')?(monto*tasaManual):(monto/tasaManual);
     } else {
       equiv=toUSD(monto,mon);
     }
-    // Mostrar la tasa efectiva en placeholder si está en auto
-    if(!tasaManual && monto>0 && equiv>0){
+    equivEl.value=equiv>0?equiv.toFixed(4):'';
+    // Mostrar tasa efectiva en placeholder
+    if(!tasaManual&&monto>0&&equiv>0){
       tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(2);
     }
+  } else {
+    equiv=monto;
+    equivEl.value=equiv>0?equiv.toFixed(4):'';
   }
-  document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(4):'';
   // Refresh caja options filtered by moneda
   var cajaSel=document.getElementById('a-caja-'+cid);
   if(cajaSel){
@@ -6954,12 +6971,7 @@ function calcEquivCli(cid){
     cajaSel.innerHTML=opts.map(k=>'<option'+(k===cur?' selected':'')+'>'+k+'</option>').join('');
     if(!opts.includes(cur)&&opts.length)cajaSel.value=opts[0];
   }
-  const c=CLIENTES.find(x=>x.id===cid);const pdt=pdtCli(c);
-  const prev=document.getElementById('a-prev-'+cid);
-  if(monto>0){
-    prev.style.display='block';prev.style.background='var(--color-background-success)';prev.style.color='var(--color-text-success)';
-    prev.innerHTML=`Abono: <strong>${fN(monto,dFor(mon))} ${mon}</strong> = <strong>${fN(equiv)} USD</strong> · Pdte tras abono: <strong>${fN(Math.max(0,pdt-equiv))} USD</strong>`;
-  } else prev.style.display='none';
+  updPrevCli(cid);
 }
 function toggleCajaCli(cid){ /* legacy no-op */ }
 function updCajaExplicaCli(cid){
@@ -7022,7 +7034,20 @@ function registrarAbonoCli(cid){
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasaManual||null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
-  if(!target){alert('No hay folios disponibles');return;}
+  if(!target){
+    // Sin folios: crear folio de crédito anticipado automáticamente
+    var _creditoFolio={
+      id:'f-credito-'+Date.now(),
+      ref:'Crédito anticipado',
+      fecha:fecha,
+      tipo:'credito_anticipado',
+      productos:[],
+      totalUSD:0,
+      abonos:[]
+    };
+    c.folios.push(_creditoFolio);
+    target=_creditoFolio;
+  }
   target.abonos.push(abono);
   ['a-monto-','a-desc-','a-tasa-','a-equiv-'].forEach(p=>{const e=document.getElementById(p+cid);if(e)e.value='';});
   document.getElementById('a-prev-'+cid).style.display='none';
