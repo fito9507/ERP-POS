@@ -1822,13 +1822,21 @@ async function flushQueue() {
   for (var op of toProcess) {
     try {
       if (op.path.includes('movimientos_ig') && op.body) {
+        // Normalize field names (legacy)
         if (op.body.descripcion !== undefined) { op.body.concepto = op.body.descripcion; delete op.body.descripcion; }
         if (op.body.cuenta !== undefined) { op.body.caja = op.body.cuenta; delete op.body.cuenta; }
         if (op.body.vendedor !== undefined) { op.body.usuario = op.body.vendedor; delete op.body.vendedor; }
+        // Strip fields not in Supabase schema (causes 400)
+        delete op.body.equiv_usd;
+        delete op.body.almacen;
+        delete op.body.sentido;
+        delete op.body.id;
       }
       var r = await supaReq(op.method, op.path, op.body);
       if (!r.ok) {
-        console.warn('Queue op failed:', r.status, op.path);
+        var _errBody = '';
+        try { _errBody = await r.clone().text(); } catch(e2) {}
+        console.warn('Queue op failed:', r.status, op.path, _errBody);
         _syncQueue.push(op);
       }
     } catch(e) {
