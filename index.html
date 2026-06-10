@@ -6920,9 +6920,22 @@ function calcEquivCli(cid){
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const tasaEl=document.getElementById('a-tasa-'+cid);
+  const tasaManual=parseFloat(tasaEl.value)||0;
   let equiv=monto;
-  if(mon!=='USD'){const t=parseFloat(tasaEl.value)||RATES[mon];equiv=toUSD(monto,mon);}
-  document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(2):'';
+  if(mon!=='USD'){
+    if(tasaManual>0){
+      // Tasa manual: monto / tasa para CUP/CUPT/MLC, monto * tasa para EUR
+      if(mon==='EUR'){ equiv=monto*tasaManual; }
+      else { equiv=monto/tasaManual; }
+    } else {
+      equiv=toUSD(monto,mon);
+    }
+    // Mostrar la tasa efectiva en placeholder si está en auto
+    if(!tasaManual && monto>0 && equiv>0){
+      tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(2);
+    }
+  }
+  document.getElementById('a-equiv-'+cid).value=equiv>0?equiv.toFixed(4):'';
   // Refresh caja options filtered by moneda
   var cajaSel=document.getElementById('a-caja-'+cid);
   if(cajaSel){
