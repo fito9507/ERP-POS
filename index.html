@@ -6978,9 +6978,17 @@ function registrarAbonoCli(cid){
   const desc=document.getElementById('a-desc-'+cid).value;
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
-  const tasa=parseFloat(document.getElementById('a-tasa-'+cid).value)||(mon!=='USD'?RATES[mon]:null);
+  const tasaManual=parseFloat(document.getElementById('a-tasa-'+cid).value)||0;
   const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
-  const equivUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
+  // Calcular equivUSD: prioridad: 1) equiv editado manualmente, 2) tasa manual, 3) tasa automática
+  let equivUSD;
+  if(window['em_'+cid] && equivRaw>0){
+    equivUSD=equivRaw;
+  } else if(tasaManual>0 && mon!=='USD'){
+    equivUSD=(mon==='EUR')?(monto*tasaManual):(monto/tasaManual);
+  } else {
+    equivUSD=toUSD(monto,mon);
+  }
   const cajaTipo=document.getElementById('a-cajatipo-'+cid)?.value||'efectivo';
   const enCaja=cajaTipo==='efectivo';
   const caja=enCaja?(document.getElementById('a-caja-'+cid)?.value||null):null;
@@ -6999,12 +7007,11 @@ function registrarAbonoCli(cid){
   if(!_targetCheck&&c.folios.length)_targetCheck=c.folios[0];
   if(_targetCheck){
     var _pdt=pdtF(_targetCheck);
-    var _abonoUSD=window['em_'+cid]?equivRaw:toUSD(monto,mon);
-    if(_abonoUSD>_pdt+0.01){
-      if(!confirm('El abono ('+fN(_abonoUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
+    if(equivUSD>_pdt+0.01){
+      if(!confirm('El abono ('+fN(equivUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
     }
   }
-  const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasa,equivUSD:parseFloat(equivUSD.toFixed(2)),enCaja,caja,cajaTipo};
+  const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasaManual||null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
   if(!target){alert('No hay folios disponibles');return;}
@@ -7029,7 +7036,7 @@ function registrarAbonoCli(cid){
     // Always write — _supaWrite handles online/offline queuing
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,concepto:igMov.desc,
-      monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
+      monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
       caja:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
