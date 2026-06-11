@@ -6757,7 +6757,10 @@ function renderFichaFolios(c){
           <div style="padding:12px">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
               <h4 style="margin:0">Abonos</h4>
-              <button class="btn-sm" style="border-color:var(--color-text-success);color:var(--color-text-success)" onclick="irAbonar('${c.id}','${f.id}')">+ Abonar</button>
+              <div style="display:flex;gap:6px">
+                ${c.folios.some(x => pagF(x) > totF(x) + 0.01 && x.id !== f.id) && pdt > 0.01 ? `<button class="btn-sm" style="border-color:#4ade80;color:#4ade80" onclick="cruzarSaldoFolio('${c.id}','${f.id}')">🔄 Usar saldo a favor</button>` : ''}
+                <button class="btn-sm" style="border-color:var(--color-text-success);color:var(--color-text-success)" onclick="irAbonar('${c.id}','${f.id}')">+ Abonar</button>
+              </div>
             </div>
             ${f.abonos.length?f.abonos.map(a=>`
               <div class="abono-row">
@@ -6838,6 +6841,58 @@ function elimFolioCli(cid,fid){
   }
   renderFichaFolios(c);
   showToast('Folio y venta eliminados con éxito');
+}
+function cruzarSaldoFolio(cid, fid) {
+  const c = CLIENTES.find(x => x.id === cid);
+  if(!c) return;
+  const targetF = c.folios.find(x => x.id === fid);
+  if(!targetF) return;
+  
+  let pdt = pdtF(targetF);
+  if(pdt < 0.01) return;
+
+  const overpaidFolios = c.folios.filter(f => pagF(f) > totF(f) + 0.01 && f.id !== fid);
+  if(overpaidFolios.length === 0) {
+    showToast('No hay folios con saldo a favor para cruzar.');
+    return;
+  }
+
+  if(!confirm('¿Traspasar saldo a favor desde otros folios para cubrir la deuda pendiente de '+fN(pdt)+' USD?')) return;
+
+  let traspasado = 0;
+  for(let i=0; i<overpaidFolios.length && pdt > 0.01; i++) {
+    const fOver = overpaidFolios[i];
+    const disp = pagF(fOver) - totF(fOver);
+    const monto = Math.min(pdt, disp);
+    
+    const negAb = {
+      id: 'a'+(nextAid++), fecha: today(), concepto: 'efectivo',
+      desc: 'Traspaso hacia Folio '+fid,
+      monto: -monto, mon: 'USD', tasa: null, equivUSD: -monto,
+      enCaja: false, caja: null, cajaTipo: null
+    };
+    fOver.abonos.push(negAb);
+    
+    const posAb = {
+      id: 'a'+(nextAid++), fecha: today(), concepto: 'efectivo',
+      desc: 'Traspaso desde Folio '+fOver.id,
+      monto: monto, mon: 'USD', tasa: null, equivUSD: monto,
+      enCaja: false, caja: null, cajaTipo: null
+    };
+    targetF.abonos.push(posAb);
+    
+    pdt -= monto;
+    traspasado += monto;
+    
+    if(typeof syncSaveAbono==='function'){
+      syncSaveAbono(c.id, fOver.id, negAb);
+      syncSaveAbono(c.id, targetF.id, posAb);
+    }
+  }
+  
+  if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+  renderFichaFolios(c);
+  showToast('Se traspasaron '+fN(traspasado)+' USD con éxito.');
 }
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
 async function elimA(cid,fid,aid){
