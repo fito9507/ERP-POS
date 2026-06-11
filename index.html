@@ -6882,7 +6882,7 @@ function renderFichaAbonar(c){
           <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
             oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
         <div><label class="lbl">Moneda</label>
-          <select id="a-mon-${c.id}" onchange="calcEquivCli('${c.id}')" style="width:100%">
+          <select id="a-mon-${c.id}" onchange="resetOnMonChangeCli('${c.id}')" style="width:100%">
             <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
           </select></div>
       </div>
@@ -6923,6 +6923,15 @@ function renderFichaAbonar(c){
   window['cajaon_'+c.id]=false;
 }
 
+// Al cambiar moneda: limpiar tasa y equiv para que recalcule desde cero
+function resetOnMonChangeCli(cid){
+  var tasaEl=document.getElementById('a-tasa-'+cid);
+  var equivEl=document.getElementById('a-equiv-'+cid);
+  if(tasaEl){ tasaEl.value=''; tasaEl.placeholder='auto'; }
+  if(equivEl){ equivEl.value=''; }
+  window['em_'+cid]=false;
+  calcEquivCli(cid);
+}
 // Actualiza solo la barra de preview usando el equiv actual (manual o auto)
 function updPrevCli(cid){
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
