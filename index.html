@@ -1822,9 +1822,10 @@ async function flushQueue() {
   for (var op of toProcess) {
     try {
       if (op.path.includes('movimientos_ig') && op.body) {
-        // Normalize field names (legacy)
+        // Normalize field names — Supabase column is 'cta', not 'caja' or 'cuenta'
         if (op.body.descripcion !== undefined) { op.body.concepto = op.body.descripcion; delete op.body.descripcion; }
-        if (op.body.cuenta !== undefined) { op.body.caja = op.body.cuenta; delete op.body.cuenta; }
+        if (op.body.cuenta !== undefined) { op.body.cta = op.body.cuenta; delete op.body.cuenta; }
+        if (op.body.caja !== undefined) { op.body.cta = op.body.caja; delete op.body.caja; }
         if (op.body.vendedor !== undefined) { op.body.usuario = op.body.vendedor; delete op.body.vendedor; }
         // Strip fields not in Supabase schema (causes 400)
         delete op.body.equiv_usd;
@@ -6454,8 +6455,8 @@ let cajaOn=false,equivManual=false;
 let folioFiltro='todos';
 
 // ── CALCULOS ──────────────────────────────────────────────
-function totF(f){return f.lineas.reduce((a,l)=>a+toUSD(l.q*l.precio,l.mon),0);}
-function pagF(f){return f.abonos.reduce((a,ab)=>a+ab.equivUSD,0);}
+function totF(f){return (f.lineas||f.productos||[]).reduce((a,l)=>a+toUSD((l.q||l.cantidad||0)*(l.precio||l.price||0),l.mon||'USD'),0);}
+function pagF(f){return (f.abonos||[]).reduce((a,ab)=>a+(ab.equivUSD||0),0);}
 function pdtF(f){return Math.max(0,totF(f)-pagF(f));}
 function estF(f){const p=pdtF(f);if(p<0.01)return'pagado';if(pagF(f)<0.01)return'pendiente';return'parcial';}
 function totCli(c){return c.folios.reduce((a,f)=>a+totF(f),0);}
@@ -7088,7 +7089,7 @@ function registrarAbonoCli(cid){
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,concepto:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
-      caja:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
+      cta:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
@@ -7099,9 +7100,9 @@ function registrarAbonoCli(cid){
       notas:'Abono '+c.nombre+' — '+desc,
       usuario:(typeof S!=='undefined'&&S.user)||'Admin',
       caja_destino:caja,
-      monto_origen:equivUSD,
-      monto_destino:equivUSD,
-      tasa_usada:null
+      monto_origen:monto,      // monto real en la moneda de la caja
+      monto_destino:monto,     // monto real en la moneda de la caja
+      tasa_usada:tasaManual||null
     };
     _cajasMovs.unshift(_cajaMov); // optimistic local update
     _supaWrite('POST','mov_cajas',_cajaMov);
