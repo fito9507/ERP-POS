@@ -6928,6 +6928,15 @@ function updPrevCli(cid){
   const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
+  // Recalcular la tasa implícita a partir del equiv manual
+  if(monto>0&&equiv>0&&mon!=='USD'){
+    var tasaImplied=(mon==='EUR')?(equiv/monto):(monto/equiv);
+    var tasaEl=document.getElementById('a-tasa-'+cid);
+    if(tasaEl){
+      // Mostrar la tasa calculada como valor en el campo
+      tasaEl.value=tasaImplied.toFixed(2);
+    }
+  }
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
   const pdt=pdtCli(c);
   const prev=document.getElementById('a-prev-'+cid);
