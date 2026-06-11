@@ -8873,53 +8873,53 @@ async function admRegistrarMovCaja() {
         // Ingreso a la caja
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Ingreso no-venta',
-          concepto: (notas||'Depósito externo') + ' → ' + orig,
+          descripcion: (notas||'Depósito externo') + ' → ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          caja: orig, usuario: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig deposito:',e);});
       } else if (tipo === 'retiro') {
         // Gasto desde la caja
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Gasto operativo',
-          concepto: (notas||'Retiro') + ' ← ' + orig,
+          descripcion: (notas||'Retiro') + ' ← ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          caja: orig, usuario: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig retiro:',e);});
       } else if (tipo === 'transferencia') {
         // Salida de origen
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          concepto: (notas||'Transferencia') + ' (salida)',
+          descripcion: (notas||'Transferencia') + ' (salida)',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          caja: orig, usuario: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig transferencia salida:',e);});
         // Entrada a destino
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          concepto: (notas||'Transferencia') + ' (entrada)',
+          descripcion: (notas||'Transferencia') + ' (entrada)',
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
-          caja: dest, usuario: usuario, notas: notas
+          cuenta: dest, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig transferencia entrada:',e);});
       } else if (tipo === 'cambio') {
         // Cambio de divisa: salida en moneda origen
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          concepto: (notas||'Cambio de divisa') + ' (salida ' + _monO + ')',
+          descripcion: (notas||'Cambio de divisa') + ' (salida ' + _monO + ')',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          caja: orig, usuario: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig cambio salida:',e);});
         // Entrada en moneda destino
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          concepto: (notas||'Cambio de divisa') + ' (entrada ' + _monD + ')',
+          descripcion: (notas||'Cambio de divisa') + ' (entrada ' + _monD + ')',
           monto: montoDest, moneda: _monD,
           equiv_usd: parseFloat((montoDest*(_RATES_USD[_monD]||1)).toFixed(4)),
-          caja: dest, usuario: usuario, notas: notas
+          cuenta: dest, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig cambio entrada:',e);});
       }
       // Reload I/G if visible
@@ -9093,7 +9093,7 @@ async function admEditarCaja(id) {
         // Update historical records asynchronously
         supaReq('PATCH', 'mov_cajas?caja_origen=eq.'+encodeURIComponent(caja.nombre), { caja_origen: nuevoNombre });
         supaReq('PATCH', 'mov_cajas?caja_destino=eq.'+encodeURIComponent(caja.nombre), { caja_destino: nuevoNombre });
-        supaReq('PATCH', 'movimientos_ig?cta=eq.'+encodeURIComponent(caja.nombre), { cta: nuevoNombre });
+        supaReq('PATCH', 'movimientos_ig?cuenta=eq.'+encodeURIComponent(caja.nombre), { cuenta: nuevoNombre });
       }
       showToast('✓ Caja actualizada');
       await loadCajasData();
@@ -9129,7 +9129,7 @@ async function admGuardarEditCaja(id, nombreAnterior) {
       // Update historical records referencing the old name
       supaReq('PATCH', 'mov_cajas?caja_origen=eq.'+encodeURIComponent(nombreAnterior), { caja_origen: nuevoNombre });
       supaReq('PATCH', 'mov_cajas?caja_destino=eq.'+encodeURIComponent(nombreAnterior), { caja_destino: nuevoNombre });
-      supaReq('PATCH', 'movimientos_ig?cta=eq.'+encodeURIComponent(nombreAnterior), { cta: nuevoNombre });
+      supaReq('PATCH', 'movimientos_ig?cuenta=eq.'+encodeURIComponent(nombreAnterior), { cuenta: nuevoNombre });
     }
     showToast('✓ Caja actualizada');
     await loadCajasData();
@@ -9421,7 +9421,7 @@ async function exportBackupSQL(returnSQL) {
       if(mig.ok){
         var mid = await mig.json();
         mid.forEach(function(r){
-          sql += "INSERT INTO movimientos_ig (fecha,tipo,concepto,monto,moneda,caja,usuario,almacen,notas) VALUES ("+esc(r.fecha)+","+esc(r.tipo)+","+esc(r.concepto)+","+(r.monto||0)+","+esc(r.moneda)+","+esc(r.caja)+","+esc(r.usuario)+","+esc(r.almacen)+","+esc(r.notas)+") ON CONFLICT DO NOTHING;\n";
+          sql += "INSERT INTO movimientos_ig (fecha,tipo,descripcion,monto,moneda,cuenta,vendedor,almacen,notas) VALUES ("+esc(r.fecha)+","+esc(r.tipo)+","+esc(r.desc)+","+(r.monto||0)+","+esc(r.mon)+","+esc(r.cta)+","+esc(r.vend)+","+esc(r.alm)+","+esc(r.notas)+") ON CONFLICT DO NOTHING;\n";
         });
       }
     } catch(e){}
