@@ -3059,7 +3059,8 @@ function ventaCreditoPOS() {
   if(stockError){alert(stockError);return;}
   
   var newFolio;
-  var creditoFolio = c.folios.find(f => f.tipo === 'credito_anticipado');
+  // find a folio with no lineas (which is a credito_anticipado)
+  var creditoFolio = c.folios.find(f => !f.lineas || f.lineas.length === 0);
   if(creditoFolio){
     newFolio = creditoFolio;
     fid = newFolio.id; // reuse the existing ID
@@ -7086,6 +7087,7 @@ function registrarAbonoCli(cid){
   const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasaManual||null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
+  var _isNewFolio = false;
   if(!target){
     // Sin folios: crear folio de crédito anticipado automáticamente
     var _creditoFolio={
@@ -7099,6 +7101,7 @@ function registrarAbonoCli(cid){
     };
     c.folios.push(_creditoFolio);
     target=_creditoFolio;
+    _isNewFolio = true;
   }
   target.abonos.push(abono);
   ['a-monto-','a-desc-','a-tasa-','a-equiv-'].forEach(p=>{const e=document.getElementById(p+cid);if(e)e.value='';});
@@ -7143,6 +7146,9 @@ function registrarAbonoCli(cid){
     if(_newSaldo!==null) showToast('✓ Caja '+caja+': '+fN(_newSaldo,2));
   }
   (async function(){
+    if (_isNewFolio) {
+      await syncSaveFolio(cid, target);
+    }
     await syncSaveAbono(cid, target.id, abono);
   })();
 
