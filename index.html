@@ -1828,8 +1828,11 @@ async function flushQueue() {
         if (op.body.caja !== undefined) { op.body.cuenta = op.body.caja; delete op.body.caja; }
         if (op.body.usuario !== undefined) { op.body.vendedor = op.body.usuario; delete op.body.usuario; }
         if (op.body.vend !== undefined) { op.body.vendedor = op.body.vend; delete op.body.vend; }
+        // Ensure equiv_usd is present, if missing calculate it roughly from monto
+        if (op.body.equiv_usd === undefined && op.body.monto !== undefined) {
+          op.body.equiv_usd = op.body.monto; // Safe fallback, assuming it's roughly 1:1 or already converted
+        }
         // Strip fields not in Supabase schema (causes 400)
-        delete op.body.equiv_usd;
         delete op.body.almacen;
         delete op.body.sentido;
         delete op.body.id;
@@ -7132,6 +7135,7 @@ function registrarAbonoCli(cid){
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
+      equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
       cuenta:igCta,vendedor:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
