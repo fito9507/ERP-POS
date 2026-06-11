@@ -6588,7 +6588,7 @@ function renderLista(){
 
   document.getElementById('clientes-grid').innerHTML=visClientes.map(c=>{
   const tot=totCli(c),pag=pagCli(c),pdt=pdtCli(c);
-    const credito=tot<0.01&&pag>0.01?pag:0; // adelanto sin factura
+    const credito=pag>tot+0.01?pag-tot:0; // saldo a favor
     const pct=tot>0?Math.round(pag/tot*100):0;
     const col=getColor(c.color);
     const nFolios=c.folios.length;
@@ -6629,7 +6629,7 @@ function renderLista(){
 // ── FICHA — CUENTA ────────────────────────────────────────
 function renderFichaCuenta(c){
   const tot=totCli(c),pag=pagCli(c),pdt=pdtCli(c),pct=tot>0?Math.round(pag/tot*100):0;
-  const credito=tot<0.01&&pag>0.01?pag:0;
+  const credito=pag>tot+0.01?pag-tot:0;
   const col=getColor(c.color);
   const all=[];c.folios.forEach(f=>(f.abonos||[]).forEach(a=>all.push({...a,folio:f.id})));
   all.sort((a,b)=>b.fecha.localeCompare(a.fecha));
@@ -6772,11 +6772,11 @@ function renderPL(c,f){
       </span>
     </div>`).join('');
 }
-function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=parseFloat(v)||0;document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
-function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
-function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;renderFichaFolios(c);}
-function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);renderFichaFolios(c);}
-function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});renderFichaFolios(c);}
+function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
+function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
+function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
 function elimFolioCli(cid,fid){
   if(!confirm('¿Eliminar este folio completo? Esto devolverá el stock a los productos y borrará la venta del libro de ventas.')) return;
   const c=CLIENTES.find(x=>x.id===cid);
