@@ -1822,8 +1822,8 @@ async function flushQueue() {
   for (var op of toProcess) {
     try {
       if (op.path.includes('movimientos_ig') && op.body) {
-        // Normalize field names — Supabase column is 'cta', not 'caja' or 'cuenta'
-        if (op.body.descripcion !== undefined) { op.body.concepto = op.body.descripcion; delete op.body.descripcion; }
+        // Normalize field names — Supabase column is 'cta', not 'caja' or 'cuenta'. And 'descripcion', not 'concepto'.
+        if (op.body.concepto !== undefined) { op.body.descripcion = op.body.concepto; delete op.body.concepto; }
         if (op.body.cuenta !== undefined) { op.body.cta = op.body.cuenta; delete op.body.cuenta; }
         if (op.body.caja !== undefined) { op.body.cta = op.body.caja; delete op.body.caja; }
         if (op.body.vendedor !== undefined) { op.body.usuario = op.body.vendedor; delete op.body.vendedor; }
@@ -3058,8 +3058,25 @@ function ventaCreditoPOS() {
   });
   if(stockError){alert(stockError);return;}
   
-  var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
-  c.folios.push(newFolio);
+  var newFolio;
+  var creditoFolio = c.folios.find(f => f.tipo === 'credito_anticipado');
+  if(creditoFolio){
+    newFolio = creditoFolio;
+    fid = newFolio.id; // reuse the existing ID
+    newFolio.fecha = fecha;
+    newFolio.alm = alm;
+    newFolio.mon = mon;
+    newFolio.desc = desc;
+    newFolio.lineas = lineas.map(l=>({...l,qO:l.q,pO:l.precio}));
+    if(ini>0) newFolio.abonos.push(abonos[0]);
+    delete newFolio.tipo;
+    delete newFolio.ref;
+    delete newFolio.productos;
+    delete newFolio.totalUSD;
+  } else {
+    newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+    c.folios.push(newFolio);
+  }
   
   // discount stock
   lineas.forEach(function(l){
@@ -7103,7 +7120,7 @@ function registrarAbonoCli(cid){
     MOVS.push(igMov);
     // Always write — _supaWrite handles online/offline queuing
     _supaWrite('POST','movimientos_ig',{
-      fecha:fecha,tipo:igTipo,concepto:igMov.desc,
+      fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
       cta:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
