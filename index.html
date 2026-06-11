@@ -3920,9 +3920,30 @@ function _revertirVenta(v){
         monto_origen:p.m, monto_destino:p.m, tasa_usada:null
       };
       _cajasMovs.unshift(retiro);
-      _supaWrite('POST','mov_cajas',retiro);
+      if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',retiro);
     });
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+  }
+  // 3. Revertir folio: vaciar lineas o eliminar folio
+  var match = (v.notas||v.nota||v.desc||'').match(/Folio ([\w-]+)/);
+  if(match) {
+    var fid = match[1];
+    var cli = typeof CLIENTES!=='undefined' ? CLIENTES.find(c => c.folios && c.folios.some(f => f.id === fid)) : null;
+    if(cli) {
+      var fidx = cli.folios.findIndex(f => f.id === fid);
+      if(fidx >= 0) {
+        var f = cli.folios[fidx];
+        f.lineas = []; // Remove products from folio
+        if(!f.abonos || f.abonos.length === 0) {
+          cli.folios.splice(fidx, 1); // Delete completely if no abonos
+          if(typeof _supaOnline!=='undefined'&&_supaOnline) { if(typeof supaReq==='function') supaReq('DELETE','folios?id=eq.'+fid).catch(e=>{}); }
+          else { if(typeof enqueue==='function') enqueue({method:'DELETE',path:'folios?id=eq.'+fid}); }
+        } else {
+          if(typeof syncSaveFolio==='function') syncSaveFolio(cli.id, f);
+        }
+        if(typeof offlineSaveClientes==='function') offlineSaveClientes();
+      }
+    }
   }
 }
 function eliminarV(id, skipConfirm){
@@ -6763,7 +6784,7 @@ function elimFolioCli(cid,fid){
   if(idx==null||idx<0) return;
   var f=c.folios[idx];
   var targetVenta=VENTAS.find(v=>(v.notas||v.nota||v.desc||'').includes('Folio '+fid));
-  if(targetVenta){
+    if(targetVenta){
     eliminarV(targetVenta.id, true);
   } else {
     if(f.lineas){
@@ -6783,8 +6804,12 @@ function elimFolioCli(cid,fid){
       if(typeof renderProds==='function') renderProds();
     }
   }
-  c.folios.splice(idx,1);
-  offlineSaveClientes();
+  // Recalculate idx since eliminarV might have deleted it
+  const realIdx=c.folios.findIndex(x=>x.id===fid);
+  if(realIdx>=0) {
+    c.folios.splice(realIdx,1);
+    offlineSaveClientes();
+  }
   if(typeof supaReq!=='undefined'&&_supaOnline){
     supaReq('DELETE','folios?id=eq.'+fid).catch(e=>{});
     supaReq('DELETE','abonos?folio_id=eq.'+fid).catch(e=>{});
