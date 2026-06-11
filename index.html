@@ -3063,21 +3063,26 @@ function ventaCreditoPOS() {
   if(stockError){alert(stockError);return;}
   
   var newFolio;
-  // find a folio with no lineas (which is a credito_anticipado)
-  var creditoFolio = c.folios.find(f => !f.lineas || f.lineas.length === 0);
+  // find a folio with no lineas (which is a credito_anticipado) OR an overpaid folio
+  var creditoFolio = c.folios.find(f => !f.lineas || f.lineas.length === 0 || pagF(f) > totF(f) + 0.01);
   if(creditoFolio){
     newFolio = creditoFolio;
     fid = newFolio.id; // reuse the existing ID
-    newFolio.fecha = fecha;
-    newFolio.alm = alm;
-    newFolio.mon = mon;
-    newFolio.desc = desc;
-    newFolio.lineas = lineas.map(l=>({...l,qO:l.q,pO:l.precio}));
+    if (!newFolio.lineas || newFolio.lineas.length === 0) {
+      newFolio.fecha = fecha;
+      newFolio.alm = alm;
+      newFolio.mon = mon;
+      newFolio.desc = desc;
+      newFolio.lineas = lineas.map(l=>({...l,qO:l.q,pO:l.precio}));
+      delete newFolio.tipo;
+      delete newFolio.ref;
+      delete newFolio.productos;
+      delete newFolio.totalUSD;
+    } else {
+      newFolio.lineas = newFolio.lineas.concat(lineas.map(l=>({...l,qO:l.q,pO:l.precio})));
+      newFolio.desc = newFolio.desc + ' | ' + desc;
+    }
     if(ini>0) newFolio.abonos.push(abonos[0]);
-    delete newFolio.tipo;
-    delete newFolio.ref;
-    delete newFolio.productos;
-    delete newFolio.totalUSD;
   } else {
     newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
     c.folios.push(newFolio);
@@ -3933,7 +3938,21 @@ function _revertirVenta(v){
       var fidx = cli.folios.findIndex(f => f.id === fid);
       if(fidx >= 0) {
         var f = cli.folios[fidx];
-        f.lineas = []; // Remove products from folio
+        if(f.lineas && f.lineas.length > 0) {
+          var linesToSubtract = [];
+          var parts=(v.prods||'').split(',');
+          parts.forEach(function(p){
+            var m=p.trim().match(/^(\d+)×\s*(.+)/);
+            if(m){linesToSubtract.push({q:parseInt(m[1]),n:m[2].split(' @ $')[0].trim()});}
+          });
+          linesToSubtract.forEach(function(vl) {
+            var idx = f.lineas.findIndex(l => l.prod === vl.n);
+            if(idx >= 0) {
+              f.lineas[idx].q -= vl.q;
+              if (f.lineas[idx].q <= 0) f.lineas.splice(idx, 1);
+            }
+          });
+        }
         if(!f.abonos || f.abonos.length === 0) {
           cli.folios.splice(fidx, 1); // Delete completely if no abonos
           if(typeof _supaOnline!=='undefined'&&_supaOnline) { if(typeof supaReq==='function') supaReq('DELETE','folios?id=eq.'+fid).catch(e=>{}); }
