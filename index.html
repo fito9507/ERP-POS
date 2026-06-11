@@ -6682,12 +6682,15 @@ function renderFichaFolios(c){
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
             <div style="font-size:11px;color:var(--color-text-secondary)">${f.desc}</div>
-            <div class="pay-bar" style="width:200px;margin:5px 0 2px"><div class="pay-bar-fill" style="width:${pct}%"></div></div>
-            <div style="font-size:10px;color:var(--color-text-secondary)">${pct}% · ${f.lineas.length} productos · ${f.abonos.length} abonos</div>
+            <div class="pay-bar" style="width:200px;margin:5px 0 2px"><div class="pay-bar-fill" style="width:${pag>tot?100:pct}%;${pag>tot?'background:linear-gradient(90deg,#22c55e,#4ade80)':''}"></div></div>
+            <div style="font-size:10px;color:var(--color-text-secondary)">${pag>tot?'Crédito a favor':pct+'%'} · ${f.lineas.length} productos · ${f.abonos.length} abonos</div>
           </div>
           <div style="text-align:right;flex-shrink:0;padding-left:12px">
             <div style="font-size:15px;font-weight:500">${fN(tot)} USD</div>
-            <div style="font-size:12px;color:var(--color-text-danger);font-weight:500">Pdte: ${fN(pdt)} USD</div>
+            ${pag>tot+0.01 
+              ? `<div style="font-size:12px;color:#4ade80;font-weight:500">A favor: ${fN(pag-tot)} USD</div>` 
+              : `<div style="font-size:12px;color:var(--color-text-danger);font-weight:500">Pdte: ${fN(pdt)} USD</div>`
+            }
           </div>
         </div>
         <div class="folio-body" id="fb-${c.id}-${f.id}">
@@ -6701,7 +6704,10 @@ function renderFichaFolios(c){
             <div style="display:flex;justify-content:flex-end;gap:16px;font-size:12px;margin-top:6px">
               <span>Total: <strong>${fN(tot)} USD</strong></span>
               <span style="color:var(--color-text-success)">Abonado: <strong>${fN(pag)} USD</strong></span>
-              <span style="color:var(--color-text-danger)">Pdte: <strong>${fN(pdt)} USD</strong></span>
+              ${pag>tot+0.01
+                ? `<span style="color:#4ade80">A favor: <strong>${fN(pag-tot)} USD</strong></span>`
+                : `<span style="color:var(--color-text-danger)">Pdte: <strong>${fN(pdt)} USD</strong></span>`
+              }
             </div>
           </div>
           <div class="sep" style="margin:0"></div>
