@@ -1822,11 +1822,12 @@ async function flushQueue() {
   for (var op of toProcess) {
     try {
       if (op.path.includes('movimientos_ig') && op.body) {
-        // Normalize field names — Supabase column is 'cta', not 'caja' or 'cuenta'. And 'descripcion', not 'concepto'.
+        // Normalize field names — Supabase columns are 'descripcion', 'cuenta', 'vendedor'
         if (op.body.concepto !== undefined) { op.body.descripcion = op.body.concepto; delete op.body.concepto; }
-        if (op.body.cuenta !== undefined) { op.body.cta = op.body.cuenta; delete op.body.cuenta; }
-        if (op.body.caja !== undefined) { op.body.cta = op.body.caja; delete op.body.caja; }
-        if (op.body.vendedor !== undefined) { op.body.usuario = op.body.vendedor; delete op.body.vendedor; }
+        if (op.body.cta !== undefined) { op.body.cuenta = op.body.cta; delete op.body.cta; }
+        if (op.body.caja !== undefined) { op.body.cuenta = op.body.caja; delete op.body.caja; }
+        if (op.body.usuario !== undefined) { op.body.vendedor = op.body.usuario; delete op.body.usuario; }
+        if (op.body.vend !== undefined) { op.body.vendedor = op.body.vend; delete op.body.vend; }
         // Strip fields not in Supabase schema (causes 400)
         delete op.body.equiv_usd;
         delete op.body.almacen;
