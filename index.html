@@ -4374,10 +4374,10 @@ function confirmarPagarLiq(i, btn) {
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
     if(typeof _supaWrite==='function') {
       _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Comision vendedor',concepto:'Pago Liq. '+liq.vend+' '+liq.semana,
+        fecha:today(),tipo:'Comision vendedor',descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
         monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,
         equiv_usd:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(4)),
-        caja:cta, usuario:liq.vend, notas:''
+        cuenta:cta, vendedor:liq.vend, notas:''
       });
     }
   }
@@ -4514,10 +4514,10 @@ function eliminarLiq(i) {
     }
     if(typeof _supaWrite==='function'){
       _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Ingreso no-venta',concepto:_notasRev,
+        fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
         monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,
         equiv_usd:parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(4)),
-        caja:cajaNom, usuario:liq.vend, notas:''
+        cuenta:cajaNom, vendedor:liq.vend, notas:''
       });
     }
 
@@ -5102,8 +5102,8 @@ function registrar(){
       var _e=MOVS.find(function(m){return m.sentido==='ingreso'&&(m.desc||'').indexOf('(entrada)')>=0;});
       if(!_e) _e=MOVS[1];
       if(_e){
-      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,concepto:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
-        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),caja:_e.cta,usuario:'',notas:_e.notas||''})
+      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
+        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),cuenta:_e.cta,vendedor:'',notas:_e.notas||''})
         .catch(function(e){console.warn('I/G transfer entrada:',e);});
       }
     }
@@ -7126,7 +7126,7 @@ function registrarAbonoCli(cid){
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
       monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
-      cta:igCta,usuario:(typeof S!=='undefined'&&S.user)||'',notas:''
+      cuenta:igCta,vendedor:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
   })();
   // Add to caja if efectivo — via mov_cajas (same schema as admRegistrarMovCaja)
