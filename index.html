@@ -6797,7 +6797,46 @@ function renderPL(c,f){
 function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
-function elimL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.splice(i,1);if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function elimL(cid,fid,i){
+  const c=CLIENTES.find(x=>x.id===cid);
+  const f=c?.folios.find(x=>x.id===fid);
+  if(!f)return;
+  var l=f.lineas[i];
+  
+  var prod=PRODS.find(p=>p.n===l.prod||p.n===l.n);
+  if(prod){
+    prod.stk=(prod.stk||0)+l.q;
+    if(f.alm){
+      if(!prod.stk_alm)prod.stk_alm={};
+      prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
+      if(typeof syncStockAlmacen==='function'&&prod.supaId){
+        syncStockAlmacen(prod.supaId,f.alm,prod.stk_alm[f.alm]);
+      }
+    }
+  }
+
+  f.lineas.splice(i,1);
+  if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+
+  var ventas = VENTAS.filter(v=>(v.notas||v.nota||v.desc||'').includes('Folio '+fid));
+  if(ventas.length === 1) {
+    var v = ventas[0];
+    v.prods = f.lineas.map(ln => ln.q+'× '+ln.prod).join(', ');
+    v.totalUSD = f.lineas.reduce((a,ln) => a + toUSD(ln.q * ln.precio, ln.mon), 0);
+    if(f.lineas.length === 0) {
+      VENTAS = VENTAS.filter(x => x.id !== v.id);
+      if(typeof _supaOnline!=='undefined' && _supaOnline) { supaReq('DELETE','ventas?id=eq.'+(v.supaId||v.id)).catch(e=>{}); }
+    } else {
+      if(typeof _supaOnline!=='undefined' && _supaOnline) { supaReq('PATCH','ventas?id=eq.'+(v.supaId||v.id), {prods:v.prods, total_usd:v.totalUSD}).catch(e=>{}); }
+    }
+    offlineSaveVentas();
+    if(typeof renderVentas==='function') renderVentas();
+  }
+
+  if(typeof renderProds==='function') renderProds();
+  renderFichaFolios(c);
+}
 function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
 function elimFolioCli(cid,fid){
   if(!confirm('¿Eliminar este folio completo? Esto devolverá el stock a los productos y borrará la venta del libro de ventas.')) return;
