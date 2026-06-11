@@ -6959,7 +6959,7 @@ async function elimA(cid,fid,aid){
     var movIdx=_cajasMovs.findIndex(function(m){
       return m.caja_destino===abono.caja
         && m.tipo==='deposito'
-        && Math.abs(parseFloat(m.monto_destino||0)-parseFloat(abono.equivUSD||0))<0.02;
+        && Math.abs(parseFloat(m.monto_destino||0)-parseFloat(abono.monto||0))<0.02;
     });
     if(movIdx>=0){
       var movId=_cajasMovs[movIdx].id;
@@ -6974,8 +6974,8 @@ async function elimA(cid,fid,aid){
         notas:'Anulación abono '+c.nombre,
         usuario:(typeof S!=='undefined'&&S.user)||'Admin',
         caja_origen:abono.caja,
-        monto_origen:abono.equivUSD,
-        monto_destino:abono.equivUSD,
+        monto_origen:abono.monto,
+        monto_destino:abono.monto,
         tasa_usada:null
       };
       _cajasMovs.unshift(retiro);
