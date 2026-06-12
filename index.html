@@ -1355,7 +1355,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="modal-bg" id="modal-cli">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h3 style="margin:0">Nuevo cliente</h3>
+      <h3 style="margin:0" id="modal-cli-titulo">Nuevo cliente</h3>
       <button style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--color-text-secondary)" onclick="hideModal()">×</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:9px">
@@ -1367,7 +1367,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="nc-colores"></div>
       </div>
       <div><label class="lbl">Notas</label><textarea id="nc-notas" rows="2" placeholder="Observaciones..."></textarea></div>
-      <button class="btn btn-p" onclick="crearCliente()">Crear cliente</button>
+      <button class="btn btn-p" id="modal-cli-btn" onclick="crearCliente()">Crear cliente</button>
     </div>
   </div>
 </div>
@@ -6628,7 +6628,8 @@ function renderFicha(){
     <button id="fn-folios" onclick="fichaNavTo('f-folios')">Folios</button>
     <button id="fn-abonar" onclick="fichaNavTo('f-abonar')">+ Abonar</button>
     <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>
-    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger);margin-left:auto">🗑 Eliminar</button>`:''}`;
+    ${(_isAdmCli||c.owner===(S&&S.user))?`<button class="btn-sm" onclick="editarCliente('${c.id}')" style="margin-left:auto">\u270f\ufe0f Editar</button>`:''}
+    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger)">🗑 Eliminar</button>`:''}`;
   fichaNavTo('f-cuenta');
 }
 
@@ -7517,7 +7518,41 @@ function crearFolioCli(cid){
 // ── NUEVO CLIENTE ─────────────────────────────────────────
 function showModal(){
   colorSel='info';renderColores();
+  document.getElementById('modal-cli-titulo').textContent='Nuevo cliente';
+  var _b=document.getElementById('modal-cli-btn');
+  _b.textContent='Crear cliente'; _b.setAttribute('onclick','crearCliente()');
+  ['nc-nombre','nc-tel','nc-notas'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('modal-cli').classList.add('show');
+}
+
+function editarCliente(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  colorSel=c.color||'info'; renderColores();
+  document.getElementById('nc-nombre').value=c.nombre||'';
+  document.getElementById('nc-tel').value=c.tel||'';
+  document.getElementById('nc-alm').value=c.alm||'Habana';
+  document.getElementById('nc-notas').value=c.notas||'';
+  document.getElementById('modal-cli-titulo').textContent='Editar cliente';
+  var _b=document.getElementById('modal-cli-btn');
+  _b.textContent='Guardar cambios'; _b.setAttribute('onclick',"guardarEdicionCliente('"+cid+"')");
+  document.getElementById('modal-cli').classList.add('show');
+}
+
+function guardarEdicionCliente(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var nombre=document.getElementById('nc-nombre').value.trim();
+  if(!nombre){alert('El nombre es obligatorio');return;}
+  c.nombre=nombre;
+  c.tel=document.getElementById('nc-tel').value;
+  c.alm=document.getElementById('nc-alm').value;
+  c.color=colorSel;
+  c.notas=document.getElementById('nc-notas').value;
+  hideModal();
+  offlineSaveClientes();
+  syncSaveCliente(c);
+  if(typeof renderLista==='function')try{renderLista();}catch(e){}
+  if(typeof activoCli!=='undefined'&&activoCli===cid&&typeof renderFicha==='function')try{renderFicha();}catch(e){}
+  showToast('\u2713 Cliente actualizado');
 }
 function hideModal(){document.getElementById('modal-cli').classList.remove('show');}
 function renderColores(){
