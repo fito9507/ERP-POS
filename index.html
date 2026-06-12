@@ -1490,7 +1490,11 @@ const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
 
 // ── Telegram Bot ─────────────────────────────────────────────
-const TG_TOKEN = '5729620093:AAHEi7-8tqm3Eig4yoryBYMh0PPGIF9--js';
+// Token eliminado del cliente: los envios van por la Edge Function 'tg-send'
+// (secreto TG_BOT_TOKEN en Supabase). Dejar vacio. Solo rellenar en emergencia
+// como fallback temporal si la Edge Function estuviera caida.
+const TG_TOKEN = '';
+const TG_ON = true; // Telegram habilitado (via Edge Function)
 const TG_CHAT  = '575008904';  // personal (admin)
 const TG_BACKUP = '-5277125001';  // Grupo Backups
 // Grupos por almacén
@@ -1522,7 +1526,7 @@ function _tgApi(tgMethod, payload, isForm){
 }
 
 function tgSend(msg, alm, tipo){
-  if(!TG_TOKEN) return;
+  if(!TG_ON&&!TG_TOKEN) return;
   // tipo: 'venta' o 'pedido'
   var grupos = tipo==='pedido' ? TG_PEDIDOS : TG_VENTAS;
   var cid = alm && grupos[alm] ? grupos[alm] : TG_CHAT;
@@ -1622,7 +1626,7 @@ setTimeout(_autoSync, 5000);
 // ── CIERRE DIARIO 8PM ─────────────────────────────────
 var _cierreEnviado = '';
 function _checkCierre() {
-  if (!_supaOnline || !TG_TOKEN) return;
+  if (!_supaOnline || (!TG_ON&&!TG_TOKEN)) return;
   // Use Cuba timezone (America/Havana) — UTC-4 summer, UTC-5 winter
   var now = new Date();
   var cubaNow = new Date(now.toLocaleString('en-US', {timeZone:'America/Havana'}));
@@ -1878,7 +1882,7 @@ async function flushQueue() {
     var _reloads = [];
     // Only reload ventas if queue had POST/PATCH (not just DELETEs)
     var _hadPosts=toProcess.some(function(op){return op.method==='POST'||op.method==='PATCH';});
-    if(_hadPosts&&typeof TG_TOKEN!=='undefined'&&TG_TOKEN){
+    if(_hadPosts&&((typeof TG_ON!=='undefined'&&TG_ON)||(typeof TG_TOKEN!=='undefined'&&TG_TOKEN))){
       toProcess.filter(function(op){return op.method==='POST'&&op.path==='ventas'&&op.body;}).forEach(function(op){
         var v=op.body; if(!v||!v.almacen) return;
         var _pr=(function(){
@@ -3142,7 +3146,7 @@ function ventaCreditoPOS() {
       offlineSaveVentas();
     }catch(e){console.warn('folio sync:',e);}
   })();
-  if(TG_TOKEN){
+  if((TG_ON||TG_TOKEN)){
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+l.q*l.precio;},0);
@@ -3161,7 +3165,7 @@ function reservar(){
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
-  if(TG_TOKEN&&S.cart&&S.cart.length){
+  if((TG_ON||TG_TOKEN)&&S.cart&&S.cart.length){
     var _rP=S.cart.map(function(c){return '  • '+c.q+'x '+c.n+' @ $'+fN(c.precioUSD)+' = $'+fN(c.q*c.precioUSD);}).join('\n');
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
     var tgMsg = '\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>';
@@ -5242,7 +5246,7 @@ function registrar(){
   document.getElementById('n-equiv').value='';
   document.getElementById('n-preview').style.display='none';
   // Telegram for I/G movement (skip transfers - they are internal)
-  if(TG_TOKEN&&tipo!=='Transferencia entre cuentas'){
+  if((TG_ON||TG_TOKEN)&&tipo!=='Transferencia entre cuentas'){
     var _igIcon=meta.sentido==='ingreso'?'\uD83D\uDCB0':'\uD83D\uDCB8';
     var _igAlm=['Habana','Placetas','Xportprise'].find(function(a){return cta.indexOf(a)>=0;})||'';
     var _igMsg=_igIcon+' <b>'+tipo+'</b>\n'
@@ -7527,7 +7531,7 @@ function crearFolioCli(cid){
       offlineSaveVentas();
     }catch(e){console.warn('folio sync:',e);}
   })();
-  if(TG_TOKEN){
+  if((TG_ON||TG_TOKEN)){
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
@@ -9480,7 +9484,7 @@ function renderBackup() {
 // Backup automático diario — envía SQL al Telegram admin
 async function enviarBackupTelegram() {
   if(!_supaOnline){ console.warn('Sin conexion para backup'); return; }
-  if(!TG_TOKEN || !TG_BACKUP){ return; }
+  if((!TG_ON&&!TG_TOKEN) || !TG_BACKUP){ return; }
   try {
     var sql = await exportBackupSQL(true);
     if(!sql){ return; }
@@ -9519,7 +9523,7 @@ async function enviarBackupTelegram() {
 
 async function backupImagenesTelegram(){
   if(!_supaOnline){ showToast('\u26a0 Necesitas conexi\u00f3n'); return; }
-  if(!TG_TOKEN||!TG_BACKUP){ showToast('\u26a0 Telegram no configurado'); return; }
+  if((!TG_ON&&!TG_TOKEN)||!TG_BACKUP){ showToast('\u26a0 Telegram no configurado'); return; }
   var conImg=PRODS.filter(function(p){return p.img;});
   if(!conImg.length){ showToast('No hay productos con imagen'); return; }
   if(!confirm('Enviar '+conImg.length+' im\u00e1genes de productos al grupo de backup de Telegram?\n(Puede tardar unos minutos)')) return;
