@@ -3927,6 +3927,24 @@ function _revertirVenta(v){
       _cajasMovs.unshift(retiro);
       if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',retiro);
     });
+    // 2b. Revertir vueltos: el vuelto fue un retiro al vender, ahora se devuelve a caja
+    var _vts=v.vueltos;
+    if(typeof _vts==='string'){try{_vts=JSON.parse(_vts);}catch(e){_vts=[];}}
+    if(Array.isArray(_vts)&&_vts.length){
+      _vts.forEach(function(vt){
+        if(!vt||!vt.m||vt.m<=0) return;
+        var cajaV=vt.caja||(vt.mon+' '+(v.alm||''));
+        var depV={
+          tipo:'deposito', fecha:v.fecha||today(),
+          notas:'Anulacion venta '+v.id+' (vuelto)',
+          usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+          caja_origen:null, caja_destino:cajaV,
+          monto_origen:vt.m, monto_destino:vt.m, tasa_usada:null
+        };
+        _cajasMovs.unshift(depV);
+        if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',depV);
+      });
+    }
     try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
   }
   // 3. Revertir folio: vaciar lineas o eliminar folio
