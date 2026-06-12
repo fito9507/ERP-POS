@@ -6730,7 +6730,7 @@ function renderFichaCuenta(c){
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:500">${a.desc}</div>
             <div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">
-              ${fD(a.fecha)} · Folio ${a.folio}${a.tasa?' · tasa '+fN(a.tasa,0):''}
+              ${fD(a.fecha)} · Folio ${a.folio}${(()=>{var _t=a.tasa||(a.mon!=='USD'&&a.equivUSD>0&&a.monto>0?(a.mon==='EUR'?a.equivUSD/a.monto:a.monto/a.equivUSD):null);return _t?' · tasa '+fN(_t,_t<10?2:0):'';})()}
               ${a.cajaTipo==='efectivo'?'· <span style="color:var(--color-text-success)">💵 Efectivo → '+a.caja+'</span>':''}
               ${a.cajaTipo==='compensacion'?'· <span style="color:var(--color-text-info)">🔄 Compensación ('+a.concepto+')</span>':''}
             </div>
@@ -7273,7 +7273,8 @@ function registrarAbonoCli(cid){
       if(!confirm('El abono ('+fN(equivUSD)+' USD) supera el pendiente ('+fN(_pdt)+' USD). ¿Continuar?'))return;
     }
   }
-  const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:mon==='USD'?null:tasaManual||null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
+  const _tasaEf=mon==='USD'?null:(tasaManual||(equivUSD>0?(mon==='EUR'?equivUSD/monto:monto/equivUSD):null));
+  const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:_tasaEf?parseFloat(parseFloat(_tasaEf).toFixed(4)):null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
   var _isNewFolio = false;
