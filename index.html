@@ -5150,22 +5150,21 @@ function registrar(){
   try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
   // Save to Supabase movimientos_ig + update mov_cajas so saldo reflects change
   if(typeof supaReq!=='undefined'){
-    // Schema: concepto, moneda, caja, usuario — _supaWrite handles offline queue
+    // Schema Supabase: descripcion, moneda, cuenta, vendedor — _supaWrite handles offline queue
     _supaWrite('POST','movimientos_ig',{
-      fecha:mov.fecha, tipo:mov.tipo, concepto:mov.desc,
+      fecha:mov.fecha, tipo:mov.tipo, descripcion:mov.desc,
       monto:parseFloat(parseFloat(mov.monto).toFixed(4)),
       moneda:mov.mon,
       equiv_usd:parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
-      caja:mov.cta, usuario:mov.vend||'', notas:mov.notas||''
+      cuenta:mov.cta, vendedor:mov.vend||'', notas:mov.notas||''
     });
     // If transferencia, also save the entrada entry
     if(mov.tipo==='Transferencia entre cuentas'&&MOVS.length>1){
       var _e=MOVS.find(function(m){return m.sentido==='ingreso'&&(m.desc||'').indexOf('(entrada)')>=0;});
       if(!_e) _e=MOVS[1];
       if(_e){
-      supaReq('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
-        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),cuenta:_e.cta,vendedor:'',notas:_e.notas||''})
-        .catch(function(e){console.warn('I/G transfer entrada:',e);});
+      _supaWrite('POST','movimientos_ig',{fecha:_e.fecha,tipo:_e.tipo,descripcion:_e.desc,monto:parseFloat(parseFloat(_e.monto).toFixed(4)),
+        moneda:_e.mon,equiv_usd:parseFloat(parseFloat(_e.equivUSD).toFixed(4)),cuenta:_e.cta,vendedor:'',notas:_e.notas||''});
       }
     }
     // Write to mov_cajas so saldo de caja reflects this movement
