@@ -9368,17 +9368,14 @@ function renderBackup() {
 
   el.innerHTML = '<div style="max-width:600px">'
     + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">Backup y Exportación</div>'
-    + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:20px">Descarga todos los datos del sistema. El JSON puede reimportarse para restaurar.</div>'
+    + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:20px">El backup diario (.sql + .json) se envía a Telegram a las 8pm. Restaura desde "Restaurar Supabase".</div>'
 
     + '<div class="adm-card" style="margin-bottom:12px">'
-    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">💾 Backup completo (JSON)</div>'
-    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Exporta todos los datos: productos, ventas, usuarios, clientes, movimientos. Importable para restaurar.</div>'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🔄 Sincronización</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Empuja los datos locales hacia Supabase manualmente si hace falta.</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-    + '<button class="adm-btn adm-btn-p" onclick="exportJSON()">⬇ Descargar JSON</button>'
     + '<button class="adm-btn" onclick="syncTodosProductos()" style="margin-top:6px">🔄 Sincronizar productos con Supabase</button>'
     + '<button class="adm-btn" onclick="syncPushAllClientes()" style="margin-top:6px">👤 Sincronizar clientes con Supabase</button>'
-    + (isAdm ? '<button class="adm-btn" onclick="document.getElementById(\'import-json-input\').click()">⬆ Importar JSON</button>' : '')
-    + (isAdm ? '<input type="file" id="import-json-input" accept=".json" style="display:none" onchange="importJSON(this)">' : '')
     + '<button class="adm-btn" style="margin-top:6px;border-color:var(--color-text-danger);color:var(--color-text-danger)" onclick="limpiarCacheLocal()">🗑 Limpiar caché local</button>'
     + '</div>'
     + '</div>'
@@ -9387,7 +9384,7 @@ function renderBackup() {
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Genera un archivo .sql con INSERT statements para restaurar la base de datos en Supabase.</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
-    + '<button class="adm-btn" onclick="document.getElementById(\'import-sql-input\').click()">⬆ Restaurar desde SQL</button>'
+    + '<button class="adm-btn" onclick="document.getElementById(\'import-sql-input\').click()">⬆ Restaurar Supabase (.sql / .json)</button>'
     + '<input type="file" id="import-sql-input" accept=".sql,.json" style="display:none" onchange="importarBackupSQL(this)">'
     + '<button class="adm-btn" onclick="backupImagenesTelegram()" style="margin-top:8px">\uD83D\uDCF7 Backup im\u00e1genes \u2192 Telegram</button>'
     + '</div>'
