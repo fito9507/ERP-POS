@@ -6002,6 +6002,15 @@ function registrarPagoDeuda(prestamoId){
       equivUSD:parseFloat(equivUSD.toFixed(2)),
       cta:caja,sentido:sentidoMov,notas:nota});
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){}
+    // Persistir en Supabase movimientos_ig (si no, desaparece del Libro al sincronizar)
+    if(typeof _supaWrite==='function'){
+      _supaWrite('POST','movimientos_ig',{
+        fecha:fecha, tipo:tipoMov, descripcion:descMov,
+        monto:parseFloat(parseFloat(monto).toFixed(4)), moneda:mon,
+        equiv_usd:parseFloat(equivUSD.toFixed(4)),
+        cuenta:caja||'', vendedor:(typeof S!=='undefined'&&S.user)||'', notas:nota||''
+      });
+    }
   }
 
   // ── Push to mov_cajas (Supabase caja) ──
@@ -6166,6 +6175,11 @@ function eliminarPago(prestamoId,pagoId){
 
   p.pagos.splice(pgIdx, 1);
 
+  // Borrar de Supabase movimientos_ig (por descripcion + fecha + monto)
+  if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
+    supaReq('DELETE','movimientos_ig?descripcion=eq.'+encodeURIComponent(descMov)+'&fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto=eq.'+pg.monto).catch(function(e){});
+    supaReq('DELETE','movimientos_ig?descripcion=eq.'+encodeURIComponent(descLiq)+'&fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto=eq.'+pg.monto).catch(function(e){});
+  }
   // Remove from _cajasMovs and Supabase
   var targetId = null;
   if(typeof _cajasMovs!=='undefined'){
@@ -6418,6 +6432,15 @@ function liquidarDeuda_p(id){
       cta:p.cta||'',sentido:sentidoMov,notas:''
     });
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+    // Persistir en Supabase movimientos_ig (si no, desaparece del Libro al sincronizar)
+    if(typeof _supaWrite==='function'){
+      _supaWrite('POST','movimientos_ig',{
+        fecha:ahora, tipo:tipoMov, descripcion:descMov,
+        monto:parseFloat(parseFloat(saldo).toFixed(4)), moneda:p.moneda,
+        equiv_usd:parseFloat(equivUSD.toFixed(4)),
+        cuenta:p.cta||'', vendedor:(typeof S!=='undefined'&&S.user)||'', notas:''
+      });
+    }
   }
   
   if(p.cta) {
