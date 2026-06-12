@@ -1,0 +1,25 @@
+name: Validar sintaxis JS
+on: [push, pull_request]
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Extraer y validar JS de index.html
+        run: |
+          python3 - << 'PYEOF'
+          import re, subprocess, sys
+          c = open('index.html', encoding='utf-8').read()
+          js = ''.join(m.group(2) for m in re.finditer(r'<script([^>]*)>(.*?)</script>', c, re.DOTALL) if 'src=' not in m.group(1))
+          open('all.js','w',encoding='utf-8').write(js)
+          r = subprocess.run(['node','--check','all.js'])
+          if r.returncode != 0:
+              print('::error::Sintaxis JS rota en index.html — commit rechazado')
+          # Chequeos extra de integridad
+          if c.count('<script') != c.count('</script>'):
+              print('::error::Tags <script> desbalanceados'); sys.exit(1)
+          sys.exit(r.returncode)
+          PYEOF
