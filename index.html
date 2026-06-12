@@ -1496,16 +1496,38 @@ const TG_BACKUP = '-5277125001';  // Grupo Backups
 // Grupos por almacén
 const TG_VENTAS  = { Habana:'-1003851284058', Placetas:'-1003866260307' };
 const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669' };
+function _tgApi(tgMethod, payload, isForm){
+  var url=SUPA_URL+'/functions/v1/tg-send';
+  var hdrs={'Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY};
+  var opts;
+  if(isForm){
+    payload.append('tg_method',tgMethod);
+    opts={method:'POST',headers:hdrs,body:payload};
+  } else {
+    var bodyJ=Object.assign({tg_method:tgMethod},payload);
+    hdrs['Content-Type']='application/json';
+    opts={method:'POST',headers:hdrs,body:JSON.stringify(bodyJ)};
+  }
+  return fetch(url,opts).then(function(r){
+    if(r.ok) return r;
+    throw new Error('edge tg-send '+r.status);
+  }).catch(function(e){
+    // FALLBACK TEMPORAL: token directo. Eliminar cuando la Edge Function este desplegada.
+    if(typeof TG_TOKEN!=='undefined'&&TG_TOKEN){
+      if(isForm){ try{payload.delete('tg_method');}catch(_e){} return fetch('https://api.telegram.org/bot'+TG_TOKEN+'/'+tgMethod,{method:'POST',body:payload}); }
+      return fetch('https://api.telegram.org/bot'+TG_TOKEN+'/'+tgMethod,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    }
+    throw e;
+  });
+}
+
 function tgSend(msg, alm, tipo){
   if(!TG_TOKEN) return;
   // tipo: 'venta' o 'pedido'
   var grupos = tipo==='pedido' ? TG_PEDIDOS : TG_VENTAS;
   var cid = alm && grupos[alm] ? grupos[alm] : TG_CHAT;
   [TG_CHAT, cid].filter(function(x,i,a){return a.indexOf(x)===i;}).forEach(function(id){
-    fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendMessage',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({chat_id:id,text:msg,parse_mode:'HTML'})
-    }).catch(function(e){console.warn('Telegram:',e);});
+    _tgApi('sendMessage',{chat_id:id,text:msg,parse_mode:'HTML'}).catch(function(e){console.warn('Telegram:',e);});
   });
 }
 let _supaOnline = navigator.onLine;
@@ -9475,7 +9497,7 @@ async function enviarBackupTelegram() {
     fd.append('document', new Blob([sql], {type:'text/sql'}), fname);
     fd.append('caption', caption);
     fd.append('parse_mode', 'HTML');
-    var r = await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument', {method:'POST', body:fd});
+    var r = await _tgApi('sendDocument', fd, true);
     if(r.ok){
       console.log('Backup enviado a Telegram');
       try{localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10));}catch(e){}
@@ -9489,7 +9511,7 @@ async function enviarBackupTelegram() {
         fdj.append('chat_id', TG_BACKUP);
         fdj.append('document', new Blob([JSON.stringify(window._backupJSON)],{type:'application/json'}), 'backup_'+new Date().toISOString().slice(0,10)+'.json');
         fdj.append('caption','\uD83D\uDCE6 Snapshot JSON \u2014 restaurable desde el ERP (Admin \u2192 Restaurar)');
-        await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument',{method:'POST',body:fdj});
+        await _tgApi('sendDocument', fdj, true);
       }catch(e){console.warn('backup json tg:',e);}
     }
   } catch(e){ console.warn('enviarBackupTelegram:', e); }
@@ -9513,7 +9535,7 @@ async function backupImagenesTelegram(){
       fd.append('chat_id',TG_BACKUP);
       fd.append('document',blob,(p.nombre||'producto').replace(/[^\w\-]/g,'_')+'.'+ext);
       fd.append('caption','\uD83D\uDCF7 '+p.nombre);
-      var tr=await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument',{method:'POST',body:fd});
+      var tr=await _tgApi('sendDocument', fd, true);
       if(tr.ok)ok++; else err++;
       showToast('\uD83D\uDCF7 '+(i+1)+'/'+conImg.length);
       await new Promise(function(rs){setTimeout(rs,1200);}); // rate limit telegram
