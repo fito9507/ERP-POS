@@ -9388,7 +9388,8 @@ function renderBackup() {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="exportBackupSQL()">⬇ Descargar SQL backup</button>'
     + '<button class="adm-btn" onclick="document.getElementById(\'import-sql-input\').click()">⬆ Restaurar desde SQL</button>'
-    + '<input type="file" id="import-sql-input" accept=".sql" style="display:none" onchange="importarBackupSQL(this)">'
+    + '<input type="file" id="import-sql-input" accept=".sql,.json" style="display:none" onchange="importarBackupSQL(this)">'
+    + '<button class="adm-btn" onclick="backupImagenesTelegram()" style="margin-top:8px">\uD83D\uDCF7 Backup im\u00e1genes \u2192 Telegram</button>'
     + '</div>'
 
     + '<div class="adm-card" style="margin-bottom:12px">'
@@ -9437,7 +9438,44 @@ async function enviarBackupTelegram() {
     } else {
       console.warn('Backup Telegram fallo:', r.status);
     }
+    // Enviar tambien el snapshot JSON (restaurable desde el propio ERP)
+    if(window._backupJSON){
+      try{
+        var fdj=new FormData();
+        fdj.append('chat_id', TG_BACKUP);
+        fdj.append('document', new Blob([JSON.stringify(window._backupJSON)],{type:'application/json'}), 'backup_'+new Date().toISOString().slice(0,10)+'.json');
+        fdj.append('caption','\uD83D\uDCE6 Snapshot JSON \u2014 restaurable desde el ERP (Admin \u2192 Restaurar)');
+        await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument',{method:'POST',body:fdj});
+      }catch(e){console.warn('backup json tg:',e);}
+    }
   } catch(e){ console.warn('enviarBackupTelegram:', e); }
+}
+
+async function backupImagenesTelegram(){
+  if(!_supaOnline){ showToast('\u26a0 Necesitas conexi\u00f3n'); return; }
+  if(!TG_TOKEN||!TG_BACKUP){ showToast('\u26a0 Telegram no configurado'); return; }
+  var conImg=PRODS.filter(function(p){return p.img;});
+  if(!conImg.length){ showToast('No hay productos con imagen'); return; }
+  if(!confirm('Enviar '+conImg.length+' im\u00e1genes de productos al grupo de backup de Telegram?\n(Puede tardar unos minutos)')) return;
+  var ok=0,err=0;
+  for(var i=0;i<conImg.length;i++){
+    var p=conImg[i];
+    try{
+      var ir=await fetch(p.img);
+      if(!ir.ok){err++;continue;}
+      var blob=await ir.blob();
+      var ext=(p.img.split('.').pop()||'jpg').split('?')[0].slice(0,4);
+      var fd=new FormData();
+      fd.append('chat_id',TG_BACKUP);
+      fd.append('document',blob,(p.nombre||'producto').replace(/[^\w\-]/g,'_')+'.'+ext);
+      fd.append('caption','\uD83D\uDCF7 '+p.nombre);
+      var tr=await fetch('https://api.telegram.org/bot'+TG_TOKEN+'/sendDocument',{method:'POST',body:fd});
+      if(tr.ok)ok++; else err++;
+      showToast('\uD83D\uDCF7 '+(i+1)+'/'+conImg.length);
+      await new Promise(function(rs){setTimeout(rs,1200);}); // rate limit telegram
+    }catch(e){err++;}
+  }
+  showToast('\u2713 Im\u00e1genes: '+ok+' enviadas'+(err?' \u00b7 '+err+' errores':''));
 }
 
 async function importarBackupSQL(input) {
@@ -9446,6 +9484,37 @@ async function importarBackupSQL(input) {
   var reader = new FileReader();
   reader.onload = async function(e) {
     var sql = e.target.result;
+    // ── Restauracion JSON via REST (modifica Supabase directamente, sin exec_sql) ──
+    if (file.name.endsWith('.json') || (sql && sql.trim().charAt(0)==='{')) {
+      var data; try{ data=JSON.parse(sql); }catch(_e){ showToast('\u26a0 JSON no v\u00e1lido'); return; }
+      var tablas=Object.keys(data).filter(function(k){return k.charAt(0)!=='_'&&Array.isArray(data[k]);});
+      var totReg=tablas.reduce(function(a,t){return a+data[t].length;},0);
+      if(!confirm('\u00bfRestaurar backup JSON ('+(data._fecha||'?').slice(0,10)+')?\n\n'+tablas.length+' tablas, '+totReg+' registros.\nLos registros existentes con el mismo id se ACTUALIZARAN.\n\n\u00bfContinuar?')) return;
+      showToast('\u23f3 Restaurando '+totReg+' registros...');
+      var okT=0, errT=0;
+      for(var ti=0;ti<tablas.length;ti++){
+        var tn=tablas[ti], rows=data[tn];
+        for(var ri=0;ri<rows.length;ri++){
+          var row=rows[ri];
+          try{
+            var rr=await supaReq('POST',tn,row);
+            if(rr.ok){okT++;}
+            else if(rr.status===409&&row.id!==undefined){
+              var body2=Object.assign({},row); delete body2.id;
+              var rp=await supaReq('PATCH',tn+'?id=eq.'+row.id,body2);
+              if(rp.ok)okT++; else errT++;
+            } else errT++;
+          }catch(_e){errT++;}
+        }
+        showToast('\u23f3 '+tn+' \u2713 ('+(ti+1)+'/'+tablas.length+')');
+      }
+      showToast(errT===0?('\u2713 Restauraci\u00f3n completa: '+okT+' registros'):('\u2713 '+okT+' OK \u00b7 '+errT+' errores (ver consola)'));
+      if(typeof syncLoadVentas==='function')try{await syncLoadVentas();}catch(_e){}
+      if(typeof syncLoadMovsIG==='function')try{await syncLoadMovsIG();}catch(_e){}
+      if(typeof loadCajasData==='function')try{await loadCajasData();}catch(_e){}
+      if(typeof syncLoadClientes==='function')try{await syncLoadClientes();}catch(_e){}
+      return;
+    }
     if (!sql || !sql.includes('INSERT INTO')) {
       showToast('⚠ Archivo no válido — no contiene sentencias INSERT');
       return;
@@ -9675,6 +9744,40 @@ async function exportBackupSQL(returnSQL) {
 
     // 14. Número de pedido configurable (tasas tabla, clave PEDIDO_NUM_*)
     // Ya cubierto en sección TASAS arriba
+
+    // ── TABLAS ADICIONALES (folios, abonos, com_reglas, liquidaciones, stock_movimientos) ──
+    var _extraTablas=['folios','abonos','com_reglas','liquidaciones','stock_movimientos'];
+    window._backupJSON={_fecha:new Date().toISOString()};
+    for(var _ti=0;_ti<_extraTablas.length;_ti++){
+      var _tn=_extraTablas[_ti];
+      try{
+        var _tr=await supaReq('GET',_tn+'?select=*&limit=5000');
+        if(!_tr.ok) continue;
+        var _td=await _tr.json()||[];
+        window._backupJSON[_tn]=_td;
+        sql+='\n-- \u2500\u2500 '+_tn.toUpperCase()+' \u2500\u2500\n';
+        _td.forEach(function(r){
+          var ks=Object.keys(r).filter(function(k){return r[k]!==undefined;});
+          var vals=ks.map(function(k){
+            var v=r[k];
+            if(v===null) return 'NULL';
+            if(typeof v==='number') return v;
+            if(typeof v==='boolean') return v?'true':'false';
+            if(typeof v==='object') return "'"+JSON.stringify(v).replace(/'/g,"''")+"'::jsonb";
+            return "'"+String(v).replace(/'/g,"''")+"'";
+          });
+          sql+='INSERT INTO '+_tn+' ('+ks.join(',')+') VALUES ('+vals.join(',')+') ON CONFLICT (id) DO NOTHING;\n';
+        });
+      }catch(e){console.warn('backup '+_tn+':',e);}
+    }
+    // Guardar tambien las tablas principales en el JSON (para restauracion via REST)
+    var _mainTablas=['productos','stock_almacen','tasas','tasas_almacen','usuarios','ventas','cajas','mov_cajas','movimientos_ig','clientes','prestamos','comisiones','pedidos'];
+    for(var _mi=0;_mi<_mainTablas.length;_mi++){
+      try{
+        var _mr=await supaReq('GET',_mainTablas[_mi]+'?select=*&limit=5000');
+        if(_mr.ok) window._backupJSON[_mainTablas[_mi]]=await _mr.json()||[];
+      }catch(e){}
+    }
 
     if(returnSQL) return sql;
     // Download
