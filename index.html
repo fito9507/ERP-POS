@@ -4660,6 +4660,7 @@ function registrarVenta(){
       +'\uD83C\uDFE6 Cobro: '+_tgCaja+'\n'
       +(v_new.prods?'\uD83D\uDCE6 '+v_new.prods:'')
       +(v_new.nota?'\n\uD83D\uDCDD '+v_new.nota:'');
+    if(typeof tgSend==='function') tgSend(_tgMsg, v_new.alm, 'venta');
   })();
   document.getElementById('nv-com-pct').value='';
   document.getElementById('nv-com-usd').value='';
