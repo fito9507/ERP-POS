@@ -12043,12 +12043,13 @@ function registrarPagoCnt(cntId, gId) {
 }
 
 window.updCntPagoCaja = function() {
+  document.getElementById('fcp-usd-mod').value='0';
   var sel = document.getElementById('fcp-caja');
   var wrp = document.getElementById('fcp-caja-wrap');
   var inpCaja = document.getElementById('fcp-moncaja');
   var lblCaja = document.getElementById('fcp-caja-mon');
   var inpUSD = document.getElementById('fcp-usd');
-  var usdMod = document.getElementById('fcp-usd-mod').value === '1';
+  var usdMod = false;
   var elMon = document.getElementById('fcp-mon');
   
   if(!sel || !elMon) return;
@@ -12148,10 +12149,47 @@ window.updCntPagoTasa = function() {
 
 window.updCntPagoUsd = function() {
   document.getElementById('fcp-usd-mod').value='1';
-  // El Equivalente USD sirve únicamente como un valor de sobreescritura (override) 
-  // para el costo global del contenedor. No debe alterar la matemática física 
-  // de la extracción de la caja (Deuda <-> Tasa <-> Caja), la cual se maneja
-  // independientemente en sus propios campos.
+  var usd = parseFloat(document.getElementById('fcp-usd').value)||0;
+  var sel = document.getElementById('fcp-caja');
+  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
+  var elMon = document.getElementById('fcp-mon');
+  if(!elMon) return;
+  var deudaMon = elMon.getAttribute('data-moneda');
+  var cajaMon = opt ? opt.getAttribute('data-mon') : deudaMon;
+  
+  var almToUse=null;
+  if(opt && typeof _cajasData !== 'undefined') {
+    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
+    if(cObj) almToUse = cObj.almacen;
+  }
+  
+  var newAmortiza = deudaMon==='USD' ? usd : (typeof fromUSD==='function'?fromUSD(usd,deudaMon,almToUse):usd*(RATES[deudaMon]||1));
+  elMon.value = newAmortiza.toFixed(2);
+  
+  var wrp = document.getElementById('fcp-caja-wrap');
+  var inpCaja = document.getElementById('fcp-moncaja');
+  var lblCaja = document.getElementById('fcp-caja-mon');
+  
+  if(!sel.value) { 
+    wrp.style.display='none'; 
+    return; 
+  }
+
+  if(cajaMon !== deudaMon) {
+    wrp.style.display='block';
+    lblCaja.innerText = '(' + cajaMon + ')';
+    var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
+    inpCaja.value = eqCaja.toFixed(2);
+    
+    var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
+    var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
+    if(newAmortiza>0 && eqCaja>0) {
+      var tasa = (!isCajaNac && isDeudaNac) ? (newAmortiza / eqCaja) : (eqCaja / newAmortiza);
+      document.getElementById('fcp-tasa').value = tasa.toFixed(4);
+    }
+  } else {
+    wrp.style.display='none';
+  }
 };
 
 function savePagoCnt() {
