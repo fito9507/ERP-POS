@@ -9024,9 +9024,15 @@ function _getTasaDefault(monOrig, monDest) {
   if (monOrig === monDest) return 1;
   if (monDest==='CUP'  && monOrig==='USD') return RATES.CUP;
   if (monDest==='CUP'  && monOrig==='EUR') return parseFloat((RATES.CUP/RATES.EUR).toFixed(2));
-  if (monDest==='CUP'  && monOrig==='CUPT') return RATES.CUPT;
-  if (monOrig==='CUP'  && monDest==='USD') return parseFloat((1/RATES.CUP).toFixed(6));
-  if (monOrig==='CUP'  && monDest==='EUR') return parseFloat((RATES.EUR/RATES.CUP).toFixed(6));
+  if (monDest==='CUPT' && monOrig==='USD') return RATES.CUPT;
+  if (monDest==='CUPT' && monOrig==='EUR') return parseFloat((RATES.CUPT/RATES.EUR).toFixed(2));
+
+  // Al revés (Nacional -> Divisa), devolvemos la misma tasa natural (ej: 330 en vez de 0.003)
+  if (monOrig==='CUP'  && monDest==='USD') return RATES.CUP;
+  if (monOrig==='CUP'  && monDest==='EUR') return parseFloat((RATES.CUP/RATES.EUR).toFixed(2));
+  if (monOrig==='CUPT' && monDest==='USD') return RATES.CUPT;
+  if (monOrig==='CUPT' && monDest==='EUR') return parseFloat((RATES.CUPT/RATES.EUR).toFixed(2));
+
   if (monOrig==='USD'  && monDest==='EUR') return RATES.EUR;
   if (monOrig==='EUR'  && monDest==='USD') return parseFloat((1/RATES.EUR).toFixed(4));
   return 1;
@@ -9157,7 +9163,6 @@ function _onMcCajaChange() {
   if (tipo==='cambio') {
     var tasa=_getTasaDefault(monO,monD);
     var tEl=document.getElementById('mc-tasa'); if(tEl) tEl.value=tasa;
-    if(hiEl) hiEl.textContent='1 '+monO+' = '+tasa+' '+monD;
   }
   _calcMcDestino();
 }
@@ -9177,10 +9182,23 @@ function _calcMcDestino() {
   var orig=document.getElementById('mc-origen')?.value||'';
   var dest=document.getElementById('mc-destino')?.value||'';
   var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dest);
-  if(hiEl) hiEl.textContent='1 '+monO+' = '+tasa+' '+monD;
+  
+  var isOrigNac = (monO==='CUP'||monO==='CUPT');
+  var isDestNac = (monD==='CUP'||monD==='CUPT');
+  var divOp = (isOrigNac && !isDestNac);
+
+  if(hiEl) {
+    if (divOp) hiEl.textContent = tasa + ' ' + monO + ' = 1 ' + monD;
+    else hiEl.textContent = '1 ' + monO + ' = ' + tasa + ' ' + monD;
+  }
+
   if (!destEl) return;
-  if (tipo==='transferencia') destEl.value=fN(monto,2);
-  else if (tipo==='cambio')   destEl.value=fN(monto*tasa,2);
+  if (tipo==='transferencia') {
+    destEl.value=fN(monto,2);
+  } else if (tipo==='cambio') {
+    if (divOp && tasa>0) destEl.value=fN(monto/tasa,2);
+    else destEl.value=fN(monto*tasa,2);
+  }
 }
 
 function _onMcDestManual() {
@@ -9190,9 +9208,21 @@ function _onMcDestManual() {
   var orig=document.getElementById('mc-origen')?.value||'';
   var dc=document.getElementById('mc-destino')?.value||'';
   var monO=_getMonedaFromCaja(orig), monD=_getMonedaFromCaja(dc);
+  
+  var isOrigNac = (monO==='CUP'||monO==='CUPT');
+  var isDestNac = (monD==='CUP'||monD==='CUPT');
+  var divOp = (isOrigNac && !isDestNac);
+
   if (monto>0 && tEl) {
-    var t=parseFloat((dest/monto).toFixed(6)); tEl.value=t;
-    if(hiEl) hiEl.textContent='1 '+monO+' = '+t+' '+monD;
+    var t;
+    if (divOp && dest>0) t = parseFloat((monto/dest).toFixed(4));
+    else t = parseFloat((dest/monto).toFixed(6));
+    
+    tEl.value=t;
+    if(hiEl) {
+      if (divOp) hiEl.textContent = t + ' ' + monO + ' = 1 ' + monD;
+      else hiEl.textContent = '1 ' + monO + ' = ' + t + ' ' + monD;
+    }
   }
 }
 
