@@ -3223,7 +3223,7 @@ function ventaCreditoPOS() {
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+l.q*l.precio;},0);
-    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'pedido');
+    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'venta');
   }
   showToast(`Folio a crédito creado para ${c.nombre}`);
   
@@ -7609,7 +7609,7 @@ function crearFolioCli(cid){
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
-    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'pedido');
+    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'venta');
   }
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
