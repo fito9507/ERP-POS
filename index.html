@@ -1134,6 +1134,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <button onclick="navTo_ig('nuevo',this)">+ Registrar</button>
   <button id="ig-btn-cajas" onclick="navTo_ig('cajas',this)">💰 Cajas</button>
   <button id="ig-btn-deuda" onclick="navTo_ig('deuda',this)">🔴 Deudas</button>
+  <button id="ig-btn-cnt" onclick="navTo_ig('contenedores',this)">🚢 Contenedores</button>
 </div>
 
 <!-- ══ LIBRO ══ -->
@@ -1324,6 +1325,11 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <!-- ══ DEUDAS ══ -->
 <div class="page" id="deuda">
   <div id="deudas-root"></div>
+</div>
+
+<!-- ══ CONTENEDORES ══ -->
+<div class="page" id="contenedores">
+  <div id="contenedores-root"></div>
 </div>
 
 
@@ -2220,6 +2226,7 @@ async function supaInit() {
     await syncLoadUsers();
     await syncLoadClientes();
     await syncLoadPrestamos();
+    await syncLoadContenedores();
     await syncLoadMovsIG();
     } else {
       _supaOnline = false; updOnlineDot();
@@ -2323,7 +2330,7 @@ function goMod(id,title,btn){
     try{
       // Hide/show admin-only tabs based on role
       var _igVend=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
-      ['ig-btn-cajas','ig-btn-deuda'].forEach(function(bid){var be=document.getElementById(bid);if(be)be.style.display=_igVend?'none':'';});
+      ['ig-btn-cajas','ig-btn-deuda','ig-btn-cnt'].forEach(function(bid){var be=document.getElementById(bid);if(be)be.style.display=_igVend?'none':'';});
       // Load cajasData so filtrar_ig can filter by almacen
       (async function(){
         if(typeof loadCajasData==='function') await loadCajasData();
@@ -4900,6 +4907,7 @@ function navTo_ig(pg,btn){
   if(pg==='cajas'){document.getElementById('cajas-grid').innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando...</div>';renderCajas();}
   if(pg==='cajas-mgmt'){if(typeof renderGestionCajas==='function')renderGestionCajas();}
   if(pg==='deuda')renderDeudas();
+  if(pg==='contenedores'&&typeof renderContenedores==='function')renderContenedores();
   if(pg==='nuevo'){document.getElementById('n-fecha').value=today();updNuevo();}
 }
 
@@ -9784,6 +9792,23 @@ async function exportBackupSQL(returnSQL) {
       }
     } catch(e){ sql += '-- (error al leer prestamos: '+e.message+')\n'; }
 
+    // 11b. Contenedores
+    sql += '\n-- ── CONTENEDORES ────────────────────────\n';
+    try {
+      var cnts = await supaReq('GET','contenedores?select=*&order=created_at.desc');
+      if(cnts.ok){
+        var cntd = await cnts.json();
+        cntd.forEach(function(r){
+          sql += "INSERT INTO contenedores (id,ref,estado,proveedor,transitario,almacen_destino,moneda,fecha_booking,fecha_salida,fecha_eta,fecha_llegada,notas,gastos,audit_log)"
+            + " VALUES ("+esc(r.id)+","+esc(r.ref)+","+esc(r.estado)+","+esc(r.proveedor)+","+esc(r.transitario)+","+esc(r.almacen_destino)+","+esc(r.moneda||'USD')
+            + ","+esc(r.fecha_booking)+","+esc(r.fecha_salida)+","+esc(r.fecha_eta)+","+esc(r.fecha_llegada)+","+esc(r.notas)
+            + ",'"+JSON.stringify(r.gastos||[]).replace(/'/g,"''")+"'::jsonb"
+            + ",'"+JSON.stringify(r.audit_log||[]).replace(/'/g,"''")+"'::jsonb"
+            + ") ON CONFLICT (id) DO UPDATE SET ref=EXCLUDED.ref,estado=EXCLUDED.estado,proveedor=EXCLUDED.proveedor,transitario=EXCLUDED.transitario,almacen_destino=EXCLUDED.almacen_destino,moneda=EXCLUDED.moneda,fecha_booking=EXCLUDED.fecha_booking,fecha_salida=EXCLUDED.fecha_salida,fecha_eta=EXCLUDED.fecha_eta,fecha_llegada=EXCLUDED.fecha_llegada,notas=EXCLUDED.notas,gastos=EXCLUDED.gastos,audit_log=EXCLUDED.audit_log;\n";
+        });
+      }
+    } catch(e){ sql += '-- (error al leer contenedores: '+e.message+')\n'; }
+
     // 12. Reglas de comisión
     sql += '\n-- ── COMISIONES ──────────────────────────\n';
     try {
@@ -10276,6 +10301,11 @@ function saveCustomCajas(arr) {
   try { localStorage.setItem('erp_cajas_custom', JSON.stringify(arr)); } catch(e) {}
 }
 function getAllCajas() {
+  // Prefer Supabase _cajasData when loaded (same approach as _getCajasForMon)
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    return _cajasData.filter(function(c){ return c.activa !== false; }).map(function(c){ return c.nombre; });
+  }
+  // Fallback: hardcoded CUENTAS_BASE + custom cajas
   var base = Object.keys(CUENTAS_BASE);
   var custom = getCustomCajas().map(function(c){ return c.key; });
   return base.concat(custom.filter(function(k){ return !base.includes(k); }));
