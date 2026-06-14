@@ -11975,11 +11975,20 @@ function registrarPagoCnt(cntId, gId) {
     document.body.appendChild(mo);
   }
   
-  var cajas=typeof getAllCajas==='function'?getAllCajas():[];
   var opts = '<option value="">Sin caja (Solo registrar)</option>';
-  cajas.forEach(function(cj){
-    opts += '<option value="'+cj.id+'" data-mon="'+cj.mon+'">'+cj.id+' ('+fN(cj.sld,0)+' '+cj.mon+')</option>';
-  });
+  if (typeof _cajasData !== 'undefined' && _cajasData.length > 0) {
+    _cajasData.filter(function(c){return c.activa!==false;}).forEach(function(c){
+      var sld = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+      opts += '<option value="'+c.nombre+'" data-mon="'+c.moneda+'">'+c.nombre+' ('+fN(sld,0)+' '+c.moneda+')</option>';
+    });
+  } else {
+    var cajasStrings = typeof getAllCajas==='function'?getAllCajas():[];
+    cajasStrings.forEach(function(cjStr){
+      var cmon = cjStr.split(' ')[0];
+      if(!['USD','EUR','CUP','CUPT'].includes(cmon)) cmon = 'USD';
+      opts += '<option value="'+cjStr+'" data-mon="'+cmon+'">'+cjStr+'</option>';
+    });
+  }
   
   var html='<div style="max-width:400px;width:100%;background:var(--color-background-primary);border-radius:14px;padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,.7);position:relative">'
     +'<button type="button" onclick="document.getElementById(\'cnt-pago-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:22px;color:var(--color-text-secondary)">×</button>'
