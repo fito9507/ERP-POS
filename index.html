@@ -1547,6 +1547,21 @@ function tgSend(msg, alm, tipo){
     _tgApi('sendMessage',{chat_id:id,text:msg,parse_mode:'HTML'}).catch(function(e){console.warn('Telegram:',e);});
   });
 }
+
+function _tgCliBalance(cliName) {
+  if(!cliName || cliName==='Walk-in') return '';
+  if(typeof CLIENTES==='undefined' || !CLIENTES) return '';
+  var c = CLIENTES.find(function(x){return x.nombre===cliName;});
+  if(!c) return '';
+  var _tot = typeof totCli==='function'?totCli(c):0;
+  var _pag = typeof pagCli==='function'?pagCli(c):0;
+  var _pdt = typeof pdtCli==='function'?pdtCli(c):0;
+  var _favor = _pag > _tot + 0.01 ? _pag - _tot : 0;
+  if (_pdt > 0.01) return '\n\n🔴 <b>Deuda actual:</b> '+fN(_pdt)+' USD';
+  if (_favor > 0.01) return '\n\n💰 <b>Saldo a favor:</b> '+fN(_favor)+' USD';
+  if (_tot > 0) return '\n\n🟢 <b>Deuda:</b> Saldada (0.00)';
+  return '';
+}
 let _supaOnline = navigator.onLine;
 let _syncQueue  = [];
 
@@ -3223,7 +3238,7 @@ function ventaCreditoPOS() {
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+l.q*l.precio;},0);
-    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'venta');
+    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc)+_tgCliBalance(c.nombre),alm,'venta');
   }
   showToast(`Folio a crédito creado para ${c.nombre}`);
   
@@ -3541,7 +3556,8 @@ function confirmar(){
       +'\uD83D\uDCB5 <b>'+fN(venta.totalUSD)+' USD</b>\n'
       +'\uD83D\uDCB3 Cobro: '+_tgCob
       +(_tgVuelto?'\n\uD83D\uDD04 Vuelto: '+_tgVuelto:'')
-      +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'');
+      +(venta.nota?'\n\uD83D\uDCDD '+venta.nota:'')
+      +_tgCliBalance(venta.cli);
     try{ tgSend(_tgMsg, S.alm, 'venta'); }catch(_tgE){ console.warn('TG venta POS:',_tgE); }
   })();
   var linesHtml='<div class="res-line" style="border-bottom:.5px solid var(--color-border-tertiary);margin-bottom:6px;padding-bottom:6px"><span style="color:var(--color-text-tertiary);font-size:11px">Ticket</span><span style="font-weight:700;font-size:13px;letter-spacing:.05em">'+_ticket+(venta.hora?' <span style="font-size:10px;font-weight:400;color:var(--color-text-tertiary);margin-left:6px">⏰ '+venta.hora+'</span>':'')+'</span></div>'
@@ -7451,7 +7467,8 @@ function registrarAbonoCli(cid){
       +'\uD83D\uDC64 '+c.nombre+'\n'
       +'\uD83D\uDCB0 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
       +(desc?'\uD83D\uDCDD '+desc:'')
-      +(caja?'\uD83C\uDFE6 '+caja:'');
+      +(caja?'\uD83C\uDFE6 '+caja:'')
+      +_tgCliBalance(c.nombre);
     tgSend(_tgMsg, null, 'venta');
   })();
   showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
@@ -7609,7 +7626,7 @@ function crearFolioCli(cid){
     var _tgEsc=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
     var _fP=lineas.map(function(l){return '  • '+l.q+'x '+_tgEsc(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
     var _fT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
-    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc),alm,'venta');
+    tgSend('\uD83D\uDCC4 <b>Venta cr\u00e9dito (Folio '+fid+')</b>\n\uD83D\uDC64 '+_tgEsc(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_fP+'\n\uD83D\uDCB5 <b>$'+fN(_fT)+'</b>\n\uD83D\uDCDD '+_tgEsc(desc)+_tgCliBalance(c.nombre),alm,'venta');
   }
   showToast(`Folio ${fid} creado para ${c.nombre}`);
   folioFiltro='todos';fichaNavTo('f-folios');
