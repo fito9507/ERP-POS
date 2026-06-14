@@ -11653,7 +11653,7 @@ function _renderCntCard(c) {
     + (c.estado==='cerrado' ? '<span class="cnt-estado-badge" style="background:rgba(74,222,128,.15);color:var(--color-text-success)">✓ Cerrado</span>' : '')
     + '</div>'
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-top:4px">'
-    + (c.proveedor||'Sin proveedor') + ' → ' + (c.almacen_destino||'Sin destino') + ' | ' + (c.transitario||'Sin transitario')
+    + (c.proveedor||'Sin proveedor(es)') + ' → ' + (c.almacen_destino||'Sin destino') + ' | ' + (c.transitario||'Sin transitario')
     + '</div>'
     + '</div>'
     + '<div style="text-align:right">'
@@ -11809,7 +11809,7 @@ function _showFormCnt(c) {
     +'</div>'
     
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
-    +'<div><label class="lbl">Proveedor</label><input type="text" id="fcnt-prov" class="adm-inp" value="'+(isEdit?c.proveedor||'':'')+'"></div>'
+    +'<div><label class="lbl">Proveedor(es)</label><input type="text" id="fcnt-prov" class="adm-inp" placeholder="Empresa A, Empresa B..." value="'+(isEdit?c.proveedor||'':'')+'"></div>'
     +'<div><label class="lbl">Transitario</label><input type="text" id="fcnt-trans" class="adm-inp" value="'+(isEdit?c.transitario||'':'')+'"></div>'
     +'</div>'
     
