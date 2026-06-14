@@ -9130,7 +9130,23 @@ function _onMcCajaChange() {
       // cambio: only different currency
       filteredCajas = allCajas.filter(function(c){ return c.moneda!==monO; });
     }
-    destSel.innerHTML = filteredCajas.map(function(c){ return '<option'+(c.nombre===prevDest?' selected':'')+'>'+c.nombre+'</option>'; }).join('');
+    
+    var porMon={};
+    filteredCajas.forEach(function(c){
+      var m = c.moneda || 'USD';
+      if(!porMon[m]) porMon[m] = [];
+      porMon[m].push(c.nombre);
+    });
+    var monOrden = ['USD','EUR','CUP','CUPT'];
+    var mons = monOrden.filter(function(m){return porMon[m];})
+      .concat(Object.keys(porMon).filter(function(m){return monOrden.indexOf(m)<0;}).sort());
+    
+    destSel.innerHTML = mons.map(function(m){
+      return '<optgroup label="'+m+'">' + porMon[m].sort().map(function(n){
+        return '<option'+(n===prevDest?' selected':'')+'>'+n+'</option>';
+      }).join('') + '</optgroup>';
+    }).join('');
+    
     if (!destSel.value && filteredCajas.length) destSel.value = filteredCajas[0].nombre;
   }
 
@@ -9290,12 +9306,35 @@ async function admRegistrarMovCaja() {
 }
 
 // ── HISTORIAL ────────────────────────────────────────────────
+let _cajasHistFiltro = '';
+window.updCajasHistFiltro = function(val) {
+  _cajasHistFiltro = val;
+  var el = document.getElementById('cajas-hist-list');
+  if(el) el.innerHTML = _getHistorialListHtml();
+};
+
 function _renderHistorialMovCajas() {
-  if (!_cajasMovs.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos</div>';
+  var filtroHtml = '<div style="margin-bottom:12px"><input type="text" class="adm-inp" placeholder="🔍 Buscar por concepto, fecha, caja, moneda o usuario..." value="'+_cajasHistFiltro+'" oninput="updCajasHistFiltro(this.value)" style="width:100%;background:var(--color-background-primary)"></div>';
+  return filtroHtml + '<div id="cajas-hist-list">' + _getHistorialListHtml() + '</div>';
+}
+
+function _getHistorialListHtml() {
   var tipoIcon  = {transferencia:'🔄',cambio:'💱',deposito:'📥',retiro:'📤'};
   var tipoColor = {transferencia:'var(--color-text-info)',cambio:'var(--color-text-warning)',deposito:'var(--color-text-success)',retiro:'var(--color-text-danger)'};
+  
+  var arr = _cajasMovs;
+  if(_cajasHistFiltro.trim()){
+    var q = _cajasHistFiltro.toLowerCase();
+    arr = arr.filter(function(m){
+      var txt = (m.tipo+' '+(m.caja_origen||'')+' '+(m.caja_destino||'')+' '+(m.notas||'')+' '+(m.fecha||'')+' '+(m.usuario||'')).toLowerCase();
+      return txt.indexOf(q)>=0;
+    });
+  }
+
+  if (!arr.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos que coincidan</div>';
+  
   return '<div style="display:flex;flex-direction:column;gap:8px">'
-    + _cajasMovs.slice(0,100).map(function(m){
+    + arr.slice(0,100).map(function(m){
         return '<div class="card" style="padding:10px 14px">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
           + '<div style="display:flex;align-items:center;gap:8px">'
