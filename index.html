@@ -12105,8 +12105,6 @@ window.updCntPagoMonCaja = function() {
     var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
     if(cObj) almToUse = cObj.almacen;
   }
-  var usd = cajaMon==='USD'?monCaja:(typeof toUSD==='function'?toUSD(monCaja,cajaMon,almToUse):monCaja/(RATES[cajaMon]||1));
-  document.getElementById('fcp-usd').value = usd.toFixed(2);
   
   if(montoDeuda>0 && monCaja>0) {
     var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
@@ -12146,8 +12144,6 @@ window.updCntPagoTasa = function() {
     var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
     if(cObj) almToUse = cObj.almacen;
   }
-  var usd = cajaMon==='USD'?monCaja:(typeof toUSD==='function'?toUSD(monCaja,cajaMon,almToUse):monCaja/(RATES[cajaMon]||1));
-  document.getElementById('fcp-usd').value = usd.toFixed(2);
 };
 
 window.updCntPagoUsd = function() {
