@@ -12116,13 +12116,56 @@ function savePagoCnt() {
 }
 
 function eliminarPagoCnt(cntId, gId, pgId) {
-  if(!confirm('¿Eliminar este pago? (No revertirá caja ni libro IG, debe hacerlo manual)')) return;
   var c=CONTENEDORES.find(function(x){return x.id===cntId;});
   if(!c)return;
   var g=(c.gastos||[]).find(function(x){return x.id===gId;});
   if(!g)return;
-  g.pagos = (g.pagos||[]).filter(function(x){return x.id!==pgId;});
+  var pgIdx=(g.pagos||[]).findIndex(function(x){return x.id===pgId;});
+  if(pgIdx<0)return;
+  var pg=g.pagos[pgIdx];
+  if(!confirm('¿Eliminar este pago de '+fN(pg.monto,2)+' '+pg.mon+'?\nEsta acción también revertirá el movimiento en caja y el libro contable.')) return;
+  
+  var descMov = (pg.nota||'Pago '+g.concepto) + ' — ' + c.ref;
+  var monCaja = pg.montoCaja || pg.monto;
+  var cajaMon = pg.monCaja || pg.mon;
+
+  // 1. Eliminar de MOVS (Libro IG)
+  if(pg.movId!=null){
+    var mi=MOVS.findIndex(function(m){return m.id===pg.movId;});
+    if(mi>=0)MOVS.splice(mi,1);
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){}
+  } else {
+    var mi=MOVS.findIndex(function(m){return m.fecha===pg.fecha && m.monto===monCaja && m.desc===descMov;});
+    if(mi>=0) { MOVS.splice(mi,1); try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){} }
+  }
+
+  // 2. Eliminar de Supabase movimientos_ig
+  if(typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
+    supaReq('DELETE','movimientos_ig?descripcion=eq.'+encodeURIComponent(descMov)+'&fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto=eq.'+monCaja).catch(function(e){});
+  }
+
+  // 3. Eliminar de _cajasMovs y mov_cajas (Cajas)
+  var cajaNota = 'Pago contenedor '+c.ref+' - '+g.concepto;
+  if(typeof _cajasMovs!=='undefined'){
+    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===pg.fecha && m.monto_origen===monCaja && m.notas===cajaNota;});
+    if(cIdx>=0){
+      var targetId = _cajasMovs[cIdx].id;
+      _cajasMovs.splice(cIdx,1);
+      if(targetId && typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
+        supaReq('DELETE','mov_cajas?id=eq.'+targetId).catch(function(){});
+      } else if (typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
+        supaReq('DELETE','mov_cajas?notas=eq.'+encodeURIComponent(cajaNota)+'&fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto_origen=eq.'+monCaja).catch(function(e){});
+      }
+    } else if (typeof supaReq==='function' && typeof _supaOnline!=='undefined' && _supaOnline) {
+      supaReq('DELETE','mov_cajas?notas=eq.'+encodeURIComponent(cajaNota)+'&fecha=eq.'+encodeURIComponent(pg.fecha)+'&monto_origen=eq.'+monCaja).catch(function(e){});
+    }
+  }
+
+  g.pagos.splice(pgIdx, 1);
   saveContenedor(c);
+  showToast('Pago revertido en deuda, caja y libro ✓');
+  if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
+  if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
 }
 </script>
 </body>
