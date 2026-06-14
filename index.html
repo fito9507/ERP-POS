@@ -11595,16 +11595,23 @@ function _renderCntCard(c) {
   });
   htmlTimeline += '</div>';
 
-  var totalGeneral = 0;
-  var pagadoGeneral = 0;
+  var totalUSD = 0;
+  var pagadoUSD = 0;
   
   var htmlGastos = '';
   (c.gastos||[]).forEach(function(g) {
     var totalGasto = parseFloat(g.monto||0);
     var pagadoGasto = (g.pagos||[]).reduce(function(acc, pg){ return acc + parseFloat(pg.monto||0); }, 0);
     var pct = totalGasto > 0 ? Math.min(100, Math.round((pagadoGasto/totalGasto)*100)) : 0;
-    totalGeneral += totalGasto;
-    pagadoGeneral += pagadoGasto;
+    
+    var usdGasto = g.moneda==='USD' ? totalGasto : (typeof toUSD==='function'?toUSD(totalGasto,g.moneda):totalGasto/(RATES[g.moneda]||1));
+    totalUSD += usdGasto;
+    
+    var pagGastoUsd = (g.pagos||[]).reduce(function(acc, pg){ 
+      if (pg.equivUSD) return acc + parseFloat(pg.equivUSD);
+      return acc + (pg.mon==='USD' ? pg.monto : (typeof toUSD==='function'?toUSD(pg.monto,pg.mon):pg.monto/(RATES[pg.mon]||1)));
+    }, 0);
+    pagadoUSD += pagGastoUsd;
     
     var vencido = false;
     if (pct < 100 && g.vencimiento && g.vencimiento < today()) vencido = true;
@@ -11643,8 +11650,8 @@ function _renderCntCard(c) {
     htmlGastos += '</div>';
   });
 
-  var pctGen = totalGeneral > 0 ? Math.min(100, Math.round((pagadoGeneral/totalGeneral)*100)) : 0;
-  var resta = totalGeneral - pagadoGeneral;
+  var pctGen = totalUSD > 0 ? Math.min(100, Math.round((pagadoUSD/totalUSD)*100)) : 0;
+  var restaUSD = Math.max(0, totalUSD - pagadoUSD);
   
   var h = '<div style="background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:12px;padding:16px;margin-bottom:16px">';
   
@@ -11666,16 +11673,16 @@ function _renderCntCard(c) {
     
   h += htmlTimeline;
   
-  // Resumen financiero global
+  // Resumen financiero global (convertido a USD)
   h += '<div style="background:rgba(0,0,0,.15);border-radius:8px;padding:12px;margin-bottom:16px">'
     + '<div style="display:flex;justify-content:space-between;font-size:11px;font-weight:600;margin-bottom:6px">'
-    + '<span>💰 Resumen financiero</span>'
-    + '<span>Total: '+fN(totalGeneral,2)+' '+(c.moneda||'USD')+'</span>'
+    + '<span>💰 Resumen financiero global (aprox)</span>'
+    + '<span>Costo USD: '+fN(totalUSD,2)+'</span>'
     + '</div>'
     + '<div style="display:flex;align-items:center;gap:10px">'
     + '<div style="flex:1;background:var(--color-background-primary);border-radius:4px;height:8px">'
     + '<div style="background:var(--color-primary);height:8px;border-radius:4px;width:'+pctGen+'%;transition:width .4s"></div></div>'
-    + '<div style="font-size:11px;width:120px;text-align:right;color:var(--color-text-tertiary)">Pagado: '+fN(pagadoGeneral,2)+'<br><span style="color:var(--color-text-danger);font-weight:600">Resta: '+fN(resta,2)+'</span></div>'
+    + '<div style="font-size:11px;width:120px;text-align:right;color:var(--color-text-tertiary)">Pagado: '+fN(pagadoUSD,2)+' USD<br><span style="color:var(--color-text-danger);font-weight:600">Resta: '+fN(restaUSD,2)+' USD</span></div>'
     + '</div>'
     + '</div>';
     
@@ -11996,15 +12003,22 @@ function registrarPagoCnt(cntId, gId) {
     +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">Pendiente: <strong>'+fN(falta,2)+' '+g.moneda+'</strong> ('+g.concepto+')</div>'
     
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
-    +'<div><label class="lbl">Amortiza ('+g.moneda+')</label><input type="number" step="0.01" id="fcp-mon" class="adm-inp" value="'+falta.toFixed(2)+'" oninput="updCntPagoCaja(\''+g.moneda+'\')"></div>'
+    +'<div><label class="lbl">Amortiza ('+g.moneda+')</label><input type="number" step="0.01" id="fcp-mon" data-moneda="'+g.moneda+'" class="adm-inp" value="'+falta.toFixed(2)+'" oninput="updCntPagoCaja()"></div>'
     +'<div><label class="lbl">Fecha</label><input type="date" id="fcp-fec" class="adm-inp" value="'+today()+'"></div>'
     +'</div>'
     
-    +'<div style="margin-bottom:12px"><label class="lbl">Caja Origen</label><select id="fcp-caja" class="adm-sel" onchange="updCntPagoCaja(\''+g.moneda+'\')">'+opts+'</select></div>'
+    +'<div style="margin-bottom:12px"><label class="lbl">Caja Origen</label><select id="fcp-caja" class="adm-sel" onchange="updCntPagoCaja()">'+opts+'</select></div>'
     +'<div id="fcp-caja-wrap" style="display:none;margin-bottom:12px;background:rgba(255,255,255,.05);padding:10px;border-radius:8px">'
     +'<label class="lbl" style="color:var(--color-text-warning)">A extraer de caja <span id="fcp-caja-mon"></span> *</label>'
-    +'<input type="number" step="0.01" id="fcp-moncaja" class="adm-inp">'
+    +'<input type="number" step="0.01" id="fcp-moncaja" class="adm-inp" oninput="updCntPagoMonCaja()">'
     +'</div>'
+    
+    +'<div style="margin-bottom:12px;background:rgba(16,185,129,.1);padding:10px;border-radius:8px;border:1px solid rgba(16,185,129,.3)">'
+    +'<label class="lbl" style="color:var(--color-text-success)">Equivalente USD (Para el costo global)</label>'
+    +'<input type="number" step="0.01" id="fcp-usd" class="adm-inp" oninput="updCntPagoUsd()">'
+    +'<input type="hidden" id="fcp-usd-mod" value="0">'
+    +'</div>'
+
     +'<div style="margin-bottom:16px"><label class="lbl">Nota / Referencia</label><input type="text" id="fcp-nota" class="adm-inp" placeholder="Transferencia BBVA"></div>'
     
     +'<button onclick="savePagoCnt()" style="width:100%;background:var(--color-primary);color:var(--color-text-primary);border:none;padding:10px;border-radius:8px;font-weight:600;cursor:pointer">Confirmar Pago</button>'
@@ -12012,30 +12026,84 @@ function registrarPagoCnt(cntId, gId) {
     
   mo.innerHTML=html;
   mo.style.display='flex';
+  setTimeout(updCntPagoCaja, 50); // initial calc
 }
 
-window.updCntPagoCaja = function(deudaMon) {
+window.updCntPagoCaja = function() {
   var sel = document.getElementById('fcp-caja');
   var wrp = document.getElementById('fcp-caja-wrap');
-  var inp = document.getElementById('fcp-moncaja');
-  var lbl = document.getElementById('fcp-caja-mon');
-  if(!sel.value) { wrp.style.display='none'; return; }
-  var opt = sel.options[sel.selectedIndex];
-  var cajaMon = opt.getAttribute('data-mon');
+  var inpCaja = document.getElementById('fcp-moncaja');
+  var lblCaja = document.getElementById('fcp-caja-mon');
+  var inpUSD = document.getElementById('fcp-usd');
+  var usdMod = document.getElementById('fcp-usd-mod').value === '1';
+  var elMon = document.getElementById('fcp-mon');
+  
+  if(!sel || !elMon) return;
+  var deudaMon = elMon.getAttribute('data-moneda');
+  var montoDeuda = parseFloat(elMon.value)||0;
+  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
+  var cajaMon = opt ? opt.getAttribute('data-mon') : deudaMon;
+
+  var almToUse=null;
+  if(opt && typeof _cajasData !== 'undefined') {
+    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
+    if(cObj) almToUse = cObj.almacen;
+  }
+  
+  var usd = deudaMon==='USD' ? montoDeuda : (typeof toUSD==='function'?toUSD(montoDeuda,deudaMon,almToUse):montoDeuda/(RATES[deudaMon]||1));
+  
+  if(!sel.value) { 
+    wrp.style.display='none'; 
+    if(!usdMod) inpUSD.value = usd.toFixed(2);
+    return; 
+  }
+
   if(cajaMon !== deudaMon) {
     wrp.style.display='block';
-    lbl.innerText = '(' + cajaMon + ')';
-    var montoDeuda = parseFloat(document.getElementById('fcp-mon').value)||0;
-    var almToUse=null;
-    if(typeof _cajasData !== 'undefined') {
-      var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
-      if(cObj) almToUse = cObj.almacen;
-    }
-    var usd = deudaMon==='USD'?montoDeuda:(typeof toUSD==='function'?toUSD(montoDeuda,deudaMon,almToUse):montoDeuda/(RATES[deudaMon]||1));
+    lblCaja.innerText = '(' + cajaMon + ')';
     var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
-    inp.value = eqCaja.toFixed(2);
+    inpCaja.value = eqCaja.toFixed(2);
   } else {
     wrp.style.display='none';
+  }
+  
+  if (!usdMod) inpUSD.value = usd.toFixed(2);
+};
+
+window.updCntPagoMonCaja = function() {
+  document.getElementById('fcp-usd-mod').value='1';
+  var monCaja = parseFloat(document.getElementById('fcp-moncaja').value)||0;
+  var sel = document.getElementById('fcp-caja');
+  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
+  var cajaMon = opt ? opt.getAttribute('data-mon') : 'USD';
+  var almToUse=null;
+  if(opt && typeof _cajasData !== 'undefined') {
+    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
+    if(cObj) almToUse = cObj.almacen;
+  }
+  var usd = cajaMon==='USD'?monCaja:(typeof toUSD==='function'?toUSD(monCaja,cajaMon,almToUse):monCaja/(RATES[cajaMon]||1));
+  document.getElementById('fcp-usd').value = usd.toFixed(2);
+};
+
+window.updCntPagoUsd = function() {
+  document.getElementById('fcp-usd-mod').value='1';
+  var usd = parseFloat(document.getElementById('fcp-usd').value)||0;
+  var sel = document.getElementById('fcp-caja');
+  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
+  var elMon = document.getElementById('fcp-mon');
+  if(!elMon) return;
+  var deudaMon = elMon.getAttribute('data-moneda');
+  var cajaMon = opt ? opt.getAttribute('data-mon') : deudaMon;
+  
+  var almToUse=null;
+  if(opt && typeof _cajasData !== 'undefined') {
+    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
+    if(cObj) almToUse = cObj.almacen;
+  }
+  
+  if(cajaMon !== deudaMon && opt) {
+    var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
+    document.getElementById('fcp-moncaja').value = eqCaja.toFixed(2);
   }
 };
 
@@ -12046,6 +12114,7 @@ function savePagoCnt() {
   if(!g)return;
   
   var mon = parseFloat(document.getElementById('fcp-mon').value)||0; // Monto de deuda amortizado
+  var finalUsd = parseFloat(document.getElementById('fcp-usd').value)||0;
   if(mon<=0){showToast('Monto inválido');return;}
   var fec = document.getElementById('fcp-fec').value||today();
   var caja = document.getElementById('fcp-caja').value;
@@ -12071,7 +12140,7 @@ function savePagoCnt() {
   // 1. Create payment obj (en moneda de la deuda para la tarjeta)
   var pgObj = {
     id:'pg-'+Date.now(), fecha:fec, hora:hora, monto:mon, mon:g.moneda, caja:caja, nota:nota||'Pago '+g.concepto,
-    user:(typeof S!=='undefined'&&S.user?S.user:'Admin')
+    user:(typeof S!=='undefined'&&S.user?S.user:'Admin'), equivUSD: finalUsd
   };
   // Store original transaction info for reference
   if (caja && cajaMon !== g.moneda) {
@@ -12084,20 +12153,14 @@ function savePagoCnt() {
   if(typeof igNextId!=='undefined'){
     movId=igNextId++;
     var descMov = (nota||'Pago '+g.concepto) + ' — ' + c.ref;
-    var almToUse = null;
-    if(caja && typeof _cajasData !== 'undefined') {
-      var cObj = _cajasData.find(function(x){return x.nombre===caja;});
-      if(cObj) almToUse = cObj.almacen;
-    }
-    var equivUSD = cajaMon==='USD'?monCaja:(typeof toUSD==='function'?toUSD(monCaja,cajaMon,almToUse):monCaja/(RATES[cajaMon]||1));
     MOVS.unshift({id:movId, fecha:fec, tipo:'Pago contenedor', desc:descMov,
-      acreedor:g.acreedor||'', monto:monCaja, mon:cajaMon, equivUSD:parseFloat(equivUSD.toFixed(2)),
+      acreedor:g.acreedor||'', monto:monCaja, mon:cajaMon, equivUSD:parseFloat(finalUsd.toFixed(2)),
       cta:caja, sentido:'gasto', notas:c.ref});
     try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,1000)));}catch(e){}
     if(typeof _supaWrite==='function'){
       _supaWrite('POST','movimientos_ig',{
         fecha:fec, tipo:'Pago contenedor', descripcion:descMov,
-        monto:monCaja, moneda:cajaMon, equiv_usd:parseFloat(equivUSD.toFixed(4)),
+        monto:monCaja, moneda:cajaMon, equiv_usd:parseFloat(finalUsd.toFixed(4)),
         cuenta:caja||'', vendedor:pgObj.user, notas:c.ref
       });
     }
