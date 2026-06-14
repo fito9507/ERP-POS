@@ -11984,9 +11984,19 @@ function registrarPagoCnt(cntId, gId) {
   
   var opts = '<option value="">Sin caja (Solo registrar)</option>';
   if (typeof _cajasData !== 'undefined' && _cajasData.length > 0) {
+    var grupos = {};
     _cajasData.filter(function(c){return c.activa!==false;}).forEach(function(c){
-      var sld = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
-      opts += '<option value="'+c.nombre+'" data-mon="'+c.moneda+'">'+c.nombre+' ('+fN(sld,0)+' '+c.moneda+')</option>';
+      var t = c.moneda || 'Otras';
+      if(!grupos[t]) grupos[t] = [];
+      grupos[t].push(c);
+    });
+    Object.keys(grupos).sort().forEach(function(gKey){
+      opts += '<optgroup label="Cajas en '+gKey+'">';
+      grupos[gKey].forEach(function(c){
+        var sld = typeof _getSaldoCaja==='function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial||0);
+        opts += '<option value="'+c.nombre+'" data-mon="'+c.moneda+'">'+c.nombre+' ('+fN(sld,0)+' '+c.moneda+')</option>';
+      });
+      opts += '</optgroup>';
     });
   } else {
     var cajasStrings = typeof getAllCajas==='function'?getAllCajas():[];
@@ -12009,7 +12019,10 @@ function registrarPagoCnt(cntId, gId) {
     
     +'<div style="margin-bottom:12px"><label class="lbl">Caja Origen</label><select id="fcp-caja" class="adm-sel" onchange="updCntPagoCaja()">'+opts+'</select></div>'
     +'<div id="fcp-caja-wrap" style="display:none;margin-bottom:12px;background:rgba(255,255,255,.05);padding:10px;border-radius:8px">'
-    +'<label class="lbl" style="color:var(--color-text-warning)">A extraer de caja <span id="fcp-caja-mon"></span> *</label>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<label class="lbl" style="color:var(--color-text-warning);margin:0">A extraer de caja <span id="fcp-caja-mon"></span> *</label>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:4px" title="Tasa de conversión respecto a la deuda">Tasa: <input type="number" id="fcp-tasa" class="adm-inp" style="width:60px;padding:2px 4px;font-size:11px;height:20px" oninput="updCntPagoTasa()"></div>'
+    +'</div>'
     +'<input type="number" step="0.01" id="fcp-moncaja" class="adm-inp" oninput="updCntPagoMonCaja()">'
     +'</div>'
     
@@ -12063,6 +12076,7 @@ window.updCntPagoCaja = function() {
     lblCaja.innerText = '(' + cajaMon + ')';
     var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
     inpCaja.value = eqCaja.toFixed(2);
+    if(montoDeuda>0) document.getElementById('fcp-tasa').value = (eqCaja/montoDeuda).toFixed(2);
   } else {
     wrp.style.display='none';
   }
@@ -12076,6 +12090,35 @@ window.updCntPagoMonCaja = function() {
   var sel = document.getElementById('fcp-caja');
   var opt = sel.value ? sel.options[sel.selectedIndex] : null;
   var cajaMon = opt ? opt.getAttribute('data-mon') : 'USD';
+  var elMon = document.getElementById('fcp-mon');
+  var montoDeuda = elMon ? (parseFloat(elMon.value)||0) : 0;
+  
+  var almToUse=null;
+  if(opt && typeof _cajasData !== 'undefined') {
+    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
+    if(cObj) almToUse = cObj.almacen;
+  }
+  var usd = cajaMon==='USD'?monCaja:(typeof toUSD==='function'?toUSD(monCaja,cajaMon,almToUse):monCaja/(RATES[cajaMon]||1));
+  document.getElementById('fcp-usd').value = usd.toFixed(2);
+  
+  if(montoDeuda>0) document.getElementById('fcp-tasa').value = (monCaja/montoDeuda).toFixed(2);
+};
+
+window.updCntPagoTasa = function() {
+  document.getElementById('fcp-usd-mod').value='1';
+  var tasa = parseFloat(document.getElementById('fcp-tasa').value)||0;
+  var elMon = document.getElementById('fcp-mon');
+  if(!elMon) return;
+  var montoDeuda = parseFloat(elMon.value)||0;
+  
+  // Tasa es (Caja / Deuda). Entonces Caja = Deuda * Tasa
+  var monCaja = montoDeuda * tasa;
+  document.getElementById('fcp-moncaja').value = monCaja.toFixed(2);
+  
+  // Now recalculate USD based on the new monCaja
+  var sel = document.getElementById('fcp-caja');
+  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
+  var cajaMon = opt ? opt.getAttribute('data-mon') : elMon.getAttribute('data-moneda');
   var almToUse=null;
   if(opt && typeof _cajasData !== 'undefined') {
     var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
