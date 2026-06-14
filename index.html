@@ -12148,32 +12148,10 @@ window.updCntPagoTasa = function() {
 
 window.updCntPagoUsd = function() {
   document.getElementById('fcp-usd-mod').value='1';
-  var usd = parseFloat(document.getElementById('fcp-usd').value)||0;
-  var sel = document.getElementById('fcp-caja');
-  var opt = sel.value ? sel.options[sel.selectedIndex] : null;
-  var elMon = document.getElementById('fcp-mon');
-  if(!elMon) return;
-  var deudaMon = elMon.getAttribute('data-moneda');
-  var cajaMon = opt ? opt.getAttribute('data-mon') : deudaMon;
-  var montoDeuda = parseFloat(elMon.value)||0;
-  
-  var almToUse=null;
-  if(opt && typeof _cajasData !== 'undefined') {
-    var cObj = _cajasData.find(function(x){return x.nombre===sel.value;});
-    if(cObj) almToUse = cObj.almacen;
-  }
-  
-  if(cajaMon !== deudaMon && opt) {
-    var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
-    document.getElementById('fcp-moncaja').value = eqCaja.toFixed(2);
-    
-    var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
-    var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
-    if(montoDeuda>0 && eqCaja>0) {
-      var tasa = (!isCajaNac && isDeudaNac) ? (montoDeuda / eqCaja) : (eqCaja / montoDeuda);
-      document.getElementById('fcp-tasa').value = tasa.toFixed(4);
-    }
-  }
+  // El Equivalente USD sirve únicamente como un valor de sobreescritura (override) 
+  // para el costo global del contenedor. No debe alterar la matemática física 
+  // de la extracción de la caja (Deuda <-> Tasa <-> Caja), la cual se maneja
+  // independientemente en sus propios campos.
 };
 
 function savePagoCnt() {
