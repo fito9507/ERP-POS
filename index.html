@@ -9907,7 +9907,7 @@ async function exportBackupSQL(returnSQL) {
     // Ya cubierto en sección TASAS arriba
 
     // ── TABLAS ADICIONALES (folios, abonos, com_reglas, liquidaciones, stock_movimientos) ──
-    var _extraTablas=['folios','abonos','com_reglas','liquidaciones','stock_movimientos'];
+    var _extraTablas=['folios','abonos','com_reglas','liquidaciones','stock_movimientos','contenedores'];
     window._backupJSON={_fecha:new Date().toISOString()};
     for(var _ti=0;_ti<_extraTablas.length;_ti++){
       var _tn=_extraTablas[_ti];
@@ -9968,6 +9968,7 @@ function exportJSON() {
     CAJAS_MOVS: typeof _cajasMovs !== 'undefined' ? _cajasMovs : [],
     RATES: RATES,
     RATES_ALM: typeof RATES_ALM !== 'undefined' ? RATES_ALM : {},
+    CONTENEDORES: typeof CONTENEDORES !== 'undefined' ? CONTENEDORES : [],
   };
   var json = JSON.stringify(data, null, 2);
   var blob = new Blob([json], {type: 'application/json'});
@@ -9992,6 +9993,7 @@ function importJSON(input) {
       if(data.VENTAS&&typeof VENTAS!=='undefined'){ data.VENTAS.forEach(function(v,i){VENTAS[i]=v;}); VENTAS.length=data.VENTAS.length; }
       if(data.CLIENTES&&typeof CLIENTES!=='undefined'){ data.CLIENTES.forEach(function(c,i){CLIENTES[i]=c;}); CLIENTES.length=data.CLIENTES.length; }
       if(data.MOVS&&typeof MOVS!=='undefined'){ data.MOVS.forEach(function(m,i){MOVS[i]=m;}); MOVS.length=data.MOVS.length; }
+      if(data.CONTENEDORES&&typeof CONTENEDORES!=='undefined'){ data.CONTENEDORES.forEach(function(m,i){CONTENEDORES[i]=m;}); CONTENEDORES.length=data.CONTENEDORES.length; }
       Object.assign(RATES, data.RATES||{});
       showToast('Datos restaurados ✓');
       renderBackup();
