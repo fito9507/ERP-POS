@@ -9647,27 +9647,33 @@ async function enviarBackupTelegram() {
   if((!TG_ON&&!TG_TOKEN) || !TG_BACKUP){ return; }
   try {
     var sql = await exportBackupSQL(true);
-    if(!sql){ return; }
-    var fname = 'backup_'+new Date().toISOString().slice(0,10)+'.sql';
-    // Count lines for summary
-    var inserts = (sql.match(/INSERT INTO/g)||[]).length;
-    var caption = '\uD83D\uDCBE <b>Backup diario</b>\n'
-      + new Date().toISOString().slice(0,10)+'\n\n'
-      + inserts+' registros guardados\n'
-      + '\uD83E\uDD16 Backup autom\u00e1tico ERP';
-    // Send as document
-    var fd = new FormData();
-    fd.append('chat_id', TG_BACKUP);
-    fd.append('document', new Blob([sql], {type:'text/sql'}), fname);
-    fd.append('caption', caption);
-    fd.append('parse_mode', 'HTML');
-    var r = await _tgApi('sendDocument', fd, true);
-    if(r.ok){
-      console.log('Backup enviado a Telegram');
-      try{localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10));}catch(e){}
-    } else {
-      console.warn('Backup Telegram fallo:', r.status);
+    if(sql){
+      var fname = 'backup_'+new Date().toISOString().slice(0,10)+'.sql';
+      // Count lines for summary
+      var inserts = (sql.match(/INSERT INTO/g)||[]).length;
+      var caption = '\uD83D\uDCBE <b>Backup diario</b>\n'
+        + new Date().toISOString().slice(0,10)+'\n\n'
+        + inserts+' registros guardados\n'
+        + '\uD83E\uDD16 Backup autom\u00e1tico ERP';
+      // Send as document
+      var fd = new FormData();
+      fd.append('chat_id', TG_BACKUP);
+      fd.append('document', new Blob([sql], {type:'text/sql'}), fname);
+      fd.append('caption', caption);
+      fd.append('parse_mode', 'HTML');
+      try {
+        var r = await _tgApi('sendDocument', fd, true);
+        if(r.ok){
+          console.log('Backup SQL enviado a Telegram');
+          try{localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10));}catch(e){}
+        } else {
+          console.warn('Backup SQL Telegram fallo:', r.status);
+        }
+      } catch(errSQL) {
+        console.warn('Error enviando backup SQL:', errSQL);
+      }
     }
+    
     // Enviar tambien el snapshot JSON (restaurable desde el propio ERP)
     if(window._backupJSON){
       try{
@@ -9675,7 +9681,9 @@ async function enviarBackupTelegram() {
         fdj.append('chat_id', TG_BACKUP);
         fdj.append('document', new Blob([JSON.stringify(window._backupJSON)],{type:'application/json'}), 'backup_'+new Date().toISOString().slice(0,10)+'.json');
         fdj.append('caption','\uD83D\uDCE6 Snapshot JSON \u2014 restaurable desde el ERP (Admin \u2192 Restaurar)');
-        await _tgApi('sendDocument', fdj, true);
+        var rj = await _tgApi('sendDocument', fdj, true);
+        if(rj.ok) console.log('Backup JSON enviado');
+        else console.warn('Backup JSON fallo:', rj.status);
       }catch(e){console.warn('backup json tg:',e);}
     }
   } catch(e){ console.warn('enviarBackupTelegram:', e); }
