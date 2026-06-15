@@ -3013,7 +3013,7 @@ function renderProds(){
     var _bH=p.reservado?'<div class="badge-reservado" style="margin:0 0 4px;font-size:9px;padding:1px 6px">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto?`<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px">${p.badgeTexto}</div>`:'');
     var _ofePr=p.oferta?(S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null)):null;
     var _priceHtml=_ofePr!=null?`<span style="color:#ef4444;font-weight:700">${fN(_ofePr)}</span> <span style="text-decoration:line-through;color:var(--color-text-tertiary);font-size:10px">${fN(pr)}</span> USD`:fN(pr)+' USD';
-    return `<button class="pb${ns?' no-stk':''}" onclick="${ns?'':` addCart('${p.n}')`}">
+    return `<button class="pb${ns?' no-stk':''}" ${ns?'':`onclick="addCart(this.getAttribute('data-n'))" data-n="${p.n.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}"`}>
       ${_bH}<div class="pbn">${p.n}</div><div class="pbp">${_priceHtml}</div>${alt}
       <div class="pbs">${ns?'Sin stock':'Stk:'+stk}</div>
     </button>`;
