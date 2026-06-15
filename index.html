@@ -5658,7 +5658,11 @@ function _saldoDeuda(p){
   return Math.max(0,_totalDeuda(p)-_pagadoDeuda(p));
 }
 function _interesesPagadosDeuda(p){
-  return (p.pagos||[]).filter(function(pg){return pg.tipoPago==='interes';}).reduce(function(a,pg){return a+(pg.montoDeuda!=null?pg.montoDeuda:pg.monto);},0);
+  return (p.pagos||[]).filter(function(pg){return pg.tipoPago==='interes' || pg.tipoPago==='cuota_revolving';})
+    .reduce(function(a,pg){
+      if(pg.tipoPago==='cuota_revolving' && pg._intAsignado != null) return a + pg._intAsignado;
+      return a + (pg.montoDeuda!=null?pg.montoDeuda:pg.monto);
+    },0);
 }
 function _migrarPagosDeuda(p){
   if(!p.pagos)p.pagos=[];
@@ -5757,9 +5761,14 @@ function _renderDeudaCard(p){
     var sugMonto=proxima?proxima.total:saldoD;
     if(p.tipo==='interes_simple' || p.tipo==='revolving'){
       var sugerInt=parseFloat((p.capital*(p.tasa||0)/100).toFixed(2));
+      var isCuotaRev = (p.tipo==='revolving' && p.cuotaFija>0);
+      var sugerMonto = isCuotaRev ? p.cuotaFija : sugerInt;
+      var lblBtn = isCuotaRev ? '💳 Pagar cuota' : '💳 Pagar intereses';
+      var tpBtn = isCuotaRev ? 'cuota_revolving' : 'interes';
+      var hintBtn = isCuotaRev ? fN(p.cuotaFija,2)+' '+p.moneda+'/mes' : fN(sugerInt,2)+' '+p.moneda+'/mes';
       h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'
-        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugerInt+',\'interes\')" style="flex:1 1 45%;min-width:120px;padding:8px;border-radius:8px;border:1px solid rgba(100,149,237,.4);background:rgba(100,149,237,.1);color:#8ab4f8;font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
-        +'💳 Pagar intereses<br><span style="font-size:10px;font-weight:400;opacity:.8">'+fN(sugerInt,2)+' '+p.moneda+'/mes</span></button>'
+        +'<button onclick="abrirPagoModal(\''+p.id+'\','+sugerMonto+',\''+tpBtn+'\')" style="flex:1 1 45%;min-width:120px;padding:8px;border-radius:8px;border:1px solid rgba(100,149,237,.4);background:rgba(100,149,237,.1);color:#8ab4f8;font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
+        +lblBtn+'<br><span style="font-size:10px;font-weight:400;opacity:.8">'+hintBtn+'</span></button>'
         +'<button onclick="abrirPagoModal(\''+p.id+'\',0,\'amortizacion\')" style="flex:1 1 45%;min-width:120px;padding:8px;border-radius:8px;border:1px solid rgba('+ac+',.4);background:rgba('+ac+',.1);color:'+tc+';font-size:11px;font-weight:600;cursor:pointer;line-height:1.4">'
         +(esDeuda?'🔽 Amortizar capital':'🔽 Cobrar capital')
         +'<br><span style="font-size:10px;font-weight:400;opacity:.8">Reduce el saldo</span></button>'
@@ -5882,6 +5891,10 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
   if(tipoPago==='interes'){
     titulo='💳 Pago de intereses';
     bannerHtml='<div style="font-size:11px;background:rgba(100,149,237,.1);border:1px solid rgba(100,149,237,.25);border-radius:7px;padding:8px;margin-bottom:12px">El capital <strong>no cambia</strong> — solo se registran los intereses del período.</div>';
+  } else if(tipoPago==='cuota_revolving'){
+    titulo='💳 Pago de cuota fija (Revolving)';
+    var intMes=parseFloat((p.capital*(p.tasa||0)/100).toFixed(2));
+    bannerHtml='<div style="font-size:11px;background:rgba(100,149,237,.1);border:1px solid rgba(100,149,237,.25);border-radius:7px;padding:8px;margin-bottom:12px">Del monto total, <strong>'+fN(intMes,2)+' '+p.moneda+'</strong> cubrirán los intereses y el resto amortizará el capital.</div>';
   } else if(tipoPago==='amortizacion'){
     titulo='🔽 Amortización de capital';
     bannerHtml='<div style="font-size:11px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:7px;padding:8px;margin-bottom:12px">Este pago <strong>reduce el capital</strong> pendiente y regenera el cuadro de amortización.</div>';
@@ -5899,7 +5912,7 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px">'+titulo+'</div>'
     +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:12px">'+p.nombre
     +(tipoPago!=='incremento'?' · Saldo: <strong>'+fN(saldo,2)+' '+p.moneda+'</strong>':'')
-    +(tipoPago==='interes'?' · Capital: <strong>'+fN(p.capital,2)+' '+p.moneda+'</strong>':'')
+    +((tipoPago==='interes'||tipoPago==='cuota_revolving')?' · Capital: <strong>'+fN(p.capital,2)+' '+p.moneda+'</strong>':'')
     +'</div>'
     +bannerHtml
     +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
@@ -6086,6 +6099,10 @@ function registrarPagoDeuda(prestamoId){
     tipoMov='Pago intereses';sentidoMov='gasto';
     descMov=(nota||'Intereses')+' — '+p.nombre;
     cajaTipo=esDeuda?'retiro':'deposito';
+  } else if(tipoPago==='cuota_revolving'){
+    tipoMov='Pago cuota';sentidoMov='gasto';
+    descMov=(nota||'Pago cuota')+' — '+p.nombre;
+    cajaTipo=esDeuda?'retiro':'deposito';
   } else if(tipoPago==='amortizacion'){
     tipoMov='Amortización deuda';sentidoMov='gasto';
     descMov=(nota||'Amortización')+' — '+p.nombre;
@@ -6145,23 +6162,30 @@ function registrarPagoDeuda(prestamoId){
   }
 
   // ── Modify capital if needed ──
+  var amRev = 0;
   if(tipoPago==='amortizacion'){
     p.capital=Math.max(0,p.capital-montoDeuda);
     if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
+  } else if(tipoPago==='cuota_revolving'){
+    var intMes = parseFloat((p.capital*(p.tasa||0)/100).toFixed(2));
+    amRev = Math.max(0, montoDeuda - intMes);
+    p.capital=Math.max(0,p.capital-amRev);
   } else if(tipoPago==='incremento'){
-    p.capital+=montoDeuda;
+    p.capitalOriginal=(p.capitalOriginal||p.capital)+montoDeuda;
+    p.capital=p.capital+montoDeuda;
     if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
   }
-
-  // ── Add to pagos log ──
-  var ahora=new Date();
-  var hora=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
-  var notaAuto=nota||(tipoPago==='interes'?'Intereses':tipoPago==='amortizacion'?'Amortización':tipoPago==='incremento'?'Incremento capital':'Pago');
-  var pPago = {id:'pg-'+Date.now(),fecha:fecha,hora:hora,
-    monto:monto,mon:mon,montoDeuda:montoDeuda,nota:notaAuto,caja:caja,movId:movId,tipoPago:tipoPago,
-    user:typeof S!=='undefined'&&S.user?S.user:'—'};
-  if (movId !== null) pPago._movId = movId;
-  p.pagos.push(pPago);
+  
+  var pgObj = {id:'pg-'+Date.now(),fecha:fecha,hora:new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit'}),
+    user:(typeof S!=='undefined'&&S.user)||'—',
+    monto:monto, mon:mon, nota: nota, caja:caja,
+    montoDeuda:montoDeuda, tipoPago:tipoPago
+  };
+  if(tipoPago==='cuota_revolving') {
+    pgObj._intAsignado = Math.max(0, montoDeuda - amRev);
+  }
+  if (movId !== null) pgObj._movId = movId;
+  p.pagos.push(pgObj);
 
   if(tipoPago!=='interes'&&tipoPago!=='incremento') _autoMarcarCuotas(p);
   _addAuditLog(p, 'Registro de pago: ' + fN(monto,2) + ' ' + mon + (tipoPago!=='pago'?' ('+tipoPago+')':''));
@@ -6319,6 +6343,10 @@ function eliminarPago(prestamoId,pagoId){
   if(pg.tipoPago==='amortizacion'){
     p.capital = (p.capital||0) + (pg.montoDeuda||pg.monto);
     if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
+  } else if(pg.tipoPago==='cuota_revolving'){
+    var intMesR = pg._intAsignado != null ? pg._intAsignado : 0;
+    var capRevR = Math.max(0, (pg.montoDeuda||pg.monto) - intMesR);
+    p.capital = (p.capital||0) + capRevR;
   } else if(pg.tipoPago==='incremento'){
     p.capital = Math.max(0, (p.capital||0) - (pg.montoDeuda||pg.monto));
     if(typeof calcCuotas==='function') p.cuotas=calcCuotas(p);
