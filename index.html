@@ -6820,10 +6820,10 @@ function renderLista(){
         ${_badge}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:8px">
-        <span style="color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Facturado: ${fN(tot)}</span>
+        <span style="color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Facturado: ${fN(tot)}">Facturado: ${fN(parseFloat(tot.toFixed(2)))}</span>
         ${credito>0
-          ? `<span style="color:#4ade80;font-weight:500;white-space:nowrap;text-align:right">+${fN(credito)} USD a favor</span>`
-          : `<span style="color:var(--color-text-danger);font-weight:500;white-space:nowrap;text-align:right">Pdte: ${fN(pdt)} / ${fN(totActivo)} USD</span>`
+          ? `<span style="color:#4ade80;font-weight:500;white-space:nowrap;text-align:right">+${fN(parseFloat(credito.toFixed(2)))} USD a favor</span>`
+          : `<span style="color:var(--color-text-danger);font-weight:500;white-space:nowrap;text-align:right">Pdte: ${fN(parseFloat(pdt.toFixed(2)))} / ${fN(parseFloat(totActivo.toFixed(2)))} USD</span>`
         }
       </div>
       <div class="pay-bar"><div class="pay-bar-fill" style="width:${pctActivo}%;${credito>0?'background:linear-gradient(90deg,#22c55e,#4ade80)':''}"></div></div>
@@ -6856,11 +6856,11 @@ function renderFichaCuenta(c){
       </div>
     </div>
     <div class="g4" style="margin-bottom:10px">
-      <div class="metric"><div class="lbl">Total facturado</div><div class="val">${fN(tot)}</div><div class="sub">USD · ${c.folios.length} folio(s)</div></div>
-      <div class="metric"><div class="lbl">Abonado</div><div class="val" style="color:var(--color-text-success)">${fN(pag)}</div><div class="sub">USD equiv.</div></div>
+      <div class="metric"><div class="lbl">Total facturado</div><div class="val">${fN(parseFloat(tot.toFixed(2)))}</div><div class="sub">USD · ${c.folios.length} folio(s)</div></div>
+      <div class="metric"><div class="lbl">Abonado</div><div class="val" style="color:var(--color-text-success)">${fN(parseFloat(pag.toFixed(2)))}</div><div class="sub">USD equiv.</div></div>
       ${credito>0
-        ? `<div class="metric"><div class="lbl">Crédito a favor</div><div class="val" style="color:#4ade80">+${fN(credito)}</div><div class="sub">USD adelantado</div></div>`
-        : `<div class="metric"><div class="lbl">Pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdt)}</div><div class="sub">USD equiv.</div></div>`
+        ? `<div class="metric"><div class="lbl">Crédito a favor</div><div class="val" style="color:#4ade80">+${fN(parseFloat(credito.toFixed(2)))}</div><div class="sub">USD adelantado</div></div>`
+        : `<div class="metric"><div class="lbl">Pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(parseFloat(pdt.toFixed(2)))}</div><div class="sub">USD equiv.</div></div>`
       }
       <div class="metric"><div class="lbl">Progreso</div><div class="val">${credito>0?'✓':pctActivo+'%'}</div><div class="sub">${credito>0?'Con crédito':'de deuda actual'}</div></div>
     </div>
@@ -6870,7 +6870,7 @@ function renderFichaCuenta(c){
       </div>
       <div class="pay-bar"><div class="pay-bar-fill" style="width:${pctActivo}%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary)">
-        <span>Deuda activa: ${fN(totActivo)} USD</span><span>Pendiente: ${fN(pdt)} USD</span>
+        <span>Deuda activa: ${fN(parseFloat(totActivo.toFixed(2)))} USD</span><span>Pendiente: ${fN(parseFloat(pdt.toFixed(2)))} USD</span>
       </div>
     </div>
     <div class="card">
