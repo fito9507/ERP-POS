@@ -11956,12 +11956,12 @@ function shareStockWhatsApp() {
       var ofPr = typeof S!=='undefined' && S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana):(p.precioOfertaHabana);
       if(ofPr!=null) {
         text += "🔥 *OFERTA: " + fN(ofPr) + " USD*\n";
-        var norm = p.min!=null ? p.min : p.maj;
+        var norm = (p.min!=null && p.min!=='') ? p.min : ((p.maj!=null && p.maj!=='') ? p.maj : null);
         if(norm!=null) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
       }
     } else if (p.preventa_min != null && p.preventa_min !== '') {
       text += "⏳ *PREVENTA: " + fN(p.preventa_min) + " USD*\n";
-      var norm = p.min!=null ? p.min : p.maj;
+      var norm = (p.min!=null && p.min!=='') ? p.min : ((p.maj!=null && p.maj!=='') ? p.maj : null);
       if(norm!=null) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
     } else {
       if(p.min!=null && p.maj!=null && p.min===p.maj) {
