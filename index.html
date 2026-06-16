@@ -12217,10 +12217,10 @@ window.updCntPagoCaja = function() {
     return; 
   }
 
-  if(cajaMon !== deudaMon) {
+  if(cajaMon !== deudaMon && cajaMon !== 'USD') {
     wrp.style.display='block';
     lblCaja.innerText = '(' + cajaMon + ')';
-    var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
+    var eqCaja = typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1);
     inpCaja.value = eqCaja.toFixed(2);
     
     var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
@@ -12231,6 +12231,7 @@ window.updCntPagoCaja = function() {
     }
   } else {
     wrp.style.display='none';
+    if (cajaMon === 'USD') inpCaja.value = usd.toFixed(2);
   }
   
   if (!usdMod) {
@@ -12347,10 +12348,10 @@ window.updCntPagoUsd = function(skipTasa) {
     return; 
   }
 
-  if(cajaMon !== deudaMon) {
+  if(cajaMon !== deudaMon && cajaMon !== 'USD') {
     wrp.style.display='block';
     lblCaja.innerText = '(' + cajaMon + ')';
-    var eqCaja = cajaMon==='USD'?usd:(typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1));
+    var eqCaja = typeof fromUSD==='function'?fromUSD(usd,cajaMon,almToUse):usd*(RATES[cajaMon]||1);
     inpCaja.value = eqCaja.toFixed(2);
     
     var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
@@ -12362,6 +12363,7 @@ window.updCntPagoUsd = function(skipTasa) {
     }
   } else {
     wrp.style.display='none';
+    if (cajaMon === 'USD') inpCaja.value = usd.toFixed(2);
   }
 };
 
