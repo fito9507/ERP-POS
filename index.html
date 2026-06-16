@@ -11978,7 +11978,12 @@ function shareStockWhatsApp() {
         if(norm!=null) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
       }
     } else if (isPrev) {
-      var prevPrice = (p.preventa_min != null && p.preventa_min !== '') ? p.preventa_min : norm;
+      var prevPrice = norm;
+      if (p.preventa_min != null && p.preventa_min !== '') {
+        prevPrice = p.preventa_min;
+      } else if (typeof RATES !== 'undefined' && RATES.DTO_PREVENTA > 0 && norm != null) {
+        prevPrice = Number((parseFloat(norm) * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
+      }
       if (prevPrice != null) text += "⏳ *PREVENTA: " + fN(prevPrice) + " USD*\n";
       if (norm!=null && parseFloat(prevPrice) !== parseFloat(norm)) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
     } else {
