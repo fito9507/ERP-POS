@@ -11692,8 +11692,16 @@ function renderContenedores() {
   if(!CONTENEDORES.length){
     html+='<div style="text-align:center;color:var(--color-text-tertiary);padding:40px;border:1px dashed rgba(255,255,255,.1);border-radius:12px">No hay contenedores registrados.</div>';
   } else {
-    // Sort by created_at desc (or id desc since id is timestamp)
-    var sortedCnts = CONTENEDORES.slice().sort(function(a,b){return b.id.localeCompare(a.id);});
+    // Sort: Activos primero, luego cerrados/recibidos. Dentro de cada grupo, ordenar por ETA ascendente.
+    var sortedCnts = CONTENEDORES.slice().sort(function(a,b){
+      var cA = (a.estado==='cerrado'||a.estado==='recibido');
+      var cB = (b.estado==='cerrado'||b.estado==='recibido');
+      if (cA !== cB) return cA ? 1 : -1;
+      var etaA = a.fecha_eta || '9999-12-31';
+      var etaB = b.fecha_eta || '9999-12-31';
+      if (etaA === etaB) return b.id.localeCompare(a.id);
+      return etaA.localeCompare(etaB);
+    });
     sortedCnts.forEach(function(c){
       html += _renderCntCard(c);
     });
