@@ -11736,13 +11736,16 @@ function _renderCntCard(c) {
     var pagadoGasto = (g.pagos||[]).reduce(function(acc, pg){ return acc + parseFloat(pg.monto||0); }, 0);
     var pct = totalGasto > 0 ? Math.min(100, Math.round((pagadoGasto/totalGasto)*100)) : 0;
     
-    var usdGasto = g.moneda==='USD' ? totalGasto : (typeof toUSD==='function'?toUSD(totalGasto,g.moneda):totalGasto/(RATES[g.moneda]||1));
-    totalUSD += usdGasto;
-    
     var pagGastoUsd = (g.pagos||[]).reduce(function(acc, pg){ 
       if (pg.equivUSD) return acc + parseFloat(pg.equivUSD);
       return acc + (pg.mon==='USD' ? pg.monto : (typeof toUSD==='function'?toUSD(pg.monto,pg.mon):pg.monto/(RATES[pg.mon]||1)));
     }, 0);
+    
+    var faltaGasto = Math.max(0, totalGasto - pagadoGasto);
+    var usdFalta = g.moneda==='USD' ? faltaGasto : (typeof toUSD==='function'?toUSD(faltaGasto,g.moneda):faltaGasto/(RATES[g.moneda]||1));
+    var usdGasto = pagGastoUsd + usdFalta;
+    
+    totalUSD += usdGasto;
     pagadoUSD += pagGastoUsd;
     
     var vencido = false;
