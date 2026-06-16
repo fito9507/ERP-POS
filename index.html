@@ -11954,17 +11954,25 @@ function shareStockWhatsApp() {
     text += "📦 *" + p.n + "*\n";
     if(p.oferta){
       var ofPr = typeof S!=='undefined' && S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana):(p.precioOfertaHabana);
-      if(ofPr!=null) text += "🔥 *OFERTA: " + fN(ofPr) + " USD*\n";
-    }
-    if(p.min!=null && p.maj!=null && p.min===p.maj) {
-      text += "💲 Precio: " + fN(p.min) + " USD\n";
+      if(ofPr!=null) {
+        text += "🔥 *OFERTA: " + fN(ofPr) + " USD*\n";
+        if(p.min!=null) text += "💲 Normal: ~" + fN(p.min) + " USD~\n";
+      }
+    } else if (p.preventa_min != null && p.preventa_min !== '') {
+      text += "⏳ *PREVENTA: " + fN(p.preventa_min) + " USD*\n";
+      if(p.min!=null) text += "💲 Normal: ~" + fN(p.min) + " USD~\n";
     } else {
-      if(p.min!=null) text += "💲 Min: " + fN(p.min) + " USD\n";
-      if(p.maj!=null) text += "💲 May: " + fN(p.maj) + " USD\n";
+      if(p.min!=null && p.maj!=null && p.min===p.maj) {
+        text += "💲 Precio: " + fN(p.min) + " USD\n";
+      } else {
+        if(p.min!=null) text += "💲 Min: " + fN(p.min) + " USD\n";
+        if(p.maj!=null) text += "💲 May: " + fN(p.maj) + " USD\n";
+      }
     }
     text += "\n";
   });
-  text += "👉 ¡Responde a este mensaje para hacer tu pedido!";
+  text += "👉 ¡Responde a este mensaje para hacer tu pedido!\n\n";
+  text += "🌐 *Ver catálogo online:*\nhttps://tu-enlace-aqui.com";
   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
 // ── MODAL: NUEVO / EDITAR CONTENEDOR ──────────────────────────────────
