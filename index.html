@@ -6818,7 +6818,7 @@ function renderLista(){
         ${_badge}
       </div>
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-        <span style="color:var(--color-text-secondary)">Deuda: ${fN(tot)} USD</span>
+        <span style="color:var(--color-text-secondary)">Facturado: ${fN(tot)} USD</span>
         ${credito>0
           ? `<span style="color:#4ade80;font-weight:500">+${fN(credito)} USD a favor</span>`
           : `<span style="color:var(--color-text-danger);font-weight:500">${fN(pdt)} USD pdte.</span>`
@@ -6852,7 +6852,7 @@ function renderFichaCuenta(c){
       </div>
     </div>
     <div class="g4" style="margin-bottom:10px">
-      <div class="metric"><div class="lbl">Deuda total</div><div class="val">${fN(tot)}</div><div class="sub">USD · ${c.folios.length} folio(s)</div></div>
+      <div class="metric"><div class="lbl">Total facturado</div><div class="val">${fN(tot)}</div><div class="sub">USD · ${c.folios.length} folio(s)</div></div>
       <div class="metric"><div class="lbl">Abonado</div><div class="val" style="color:var(--color-text-success)">${fN(pag)}</div><div class="sub">USD equiv.</div></div>
       ${credito>0
         ? `<div class="metric"><div class="lbl">Crédito a favor</div><div class="val" style="color:#4ade80">+${fN(credito)}</div><div class="sub">USD adelantado</div></div>`
