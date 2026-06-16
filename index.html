@@ -11877,7 +11877,11 @@ function renderStock(){
   var prods=activos.filter(function(p){
     if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
     if(catF&&p.cat!==catF)return false;
-    if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
+    if(almF){
+      var hasStk = (p.stk_alm&&p.stk_alm[almF])>0;
+      var inTrans = (p.enTransito&&p.enTransito[almF]);
+      if(!hasStk && !inTrans) return false;
+    }
     return true;
   }).sort(function(a,b){return a.n.localeCompare(b.n, undefined, {numeric: true});});
   var visAlms=almF?[almF]:alms;
@@ -11940,7 +11944,11 @@ function shareStockWhatsApp() {
   var prods=activos.filter(function(p){
     if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
     if(catF&&p.cat!==catF)return false;
-    if(almF&&!((p.stk_alm&&p.stk_alm[almF])>0))return false;
+    if(almF){
+      var hasStk = (p.stk_alm&&p.stk_alm[almF])>0;
+      var inTrans = (p.enTransito&&p.enTransito[almF]);
+      if(!hasStk && !inTrans) return false;
+    }
     return true;
   }).sort(function(a,b){return a.n.localeCompare(b.n, undefined, {numeric: true});});
   
@@ -11948,21 +11956,31 @@ function shareStockWhatsApp() {
   if(prods.length > 50){
     if(!confirm('Vas a enviar '+prods.length+' productos al WhatsApp. Esto generará un mensaje muy largo. ¿Continuar?')) return;
   }
-  
-  var text = "🚀 *NUESTRO CATÁLOGO" + (catF ? " - " + catF.toUpperCase() : "") + "* 🚀\n\n";
+
+  var prodsStock = [];
+  var prodsTransito = [];
   prods.forEach(function(p){
+    var isTrans = almF ? (p.enTransito&&p.enTransito[almF]) : (p.enTransito && (p.enTransito.Habana || p.enTransito.Placetas || p.enTransito.Xportprise));
+    if(isTrans) prodsTransito.push(p);
+    else prodsStock.push(p);
+  });
+
+  var text = "🚀 *NUESTRO CATÁLOGO" + (catF ? " - " + catF.toUpperCase() : "") + "* 🚀\n\n";
+
+  function appendProd(p, isPrev) {
     text += "📦 *" + p.n + "*\n";
+    var norm = (p.min!=null && p.min!=='') ? p.min : ((p.maj!=null && p.maj!=='') ? p.maj : (p.escala && p.escala.length ? p.escala[0].precio : null));
+    
     if(p.oferta){
       var ofPr = typeof S!=='undefined' && S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana):(p.precioOfertaHabana);
       if(ofPr!=null) {
         text += "🔥 *OFERTA: " + fN(ofPr) + " USD*\n";
-        var norm = (p.min!=null && p.min!=='') ? p.min : ((p.maj!=null && p.maj!=='') ? p.maj : (p.escala && p.escala.length ? p.escala[0].precio : null));
         if(norm!=null) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
       }
-    } else if (p.preventa_min != null && p.preventa_min !== '') {
-      text += "⏳ *PREVENTA: " + fN(p.preventa_min) + " USD*\n";
-      var norm = (p.min!=null && p.min!=='') ? p.min : ((p.maj!=null && p.maj!=='') ? p.maj : (p.escala && p.escala.length ? p.escala[0].precio : null));
-      if(norm!=null) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
+    } else if (isPrev) {
+      var prevPrice = (p.preventa_min != null && p.preventa_min !== '') ? p.preventa_min : norm;
+      if (prevPrice != null) text += "⏳ *PREVENTA: " + fN(prevPrice) + " USD*\n";
+      if (norm!=null && parseFloat(prevPrice) !== parseFloat(norm)) text += "💲 Normal: ~" + fN(norm) + " USD~\n";
     } else {
       if(p.min!=null && p.maj!=null && p.min===p.maj) {
         text += "💲 Precio: " + fN(p.min) + " USD\n";
@@ -11972,7 +11990,19 @@ function shareStockWhatsApp() {
       }
     }
     text += "\n";
-  });
+  }
+
+  if (prodsStock.length > 0) {
+    if (prodsTransito.length > 0) text += "🟢 *DISPONIBLES EN STOCK*\n\n";
+    prodsStock.forEach(function(p){ appendProd(p, false); });
+  }
+  
+  if (prodsTransito.length > 0) {
+    if (prodsStock.length > 0) text += "➖➖➖➖➖➖➖➖➖➖\n\n";
+    text += "🚢 *EN TRÁNSITO (PREVENTA)*\n\n";
+    prodsTransito.forEach(function(p){ appendProd(p, true); });
+  }
+
   text += "👉 ¡Responde a este mensaje para hacer tu pedido!\n\n";
   text += "🌐 *Ver catálogo online:*\nhttps://marinmetal.com/ofertas/";
   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
