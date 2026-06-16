@@ -440,8 +440,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #mod-clientes .prod-row {display:grid;grid-template-columns:1fr 76px 86px 52px 80px 50px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
 #mod-clientes .prod-row:last-child {border-bottom:none}
 #mod-clientes .prod-row.hdr {font-size:10px;color:var(--color-text-secondary)}
-#mod-clientes .qi {width:72px !important;font-size:11px !important;padding:2px 5px !important;text-align:right !important;border-radius:4px !important}
-#mod-clientes .pi {width:82px !important;font-size:11px !important;padding:2px 5px !important;text-align:right !important;border-radius:4px !important}
+#mod-clientes .qi {width:72px !important;font-size:11px !important;padding:2px 5px !important;text-align:right !important;border-radius:4px !important;-moz-appearance:textfield}
+#mod-clientes .pi {width:82px !important;font-size:11px !important;padding:2px 5px !important;text-align:right !important;border-radius:4px !important;-moz-appearance:textfield}
+#mod-clientes .qi::-webkit-outer-spin-button, #mod-clientes .qi::-webkit-inner-spin-button, #mod-clientes .pi::-webkit-outer-spin-button, #mod-clientes .pi::-webkit-inner-spin-button {-webkit-appearance:none;margin:0}
 #mod-clientes .prev-bar {padding:9px 12px;border-radius:var(--border-radius-md);font-size:12px;margin-top:4px}
 #mod-clientes .toggle-caja {display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--border-radius-md);border:.5px solid var(--color-border-tertiary);cursor:pointer;user-select:none}
 #mod-clientes .toggle-caja.on {background:var(--color-background-info);border-color:var(--color-text-info)}
