@@ -6921,10 +6921,10 @@ function renderFichaFolios(c){
             <div style="font-size:10px;color:var(--color-text-secondary)">${pag>tot?'Crédito a favor':pct+'%'} · ${f.lineas.length} productos · ${f.abonos.length} abonos</div>
           </div>
           <div style="text-align:right;flex-shrink:0;padding-left:12px">
-            <div style="font-size:15px;font-weight:500">${fN(tot)} USD</div>
+            <div style="font-size:15px;font-weight:500">${fN(parseFloat(tot.toFixed(2)))} USD</div>
             ${pag>tot+0.01 
-              ? `<div style="font-size:12px;color:#4ade80;font-weight:500">A favor: ${fN(pag-tot)} USD</div>` 
-              : `<div style="font-size:12px;color:var(--color-text-danger);font-weight:500">Pdte: ${fN(pdt)} USD</div>`
+              ? `<div style="font-size:12px;color:#4ade80;font-weight:500">A favor: ${fN(parseFloat((pag-tot).toFixed(2)))} USD</div>` 
+              : `<div style="font-size:12px;color:var(--color-text-danger);font-weight:500">Pdte: ${fN(parseFloat(pdt.toFixed(2)))} USD</div>`
             }
           </div>
         </div>
@@ -6937,11 +6937,11 @@ function renderFichaFolios(c){
             <div class="prod-row hdr"><span>Producto</span><span style="text-align:right">Cant.</span><span style="text-align:right">P.unit.</span><span>Mon.</span><span style="text-align:right">Total</span><span></span></div>
             <div id="pl-${c.id}-${f.id}">${renderPL(c,f)}</div>
             <div style="display:flex;justify-content:flex-end;gap:16px;font-size:12px;margin-top:6px">
-              <span>Total: <strong>${fN(tot)} USD</strong></span>
-              <span style="color:var(--color-text-success)">Abonado: <strong>${fN(pag)} USD</strong></span>
+              <span>Total: <strong>${fN(parseFloat(tot.toFixed(2)))} USD</strong></span>
+              <span style="color:var(--color-text-success)">Abonado: <strong>${fN(parseFloat(pag.toFixed(2)))} USD</strong></span>
               ${pag>tot+0.01
-                ? `<span style="color:#4ade80">A favor: <strong>${fN(pag-tot)} USD</strong></span>`
-                : `<span style="color:var(--color-text-danger)">Pdte: <strong>${fN(pdt)} USD</strong></span>`
+                ? `<span style="color:#4ade80">A favor: <strong>${fN(parseFloat((pag-tot).toFixed(2)))} USD</strong></span>`
+                : `<span style="color:var(--color-text-danger)">Pdte: <strong>${fN(parseFloat(pdt.toFixed(2)))} USD</strong></span>`
               }
             </div>
           </div>
@@ -6963,7 +6963,7 @@ function renderFichaFolios(c){
                 </div>
                 <div style="text-align:right;white-space:nowrap">
                   <div style="font-size:12px;font-weight:500;color:var(--color-text-success)">${fN(a.monto,dFor(a.mon))} ${a.mon}</div>
-                  ${a.mon!=='USD'?`<div style="font-size:10px;color:var(--color-text-tertiary)">≈${fN(a.equivUSD)} USD</div>`:''}
+                  ${a.mon!=='USD'?`<div style="font-size:10px;color:var(--color-text-tertiary)">≈${fN(parseFloat(a.equivUSD.toFixed(2)))} USD</div>`:''}
                 </div>
                 ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px" onclick="elimA('${c.id}','${f.id}','${a.id}')">×</button>`:''}
               </div>`).join('')
@@ -6980,7 +6980,7 @@ function renderPL(c,f){
       <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
       <span><input type="number" class="pi" value="${l.precio}" step="0.01" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
-      <span style="text-align:right;font-weight:500">${fN(toUSD(l.q*l.precio,l.mon))}</span>
+      <span style="text-align:right;font-weight:500">${fN(parseFloat(toUSD(l.q*l.precio,l.mon).toFixed(2)))}</span>
       <span>${l.q!==l.qO||l.precio!==l.pO?`<span class="badge ba" style="font-size:9px;cursor:pointer" onclick="restL('${c.id}','${f.id}',${i})">mod</span>`:''}
         <button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:13px" onclick="elimL('${c.id}','${f.id}',${i})">×</button>
       </span>
