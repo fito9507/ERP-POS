@@ -9704,6 +9704,7 @@ async function enviarBackupTelegram() {
     
     // Enviar tambien el snapshot JSON (restaurable desde el propio ERP)
     if(window._backupJSON){
+      await new Promise(function(rs){setTimeout(rs,3000);}); // rate limit telegram
       try{
         var fdj=new FormData();
         fdj.append('chat_id', TG_BACKUP);
