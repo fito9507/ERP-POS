@@ -12298,9 +12298,6 @@ window.updCntPagoUsd = function() {
     if(cObj) almToUse = cObj.almacen;
   }
   
-  var newAmortiza = deudaMon==='USD' ? usd : (typeof fromUSD==='function'?fromUSD(usd,deudaMon,almToUse):usd*(RATES[deudaMon]||1));
-  elMon.value = newAmortiza.toFixed(2);
-  
   var wrp = document.getElementById('fcp-caja-wrap');
   var inpCaja = document.getElementById('fcp-moncaja');
   var lblCaja = document.getElementById('fcp-caja-mon');
@@ -12318,8 +12315,9 @@ window.updCntPagoUsd = function() {
     
     var isCajaNac = (cajaMon==='CUP'||cajaMon==='CUPT');
     var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
-    if(newAmortiza>0 && eqCaja>0) {
-      var tasa = (!isCajaNac && isDeudaNac) ? (newAmortiza / eqCaja) : (eqCaja / newAmortiza);
+    var montoDeuda = parseFloat(elMon.value)||0;
+    if(montoDeuda>0 && eqCaja>0) {
+      var tasa = (!isCajaNac && isDeudaNac) ? (montoDeuda / eqCaja) : (eqCaja / montoDeuda);
       document.getElementById('fcp-tasa').value = tasa.toFixed(4);
     }
   } else {
