@@ -12162,7 +12162,10 @@ function registrarPagoCnt(cntId, gId) {
     +'</div>'
     
     +'<div style="margin-bottom:12px;background:rgba(16,185,129,.1);padding:10px;border-radius:8px;border:1px solid rgba(16,185,129,.3)">'
-    +'<label class="lbl" style="color:var(--color-text-success)">Equivalente USD (Para el costo global)</label>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+    +'<label class="lbl" style="color:var(--color-text-success);margin:0">Equivalente USD (Para el costo global)</label>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);display:flex;align-items:center;gap:4px" title="Tasa de conversión a USD">Tasa: <input type="number" id="fcp-tasa-usd" class="adm-inp" style="width:70px;padding:2px 4px;font-size:11px;height:20px" oninput="updCntPagoTasaUsd()"></div>'
+    +'</div>'
     +'<input type="number" step="0.01" id="fcp-usd" class="adm-inp" oninput="updCntPagoUsd()">'
     +'<input type="hidden" id="fcp-usd-mod" value="0">'
     +'</div>'
@@ -12203,7 +12206,13 @@ window.updCntPagoCaja = function() {
   
   if(!sel.value) { 
     wrp.style.display='none'; 
-    if(!usdMod) inpUSD.value = usd.toFixed(2);
+    if(!usdMod) {
+      inpUSD.value = usd.toFixed(2);
+      if(document.getElementById('fcp-tasa-usd') && montoDeuda>0 && usd>0) {
+        var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
+        document.getElementById('fcp-tasa-usd').value = isDeudaNac ? (montoDeuda/usd).toFixed(4) : (usd/montoDeuda).toFixed(4);
+      }
+    }
     return; 
   }
 
@@ -12223,7 +12232,13 @@ window.updCntPagoCaja = function() {
     wrp.style.display='none';
   }
   
-  if (!usdMod) inpUSD.value = usd.toFixed(2);
+  if (!usdMod) {
+    inpUSD.value = usd.toFixed(2);
+    if(document.getElementById('fcp-tasa-usd') && montoDeuda>0 && usd>0) {
+      var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
+      document.getElementById('fcp-tasa-usd').value = isDeudaNac ? (montoDeuda/usd).toFixed(4) : (usd/montoDeuda).toFixed(4);
+    }
+  }
 };
 
 window.updCntPagoMonCaja = function() {
@@ -12281,8 +12296,24 @@ window.updCntPagoTasa = function() {
     if(cObj) almToUse = cObj.almacen;
   }
 };
+};
 
-window.updCntPagoUsd = function() {
+window.updCntPagoTasaUsd = function() {
+  document.getElementById('fcp-usd-mod').value='1';
+  var tasa = parseFloat(document.getElementById('fcp-tasa-usd').value)||0;
+  var elMon = document.getElementById('fcp-mon');
+  if(!elMon) return;
+  var deudaMon = elMon.getAttribute('data-moneda');
+  var montoDeuda = parseFloat(elMon.value)||0;
+  if(tasa > 0) {
+    var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
+    var usd = isDeudaNac ? (montoDeuda / tasa) : (montoDeuda * tasa);
+    document.getElementById('fcp-usd').value = usd.toFixed(2);
+    updCntPagoUsd(true);
+  }
+};
+
+window.updCntPagoUsd = function(skipTasa) {
   document.getElementById('fcp-usd-mod').value='1';
   var usd = parseFloat(document.getElementById('fcp-usd').value)||0;
   var sel = document.getElementById('fcp-caja');
@@ -12298,6 +12329,15 @@ window.updCntPagoUsd = function() {
     if(cObj) almToUse = cObj.almacen;
   }
   
+  var montoDeuda = parseFloat(elMon.value)||0;
+  if (!skipTasa) {
+    var tasaInp = document.getElementById('fcp-tasa-usd');
+    if(tasaInp && montoDeuda>0 && usd>0) {
+      var isDeudaNac = (deudaMon==='CUP'||deudaMon==='CUPT');
+      tasaInp.value = isDeudaNac ? (montoDeuda / usd).toFixed(4) : (usd / montoDeuda).toFixed(4);
+    }
+  }
+
   var wrp = document.getElementById('fcp-caja-wrap');
   var inpCaja = document.getElementById('fcp-moncaja');
   var lblCaja = document.getElementById('fcp-caja-mon');
