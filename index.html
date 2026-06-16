@@ -6819,11 +6819,11 @@ function renderLista(){
         </div>
         ${_badge}
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-        <span style="color:var(--color-text-secondary)">Facturado: ${fN(tot)} USD</span>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;gap:8px">
+        <span style="color:var(--color-text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Facturado: ${fN(tot)}</span>
         ${credito>0
-          ? `<span style="color:#4ade80;font-weight:500">+${fN(credito)} USD a favor</span>`
-          : `<span style="color:var(--color-text-danger);font-weight:500">Deuda actual: ${fN(pdt)} USD</span>`
+          ? `<span style="color:#4ade80;font-weight:500;white-space:nowrap;text-align:right">+${fN(credito)} USD a favor</span>`
+          : `<span style="color:var(--color-text-danger);font-weight:500;white-space:nowrap;text-align:right">Pdte: ${fN(pdt)} / ${fN(totActivo)} USD</span>`
         }
       </div>
       <div class="pay-bar"><div class="pay-bar-fill" style="width:${pctActivo}%;${credito>0?'background:linear-gradient(90deg,#22c55e,#4ade80)':''}"></div></div>
@@ -6870,7 +6870,7 @@ function renderFichaCuenta(c){
       </div>
       <div class="pay-bar"><div class="pay-bar-fill" style="width:${pctActivo}%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--color-text-secondary)">
-        <span>Total facturado global: ${fN(tot)} USD</span><span>Deuda actual: ${fN(pdt)} USD</span>
+        <span>Deuda activa: ${fN(totActivo)} USD</span><span>Pendiente: ${fN(pdt)} USD</span>
       </div>
     </div>
     <div class="card">
