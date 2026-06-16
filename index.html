@@ -11697,10 +11697,10 @@ function renderContenedores() {
       var cA = (a.estado==='cerrado'||a.estado==='recibido');
       var cB = (b.estado==='cerrado'||b.estado==='recibido');
       if (cA !== cB) return cA ? 1 : -1;
-      var etaA = a.fecha_eta || '9999-12-31';
-      var etaB = b.fecha_eta || '9999-12-31';
-      if (etaA === etaB) return b.id.localeCompare(a.id);
-      return etaA.localeCompare(etaB);
+      var tA = a.fecha_eta ? new Date(a.fecha_eta+'T00:00:00').getTime() : 9999999999999;
+      var tB = b.fecha_eta ? new Date(b.fecha_eta+'T00:00:00').getTime() : 9999999999999;
+      if (tA === tB) return b.id.localeCompare(a.id);
+      return tA - tB;
     });
     sortedCnts.forEach(function(c){
       html += _renderCntCard(c);
