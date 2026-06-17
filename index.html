@@ -7414,9 +7414,11 @@ function registrarAbonoCli(cid){
   if(!desc){alert('Añade una descripción');return;}
   // Validate caja moneda matches abono moneda
   if(enCaja&&caja){
-    var cajaMoneda=caja.split(' ')[0];
-    if(cajaMoneda!==mon){
-      alert('⚠ Error: estás intentando depositar '+mon+' en una caja de '+cajaMoneda+'. Selecciona una cuenta que coincida con la moneda del abono.');
+    // Look up the real moneda from _cajasData instead of guessing from the name
+    var _cajaDef = typeof _cajasData!=='undefined' ? _cajasData.find(function(c){return c.nombre===caja;}) : null;
+    var cajaMoneda = _cajaDef ? _cajaDef.moneda : caja.split(' ')[0];
+    if(cajaMoneda && cajaMoneda!==mon){
+      alert('⚠ Error: estás intentando depositar '+mon+' en una caja de '+cajaMoneda+' ('+caja+'). Selecciona una cuenta que coincida con la moneda del abono.');
       return;
     }
   }
