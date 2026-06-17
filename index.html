@@ -9683,20 +9683,57 @@ function renderBackup() {
 }
 
 // Backup automático diario — envía SQL al Telegram admin
+async function _buildBackupJSON() {
+  var snap = {_fecha: new Date().toISOString()};
+  var tablas = ['productos','stock_almacen','tasas','tasas_almacen','usuarios','ventas',
+                'cajas','mov_cajas','movimientos_ig','clientes','prestamos','comisiones',
+                'pedidos','folios','abonos','com_reglas','liquidaciones',
+                'stock_movimientos','contenedores'];
+  for (var i = 0; i < tablas.length; i++) {
+    try {
+      var r = await supaReq('GET', tablas[i] + '?select=*&limit=5000');
+      if (r.ok) snap[tablas[i]] = await r.json() || [];
+    } catch(e) { console.warn('_buildBackupJSON ' + tablas[i] + ':', e); }
+  }
+  window._backupJSON = snap;
+  return snap;
+}
 async function enviarBackupTelegram() {
   if(!_supaOnline){ console.warn('Sin conexion para backup'); return; }
   if((!TG_ON&&!TG_TOKEN) || !TG_BACKUP){ return; }
   try {
+    // 1. Build JSON snapshot first — independent of SQL so it never silently fails
+    var snap;
+    try { snap = await _buildBackupJSON(); } catch(e) { console.warn('JSON snapshot error:', e); }
+
+    // 2. Send JSON backup to Telegram
+    if (snap) {
+      try {
+        var fdj = new FormData();
+        fdj.append('chat_id', TG_BACKUP);
+        fdj.append('document', new Blob([JSON.stringify(snap)], {type:'application/json'}),
+          'backup_' + new Date().toISOString().slice(0,10) + '.json');
+        fdj.append('caption', '\uD83D\uDCE6 Snapshot JSON \u2014 restaurable desde el ERP (Admin \u2192 Restaurar)');
+        var rj = await _tgApi('sendDocument', fdj, true);
+        if (rj.ok) {
+          console.log('Backup JSON enviado');
+          try { localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10)); } catch(e) {}
+        } else {
+          console.warn('Backup JSON fallo:', rj.status);
+        }
+      } catch(e) { console.warn('backup json tg:', e); }
+    }
+
+    // 3. Rate limit then send SQL
+    await new Promise(function(rs){setTimeout(rs, 3000);});
     var sql = await exportBackupSQL(true);
     if(sql){
       var fname = 'backup_'+new Date().toISOString().slice(0,10)+'.sql';
-      // Count lines for summary
       var inserts = (sql.match(/INSERT INTO/g)||[]).length;
-      var caption = '\uD83D\uDCBE <b>Backup diario</b>\n'
+      var caption = '\uD83D\uDCBE <b>Backup SQL diario</b>\n'
         + new Date().toISOString().slice(0,10)+'\n\n'
-        + inserts+' registros guardados\n'
+        + inserts+' registros\n'
         + '\uD83E\uDD16 Backup autom\u00e1tico ERP';
-      // Send as document
       var fd = new FormData();
       fd.append('chat_id', TG_BACKUP);
       fd.append('document', new Blob([sql], {type:'text/sql'}), fname);
@@ -9704,29 +9741,9 @@ async function enviarBackupTelegram() {
       fd.append('parse_mode', 'HTML');
       try {
         var r = await _tgApi('sendDocument', fd, true);
-        if(r.ok){
-          console.log('Backup SQL enviado a Telegram');
-          try{localStorage.setItem('erp_backup_enviado', new Date().toISOString().slice(0,10));}catch(e){}
-        } else {
-          console.warn('Backup SQL Telegram fallo:', r.status);
-        }
-      } catch(errSQL) {
-        console.warn('Error enviando backup SQL:', errSQL);
-      }
-    }
-    
-    // Enviar tambien el snapshot JSON (restaurable desde el propio ERP)
-    if(window._backupJSON){
-      await new Promise(function(rs){setTimeout(rs,3000);}); // rate limit telegram
-      try{
-        var fdj=new FormData();
-        fdj.append('chat_id', TG_BACKUP);
-        fdj.append('document', new Blob([JSON.stringify(window._backupJSON)],{type:'application/json'}), 'backup_'+new Date().toISOString().slice(0,10)+'.json');
-        fdj.append('caption','\uD83D\uDCE6 Snapshot JSON \u2014 restaurable desde el ERP (Admin \u2192 Restaurar)');
-        var rj = await _tgApi('sendDocument', fdj, true);
-        if(rj.ok) console.log('Backup JSON enviado');
-        else console.warn('Backup JSON fallo:', rj.status);
-      }catch(e){console.warn('backup json tg:',e);}
+        if(r.ok) console.log('Backup SQL enviado a Telegram');
+        else console.warn('Backup SQL Telegram fallo:', r.status);
+      } catch(errSQL) { console.warn('Error enviando backup SQL:', errSQL); }
     }
   } catch(e){ console.warn('enviarBackupTelegram:', e); }
 }
