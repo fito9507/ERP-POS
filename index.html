@@ -7536,15 +7536,18 @@ function registrarAbonoCli(cid){
 
   // Telegram notification for abono
   (function(){
-    var _tgIcon=cajaTipo==='efectivo'?'\uD83D\uDCB5':'\uD83D\uDD04';
-    var _tgMsg=_tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
-      +'\uD83D\uDC64 '+c.nombre+'\n'
-      +'\uD83D\uDCB0 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
-      +(desc?'\uD83D\uDCDD '+desc:'')
-      +(caja?'\uD83C\uDFE6 '+caja:'')
+    var _cliAlm = c.almacen || (c.folios&&c.folios.length?c.folios[c.folios.length-1].alm:'') || 'Habana';
+    var _tgIcon = cajaTipo==='efectivo' ? '💵' : '🔄';
+    var _tgMsg = _tgIcon+' <b>Abono '+cajaTipo+'</b>\n'
+      +'👤 '+c.nombre+'\n'
+      +'💰 <b>'+fN(monto,dFor(mon))+' '+mon+'</b>'+(mon!=='USD'?' ≈ '+fN(equivUSD)+' USD':'')+'\n'
+      +(desc?'📝 '+desc+'\n':'')
+      +(caja?'🏦 '+caja+'\n':'')
+      +'🏪 '+_cliAlm
       +_tgCliBalance(c.nombre);
-    tgSend(_tgMsg, null, 'venta');
+    tgSend(_tgMsg, _cliAlm, 'venta');
   })();
+
   showToast(`Abono registrado (${cajaTipo}) — ${fN(monto,dFor(mon))} ${mon} ≈ ${fN(equivUSD)} USD`);
   renderFichaCuenta(c);fichaNavTo('f-cuenta');
 }
