@@ -1553,15 +1553,18 @@ function tgSend(msg, alm, tipo){
 function _tgCliBalance(cliName) {
   if(!cliName || cliName==='Walk-in') return '';
   if(typeof CLIENTES==='undefined' || !CLIENTES) return '';
-  var c = CLIENTES.find(function(x){return x.nombre===cliName;});
-  if(!c) return '';
-  var _tot = typeof totCli==='function'?totCli(c):0;
-  var _pag = typeof pagCli==='function'?pagCli(c):0;
-  var _pdt = typeof pdtCli==='function'?pdtCli(c):0;
+  var cli = CLIENTES.find(function(x){return x.nombre===cliName;});
+  if(!cli) return '';
+  var _tot = 0, _pag = 0;
+  (cli.folios||[]).forEach(function(f){
+    _tot += (f.totalUSD||0);
+    (f.abonos||[]).forEach(function(ab){ _pag += (ab.equivUSD||0); });
+  });
+  var _pdt = _tot - _pag;
   var _favor = _pag > _tot + 0.01 ? _pag - _tot : 0;
-  if (_pdt > 0.01) return '\n\n🔴 <b>Deuda actual:</b> '+fN(_pdt)+' USD';
-  if (_favor > 0.01) return '\n\n💰 <b>Saldo a favor:</b> '+fN(_favor)+' USD';
-  if (_tot > 0) return '\n\n🟢 <b>Deuda:</b> Saldada (0.00)';
+  if (_pdt > 0.01) return '\n\n🔴 <b>Deuda pendiente:</b> '+fN(_pdt)+' USD';
+  if (_favor > 0.01) return '\n\n💰 <b>Saldo a favor:</b> +'+fN(_favor)+' USD';
+  if (_tot > 0) return '\n\n🟢 <b>Cuenta:</b> Saldada';
   return '';
 }
 let _supaOnline = navigator.onLine;
