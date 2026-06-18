@@ -1750,7 +1750,39 @@ async function enviarCierreDiario(fecha, isAuto) {
       var netoStr=(neto>=0?'+':'-')+fN(Math.abs(neto),dec)+' '+mon+' neto';
       return lines+'\n  = '+netoStr;
     }).join('\n');
-    // Ensure cajas data is loaded
+    // ── Abonos a folios de clientes del día ──
+    var abonosHoy = [];
+    (typeof CLIENTES !== 'undefined' ? CLIENTES : []).forEach(function(cli) {
+      (cli.folios || []).forEach(function(f) {
+        var fAlm = f.alm || f.almacen || 'Habana';
+        if (fAlm !== alm) return;
+        (f.abonos || []).forEach(function(ab) {
+          if (ab.fecha && ab.fecha.slice(0,10) === fecha) {
+            abonosHoy.push({ cli: cli.nombre, monto: ab.monto||ab.m||0, mon: ab.mon||'USD', equivUSD: ab.equivUSD||0, desc: ab.desc||ab.concepto||'' });
+          }
+        });
+      });
+    });
+    var abonosByMon = {};
+    var abonosTotalUSD = 0;
+    abonosHoy.forEach(function(ab) {
+      if (!abonosByMon[ab.mon]) abonosByMon[ab.mon] = 0;
+      abonosByMon[ab.mon] += ab.monto;
+      abonosTotalUSD += ab.equivUSD || toUSD(ab.monto, ab.mon, alm);
+    });
+    var abonosLines = '';
+    if (abonosHoy.length > 0) {
+      var monSymA = {USD:'$',EUR:'€',CUP:'₱',CUPT:'₱',MLC:'₱'};
+      abonosLines = Object.keys(abonosByMon).map(function(m) {
+        var dec = m==='USD'||m==='EUR' ? 2 : 0;
+        var eq = m!=='USD' ? ' ≈ $'+fN(toUSD(abonosByMon[m],m,alm)) : '';
+        return '  '+(monSymA[m]||'')+' '+fN(abonosByMon[m],dec)+' '+m+eq;
+      }).join('\n');
+      if (Object.keys(abonosByMon).length > 1)
+        abonosLines += '\n  ——\n  <b>💰 Total cobrado clientes: $'+fN(abonosTotalUSD)+'</b>';
+    }
+
+
     if(typeof loadCajasData==='function' && (!_cajasData||!_cajasData.length)){
       try{ await loadCajasData(); }catch(e){}
     }
@@ -1815,8 +1847,9 @@ async function enviarCierreDiario(fecha, isAuto) {
         +(vendLines?'\n<b>Por vendedor:</b>\n'+vendLines:'')
         +(prodLines?'\n\n<b>Vendido:</b>\n'+prodLines+'\n':'')
       )
-      +(igLines?'\n<b>\uD83D\uDCCB I/G del d\u00eda:</b>\n'+igLines+'\n':'')
-      +(cajasLines?'\n<b>\uD83C\uDFE6 Saldo cajas:</b>\n'+cajasLines:'');
+      +(igLines?'\n<b>📋 I/G del día:</b>\n'+igLines+'\n':'')
+      +(abonosLines?'\n<b>🤝 Cobros clientes (folios):</b>\n'+abonosLines+'\n':'')
+      +(cajasLines?'\n<b>🏦 Saldo cajas:</b>\n'+cajasLines:'');
     tgSend(msg, alm, 'venta');
   }
   if(isAuto){ try{ await enviarBackupTelegram(); }catch(e){} }
