@@ -664,6 +664,8 @@ async function init(){
         enWeb: r.en_web!==false,
         oferta: r.en_oferta===true,
         badgeTexto: r.badge_texto||'',
+        qty_reservada: parseInt(r.qty_reservada)||0,
+        reservado: r.badge_texto==='RESERVADO',
         precioOfertaHabana: r.precio_oferta_habana!=null?parseFloat(r.precio_oferta_habana):null,
         precioOfertaPlacetas: r.precio_oferta_placetas!=null?parseFloat(r.precio_oferta_placetas):null
       };
@@ -817,6 +819,20 @@ function transitCardHTML(p){
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
+    +(function(){
+      var qr=p.qty_reservada||0, ts=p.stk||0;
+      if(qr<=0 || ts<=0) return '';
+      var pct=Math.min(Math.round(qr/ts*100),100);
+      var fqr=qr>=1000?fN(qr,0):qr;
+      var fts=ts>=1000?fN(ts,0):ts;
+      if(pct>=100) return '<div style="margin:4px 0 2px;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
+      return '<div style="margin:4px 0 2px">'
+        +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">🔥 '+fqr+' / '+fts+' reservados ('+pct+'%)</div>'
+        +'<div style="height:4px;border-radius:3px;background:'+barBg+';overflow:hidden">'
+        +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
+        +'</div></div>';
+    }())
     +'<div class="prices">'
     +(showPrice?'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'<div class="price-row main"><span class="lbl">Precio</span><span class="val" style="color:var(--text-dim);font-size:12px">Consultar</span></div>')
     +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
@@ -873,6 +889,21 @@ function cardHTML(p){
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
+    +(function(){
+      if(!_transit) return '';
+      var qr=p.qty_reservada||0, ts=p.stk||0;
+      if(qr<=0 || ts<=0) return '';
+      var pct=Math.min(Math.round(qr/ts*100),100);
+      var fqr=qr>=1000?fN(qr,0):qr;
+      var fts=ts>=1000?fN(ts,0):ts;
+      if(pct>=100) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
+      return '<div style="margin:2px 0">'
+        +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">🔥 '+fqr+' / '+fts+' reservados ('+pct+'%)</div>'
+        +'<div style="height:4px;border-radius:3px;background:'+barBg+';overflow:hidden">'
+        +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
+        +'</div></div>';
+    }())
     +'<div class="prices">'
     +(function(){
       if(hasEscala){
