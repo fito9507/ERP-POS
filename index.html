@@ -2658,11 +2658,13 @@ async function _recalcReservas(){
     var newQtyRes = reservasPorProd[p.n] || 0;
     var totalStock = p.stk || 0;
     var newBadge = oldBadge;
-    if (totalStock > 0) {
-      newBadge = (newQtyRes >= totalStock) ? 'RESERVADO' : '';
-    } else if (newQtyRes > 0 && oldBadge !== 'RESERVADO') {
-      // If stock is 0 but we have reservations, keep whatever badge it had.
-      // We don't auto-clear it, because we don't know the incoming stock.
+    
+    if (totalStock <= 0 && newQtyRes > 0) {
+      // Si el stock restante es 0 y hay ventas, se agotó todo el contenedor -> Auto-Reservado
+      newBadge = 'RESERVADO';
+    } else if (totalStock > 0) {
+      // Si queda stock disponible, NO está reservado al 100% -> Auto-Limpiar
+      newBadge = '';
     }
 
     // Only sync if something changed
