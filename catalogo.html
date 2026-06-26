@@ -831,7 +831,7 @@ function transitCardHTML(p){
       var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
       return '<div style="margin:4px 0 2px">'
         +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">'+text+'</div>'
-        +'<div style="height:4px;border-radius:3px;background:'+barBg+';overflow:hidden">'
+        +'<div style="height:6px;border-radius:3px;background:'+barBg+';overflow:hidden">'
         +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
         +'</div></div>';
     }())
@@ -904,7 +904,7 @@ function cardHTML(p){
       var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
       return '<div style="margin:2px 0">'
         +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">'+text+'</div>'
-        +'<div style="height:4px;border-radius:3px;background:'+barBg+';overflow:hidden">'
+        +'<div style="height:6px;border-radius:3px;background:'+barBg+';overflow:hidden">'
         +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
         +'</div></div>';
     }())
