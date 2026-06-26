@@ -2657,7 +2657,13 @@ async function _recalcReservas(){
     var oldBadge = p.badgeTexto || '';
     var newQtyRes = reservasPorProd[p.n] || 0;
     var totalStock = p.stk || 0;
-    var newBadge = (totalStock > 0 && newQtyRes >= totalStock) ? 'RESERVADO' : '';
+    var newBadge = oldBadge;
+    if (totalStock > 0) {
+      newBadge = (newQtyRes >= totalStock) ? 'RESERVADO' : '';
+    } else if (newQtyRes > 0 && oldBadge !== 'RESERVADO') {
+      // If stock is 0 but we have reservations, keep whatever badge it had.
+      // We don't auto-clear it, because we don't know the incoming stock.
+    }
 
     // Only sync if something changed
     if(newQtyRes !== oldQtyRes || newBadge !== oldBadge){
