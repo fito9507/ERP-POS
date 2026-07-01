@@ -664,6 +664,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #prestamos-root .adm-card, #deudas-root .adm-card{padding:10px!important}
   #prestamos-root .g2,#prestamos-root .g3,#deudas-root .g2,#deudas-root .g3{grid-template-columns:1fr!important}
   #prestamos-root .adm-table,#deudas-root .adm-table{min-width:440px}
+  .dg-collapsed .dg-chev{transform:rotate(-90deg)}
+  .dg-header:hover{filter:brightness(1.1)}
   .deudas-cols{flex-direction:column!important}
   .deudas-cols > div{flex:1 1 100%!important}
 
@@ -5717,19 +5719,75 @@ function renderDeudas(){
     +'<div style="font-size:11px;color:var(--color-text-tertiary)">'+cobrar.length+' activo'+(cobrar.length!==1?'s':'')+'</div>'
     +'</div>'
     +'</div>';
+  // ── Helper: group debts by nombre and render grouped ──
+  function _groupByNombre(list){
+    var groups={}, order=[];
+    list.forEach(function(p){
+      var key=p.nombre.trim();
+      if(!groups[key]){groups[key]=[];order.push(key);}
+      groups[key].push(p);
+    });
+    // Sort groups: most total USD first
+    order.sort(function(a,b){
+      var tA=groups[a].reduce(function(s,p){var sd=_saldoDeuda(p);return s+(p.moneda==='USD'?sd:(typeof toUSD==='function'?toUSD(sd,p.moneda):sd/(RATES[p.moneda]||1)));},0);
+      var tB=groups[b].reduce(function(s,p){var sd=_saldoDeuda(p);return s+(p.moneda==='USD'?sd:(typeof toUSD==='function'?toUSD(sd,p.moneda):sd/(RATES[p.moneda]||1)));},0);
+      return tB-tA;
+    });
+    return {groups:groups,order:order};
+  }
+  function _renderGroup(nombre, items, accentRgb){
+    var isSingle = items.length === 1;
+    // Total per currency
+    var byCurr={};
+    items.forEach(function(p){
+      var sd=_saldoDeuda(p); var m=p.moneda||'USD';
+      if(!byCurr[m]) byCurr[m]=0; byCurr[m]+=sd;
+    });
+    var totalUSD=items.reduce(function(s,p){
+      var sd=_saldoDeuda(p);
+      return s+(p.moneda==='USD'?sd:(typeof toUSD==='function'?toUSD(sd,p.moneda):sd/(RATES[p.moneda]||1)));
+    },0);
+    var allLiquidada=items.every(function(p){return _saldoDeuda(p)<=0.005;});
+    var currParts=Object.keys(byCurr).map(function(m){return fN(byCurr[m],m==='CUP'||m==='CUPT'?0:2)+' '+m;});
+    var gid='dg-'+nombre.replace(/[^a-zA-Z0-9]/g,'_');
+    var collapsed = isSingle ? '' : ' dg-collapsed';
+    var chevron = isSingle ? '' : '<span class="dg-chev" style="font-size:10px;transition:transform .2s;margin-left:4px">▼</span>';
+    var g='<div class="deuda-group'+collapsed+'" data-gid="'+gid+'" style="margin-bottom:8px">'
+      +'<div class="dg-header" onclick="'+(isSingle?'':'toggleDeudaGroup(\''+gid+'\')')+'" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:8px;background:rgba('+accentRgb+','+(allLiquidada?'.04':'.08')+');'+(isSingle?'':'cursor:pointer;')+'">'
+      +'<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'
+      +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nombre+'</div>'
+      +(items.length>1?'<span style="font-size:10px;background:rgba('+accentRgb+',.2);padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap">'+items.length+' deudas</span>':'')
+      +(allLiquidada?'<span style="font-size:10px;background:rgba(74,222,128,.15);color:var(--color-text-success);padding:1px 6px;border-radius:4px;font-weight:500">✓</span>':'')
+      +chevron
+      +'</div>'
+      +'<div style="text-align:right;flex-shrink:0">'
+      +'<div style="font-size:13px;font-weight:700;color:rgb('+accentRgb+')">'+fN(totalUSD,2)+' USD</div>'
+      +(Object.keys(byCurr).length>1||!byCurr['USD']?'<div style="font-size:10px;color:var(--color-text-tertiary)">'+currParts.join(' + ')+'</div>':'')
+      +'</div>'
+      +'</div>'
+      +'<div class="dg-body" style="'+(isSingle?'':'max-height:0;overflow:hidden;transition:max-height .3s ease;')+'padding-top:'+(isSingle?'6':'0')+'px">';
+    items.forEach(function(p){g+=_renderDeudaCard(p);});
+    g+='</div></div>';
+    return g;
+  }
+
   // Two columns (Responsive flex-wrap)
   html+='<div class="deudas-cols" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">';
   // Por pagar
   html+='<div style="flex:1 1 300px;min-width:0">'
     +'<div style="font-size:11px;font-weight:700;color:var(--color-text-danger);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(248,113,113,.2);padding-bottom:6px">📤 Por pagar</div>';
-  if(pagar.length){pagar.forEach(function(p){html+=_renderDeudaCard(p);});}
-  else html+='<div style="color:var(--color-text-success);font-size:12px;padding:20px 0;text-align:center">Sin deudas pendientes ✓</div>';
+  if(pagar.length){
+    var gP=_groupByNombre(pagar);
+    gP.order.forEach(function(n){html+=_renderGroup(n,gP.groups[n],'248,113,113');});
+  } else html+='<div style="color:var(--color-text-success);font-size:12px;padding:20px 0;text-align:center">Sin deudas pendientes ✓</div>';
   html+='</div>';
   // Por cobrar
   html+='<div style="flex:1 1 300px;min-width:0">'
     +'<div style="font-size:11px;font-weight:700;color:var(--color-text-success);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid rgba(74,222,128,.2);padding-bottom:6px">📥 Por cobrar</div>';
-  if(cobrar.length){cobrar.forEach(function(p){html+=_renderDeudaCard(p);});}
-  else html+='<div style="color:var(--color-text-tertiary);font-size:12px;padding:20px 0;text-align:center">Sin cobros pendientes</div>';
+  if(cobrar.length){
+    var gC=_groupByNombre(cobrar);
+    gC.order.forEach(function(n){html+=_renderGroup(n,gC.groups[n],'74,222,128');});
+  } else html+='<div style="color:var(--color-text-tertiary);font-size:12px;padding:20px 0;text-align:center">Sin cobros pendientes</div>';
   html+='</div>';
   html+='</div>';
   // Historial
@@ -5753,6 +5811,29 @@ function renderDeudas(){
   el.innerHTML=html;
 }
 
+
+// ── Toggle collapsible debt groups ──────────────────
+function toggleDeudaGroup(gid){
+  var el=document.querySelector('[data-gid="'+gid+'"]');
+  if(!el) return;
+  var body=el.querySelector('.dg-body');
+  var chev=el.querySelector('.dg-chev');
+  var isCollapsed=el.classList.contains('dg-collapsed');
+  if(isCollapsed){
+    el.classList.remove('dg-collapsed');
+    body.style.maxHeight=body.scrollHeight+'px';
+    body.style.paddingTop='6px';
+    if(chev) chev.style.transform='rotate(0deg)';
+    setTimeout(function(){body.style.maxHeight='none';},350);
+  } else {
+    body.style.maxHeight=body.scrollHeight+'px';
+    body.offsetHeight; // force reflow
+    body.style.maxHeight='0';
+    body.style.paddingTop='0';
+    el.classList.add('dg-collapsed');
+    if(chev) chev.style.transform='rotate(-90deg)';
+  }
+}
 
 // ── HELPERS ──────────────────────────────────────────
 function _totalDeuda(p){
