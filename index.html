@@ -3285,11 +3285,38 @@ function ventaCreditoPOS() {
   if(stockError){alert(stockError);return;}
   
   var newFolio;
-  // find a folio with no lineas (which is a credito_anticipado) OR an overpaid folio
-  var creditoFolio = c.folios.find(f => !f.lineas || f.lineas.length === 0 || pagF(f) > totF(f) + 0.01);
-  if(creditoFolio){
-    newFolio = creditoFolio;
-    fid = newFolio.id; // reuse the existing ID
+  // ── Let user choose: new folio or add to existing ──
+  var existingFolios = c.folios.filter(function(f){
+    return f.lineas && f.lineas.length > 0;
+  });
+  var emptyFolio = c.folios.find(function(f){
+    return !f.lineas || f.lineas.length === 0;
+  });
+  
+  var selectedFolio = null;
+  if(existingFolios.length > 0){
+    var opts = '0 → 📄 Folio NUEVO\n';
+    existingFolios.forEach(function(f, i){
+      var t = totF(f), p = pagF(f), saldo = t - p;
+      var prods = (f.lineas||[]).map(function(l){return l.prod;}).filter(function(v,i,a){return a.indexOf(v)===i;}).slice(0,3).join(', ');
+      if(prods.length > 40) prods = prods.substring(0,37) + '...';
+      opts += (i+1) + ' → ' + (f.desc||'Sin descripción') + ' | ' + prods + ' | Saldo: $' + fN(saldo) + '\n';
+    });
+    var pick = prompt('¿En qué folio quieres registrar esta venta?\n\n' + opts, '0');
+    if(pick === null) return; // cancelado
+    var pickNum = parseInt(pick);
+    if(pickNum > 0 && pickNum <= existingFolios.length){
+      selectedFolio = existingFolios[pickNum - 1];
+    }
+  }
+  // Also check for empty folio (credito_anticipado) if no selection made
+  if(!selectedFolio && emptyFolio){
+    selectedFolio = emptyFolio;
+  }
+  
+  if(selectedFolio){
+    newFolio = selectedFolio;
+    fid = newFolio.id;
     if (!newFolio.lineas || newFolio.lineas.length === 0) {
       newFolio.fecha = fecha;
       newFolio.alm = alm;
