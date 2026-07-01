@@ -5753,7 +5753,7 @@ function renderDeudas(){
     var collapsed = isSingle ? '' : ' dg-collapsed';
     var chevron = isSingle ? '' : '<span class="dg-chev" style="font-size:10px;transition:transform .2s;margin-left:4px">▼</span>';
     var g='<div class="deuda-group'+collapsed+'" data-gid="'+gid+'" style="margin-bottom:8px">'
-      +'<div class="dg-header" onclick="'+(isSingle?'':'toggleDeudaGroup(\''+gid+'\')')+'" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:8px;background:rgba('+accentRgb+','+(allLiquidada?'.04':'.08')+');'+(isSingle?'':'cursor:pointer;')+'">'
+      +'<div class="dg-header" onclick="'+(isSingle?'':'toggleDeudaGroup(this.parentNode.dataset.gid)')+'" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:8px;background:rgba('+accentRgb+','+(allLiquidada?'.04':'.08')+');'+(isSingle?'':'cursor:pointer;')+'">'
       +'<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'
       +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nombre+'</div>'
       +(items.length>1?'<span style="font-size:10px;background:rgba('+accentRgb+',.2);padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap">'+items.length+' deudas</span>':'')
