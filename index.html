@@ -9329,6 +9329,14 @@ function _renderNuevoMovCaja() {
     // Monto
     + '<div><label class="adm-lbl-f">Monto <span id="mc-mon-orig-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
     + '<input class="adm-inp" type="number" id="mc-monto" step="0.01" placeholder="0.00" oninput="_calcMcDestino()" style="font-size:20px;font-weight:600;height:46px">'
+    + '<div id="mc-saldo-error" style="display:none;color:var(--color-text-danger);font-size:11px;font-weight:600;margin-top:4px">⚠️ Monto superior al saldo disponible</div>'
+    + '</div>'
+    // Balance preview
+    + '<div id="mc-balance-preview" style="display:none;border:1px solid var(--color-border-secondary);border-radius:8px;padding:10px;background:var(--color-background-secondary)">'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div id="mc-bal-orig"></div>'
+    + '<div id="mc-bal-dest"></div>'
+    + '</div>'
     + '</div>'
     // Tasa (cambio only)
     + '<div id="mc-tasa-wrap" style="display:none">'
@@ -9449,12 +9457,83 @@ function _calcMcDestino() {
   }
 
   if (!destEl) return;
+  var montoDest = monto;
   if (tipo==='transferencia') {
     destEl.value=fN(monto,2);
   } else if (tipo==='cambio') {
-    if (divOp && tasa>0) destEl.value=fN(monto/tasa,2);
-    else destEl.value=fN(monto*tasa,2);
+    if (divOp && tasa>0) montoDest = monto/tasa;
+    else montoDest = monto*tasa;
+    destEl.value=fN(montoDest,2);
   }
+  // Update balance preview
+  _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD);
+}
+
+function _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD) {
+  var preview = document.getElementById('mc-balance-preview');
+  var balOrig = document.getElementById('mc-bal-orig');
+  var balDest = document.getElementById('mc-bal-dest');
+  var errEl = document.getElementById('mc-saldo-error');
+  var btn = document.querySelector('[onclick="admRegistrarMovCaja()"]');
+  if (!preview) return;
+
+  var dO = monO==='CUP'||monO==='CUPT' ? 0 : 2;
+  var dD = monD==='CUP'||monD==='CUPT' ? 0 : 2;
+
+  if (!monto || monto <= 0) {
+    preview.style.display = 'none';
+    if (errEl) errEl.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    return;
+  }
+  preview.style.display = 'block';
+
+  var saldoOrig = typeof _getSaldoCaja==='function' ? _getSaldoCaja(orig) : 0;
+  var saldoDest = typeof _getSaldoCaja==='function' ? _getSaldoCaja(dest) : 0;
+  var excede = false;
+
+  if (tipo === 'deposito') {
+    // Only destination changes (orig acts as dest)
+    saldoOrig = typeof _getSaldoCaja==='function' ? _getSaldoCaja(orig) : 0;
+    var nuevoOrig = saldoOrig + monto;
+    balOrig.innerHTML = '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">' + orig + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="font-size:13px;color:var(--color-text-secondary)">' + fN(saldoOrig, dO) + '</span>'
+      + '<span style="color:var(--color-text-success)">→</span>'
+      + '<span style="font-size:15px;font-weight:700;color:var(--color-text-success)">' + fN(nuevoOrig, dO) + ' ' + monO + '</span>'
+      + '</div>';
+    balDest.innerHTML = '';
+  } else if (tipo === 'retiro') {
+    var nuevoOrig = saldoOrig - monto;
+    excede = nuevoOrig < -0.005;
+    balOrig.innerHTML = '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">' + orig + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      + '<span style="font-size:13px;color:var(--color-text-secondary)">' + fN(saldoOrig, dO) + '</span>'
+      + '<span style="color:var(--color-text-danger)">→</span>'
+      + '<span style="font-size:15px;font-weight:700;color:' + (excede ? 'var(--color-text-danger)' : 'var(--color-text-warning)') + '">' + fN(nuevoOrig, dO) + ' ' + monO + '</span>'
+      + '</div>';
+    balDest.innerHTML = '';
+  } else {
+    // transferencia or cambio
+    var nuevoOrig = saldoOrig - monto;
+    var nuevoDest = saldoDest + (tipo==='transferencia' ? monto : montoDest);
+    excede = nuevoOrig < -0.005;
+    balOrig.innerHTML = '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">📤 ' + orig + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      + '<span style="font-size:13px;color:var(--color-text-secondary)">' + fN(saldoOrig, dO) + '</span>'
+      + '<span style="color:var(--color-text-danger)">→</span>'
+      + '<span style="font-size:15px;font-weight:700;color:' + (excede ? 'var(--color-text-danger)' : 'var(--color-text-warning)') + '">' + fN(nuevoOrig, dO) + ' ' + monO + '</span>'
+      + '</div>';
+    balDest.innerHTML = '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">📥 ' + dest + '</div>'
+      + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      + '<span style="font-size:13px;color:var(--color-text-secondary)">' + fN(saldoDest, dD) + '</span>'
+      + '<span style="color:var(--color-text-success)">→</span>'
+      + '<span style="font-size:15px;font-weight:700;color:var(--color-text-success)">' + fN(nuevoDest, dD) + ' ' + monD + '</span>'
+      + '</div>';
+  }
+  // Show/hide error and disable button
+  if (errEl) errEl.style.display = excede ? 'block' : 'none';
+  if (btn) { btn.disabled = excede; btn.style.opacity = excede ? '0.4' : '1'; }
 }
 
 function _onMcDestManual() {
@@ -9494,6 +9573,16 @@ async function admRegistrarMovCaja() {
   var usuario=(typeof S!=='undefined'&&S.user)||'Admin';
 
   if (!monto) { showToast('Introduce el monto'); return; }
+
+  // Validate balance
+  var cajaOrigenCheck = (tipo==='deposito') ? null : orig;
+  if (cajaOrigenCheck) {
+    var saldoDisp = typeof _getSaldoCaja==='function' ? _getSaldoCaja(cajaOrigenCheck) : 0;
+    if (monto > saldoDisp + 0.005) {
+      showToast('⚠️ Saldo insuficiente en ' + cajaOrigenCheck + ' (' + fN(saldoDisp,2) + ')');
+      return;
+    }
+  }
 
   if (tipo === 'transferencia') {
     if (_getMonedaFromCaja(orig) !== _getMonedaFromCaja(dest)) {
