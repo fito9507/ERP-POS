@@ -5792,7 +5792,7 @@ function renderDeudas(){
       +(Object.keys(byCurr).length>1||!byCurr['USD']?'<div style="font-size:10px;color:var(--color-text-tertiary)">'+currParts.join(' + ')+'</div>':'')
       +'</div>'
       +'</div>'
-      +'<div class="dg-body" style="'+(isSingle?'':'max-height:0;overflow:hidden;transition:max-height .3s ease;')+'padding-top:'+(isSingle?'6':'0')+'px">';
+      +'<div class="dg-body" style="'+(isSingle?'':'display:none;')+'padding-top:'+(isSingle?'6':'0')+'px">';
     items.forEach(function(p){g+=_renderDeudaCard(p);});
     g+='</div></div>';
     return g;
@@ -5848,14 +5848,11 @@ function toggleDeudaGroup(gid){
   var isCollapsed=el.classList.contains('dg-collapsed');
   if(isCollapsed){
     el.classList.remove('dg-collapsed');
-    body.style.maxHeight=body.scrollHeight+'px';
+    body.style.display='block';
     body.style.paddingTop='6px';
     if(chev) chev.style.transform='rotate(0deg)';
-    setTimeout(function(){body.style.maxHeight='none';},350);
   } else {
-    body.style.maxHeight=body.scrollHeight+'px';
-    body.offsetHeight; // force reflow
-    body.style.maxHeight='0';
+    body.style.display='none';
     body.style.paddingTop='0';
     el.classList.add('dg-collapsed');
     if(chev) chev.style.transform='rotate(-90deg)';
