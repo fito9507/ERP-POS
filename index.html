@@ -5780,7 +5780,7 @@ function renderDeudas(){
     var collapsed = isSingle ? '' : ' dg-collapsed';
     var chevron = isSingle ? '' : '<span class="dg-chev" style="font-size:10px;transition:transform .2s;margin-left:4px">▼</span>';
     var g='<div class="deuda-group'+collapsed+'" data-gid="'+gid+'" style="margin-bottom:8px">'
-      +'<div class="dg-header" onclick="'+(isSingle?'':'toggleDeudaGroup(this.parentNode.dataset.gid)')+'" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:8px;background:rgba('+accentRgb+','+(allLiquidada?'.04':'.08')+');'+(isSingle?'':'cursor:pointer;')+'">'
+      +'<div class="dg-header" style="display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:8px;background:rgba('+accentRgb+','+(allLiquidada?'.04':'.08')+');'+(isSingle?'':'cursor:pointer;')+'">'
       +'<div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">'
       +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+nombre+'</div>'
       +(items.length>1?'<span style="font-size:10px;background:rgba('+accentRgb+',.2);padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap">'+items.length+' deudas</span>':'')
@@ -5836,27 +5836,29 @@ function renderDeudas(){
   }
   html+='</div>';
   el.innerHTML=html;
-}
-
-
-// ── Toggle collapsible debt groups ──────────────────
-function toggleDeudaGroup(gid){
-  var el=document.querySelector('[data-gid="'+gid+'"]');
-  if(!el) return;
-  var body=el.querySelector('.dg-body');
-  var chev=el.querySelector('.dg-chev');
-  var isCollapsed=el.classList.contains('dg-collapsed');
-  if(isCollapsed){
-    el.classList.remove('dg-collapsed');
-    body.style.display='block';
-    body.style.paddingTop='6px';
-    if(chev) chev.style.transform='rotate(0deg)';
-  } else {
-    body.style.display='none';
-    body.style.paddingTop='0';
-    el.classList.add('dg-collapsed');
-    if(chev) chev.style.transform='rotate(-90deg)';
-  }
+  // ── Attach click handlers for collapsible groups ──
+  el.querySelectorAll('.dg-header').forEach(function(hdr){
+    var grp = hdr.parentNode;
+    if(!grp || !grp.classList.contains('deuda-group')) return;
+    if(!grp.classList.contains('dg-collapsed') && grp.querySelectorAll('.dg-body > *').length <= 1) return; // single item, no toggle
+    hdr.addEventListener('click', function(){
+      var body = grp.querySelector('.dg-body');
+      var chev = grp.querySelector('.dg-chev');
+      if(!body) return;
+      var isCollapsed = grp.classList.contains('dg-collapsed');
+      if(isCollapsed){
+        grp.classList.remove('dg-collapsed');
+        body.style.display='block';
+        body.style.paddingTop='6px';
+        if(chev) chev.style.transform='rotate(0deg)';
+      } else {
+        grp.classList.add('dg-collapsed');
+        body.style.display='none';
+        body.style.paddingTop='0';
+        if(chev) chev.style.transform='rotate(-90deg)';
+      }
+    });
+  });
 }
 
 // ── HELPERS ──────────────────────────────────────────
