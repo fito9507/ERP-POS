@@ -820,12 +820,12 @@ function transitCardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
     +(function(){
-      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:4px 0 2px;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:4px 0 2px;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
       var qr=p.qty_reservada||0;
       var ts=qr+(p.stk||0);
       if(qr<=0 || ts<=0) return '';
       var pct=Math.min(Math.round(qr/ts*100),100);
-      if(pct>=100) return '<div style="margin:4px 0 2px;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      if(pct>=100) return '<div style="margin:4px 0 2px;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
       var text = '🔥 Reservando rápido';
       if(pct > 80) text = '⚡ Últimas unidades disponibles';
       else if(pct > 50) text = '🔥 Más del 50% reservado';
@@ -894,12 +894,12 @@ function cardHTML(p){
     +'<div class="card-stock">'+stkLabel+'</div>'
     +(function(){
       if(!_transit) return '';
-      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
       var qr=p.qty_reservada||0;
       var ts=qr+(p.stk||0);
       if(qr<=0 || ts<=0) return '';
       var pct=Math.min(Math.round(qr/ts*100),100);
-      if(pct>=100) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 100% Reservado</div>';
+      if(pct>=100) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
       var text = '🔥 Reservando rápido';
       if(pct > 80) text = '⚡ Últimas unidades disponibles';
       else if(pct > 50) text = '🔥 Más del 50% reservado';
