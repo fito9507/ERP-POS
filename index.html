@@ -9207,7 +9207,8 @@ function _getSaldoCaja(cajaId) {
     if (esOrigen)  saldo -= parseFloat(m.monto_origen||0);
     if (esDestino) saldo += parseFloat(m.monto_destino||0);
   });
-  return saldo;
+  if (Math.abs(saldo) < 0.005) return 0;
+  return parseFloat(saldo.toFixed(4));
 }
 
 async function renderAdminCajas() {
