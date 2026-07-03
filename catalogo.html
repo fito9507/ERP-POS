@@ -397,6 +397,12 @@
   </div>
 </header>
 
+<!-- SECTION TOGGLE -->
+<div class="controls" style="margin-bottom:12px;display:flex;gap:10px;justify-content:center;background:transparent;border:none;padding:0 16px">
+  <button id="sec-stock" class="alm-btn active" style="flex:1;background:var(--accent)" onclick="setSec('stock')">📦 Stock & Tránsito</button>
+  <button id="sec-encargo" class="alm-btn" style="flex:1;background:var(--steel-light)" onclick="setSec('encargo')">✈️ Por Encargo</button>
+</div>
+
 <!-- CONTROLS -->
 <div class="controls">
   <div class="ctrl-group">
@@ -667,7 +673,9 @@ async function init(){
         qty_reservada: parseInt(r.qty_reservada)||0,
         reservado: r.badge_texto==='RESERVADO',
         precioOfertaHabana: r.precio_oferta_habana!=null?parseFloat(r.precio_oferta_habana):null,
-        precioOfertaPlacetas: r.precio_oferta_placetas!=null?parseFloat(r.precio_oferta_placetas):null
+        precioOfertaPlacetas: r.precio_oferta_placetas!=null?parseFloat(r.precio_oferta_placetas):null,
+        por_encargo: r.por_encargo===true,
+        esquema_pago: r.esquema_pago||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
 
@@ -724,48 +732,62 @@ function filteredProds(){
 function render(){
   var grid = document.getElementById('prod-grid');
   var allProds = window.ALL_PRODS || PRODS;
-  // Transit products for this almacen
-  var transitProds = allProds.filter(function(p){ return p.enWeb!==false && p.enTransito && p.enTransito[ALM]; });
-  // Normal products (exclude transit-only, apply search/cat filters)
+  
   var q = (document.getElementById('search')||{}).value||'';
   var cat = document.getElementById('cat-sel').value;
-  var normalProds = allProds.filter(function(p){
-    if(p.enTransito && p.enTransito[ALM]) return false; // handled in transit section
+
+  var baseFiltered = allProds.filter(function(p){
     if(p.enWeb===false) return false;
+    if(cat && p.cat !== cat) return false;
+    if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
+    return true;
+  });
+
+  if (SEC === 'encargo') {
+    var encargoProds = baseFiltered.filter(function(p){ return p.por_encargo; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
+    if(!encargoProds.length){
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">✈️</div><p>Sin productos por encargo disponibles.<br>Prueba con otra búsqueda o categoría.</p></div>';
+      return;
+    }
+    grid.innerHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
+      +'<span style="font-size:20px">✈️</span>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#3b82f6">Ventas por encargo (Importación)</div>'
+      +'<div style="font-size:11px;color:var(--text-dim)">Paga de forma fraccionada y recibe bajo demanda</div></div>'
+      +'</div></div>'
+      + encargoProds.map(function(p){ return encargoCardHTML(p); }).join('');
+    return;
+  }
+
+  // Stock section (SEC === 'stock')
+  var stockProds = baseFiltered.filter(function(p){ return !p.por_encargo; });
+
+  var transitProds = stockProds.filter(function(p){ return p.enTransito && p.enTransito[ALM]; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
+  
+  var normalProds = stockProds.filter(function(p){
+    if(p.enTransito && p.enTransito[ALM]) return false; // handled in transit section
     var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
     if(stk <= 0) return false;
-    if(cat && p.cat !== cat) return false;
-    if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
     return true;
-  }).sort(function(a,b) { 
-    return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); 
-  });
-  // Also filter transit by search/cat
-  var filteredTransit = transitProds.filter(function(p){
-    if(cat && p.cat !== cat) return false;
-    if(q && p.n.toLowerCase().indexOf(q.toLowerCase())<0) return false;
-    return true;
-  }).sort(function(a,b) { 
-    return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); 
-  });
+  }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
 
   var transitBanner = '';
   var transitCards = '';
-  if(filteredTransit.length){
+  if(transitProds.length){
     transitBanner = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px">'
       +'<span style="font-size:20px">🚢</span>'
       +'<div><div style="font-size:13px;font-weight:700;color:#f59e0b">Próximamente en '+ALM+'</div>'
       +'<div style="font-size:11px;color:var(--text-dim)">Reserva ahora a precio especial antes de que llegue</div></div>'
       +'</div></div>';
-    transitCards = filteredTransit.map(function(p){ return transitCardHTML(p); }).join('');
+    transitCards = transitProds.map(function(p){ return transitCardHTML(p); }).join('');
   }
-  if(!normalProds.length && !filteredTransit.length){
+  if(!normalProds.length && !transitProds.length){
     grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📦</div><p>Sin productos disponibles para <strong>'+ALM+'</strong>.<br>Prueba con otro almacén o categoría.</p></div>';
     return;
   }
   var normalHTML = normalProds.map(function(p){ return cardHTML(p); }).join('');
-  var divider = (filteredTransit.length && normalProds.length)
+  var divider = (transitProds.length && normalProds.length)
     ? '<div style="grid-column:1/-1;margin:4px 0">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:12px">'
       +'<span style="font-size:20px">&#9989;</span>'
@@ -954,6 +976,45 @@ function cardHTML(p){
         :'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'✓ Agregado':'+ Agregar')+'</button>'
       )
       +'</div>':'')
+    +'</div>'
+    +'</div>';
+}
+
+function encargoCardHTML(p){
+  var cartItem = CART[p.n];
+  var qty = cartItem ? cartItem.qty : (p.moq || 1);
+  var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
+  if(PRODS.indexOf(p) < 0) PRODS.push(p);
+  var pidx = PRODS.indexOf(p);
+  
+  var esquema = p.esquema_pago || 'Pago escalado / A convenir';
+  var price = p.min || p.maj || 0;
+  
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(59,130,246,.35)">' 
+    +'<div class="card-img" style="position:relative">'
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
+    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">✈️ POR ENCARGO</div>'
+    +'</div>'
+    +'</div>'
+    +'<div class="card-body">'
+    +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
+    +'<div class="card-name">'+esc(p.n)+'</div>'
+    +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.1);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
+    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:2px">Esquema de Pagos:</div>'
+    +esc(esquema)
+    +'</div>'
+    +'<div class="prices">'
+    +'<div class="price-row main"><span class="lbl">Precio ref.</span><span class="val">'+fPrice(price,MON,ALM)+'</span></div>'
+    +'</div>'
+    +'<div class="qty-row" style="margin-top:10px">'
+    +'<div class="qty-ctrl">'
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">−</button>'
+    +'<span class="qty-disp" id="qd-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
+    +'</div>'
+    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'✓ Agregado':'+ Encargar')+'</button>'
+    +'</div>'
     +'</div>'
     +'</div>';
 }
@@ -1269,9 +1330,14 @@ function setMonCart(m){
 function sendWA(){
   var items = Object.values(CART);
   if(!items.length){ alert('Agrega productos al pedido primero'); return; }
+  var hasEncargo = items.some(function(i){ return i.prod.por_encargo; });
   var lines = items.map(function(i){
     var r = getCartPrice(i);
-    return '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
+    var ln = '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
+    if (i.prod.por_encargo) {
+      ln += '\n  ↳ ✈️ Encargo: ' + (i.prod.esquema_pago || 'Pago escalado / A convenir');
+    }
+    return ln;
   });
   var total = items.reduce(function(a,i){
     return a + getCartPrice(i).price * i.qty;
@@ -1281,7 +1347,7 @@ function sendWA(){
   var tel    = (document.getElementById('cart-tel')?.value||'').trim();
   if(!nombre){ document.getElementById('cart-nombre').style.borderColor='#e84b4b'; document.getElementById('cart-nombre').focus(); return; }
   if(!tel){ document.getElementById('cart-tel').style.borderColor='#e84b4b'; document.getElementById('cart-tel').focus(); return; }
-  var msg = '\uD83C\uDFF7\uFE0F *Pedido \u2014 '+ALM+'*\n\n'
+  var msg = '\uD83C\uDFF7\uFE0F *' + (hasEncargo ? 'Pedido de Importación / Encargo' : 'Pedido') + ' \u2014 '+ALM+'*\n\n'
     + '\uD83D\uDC64 *'+nombre+'*'+(tel?' \u00b7 \uD83D\uDCDE '+tel:'')+'\n\n'
     + lines.join('\n') + '\n\n'
     + '\uD83D\uDCB0 *Total: '+fPrice(total,CART_MON)+'*\n'
