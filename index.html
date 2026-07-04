@@ -11090,8 +11090,33 @@ function crearPrestamo(data) {
 
   if (data.regIni && p.cta) {
     var esDeuda = p.direccion !== 'nos_deben';
-    var cajaTipo = esDeuda ? 'deposito' : 'retiro';
+    var tipoMov = esDeuda ? 'Préstamo recibido' : 'Préstamo otorgado';
+    var sentidoMov = esDeuda ? 'ingreso' : 'gasto';
     var descMov = 'Apertura de préstamo/deuda — ' + p.nombre;
+
+    // 1. Agregar al libro I/G (movimientos_ig)
+    var igId = (typeof igNextId !== 'undefined') ? igNextId++ : Date.now();
+    var equivUSD = p.moneda === 'USD' ? p.capital : (typeof toUSD === 'function' ? toUSD(p.capital, p.moneda) : (p.capital / (RATES[p.moneda] || 1)));
+    if (typeof MOVS !== 'undefined') {
+      MOVS.unshift({
+        id: igId, fecha: p.fechaInicio, tipo: tipoMov, desc: descMov,
+        acreedor: p.nombre, monto: p.capital, mon: p.moneda,
+        equivUSD: parseFloat(equivUSD.toFixed(2)),
+        cta: p.cta, sentido: sentidoMov, notas: ''
+      });
+      try { localStorage.setItem('erp_movs', JSON.stringify(MOVS.slice(0, 1000))); } catch(e){}
+    }
+    if (typeof _supaWrite === 'function') {
+      _supaWrite('POST', 'movimientos_ig', {
+        fecha: p.fechaInicio, tipo: tipoMov, descripcion: descMov,
+        monto: parseFloat(p.capital.toFixed(4)), moneda: p.moneda,
+        equiv_usd: parseFloat(equivUSD.toFixed(4)),
+        cuenta: p.cta || '', vendedor: (typeof S!=='undefined'&&S.user)||'', notas: ''
+      });
+    }
+
+    // 2. Agregar a mov_cajas
+    var cajaTipo = esDeuda ? 'deposito' : 'retiro';
     var cRow = {
       tipo: cajaTipo, fecha: p.fechaInicio, notas: descMov, 
       usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
