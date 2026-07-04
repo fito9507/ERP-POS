@@ -1062,11 +1062,11 @@ function chgQtyIdx(idx, d){
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
   if(!sp) return;
   var isT = p.enTransito && p.enTransito[ALM];
-  var moq = isT ? (p.moq||1) : 1;
+  var moq = (isT || p.por_encargo) ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
-  // Cap at available stock 
-  if(d > 0){
+  // Cap at available stock (skip for import products — no stock limit)
+  if(d > 0 && !p.por_encargo){
     var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
     if(maxStk > 0) v = Math.min(v, maxStk);
   }
@@ -1130,23 +1130,26 @@ function addToCartIdx(idx){
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   var sp = document.getElementById('qd-'+cardId) || document.getElementById('qd-tr-'+cardId);
   var isT = p.enTransito && p.enTransito[ALM];
-  var moq = isT ? (p.moq||1) : 1;
+  var moq = (isT || p.por_encargo) ? (p.moq||1) : 1;
   var qty = sp ? Math.max(moq, parseInt(sp.textContent)||moq) : moq;
   
-  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-  if(qty > maxStk) {
-    qty = Math.max(0, maxStk);
-    if(sp) sp.textContent = qty;
-    if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
-  }
-  if(qty <= 0) {
-    if(typeof showToast==='function') showToast("Producto sin stock disponible");
-    return;
+  // Skip stock limit check for import products
+  if(!p.por_encargo){
+    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    if(qty > maxStk) {
+      qty = Math.max(0, maxStk);
+      if(sp) sp.textContent = qty;
+      if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
+    }
+    if(qty <= 0) {
+      if(typeof showToast==='function') showToast("Producto sin stock disponible");
+      return;
+    }
   }
   
   CART[p.n] = {prod:p, qty:qty};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
-  if(btn){ btn.textContent = (p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'; btn.classList.add('added'); }
+  if(btn){ btn.textContent = p.por_encargo ? '✓ Encargado' : ((p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'); btn.classList.add('added'); }
   updCart(); saveCartState();
 }
 function getQtyInp(name){ return document.querySelector('.qty-inp[data-name="'+name+'"]'); }
