@@ -6771,7 +6771,8 @@ function admCrearDeuda(){
     notas:document.getElementById('nd-notas').value,
   });
   document.getElementById('nueva-deuda-modal').style.display='none';
-  renderDeudas();
+  if (typeof renderDeudas==='function') renderDeudas();
+  if (typeof renderLibro==='function') renderLibro();
 }
 
 function liquidarDeuda_p(id){
@@ -11133,6 +11134,8 @@ function crearPrestamo(data) {
   _addAuditLog(p, 'Registro de deuda creado: ' + fN(p.capital,2) + ' ' + p.moneda);
   savePrestamos(p);
   showToast('Creado: ' + p.nombre);
+  if (typeof renderLibro === 'function') renderLibro();
+  if (typeof renderLiqCuentas === 'function') renderLiqCuentas();
 }
 
 function showEditarDeudaModal(id){
