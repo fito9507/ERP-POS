@@ -1012,6 +1012,7 @@ function encargoCardHTML(p){
                + '<span style="font-size:12px">⏳</span>'
                + '<div><div style="font-weight:700;color:#3b82f6;margin-bottom:1px">Tiempo de tránsito:</div>'
                + esc(transito)+'</div></div>' : '')
+    +(p.ficha_tecnica ? '<div style="margin-top:8px;text-align:center"><button onclick="openFichaModal('+pidx+')" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;width:100%">📄 Ver Ficha Técnica</button></div>' : '')
     +'</div>'
     +'<div class="prices">'
     +(p.precio_mercado && p.precio_mercado > price ? 
@@ -1431,8 +1432,30 @@ function sendWA(){
   window.open('https://wa.me/'+phone+'?text='+encodeURIComponent(msg), '_blank');
 }
 
+function openFichaModal(pidx){
+  var p = PRODS[pidx];
+  if(!p || !p.ficha_tecnica) return;
+  document.getElementById('ficha-content').innerHTML = esc(p.ficha_tecnica).replace(/\n/g, '<br>');
+  document.getElementById('ficha-modal').style.display = 'flex';
+}
+function closeFicha(e){
+  if(e && e.target !== document.getElementById('ficha-modal') && e.target.tagName !== 'BUTTON') return;
+  document.getElementById('ficha-modal').style.display = 'none';
+}
+
 // ── START ─────────────────────────────────────────────────
 init();
 </script>
+
+<div class="modal-overlay" id="ficha-modal" onclick="closeFicha(event)">
+  <div class="modal" id="ficha-modal-content" style="max-width:500px;text-align:left;padding:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+      <div style="font-weight:800;font-size:16px;color:var(--text-main)">📄 Ficha Técnica</div>
+      <button onclick="closeFicha()" style="background:none;border:none;font-size:24px;color:var(--text-secondary);cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="ficha-content" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-family:monospace;white-space:pre-wrap"></div>
+  </div>
+</div>
+
 </body>
 </html>

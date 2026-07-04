@@ -2146,7 +2146,8 @@ async function syncLoadProductos() {
         por_encargo: row.por_encargo===true,
         esquema_pago: row.esquema_pago||'',
         tiempo_transito: row.tiempo_transito||'',
-        precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null
+        precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
+        ficha_tecnica: row.ficha_tecnica||''
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2196,7 +2197,8 @@ async function syncSaveProducto(p) {
     por_encargo:p.por_encargo===true,
     esquema_pago:p.esquema_pago||null,
     tiempo_transito:p.tiempo_transito||null,
-    precio_mercado:p.precio_mercado!=null?p.precio_mercado:null};
+    precio_mercado:p.precio_mercado!=null?p.precio_mercado:null,
+    ficha_tecnica:p.ficha_tecnica||null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
@@ -8365,6 +8367,11 @@ function renderFormProducto() {
     + '<div style="font-size:10px;color:var(--text-tertiary);line-height:1.2;margin-bottom:2px">Se usará para calcular y mostrar el ahorro al cliente de forma visual. (Opcional)</div>'
     + '<input class="adm-inp" type="number" id="ep-precio-mercado" value="' + (p.precio_mercado||'') + '" placeholder="Ej: 250">'
     + '</div>'
+    + '<div style="display:grid;gap:4px;border-top:1px solid rgba(59,130,246,0.1);padding-top:10px;margin-top:4px">'
+    + '<label style="font-size:11px;font-weight:600">Ficha Técnica / Descripción (Opcional)</label>'
+    + '<div style="font-size:10px;color:var(--text-tertiary);line-height:1.2;margin-bottom:2px">Puedes pegar texto, características o links. Se mostrará en un botón emergente en el catálogo.</div>'
+    + '<textarea class="adm-inp" id="ep-ficha-tecnica" style="height:60px;resize:vertical" placeholder="Ej: Potencia: 620W&#10;Eficiencia: 21%...">' + (p.ficha_tecnica||'') + '</textarea>'
+    + '</div>'
     + '</div>'
     + '</div>'
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
@@ -8492,6 +8499,7 @@ function admGuardarProd(idx) {
   var tiempo_transito = (document.getElementById('ep-tiempo-transito')?.value||'').trim();
   var pMercadoV = document.getElementById('ep-precio-mercado')?.value;
   var precio_mercado = pMercadoV!==''&&!isNaN(parseFloat(pMercadoV)) ? parseFloat(pMercadoV) : null;
+  var ficha_tecnica = (document.getElementById('ep-ficha-tecnica')?.value||'').trim();
 
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enWeb:enWeb, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
     img: existingImg,
@@ -8500,7 +8508,7 @@ function admGuardarProd(idx) {
     ddp: isNaN(ddp) ? null : ddp,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
