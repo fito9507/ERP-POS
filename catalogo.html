@@ -397,12 +397,6 @@
   </div>
 </header>
 
-<!-- SECTION TOGGLE -->
-<div class="controls" style="margin-bottom:12px;display:flex;gap:10px;justify-content:center;background:transparent;border:none;padding:0 16px">
-  <button id="sec-stock" class="alm-btn active" style="flex:1;background:var(--accent)" onclick="setSec('stock')">📦 Stock & Tránsito</button>
-  <button id="sec-encargo" class="alm-btn" style="flex:1;background:var(--steel-light)" onclick="setSec('encargo')">✈️ Por Encargo</button>
-</div>
-
 <!-- CONTROLS -->
 <div class="controls">
   <div class="ctrl-group">
@@ -410,6 +404,7 @@
     <div class="alm-btns">
       <button class="alm-btn active" data-alm="Habana" onclick="setAlm('Habana',this)">📍 Habana</button>
       <button class="alm-btn" data-alm="Placetas" onclick="setAlm('Placetas',this)">📍 Placetas</button>
+      <button class="alm-btn" data-alm="Importacion" onclick="setAlm('Importacion',this)">✈️ Por Importación</button>
     </div>
   </div>
   <div class="ctrl-group">
@@ -530,7 +525,7 @@ function loadCartState(){
     var data = JSON.parse(raw);
     if(!data || Date.now() - data.ts > CART_TTL){ localStorage.removeItem(CART_KEY); return; }
     // Restore almacen
-    if(data.alm && (data.alm==='Habana'||data.alm==='Placetas')){
+    if(data.alm && (data.alm==='Habana'||data.alm==='Placetas'||data.alm==='Importacion')){
       ALM = data.alm;
       document.querySelectorAll('.alm-btn').forEach(function(b){
         b.classList.toggle('active', b.dataset.alm===ALM);
@@ -743,23 +738,23 @@ function render(){
     return true;
   });
 
-  if (SEC === 'encargo') {
+  if (ALM === 'Importacion') {
     var encargoProds = baseFiltered.filter(function(p){ return p.por_encargo; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
     if(!encargoProds.length){
-      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">✈️</div><p>Sin productos por encargo disponibles.<br>Prueba con otra búsqueda o categoría.</p></div>';
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">✈️</div><p>Sin productos por importación disponibles.<br>Prueba con otra búsqueda o categoría.</p></div>';
       return;
     }
     grid.innerHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
       +'<span style="font-size:20px">✈️</span>'
-      +'<div><div style="font-size:13px;font-weight:700;color:#3b82f6">Ventas por encargo (Importación)</div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#3b82f6">Ventas por importación</div>'
       +'<div style="font-size:11px;color:var(--text-dim)">Paga de forma fraccionada y recibe bajo demanda</div></div>'
       +'</div></div>'
       + encargoProds.map(function(p){ return encargoCardHTML(p); }).join('');
     return;
   }
 
-  // Stock section (SEC === 'stock')
+  // Stock section (Habana / Placetas)
   var stockProds = baseFiltered.filter(function(p){ return !p.por_encargo; });
 
   var transitProds = stockProds.filter(function(p){ return p.enTransito && p.enTransito[ALM]; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
@@ -994,7 +989,7 @@ function encargoCardHTML(p){
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
-    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">✈️ POR ENCARGO</div>'
+    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">✈️ POR IMPORTACIÓN</div>'
     +'</div>'
     +'</div>'
     +'<div class="card-body">'
@@ -1335,7 +1330,7 @@ function sendWA(){
     var r = getCartPrice(i);
     var ln = '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
     if (i.prod.por_encargo) {
-      ln += '\n  ↳ ✈️ Encargo: ' + (i.prod.esquema_pago || 'Pago escalado / A convenir');
+      ln += '\n  ↳ ✈️ Importación: ' + (i.prod.esquema_pago || 'Pago escalado / A convenir');
     }
     return ln;
   });
@@ -1347,7 +1342,7 @@ function sendWA(){
   var tel    = (document.getElementById('cart-tel')?.value||'').trim();
   if(!nombre){ document.getElementById('cart-nombre').style.borderColor='#e84b4b'; document.getElementById('cart-nombre').focus(); return; }
   if(!tel){ document.getElementById('cart-tel').style.borderColor='#e84b4b'; document.getElementById('cart-tel').focus(); return; }
-  var msg = '\uD83C\uDFF7\uFE0F *' + (hasEncargo ? 'Pedido de Importación / Encargo' : 'Pedido') + ' \u2014 '+ALM+'*\n\n'
+  var msg = '\uD83C\uDFF7\uFE0F *' + (hasEncargo ? 'Pedido de Importación' : 'Pedido') + ' \u2014 '+ALM+'*\n\n'
     + '\uD83D\uDC64 *'+nombre+'*'+(tel?' \u00b7 \uD83D\uDCDE '+tel:'')+'\n\n'
     + lines.join('\n') + '\n\n'
     + '\uD83D\uDCB0 *Total: '+fPrice(total,CART_MON)+'*\n'
