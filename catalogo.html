@@ -673,7 +673,8 @@ async function init(){
         por_encargo: r.por_encargo===true,
         esquema_pago: r.esquema_pago||'',
         tiempo_transito: r.tiempo_transito||'',
-        precio_mercado: r.precio_mercado!=null?parseFloat(r.precio_mercado):null
+        precio_mercado: r.precio_mercado!=null?parseFloat(r.precio_mercado):null,
+        ficha_tecnica: r.ficha_tecnica||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
 
