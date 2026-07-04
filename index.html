@@ -2142,7 +2142,9 @@ async function syncLoadProductos() {
         badgeTexto: row.badge_texto==='RESERVADO' ? '' : (row.badge_texto||''),
         precioOfertaHabana: row.precio_oferta_habana!=null?parseFloat(row.precio_oferta_habana):null,
         precioOfertaPlacetas: row.precio_oferta_placetas!=null?parseFloat(row.precio_oferta_placetas):null,
-        reservado: row.badge_texto==='RESERVADO'
+        reservado: row.badge_texto==='RESERVADO',
+        por_encargo: row.por_encargo===true,
+        esquema_pago: row.esquema_pago||''
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2188,7 +2190,9 @@ async function syncSaveProducto(p) {
     imagen_url:p.img||null,
     en_oferta:p.oferta===true, badge_texto:p.reservado?'RESERVADO':(p.badgeTexto||null),
     precio_oferta_habana:p.precioOfertaHabana!=null?p.precioOfertaHabana:null,
-    precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null};
+    precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null,
+    por_encargo:p.por_encargo===true,
+    esquema_pago:p.esquema_pago||null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
