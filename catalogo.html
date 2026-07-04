@@ -1435,7 +1435,15 @@ function sendWA(){
 function openFichaModal(pidx){
   var p = PRODS[pidx];
   if(!p || !p.ficha_tecnica) return;
-  document.getElementById('ficha-content').innerHTML = esc(p.ficha_tecnica).replace(/\n/g, '<br>');
+  var html = esc(p.ficha_tecnica).split('\n').map(function(line){
+    if(!line.trim()) return '';
+    var idx = line.indexOf(':');
+    if(idx !== -1) {
+      return '<tr><td style="padding:8px 0;font-weight:700;color:var(--text-main);border-bottom:1px solid var(--border);width:40%">' + line.substring(0, idx).trim() + '</td><td style="padding:8px 0 8px 12px;border-bottom:1px solid var(--border)">' + line.substring(idx+1).trim() + '</td></tr>';
+    }
+    return '<tr><td colspan="2" style="padding:8px 0;border-bottom:1px solid var(--border)">' + line.trim() + '</td></tr>';
+  }).join('');
+  document.getElementById('ficha-content').innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;line-height:1.5">' + html + '</table>';
   document.getElementById('ficha-modal').style.display = 'flex';
 }
 function closeFicha(e){
@@ -1448,12 +1456,12 @@ init();
 </script>
 
 <div class="modal-overlay" id="ficha-modal" onclick="closeFicha(event)">
-  <div class="modal" id="ficha-modal-content" style="max-width:500px;text-align:left;padding:24px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--border)">
-      <div style="font-weight:800;font-size:16px;color:var(--text-main)">📄 Ficha Técnica</div>
-      <button onclick="closeFicha()" style="background:none;border:none;font-size:24px;color:var(--text-secondary);cursor:pointer;line-height:1">×</button>
+  <div class="modal" id="ficha-modal-content" style="max-width:500px;text-align:left;padding:24px;border-top:4px solid #3b82f6">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px">
+      <div style="font-weight:800;font-size:18px;color:var(--text-main)">⚙️ Especificaciones Técnicas</div>
+      <button onclick="closeFicha()" style="background:rgba(255,255,255,0.1);border:1px solid var(--border);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--text-main);cursor:pointer;line-height:1">×</button>
     </div>
-    <div id="ficha-content" style="font-size:13px;color:var(--text-secondary);line-height:1.6;font-family:monospace;white-space:pre-wrap"></div>
+    <div id="ficha-content" style="color:var(--text-secondary)"></div>
   </div>
 </div>
 
