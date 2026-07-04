@@ -404,7 +404,7 @@
     <div class="alm-btns">
       <button class="alm-btn active" data-alm="Habana" onclick="setAlm('Habana',this)">📍 Habana</button>
       <button class="alm-btn" data-alm="Placetas" onclick="setAlm('Placetas',this)">📍 Placetas</button>
-      <button class="alm-btn" data-alm="Importacion" onclick="setAlm('Importacion',this)">✈️ Por Importación</button>
+      <button class="alm-btn" data-alm="Importacion" onclick="setAlm('Importacion',this)">🚢 Por Importación</button>
     </div>
   </div>
   <div class="ctrl-group">
@@ -745,13 +745,13 @@ function render(){
   if (ALM === 'Importacion') {
     var encargoProds = baseFiltered.filter(function(p){ return p.por_encargo; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
     if(!encargoProds.length){
-      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">✈️</div><p>Sin productos por importación disponibles.<br>Prueba con otra búsqueda o categoría.</p></div>';
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🚢</div><p>Sin productos por importación disponibles.<br>Prueba con otra búsqueda o categoría.</p></div>';
       return;
     }
     grid.innerHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;flex-direction:column;gap:8px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
-      +'<span style="font-size:20px">✈️</span>'
+      +'<span style="font-size:20px">🚢</span>'
       +'<div><div style="font-size:14px;font-weight:700;color:#3b82f6">Ventas por importación directa</div>'
       +'<div style="font-size:12px;color:var(--text-dim)">Paga de forma fraccionada y asegúrate de recibir exactamente lo que necesitas bajo demanda.</div></div>'
       +'</div>'
@@ -1000,7 +1000,7 @@ function encargoCardHTML(p){
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
-    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">✈️ POR IMPORTACIÓN</div>'
+    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">🚢 POR IMPORTACIÓN</div>'
     +'</div>'
     +'</div>'
     +'<div class="card-body">'
@@ -1402,7 +1402,7 @@ function sendWA(){
           esqLines.push(part);
         }
       });
-      ln += '\n  ↳ ✈️ Importación - Esquema de Pago:\n      · ' + (esqLines.length ? esqLines.join('\n      · ') : 'Pago escalado / A convenir');
+      ln += '\n  ↳ 🚢 Importación - Esquema de Pago:\n      · ' + (esqLines.length ? esqLines.join('\n      · ') : 'Pago escalado / A convenir');
       if (i.prod.tiempo_transito) ln += '\n  ↳ ⏳ Tiempo estimado: ' + i.prod.tiempo_transito;
     }
     return ln;
