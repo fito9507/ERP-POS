@@ -1017,7 +1017,8 @@ function encargoCardHTML(p){
     +(p.precio_mercado && p.precio_mercado > price ? 
         '<div style="font-size:12px;color:var(--text-tertiary);text-decoration:line-through">Precio Mercado: '+fPrice(p.precio_mercado,MON,ALM)+'</div>'
       + '<div class="price-row main"><span class="lbl">Precio Importación</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>'
-      + '<div style="font-size:11px;color:#fff;background:#10b981;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;font-weight:700">¡Ahorras '+fPrice(p.precio_mercado - price,MON,ALM)+'!</div>'
+      + '<div style="font-size:11px;color:#fff;background:#10b981;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;font-weight:700">Ahorro por unidad: '+fPrice(p.precio_mercado - price,MON,ALM)+'</div>'
+      + '<div id="ahorro-tot-'+cardId+'" style="font-size:12px;color:#10b981;padding-top:6px;font-weight:800;letter-spacing:-0.2px">Ganancia Potencial: '+fPrice((p.precio_mercado - price)*qty,MON,ALM)+'</div>'
       : '<div class="price-row main"><span class="lbl">Precio ref.</span><span class="val">'+fPrice(price,MON,ALM)+'</span></div>')
     +'</div>'
     +'<div class="qty-row" style="margin-top:10px">'
@@ -1045,7 +1046,7 @@ function renderEsquemaCalculado(esquemaStr, price, qty) {
       var pct = parseFloat(match[1]);
       var amount = total * (pct / 100);
       var desc = match[2];
-      html += '<div style="display:flex;flex-direction:column;background:#fff;padding:4px 8px;border-radius:4px;border:1px solid rgba(59,130,246,0.15)">'
+      html += '<div style="display:flex;flex-direction:column;background:rgba(59,130,246,0.02);padding:4px 8px;border-radius:4px;border:1px solid rgba(59,130,246,0.15)">'
            + '<div style="font-weight:800;color:#3b82f6;font-size:11px;display:flex;justify-content:space-between">'
            + '<span>'+pct+'%</span> <span style="color:var(--text-main)">'+fPrice(amount, MON, ALM)+'</span>'
            + '</div>'
@@ -1173,6 +1174,11 @@ function updCardPrices(cardId, p, qty){
   var calcEsq = document.getElementById('calc-esq-'+cardId);
   if (calcEsq && p.por_encargo) {
     calcEsq.innerHTML = renderEsquemaCalculado(p.esquema_pago, _equivRef, qty);
+  }
+  
+  var ahorroTot = document.getElementById('ahorro-tot-'+cardId);
+  if (ahorroTot && p.precio_mercado && p.precio_mercado > _equivRef) {
+    ahorroTot.textContent = 'Ganancia Potencial: ' + fPrice((p.precio_mercado - _equivRef)*qty, MON, ALM);
   }
 }
 function addToCartIdx(idx){
