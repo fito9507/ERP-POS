@@ -2144,7 +2144,8 @@ async function syncLoadProductos() {
         precioOfertaPlacetas: row.precio_oferta_placetas!=null?parseFloat(row.precio_oferta_placetas):null,
         reservado: row.badge_texto==='RESERVADO',
         por_encargo: row.por_encargo===true,
-        esquema_pago: row.esquema_pago||''
+        esquema_pago: row.esquema_pago||'',
+        tiempo_transito: row.tiempo_transito||''
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
@@ -2192,7 +2193,8 @@ async function syncSaveProducto(p) {
     precio_oferta_habana:p.precioOfertaHabana!=null?p.precioOfertaHabana:null,
     precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null,
     por_encargo:p.por_encargo===true,
-    esquema_pago:p.esquema_pago||null};
+    esquema_pago:p.esquema_pago||null,
+    tiempo_transito:p.tiempo_transito||null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
@@ -8346,8 +8348,17 @@ function renderFormProducto() {
     + '<input type="checkbox" id="ep-por-encargo"' + (p.por_encargo?' checked':'') + ' style="width:18px;height:18px;cursor:pointer" onchange="document.getElementById(\'ep-esquema-row\').style.display=this.checked?\'block\':\'none\'">'
     + '</div>'
     + '<div id="ep-esquema-row" style="grid-column:1/-1;padding-bottom:10px;display:' + (p.por_encargo?'block':'none') + '">'
-    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px">Esquema de pagos (Ej: 50% Adelanto, 50% Entrega). Solo visible si es por encargo.</div>'
-    + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="50% al reservar, 50% a la entrega">'
+    + '<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);padding:12px;border-radius:8px;display:grid;gap:10px">'
+    + '<div class="adm-lbl" style="color:#3b82f6;font-weight:700">✈️ Opciones de Importación</div>'
+    + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Esquema de Pagos</label>'
+    + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="Ej: 50% al reservar, 50% a la entrega">'
+    + '</div>'
+    + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Tiempo de Tránsito / Entrega</label>'
+    + '<input class="adm-inp" id="ep-tiempo-transito" value="' + (p.tiempo_transito||'') + '" placeholder="Ej: 45 a 60 días">'
+    + '</div>'
+    + '</div>'
     + '</div>'
     + '<div style="grid-column:1/-1;padding:8px 0 4px">'    + '<div style="font-size:11px;font-weight:700;color:var(--color-text-secondary);margin-bottom:8px">🚢 En tránsito por almacén</div>'    + '<div style="display:flex;gap:16px;flex-wrap:wrap">'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-hab"' + (p.enTransito&&p.enTransito.Habana?' checked':'') + ' style="width:15px;height:15px"> Habana</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-plac"' + (p.enTransito&&p.enTransito.Placetas?' checked':'') + ' style="width:15px;height:15px"> Placetas</label>'    + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px"><input type="checkbox" id="ep-transito-xport"' + (p.enTransito&&p.enTransito.Xportprise?' checked':'') + ' style="width:15px;height:15px"> Xportprise</label>'    + '</div></div>'
     + '<div><label class="adm-lbl-f">Precio Minorista (USD)</label>'
@@ -8382,7 +8393,7 @@ function renderFormProducto() {
     + '<input class="adm-inp" type="number" id="ep-stk-min" value="' + (p.stk_min || 10) + '" min="0" step="1"></div>'
 
     + '<div style="grid-column:1/-1;border-top:1px solid var(--color-border-tertiary);padding-top:12px;margin-top:4px">'
-    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#f59e0b">🏷 Precio preventa (solo en tránsito)</div>'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;color:#f59e0b">🏷 Precio preventa (solo en tránsito)</div>'
     + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Precio especial de reserva. Si vacío usa el precio normal.</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div><label class="adm-lbl-f">Preventa (USD)</label>'
@@ -8471,6 +8482,7 @@ function admGuardarProd(idx) {
   var reservado = !!(document.getElementById('ep-reservado') && document.getElementById('ep-reservado').checked);
   var por_encargo = !!(document.getElementById('ep-por-encargo') && document.getElementById('ep-por-encargo').checked);
   var esquema_pago = (document.getElementById('ep-esquema-pago')?.value||'').trim();
+  var tiempo_transito = (document.getElementById('ep-tiempo-transito')?.value||'').trim();
 
   var prod = { n:n, stk:stk, stk_alm:stk_alm, stk_min:stk_min, moq:moq, cat:cat, activo:activo, enStock:enStock, enWeb:enWeb, enTransito:enTransito, min_placetas:min_placetas, maj_placetas:maj_placetas, preventa_min:preventa_min, preventa_maj:preventa_maj, escala:escala,
     img: existingImg,
@@ -8479,7 +8491,7 @@ function admGuardarProd(idx) {
     ddp: isNaN(ddp) ? null : ddp,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, tiempo_transito: tiempo_transito };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)

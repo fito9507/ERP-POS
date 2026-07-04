@@ -671,7 +671,8 @@ async function init(){
         precioOfertaHabana: r.precio_oferta_habana!=null?parseFloat(r.precio_oferta_habana):null,
         precioOfertaPlacetas: r.precio_oferta_placetas!=null?parseFloat(r.precio_oferta_placetas):null,
         por_encargo: r.por_encargo===true,
-        esquema_pago: r.esquema_pago||''
+        esquema_pago: r.esquema_pago||'',
+        tiempo_transito: r.tiempo_transito||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
 
@@ -746,10 +747,17 @@ function render(){
       return;
     }
     grid.innerHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
-      +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
+      +'<div style="display:flex;flex-direction:column;gap:8px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
       +'<span style="font-size:20px">✈️</span>'
-      +'<div><div style="font-size:13px;font-weight:700;color:#3b82f6">Ventas por importación</div>'
-      +'<div style="font-size:11px;color:var(--text-dim)">Paga de forma fraccionada y recibe bajo demanda</div></div>'
+      +'<div><div style="font-size:14px;font-weight:700;color:#3b82f6">Ventas por importación directa</div>'
+      +'<div style="font-size:12px;color:var(--text-dim)">Paga de forma fraccionada y asegúrate de recibir exactamente lo que necesitas bajo demanda.</div></div>'
+      +'</div>'
+      +'<div style="display:flex;gap:10px;justify-content:center;margin-bottom:8px">'
+      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Pagos seguros</span></div>'
+      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Ahorro asegurado</span></div>'
+      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Garantía de entrega</span></div>'
+      +'</div>'
       +'</div></div>'
       + encargoProds.map(function(p){ return encargoCardHTML(p); }).join('');
     return;
@@ -984,6 +992,7 @@ function encargoCardHTML(p){
   var pidx = PRODS.indexOf(p);
   
   var esquema = p.esquema_pago || 'Pago escalado / A convenir';
+  var transito = p.tiempo_transito;
   var price = p.min || p.maj || 0;
   
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(59,130,246,.35)">' 
@@ -996,9 +1005,16 @@ function encargoCardHTML(p){
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
-    +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.1);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
-    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:2px">Esquema de Pagos:</div>'
-    +esc(esquema)
+    +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
+    +'<div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px">'
+    +'<span style="font-size:12px">💰</span>'
+    +'<div><div style="font-weight:700;color:#3b82f6;margin-bottom:1px">Esquema de Pagos:</div>'
+    +esc(esquema)+'</div>'
+    +'</div>'
+    +(transito ? '<div style="display:flex;align-items:flex-start;gap:6px;padding-top:6px;border-top:1px solid rgba(59,130,246,0.1)">'
+               + '<span style="font-size:12px">⏳</span>'
+               + '<div><div style="font-weight:700;color:#3b82f6;margin-bottom:1px">Tiempo de tránsito:</div>'
+               + esc(transito)+'</div></div>' : '')
     +'</div>'
     +'<div class="prices">'
     +'<div class="price-row main"><span class="lbl">Precio ref.</span><span class="val">'+fPrice(price,MON,ALM)+'</span></div>'
@@ -1335,6 +1351,7 @@ function sendWA(){
     var ln = '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
     if (i.prod.por_encargo) {
       ln += '\n  ↳ ✈️ Importación: ' + (i.prod.esquema_pago || 'Pago escalado / A convenir');
+      if (i.prod.tiempo_transito) ln += ' (' + i.prod.tiempo_transito + ')';
     }
     return ln;
   });
