@@ -1206,6 +1206,7 @@ function selectPriceTipo(cardId, pidx, tipo) {
   var esqEl = document.getElementById('calc-esq-'+cardId);
   if(esqEl) esqEl.innerHTML = renderEsquemaCalculado(p.esquema_pago, price, qty);
   // Ganancia is DDP-fixed, does not change on price toggle
+}
 function renderEsquemaCalculado(esquemaStr, price, qty) {
   if (!esquemaStr) return '<div style="color:var(--text-dim)">Pago escalado / A convenir</div>';
   var parts = esquemaStr.split(/[|\n]/).map(function(s){ return s.trim(); }).filter(Boolean);
