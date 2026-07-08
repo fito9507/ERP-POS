@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -8368,7 +8368,7 @@ function renderFormProducto() {
     + '<input class="adm-inp" id="ep-tiempo-transito" value="' + (p.tiempo_transito||'') + '" placeholder="Ej: 45 a 60 días">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
-    + '<div style="display:grid;gap:4px;grid-column:1/-1">' + '<label style="font-size:11px;font-weight:600">Nombre Puerto / Destino CIF</label>' + '<input class="adm-inp" type="text" id="ep-nombre-puerto" value="' + esc(p.nombre_puerto||'') + '" placeholder="Ej: Mariel">' + '</div>'
+    + '<div style="display:grid;gap:4px;grid-column:1/-1">' + '<label style="font-size:11px;font-weight:600">Nombre Puerto / Destino CIF</label>' + '<input class="adm-inp" type="text" id="ep-nombre-puerto" value="' + (p.nombre_puerto||'') + '" placeholder="Ej: Mariel">' + '</div>'
     + '<label style="font-size:11px;font-weight:600">Precio CIF - Puerto Cuba (USD)</label>'
     + '<input class="adm-inp" type="number" id="ep-precio-cif" value="' + (p.cif!=null?p.cif:'') + '" placeholder="Ej: 95" step="0.01">'
     + '</div>'
