@@ -992,104 +992,203 @@ function cardHTML(p){
     +'</div>';
 }
 
-function encargoCardHTML(p){
-  var cartItem = CART[p.n];
-  var qty = cartItem ? cartItem.qty : (p.moq || 1);
-  var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
-  if(PRODS.indexOf(p) < 0) PRODS.push(p);
-  var pidx = PRODS.indexOf(p);
-
-  var transito = p.tiempo_transito;
-  var price = p.min || p.maj || 0;
-  var cifP = p.precio_cif;
-  var ddpP = p.precio_ddp;
-  var nombrePuerto = p.nombre_puerto || 'Puerto Cuba';
-  var defTipo = (ddpP!=null)?'ddp':((cifP!=null)?'cif':'base');
-  var esqPrice = defTipo==='ddp'?ddpP:(defTipo==='cif'?cifP:price);
-  var ganancia = (p.precio_mercado && p.precio_mercado > esqPrice) ? (p.precio_mercado - esqPrice) * qty : null;
-  var ahorro   = (p.precio_mercado && p.precio_mercado > esqPrice) ? (p.precio_mercado - esqPrice) : null;
-
-  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(59,130,246,.35)">'
-    +'<div class="card-img" style="position:relative">'
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
-    +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
-    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">&#128674; POR IMPORTACI\u00d3N</div>'
-    +'</div>'
-    +'</div>'
-    +'<div class="card-body">'
-    +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
-    +'<div class="card-name">'+esc(p.n)+'</div>'
-
-    /* === 1\u00ba GANANCIA POTENCIAL (hero, arriba de todo) === */
-    +(ganancia ?
-        '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(16,185,129,0.06));border:1.5px solid rgba(16,185,129,0.35);border-radius:10px;padding:10px 12px;margin:8px 0;text-align:center">'
-        +'<div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">&#128200; Ganancia Potencial</div>'
-        +'<div id="ahorro-tot-'+cardId+'" style="font-size:22px;font-weight:900;color:#10b981;letter-spacing:-0.5px">'+fPrice(ganancia,MON,ALM)+'</div>'
-        +'<div style="font-size:10px;color:var(--text-secondary);margin-top:2px">con '+qty+' unidades a '+fPrice(ahorro,MON,ALM)+' de margen c/u</div>'
-        +'</div>'
-      :'')
-
-    /* === 2\u00ba PRECIO ANCLA + AHORRO === */
-    +(p.precio_mercado && p.precio_mercado > esqPrice ?
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;padding:0 2px">'
-        +'<span style="font-size:12px;color:var(--text-tertiary);text-decoration:line-through">Mercado: '+fPrice(p.precio_mercado,MON,ALM)+'</span>'
-        +'<span style="font-size:11px;font-weight:800;color:#fff;background:#10b981;padding:2px 7px;border-radius:4px">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
-        +'</div>'
-      :'')
-
-    /* === 3\u00ba SELECTOR CIF / DDP === */
-    +((cifP!=null||ddpP!=null)?
-        '<div style="display:flex;gap:6px;margin-bottom:8px">'
-        +(cifP!=null?'<button class="price-tipo-btn'+(defTipo==='cif'?' active-cif':'')+'" id="ptbtn-cif-'+cardId+'" onclick="selectPriceTipo(\''+cardId+'\','+pidx+',\'cif\')" type="button">'
-                    +'<div style="font-size:9px;opacity:.75">CIF</div>'
-                    +'<div style="font-size:14px;font-weight:800">'+fPrice(cifP,MON,ALM)+'</div>'
-                    +'<div style="font-size:9px;margin-top:1px">'+esc(nombrePuerto)+'</div>'
-                    +'</button>':'')
-        +(ddpP!=null?'<button class="price-tipo-btn'+(defTipo==='ddp'?' active-ddp':'')+'" id="ptbtn-ddp-'+cardId+'" onclick="selectPriceTipo(\''+cardId+'\','+pidx+',\'ddp\')" type="button">'
-                    +'<div style="font-size:9px;opacity:.75">DDP</div>'
-                    +'<div style="font-size:14px;font-weight:800">'+fPrice(ddpP,MON,ALM)+'</div>'
-                    +'<div style="font-size:9px;margin-top:1px">Nacionalizado</div>'
-                    +'</button>':'')
-        +(cifP!=null&&ddpP!=null?'<div style="font-size:9px;color:var(--text-dim);align-self:center;line-height:1.3;padding-left:2px">CIF=en puerto<br>DDP=llave en mano</div>':'')
-        +'</div>'
-      :(cifP==null&&ddpP==null?
-          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>'
-        :''))
-
-    /* === 4\u00ba ESQUEMA DE PAGOS === */
-    +'<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:8px;font-size:11px;color:var(--text-secondary)">'
-    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;gap:4px"><span style="font-size:12px">&#128176;</span> Esquema de Pagos:</div>'
-    +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, esqPrice, qty) + '</div>'
-
-    /* === 5\u00ba TIEMPO REENCUADRADO === */
-    +(transito ?
-        '<div style="display:flex;align-items:center;gap:6px;padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
-        +'<span style="font-size:14px">&#128640;</span>'
-        +'<div><div style="font-weight:700;color:#3b82f6;font-size:11px">Disponible en tu almac\u00e9n en:</div>'
-        +'<div style="font-weight:800;color:var(--text-main)">'+esc(transito)+'</div></div>'
-        +'</div>'
-      :'')
-
-    /* === 6\u00ba FICHA T\u00c9CNICA (CTA secundario) === */
-    +(p.ficha_tecnica ?
-        '<div style="margin-top:8px;text-align:center">'
-        +'<button onclick="openFichaModal('+pidx+')" style="background:rgba(59,130,246,0.08);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;width:100%">&#128196; Ver Ficha T\u00e9cnica</button>'
-        +'</div>'
-      :'')
-    +'</div>'
-
-    /* === QTY + CTA PRINCIPAL === */
-    +'<div class="qty-row" style="margin-top:10px">'
-    +'<div class="qty-ctrl">'
-    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">\u2212</button>'
-    +'<span class="qty-disp" id="qd-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
-    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
-    +'</div>'
-    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button" style="'+(cartItem?'':'background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.4);')+'font-weight:900;font-size:14px">'+(cartItem?'&#10003; Encargado':'+ Encargar')+'</button>'
-    +'</div>'
-    +'</div>'
-    +'</div>';
-}
+function encargoCardHTML(p){
+
+  var cartItem = CART[p.n];
+
+  var qty = cartItem ? cartItem.qty : (p.moq || 1);
+
+  var cardId = p.id||p.n.replace(/[^a-zA-Z0-9]/g,'_');
+
+  if(PRODS.indexOf(p) < 0) PRODS.push(p);
+
+  var pidx = PRODS.indexOf(p);
+
+
+
+  var transito = p.tiempo_transito;
+
+  var price = p.min || p.maj || 0;
+
+  var cifP = p.precio_cif;
+
+  var ddpP = p.precio_ddp;
+
+  var nombrePuerto = p.nombre_puerto || 'Puerto Cuba';
+
+  var defTipo = (ddpP!=null)?'ddp':((cifP!=null)?'cif':'base');
+
+  var esqPrice = defTipo==='ddp'?ddpP:(defTipo==='cif'?cifP:price);
+
+  // Ganancia always based on DDP (nationalized at Mariel), fallback CIF or base
+  var gananciaBaseP = ddpP!=null ? ddpP : (cifP!=null ? cifP : price);
+  var ganancia = (p.precio_mercado && p.precio_mercado > gananciaBaseP) ? (p.precio_mercado - gananciaBaseP) * qty : null;
+  var ahorro   = (p.precio_mercado && p.precio_mercado > gananciaBaseP) ? (p.precio_mercado - gananciaBaseP) : null;
+
+
+
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(59,130,246,.35)">'
+
+    +'<div class="card-img" style="position:relative">'
+
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+
+    +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
+
+    +'<div style="background:#3b82f6;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">&#128674; POR IMPORTACI\u00d3N</div>'
+
+    +'</div>'
+
+    +'</div>'
+
+    +'<div class="card-body">'
+
+    +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
+
+    +'<div class="card-name">'+esc(p.n)+'</div>'
+
+
+
+    /* === 1\u00ba GANANCIA POTENCIAL (hero, arriba de todo) === */
+
+    +(ganancia ?
+
+        '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(16,185,129,0.06));border:1.5px solid rgba(16,185,129,0.35);border-radius:10px;padding:10px 12px;margin:8px 0;text-align:center">'
+
+        +'<div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">&#128200; Ganancia Potencial</div>'
+
+        +'<div id="ahorro-tot-'+cardId+'" style="font-size:22px;font-weight:900;color:#10b981;letter-spacing:-0.5px">'+fPrice(ganancia,MON,ALM)+'</div>'
+
+        +'<div style="font-size:10px;color:var(--text-secondary);margin-top:2px">'+fPrice(ahorro,MON,ALM)+' margen/ud · precio a retirar en Mariel: '+fPrice(gananciaBaseP,MON,ALM)+'</div>'
+
+        +'</div>'
+
+      :'')
+
+
+
+    /* === 2\u00ba PRECIO ANCLA + AHORRO === */
+
+    +(p.precio_mercado && p.precio_mercado > esqPrice ?
+
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;padding:0 2px">'
+
+        +'<span style="font-size:12px;color:var(--text-tertiary);text-decoration:line-through">Mercado: '+fPrice(p.precio_mercado,MON,ALM)+'</span>'
+
+        +'<span style="font-size:11px;font-weight:800;color:#fff;background:#10b981;padding:2px 7px;border-radius:4px">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
+
+        +'</div>'
+
+      :'')
+
+
+
+    /* === 3\u00ba SELECTOR CIF / DDP === */
+
+    +((cifP!=null||ddpP!=null)?
+
+        '<div style="display:flex;gap:6px;margin-bottom:8px">'
+
+        +(cifP!=null?'<button class="price-tipo-btn'+(defTipo==='cif'?' active-cif':'')+'" id="ptbtn-cif-'+cardId+'" onclick="selectPriceTipo(\''+cardId+'\','+pidx+',\'cif\')" type="button">'
+
+                    +'<div style="font-size:9px;opacity:.75">CIF</div>'
+
+                    +'<div style="font-size:14px;font-weight:800">'+fPrice(cifP,MON,ALM)+'</div>'
+
+                    +'<div style="font-size:9px;margin-top:1px">'+esc(nombrePuerto)+'</div>'
+
+                    +'</button>':'')
+
+        +(ddpP!=null?'<button class="price-tipo-btn'+(defTipo==='ddp'?' active-ddp':'')+'" id="ptbtn-ddp-'+cardId+'" onclick="selectPriceTipo(\''+cardId+'\','+pidx+',\'ddp\')" type="button">'
+
+                    +'<div style="font-size:9px;opacity:.75">DDP</div>'
+
+                    +'<div style="font-size:14px;font-weight:800">'+fPrice(ddpP,MON,ALM)+'</div>'
+
+                    +'<div style="font-size:9px;margin-top:1px">Nacionalizado</div>'
+
+                    +'</button>':'')
+
+        +(cifP!=null&&ddpP!=null?'<div style="font-size:9px;color:var(--text-dim);align-self:center;line-height:1.3;padding-left:2px">CIF=en puerto<br>DDP=llave en mano</div>':'')
+
+        +'</div>'
+
+      :(cifP==null&&ddpP==null?
+
+          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>'
+
+        :''))
+
+
+
+    /* === 4\u00ba ESQUEMA DE PAGOS === */
+
+    +'<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:8px;font-size:11px;color:var(--text-secondary)">'
+
+    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;gap:4px"><span style="font-size:12px">&#128176;</span> Esquema de Pagos:</div>'
+
+    +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, esqPrice, qty) + '</div>'
+
+
+
+    /* === 5\u00ba TIEMPO REENCUADRADO === */
+
+    +(transito ?
+
+        '<div style="display:flex;align-items:center;gap:6px;padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
+
+        +'<span style="font-size:14px">&#128640;</span>'
+
+        +'<div><div style="font-weight:700;color:#3b82f6;font-size:11px">Disponible en tu almac\u00e9n en:</div>'
+
+        +'<div style="font-weight:800;color:var(--text-main)">'+esc(transito)+'</div></div>'
+
+        +'</div>'
+
+      :'')
+
+
+
+    /* === 6\u00ba FICHA T\u00c9CNICA (CTA secundario) === */
+
+    +(p.ficha_tecnica ?
+
+        '<div style="margin-top:8px;text-align:center">'
+
+        +'<button onclick="openFichaModal('+pidx+')" style="background:rgba(59,130,246,0.08);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;width:100%">&#128196; Ver Ficha T\u00e9cnica</button>'
+
+        +'</div>'
+
+      :'')
+
+    +'</div>'
+
+
+
+    /* === QTY + CTA PRINCIPAL === */
+
+    +'<div class="qty-row" style="margin-top:10px">'
+
+    +'<div class="qty-ctrl">'
+
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',-1)" ontouchstart="_lpStart('+pidx+',-1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">\u2212</button>'
+
+    +'<span class="qty-disp" id="qd-'+cardId+'" contenteditable="true" inputmode="numeric" onblur="_qdBlur(this,'+pidx+')" onclick="_qdClick(this)" onfocus="_qdFocus(this)" onkeydown="_qdKeydown(event,this,'+pidx+')" style="cursor:text;outline:none">'+qty+'</span>'
+
+    +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
+
+    +'</div>'
+
+    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button" style="'+(cartItem?'':'background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.4);')+'font-weight:900;font-size:14px">'+(cartItem?'&#10003; Encargado':'+ Encargar')+'</button>'
+
+    +'</div>'
+
+    +'</div>'
+
+    +'</div>';
+
+}
+
 
 function selectPriceTipo(cardId, pidx, tipo) {
   var p = PRODS[pidx]; if(!p) return;
@@ -1106,16 +1205,7 @@ function selectPriceTipo(cardId, pidx, tipo) {
   // Re-render payment scheme
   var esqEl = document.getElementById('calc-esq-'+cardId);
   if(esqEl) esqEl.innerHTML = renderEsquemaCalculado(p.esquema_pago, price, qty);
-  // Update hero ganancia block
-  var ahorroEl = document.getElementById('ahorro-tot-'+cardId);
-  if(ahorroEl && p.precio_mercado && p.precio_mercado > price) {
-    var ganancia = (p.precio_mercado - price) * qty;
-    var margen   = p.precio_mercado - price;
-    ahorroEl.textContent = fPrice(ganancia, MON, ALM);
-    var subEl = ahorroEl.nextElementSibling;
-    if(subEl) subEl.textContent = 'con '+qty+' unidades a '+fPrice(margen,MON,ALM)+' de margen c/u';
-  }
-}
+  // Ganancia is DDP-fixed, does not change on price toggle
 function renderEsquemaCalculado(esquemaStr, price, qty) {
   if (!esquemaStr) return '<div style="color:var(--text-dim)">Pago escalado / A convenir</div>';
   var parts = esquemaStr.split(/[|\n]/).map(function(s){ return s.trim(); }).filter(Boolean);
@@ -1250,11 +1340,12 @@ function updCardPrices(cardId, p, qty){
   var _equivRef=(_ofeP&&_ofeP>0)?_ofeP:activePrice;
   var ahorroTot = document.getElementById('ahorro-tot-'+cardId);
   if (ahorroTot && p.precio_mercado && p.precio_mercado > _equivRef) {
-    var _ganancia = (p.precio_mercado - _equivRef) * qty;
-    var _margen   = p.precio_mercado - _equivRef;
+    var _gbP = p.precio_ddp!=null?p.precio_ddp:(p.precio_cif!=null?p.precio_cif:_equivRef);
+    var _ganancia = p.precio_mercado > _gbP ? (p.precio_mercado - _gbP) * qty : 0;
+    var _margen   = p.precio_mercado > _gbP ? (p.precio_mercado - _gbP) : 0;
     ahorroTot.textContent = fPrice(_ganancia, MON, ALM);
     var _subEl = ahorroTot.nextElementSibling;
-    if(_subEl) _subEl.textContent = 'con '+qty+' unidades a '+fPrice(_margen,MON,ALM)+' de margen c/u';
+    if(_subEl) _subEl.textContent = fPrice(_margen,MON,ALM)+' margen/ud · a retirar en Mariel: '+fPrice(_gbP,MON,ALM);
   }
   card.querySelectorAll('[data-equiv]').forEach(function(row){
     var mon=row.dataset.equiv;
