@@ -674,6 +674,8 @@ async function init(){
         esquema_pago: r.esquema_pago||'',
         tiempo_transito: r.tiempo_transito||'',
         precio_mercado: r.precio_mercado!=null?parseFloat(r.precio_mercado):null,
+        precio_cif: r.precio_cif!=null?parseFloat(r.precio_cif):null,
+        precio_ddp: r.precio_ddp!=null?parseFloat(r.precio_ddp):null,
         ficha_tecnica: r.ficha_tecnica||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
@@ -1018,10 +1020,20 @@ function encargoCardHTML(p){
     +'<div class="prices">'
     +(p.precio_mercado && p.precio_mercado > price ? 
         '<div style="font-size:12px;color:var(--text-tertiary);text-decoration:line-through">Precio Mercado: '+fPrice(p.precio_mercado,MON,ALM)+'</div>'
-      + '<div class="price-row main"><span class="lbl">Precio Importación</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>'
-      + '<div style="font-size:11px;color:#fff;background:#10b981;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;font-weight:700">Ahorro por unidad: '+fPrice(p.precio_mercado - price,MON,ALM)+'</div>'
+      : '')
+    +(p.precio_cif!=null ? 
+        '<div class="price-row" style="margin-bottom:2px"><span class="lbl" style="font-size:11px;color:var(--text-secondary)">Precio CIF <span style="font-size:9px;background:rgba(59,130,246,0.15);color:#3b82f6;padding:1px 5px;border-radius:3px;font-weight:700">Puerto Cuba</span></span><span class="val" style="color:#3b82f6;font-size:13px">'+fPrice(p.precio_cif,MON,ALM)+'</span></div>'
+      : '')
+    +(p.precio_ddp!=null ? 
+        '<div class="price-row main"><span class="lbl">Precio DDP <span style="font-size:9px;background:rgba(16,185,129,0.15);color:#10b981;padding:1px 5px;border-radius:3px;font-weight:700">Nacionalizado</span></span><span class="val" style="color:#10b981">'+fPrice(p.precio_ddp,MON,ALM)+'</span></div>'
+      : '<div class="price-row main"><span class="lbl">Precio Importación</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>')
+    +(p.precio_mercado && p.precio_mercado > price ? 
+        '<div style="font-size:11px;color:#fff;background:#10b981;padding:4px 8px;border-radius:4px;display:inline-block;margin-top:4px;font-weight:700">Ahorro por unidad: '+fPrice(p.precio_mercado - price,MON,ALM)+'</div>'
       + '<div id="ahorro-tot-'+cardId+'" style="font-size:12px;color:#10b981;padding-top:6px;font-weight:800;letter-spacing:-0.2px">Ganancia Potencial: '+fPrice((p.precio_mercado - price)*qty,MON,ALM)+'</div>'
-      : '<div class="price-row main"><span class="lbl">Precio ref.</span><span class="val">'+fPrice(price,MON,ALM)+'</span></div>')
+      : '')
+    +(p.precio_cif==null && p.precio_ddp==null && !(p.precio_mercado && p.precio_mercado > price) ? 
+        '<div class="price-row main"><span class="lbl">Precio ref.</span><span class="val">'+fPrice(price,MON,ALM)+'</span></div>'
+      : '')
     +'</div>'
     +'<div class="qty-row" style="margin-top:10px">'
     +'<div class="qty-ctrl">'
@@ -1392,6 +1404,8 @@ function sendWA(){
     var ln = '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
     if (i.prod.por_encargo) {
       var totalItem = r.price * i.qty;
+      if (i.prod.precio_cif != null) ln += '\n  ↳ 📦 Precio CIF (Puerto Cuba): ' + fPrice(i.prod.precio_cif, CART_MON) + '/ud';
+      if (i.prod.precio_ddp != null) ln += '\n  ↳ ✅ Precio DDP (Nacionalizado): ' + fPrice(i.prod.precio_ddp, CART_MON) + '/ud';
       var eParts = (i.prod.esquema_pago||'').split(/[|\n]/).map(function(s){ return s.trim(); }).filter(Boolean);
       var esqLines = [];
       eParts.forEach(function(part){

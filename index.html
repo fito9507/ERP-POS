@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
@@ -2129,6 +2129,7 @@ async function syncLoadProductos() {
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
         escala: (function(v){ try{ return v ? (typeof v==='string'?JSON.parse(v):v) : null; }catch(e){ return null; } })(row.precios_escala),
         ddp: row.precio_ddp != null ? parseFloat(row.precio_ddp) : null,
+        cif: row.precio_cif != null ? parseFloat(row.precio_cif) : null,
         stk: stk, stk_alm: stk_alm, stk_min: row.stk_min||10,
         activo: row.activo !== false, enStock: row.en_stock !== false, enWeb: row.en_web !== false,
         enTransito: {Habana:row.en_transito_habana===true, Placetas:row.en_transito_placetas===true, Xportprise:row.en_transito_xportprise===true},
@@ -2147,6 +2148,7 @@ async function syncLoadProductos() {
         esquema_pago: row.esquema_pago||'',
         tiempo_transito: row.tiempo_transito||'',
         precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
+        cif: row.precio_cif!=null?parseFloat(row.precio_cif):null,
         ficha_tecnica: row.ficha_tecnica||''
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
@@ -2180,7 +2182,8 @@ async function syncSaveProducto(p) {
   var row = {nombre:p.n,categoria:p.cat||'',
     precio_min:p.min!=null?p.min:null,precio_maj:p.maj!=null?p.maj:null,
     precios_escala:p.escala&&p.escala.length?JSON.stringify(p.escala):null,
-    precio_ddp:p.ddp!=null?p.ddp:null,stk_min:p.stk_min||10,
+    precio_ddp:p.ddp!=null?p.ddp:null,
+    precio_cif:p.cif!=null?p.cif:null,stk_min:p.stk_min||10,
     activo:p.activo!==false,en_stock:p.enStock!==false,en_web:p.enWeb!==false,
     en_transito_habana:!!(p.enTransito&&p.enTransito.Habana),
     en_transito_placetas:!!(p.enTransito&&p.enTransito.Placetas),
@@ -8277,7 +8280,6 @@ function renderAdminProductos() {
     c.addEventListener('change', admUpdSelBar);
   });
 }
-
 function admAddEscalaRow(){
   var container = document.getElementById('ep-escala-rows');
   if(!container) return;
@@ -8365,8 +8367,16 @@ function renderFormProducto() {
     + '<input class="adm-inp" id="ep-tiempo-transito" value="' + (p.tiempo_transito||'') + '" placeholder="Ej: 45 a 60 días">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
-    + '<label style="font-size:11px;font-weight:600">Precio en Mercado Local</label>'
-    + '<input class="adm-inp" type="number" id="ep-precio-mercado" value="' + (p.precio_mercado||'') + '" placeholder="Ej: 250">'
+    + '<label style="font-size:11px;font-weight:600">Precio CIF - Puerto Cuba (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-precio-cif" value="' + (p.cif!=null?p.cif:'') + '" placeholder="Ej: 95" step="0.01">'
+    + '</div>'
+    + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Precio DDP - Nacionalizado (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-precio-ddp-imp" value="' + (p.ddp!=null?p.ddp:'') + '" placeholder="Ej: 115" step="0.01">'
+    + '</div>'
+    + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Precio en Mercado Local (USD)</label>'
+    + '<input class="adm-inp" type="number" id="ep-precio-mercado" value="' + (p.precio_mercado!=null?p.precio_mercado:'') + '" placeholder="Ej: 250">'
     + '</div>'
     + '<div style="display:grid;gap:4px;grid-column:1/-1">'
     + '<label style="font-size:11px;font-weight:600">Ficha Técnica / Descripción</label>'
@@ -8451,7 +8461,9 @@ function admGuardarProd(idx) {
     if(!isNaN(desde) && !isNaN(precio)) escala.push({desde:desde, hasta:hasta, precio:precio});
   });
   escala = escala.length ? escala.sort(function(a,b){return a.desde-b.desde;}) : null;
-  var ddp = parseFloat(document.getElementById('ep-ddp').value);
+  var ddp = parseFloat(document.getElementById('ep-precio-ddp-imp')?.value ?? document.getElementById('ep-ddp')?.value);
+  var cifV = document.getElementById('ep-precio-cif')?.value||'';
+  var cif = cifV!==''&&!isNaN(parseFloat(cifV)) ? parseFloat(cifV) : null;
   var stk_min = parseInt(document.getElementById('ep-stk-min').value) || 10;
   var moq = parseInt(document.getElementById('ep-moq')?.value) || 1;
   var min_placetas_v = document.getElementById('ep-min-plac')?.value;
@@ -8506,6 +8518,7 @@ function admGuardarProd(idx) {
     min: isNaN(min) ? null : min,
     maj: isNaN(maj) ? null : maj,
     ddp: isNaN(ddp) ? null : ddp,
+    cif: cif,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
     reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica };
