@@ -1495,18 +1495,29 @@ function getCartPrice(i){
   if(ofertaPrice!=null && ofertaPrice>0) return {price:ofertaPrice, isMay:false, MIN_MAY:MIN_MAY, isTransit:false, isOferta:true};
   var escalaPrice = getEscalaPrice(p, i.qty);
   var basePrice = escalaPrice!=null ? escalaPrice : (isMay ? (maj||min||0) : (min||maj||0));
+  // Fallback for por_encargo products: use precio_ddp > precio_cif > precio_mercado if base is 0
+  if(basePrice === 0 && p.por_encargo){
+    basePrice = (p.precio_ddp!=null && p.precio_ddp>0) ? p.precio_ddp
+              : (p.precio_cif!=null && p.precio_cif>0) ? p.precio_cif
+              : (p.precio_mercado!=null && p.precio_mercado>0) ? p.precio_mercado
+              : 0;
+  }
   return {price:basePrice, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:false, hasEscala:escalaPrice!=null};
 }
 function updCartQty(name, val){
   if(!CART[name]) return;
   var p = CART[name].prod;
   var isTransit = p.enTransito && p.enTransito[ALM];
-  var minQty = isTransit ? (p.moq||1) : 1;
+  var isEncargo = p.por_encargo === true;
+  var minQty = (isTransit || isEncargo) ? (p.moq||1) : 1;
   var qty = Math.max(minQty, parseInt(val)||minQty);
-  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-  if(qty > maxStk) {
-    qty = Math.max(0, maxStk);
-    if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
+  // Skip stock cap for import (por_encargo) products — they have no physical stock limit
+  if(!isEncargo){
+    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    if(qty > maxStk) {
+      qty = Math.max(0, maxStk);
+      if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
+    }
   }
   CART[name].qty = qty;
   renderCart(); updCart(); saveCartState();
