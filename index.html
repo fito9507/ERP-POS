@@ -11679,29 +11679,22 @@ function eliminarPrestamo(id) {
     supaReq('DELETE','mov_cajas?'+q).catch(function(e){console.warn('delete inicial:',e);});
   }
   if(typeof _cajasMovs!=='undefined') {
-    var cIdx=_cajas    if (!movs.length) {
-      html += '<div style="text-align:center;padding:30px;color:var(--color-text-tertiary)">Sin movimientos registrados</div>';
-    } else {
-      html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-        + '<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th style="text-align:right">Cant.</th><th>Contenedor</th><th>Motivo</th><th>Usuario</th>'
-        + '</tr></thead><tbody>'
-        + movs.map(function(m){
-            var dest = (m.tipo === 'traslado' && m.almacenDest) ? ' → '+m.almacenDest : '';
-            return '<tr>'
-              + '<td style="font-size:11px">'+fD(m.fecha)+'</td>'
-              + '<td style="font-size:11px;color:'+(tipoColor[m.tipo]||'')+'">'+( tipoIcon[m.tipo]||'')+' '+m.tipo.replace('_',' ')+'</td>'
-              + '<td style="font-size:11px;max-width:140px">'+m.producto+'</td>'
-              + '<td style="font-size:11px">'+m.almacen+dest+'</td>'
-              + '<td style="text-align:right;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'
-              + (m.tipo==='salida'||m.tipo==='ajuste_baja'?'−':m.tipo==='traslado'?'↔':'+')
-              + m.cantidad+'</td>'
-              + '<td style="font-size:11px">'+(m.contenedor?_cntBadge(m.contenedor):'<span style="color:var(--color-text-tertiary)">—</span>')+'</td>'
-              + '<td style="font-size:11px;color:var(--color-text-secondary)">'+(m.motivo||'—')+'</td>'
-              + '<td style="font-size:11px;color:var(--color-text-tertiary)">'+m.usuario+'</td>'
-              + '</tr>';
-          }).join('')
-        + '</tbody></table></div>';
-    }rray
+    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===p.fechaInicio && m.monto_origen===p.capital && m.notas===descApertura;});
+    if(cIdx>=0) _cajasMovs.splice(cIdx,1);
+  }
+
+  PRESTAMOS = PRESTAMOS.filter(function(x){ return x.id !== id; });
+  savePrestamos(null, id);
+  if(typeof renderDeudas === 'function') renderDeudas();
+  else if(typeof renderPrestamos === 'function') renderPrestamos();
+}
+
+function toggleDeudasLiquidadas() {
+  var act = localStorage.getItem('erp_mostrar_liquidadas') === 'true';
+  localStorage.setItem('erp_mostrar_liquidadas', !act);
+  if(typeof renderDeudas === 'function') renderDeudas();
+}
+
 function applyStockMov(mov) {
   var p = PRODS.find(function(x){ return x.n === mov.producto; });
   if (!p) return false;
@@ -11880,10 +11873,12 @@ function renderStockMovimientos() {
       html += '<div style="text-align:center;padding:30px;color:var(--color-text-tertiary)">Sin movimientos registrados</div>';
     } else {
       html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
-        + '<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th style="text-align:right">Cant.</th><th>Motivo</th><th>Usuario</th>'
+        + '<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th style="text-align:right">Cant.</th><th>Lote</th><th>Motivo</th><th>Usuario</th><th></th>'
         + '</tr></thead><tbody>'
         + movs.map(function(m){
             var dest = (m.tipo === 'traslado' && m.almacenDest) ? ' → '+m.almacenDest : '';
+            var loteBadge = m.contenedor ? _cntBadge(m.contenedor) : '<span style="color:var(--color-text-tertiary);font-size:10px">—</span>';
+            var mid = String(m.id).replace(/'/g,'');
             return '<tr>'
               + '<td style="font-size:11px">'+fD(m.fecha)+'</td>'
               + '<td style="font-size:11px;color:'+(tipoColor[m.tipo]||'')+'">'+(tipoIcon[m.tipo]||'')+' '+m.tipo.replace('_',' ')+'</td>'
@@ -11892,8 +11887,10 @@ function renderStockMovimientos() {
               + '<td style="text-align:right;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'
               + (m.tipo==='salida'||m.tipo==='ajuste_baja'?'−':m.tipo==='traslado'?'↔':'+')
               + m.cantidad+'</td>'
-              + '<td style="font-size:11px;color:var(--color-text-secondary)">'+(m.motivo||'—')+'</td>'
+              + '<td style="font-size:11px">'+loteBadge+'</td>'
+              + '<td style="font-size:11px;color:var(--color-text-secondary);max-width:120px">'+(m.motivo||'—')+'</td>'
               + '<td style="font-size:11px;color:var(--color-text-tertiary)">'+m.usuario+'</td>'
+              + '<td><button class="adm-btn" style="padding:2px 7px;font-size:11px" onclick="_editMovLote(\''+mid+'\')">✏️</button></td>'
               + '</tr>';
           }).join('')
         + '</tbody></table></div>';
@@ -11901,6 +11898,61 @@ function renderStockMovimientos() {
   }
 
   el.innerHTML = html;
+}
+
+// ── EDITAR LOTE / MOTIVO DE MOVIMIENTO EXISTENTE ────────────────
+function _editMovLote(id) {
+  var m = STOCK_MOVS.find(function(x){ return String(x.id) === String(id); });
+  if (!m) { showToast('Movimiento no encontrado'); return; }
+  var mo = document.getElementById('mov-edit-modal');
+  if (!mo) {
+    mo = document.createElement('div'); mo.id = 'mov-edit-modal';
+    mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(mo);
+  }
+  var cntOpts = '<option value="">— Sin lote —</option>'
+    + CONTENEDORES.map(function(c){
+        var ic = c.estado==='retrasado'?'⚠️':(c.estado==='recibido'||c.estado==='cerrado'?'✅':(c.estado==='en_transito'||c.estado==='en_aduana'||c.estado==='en_puerto'?'🚢':'📦'));
+        var lbl = (c.lote||c.ref)+(c.lote&&c.ref&&c.lote!==c.ref?' (• '+c.ref+')':'');
+        var val = c.lote||c.ref;
+        var sel = (m.contenedor&&m.contenedor===val)?'selected':'';
+        return '<option value="'+val+'" '+sel+'>'+ic+' Lote: '+lbl+'</option>';
+      }).join('');
+  mo.innerHTML = '<div style="background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:22px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)">'
+    + '<div style="font-size:14px;font-weight:700;margin-bottom:4px">✏️ Editar movimiento</div>'
+    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:16px">'+fD(m.fecha)+' · '+m.tipo+' · '+m.producto+' · '+m.cantidad+' uds</div>'
+    + '<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">🚢 LOTE / CONTENEDOR</label>'
+    + (CONTENEDORES.length
+        ? '<select id="mov-edit-cnt" class="adm-inp" style="width:100%;margin-bottom:12px">'+cntOpts+'</select>'
+        : '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px;padding:8px;background:var(--color-background-secondary);border-radius:4px">Sin contenedores. Crea uno en Admin → 🚢 Contenedores.</div><input type="hidden" id="mov-edit-cnt" value="'+(m.contenedor||'')+'">')
+    + '<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">MOTIVO / REFERENCIA</label>'
+    + '<input id="mov-edit-motivo" class="adm-inp" style="width:100%;margin-bottom:16px" value="'+(m.motivo||'')+'">'
+    + '<input type="hidden" id="mov-edit-id" value="'+id+'">'
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="adm-btn" style="flex:1" onclick="document.getElementById(\'mov-edit-modal\').style.display=\'none\'">Cancelar</button>'
+    + '<button class="adm-btn adm-btn-p" style="flex:1" onclick="_saveMovLote()">✓ Guardar</button>'
+    + '</div></div>';
+  mo.style.display = 'flex';
+}
+
+function _saveMovLote() {
+  var id     = (document.getElementById('mov-edit-id')||{}).value||'';
+  var cnt    = (document.getElementById('mov-edit-cnt')||{}).value||'';
+  var motivo = (document.getElementById('mov-edit-motivo')||{}).value||'';
+  var m = STOCK_MOVS.find(function(x){ return String(x.id) === String(id); });
+  if (!m) { showToast('Movimiento no encontrado'); return; }
+  m.contenedor = cnt;
+  m.motivo = motivo;
+  saveStockMovs();
+  // Sync patch to Supabase if online
+  if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
+    supaReq('PATCH', 'stock_movimientos?id=eq.'+encodeURIComponent(id), {
+      contenedor: cnt||'', motivo: motivo||''
+    }).catch(function(e){ console.warn('mov patch supabase:', e); });
+  }
+  document.getElementById('mov-edit-modal').style.display = 'none';
+  showToast('✓ Movimiento actualizado');
+  renderStockMovimientos();
 }
 
 function admRegistrarMovStock() {
@@ -11924,9 +11976,7 @@ function admRegistrarMovStock() {
   var ok = registrarMovStock(data);
   if (ok) {
     showToast('✓ Movimiento registrado: ' + qty + ' uds ' + tipo + (cnt?' · '+cnt:''));
-    // Re-render stock table immediately
     if (typeof renderStock === 'function') renderStock();
-    // Reset form fields but keep tipo/alm selection
     var qEl = document.getElementById('smov-qty');
     var mEl = document.getElementById('smov-motivo');
     var cEl = document.getElementById('smov-cnt');
@@ -11936,6 +11986,61 @@ function admRegistrarMovStock() {
   } else {
     showToast('Error: producto no encontrado');
   }
+}
+
+// ── EDITAR LOTE / MOTIVO DE MOVIMIENTO EXISTENTE ────────────────
+function _editMovLote(id) {
+  var m = STOCK_MOVS.find(function(x){ return String(x.id) === String(id); });
+  if (!m) { showToast('Movimiento no encontrado'); return; }
+  var mo = document.getElementById('mov-edit-modal');
+  if (!mo) {
+    mo = document.createElement('div'); mo.id = 'mov-edit-modal';
+    mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(mo);
+  }
+  var cntOpts = '<option value="">— Sin lote —</option>'
+    + CONTENEDORES.map(function(c){
+        var ic = c.estado==='retrasado'?'⚠️':(c.estado==='recibido'||c.estado==='cerrado'?'✅':(c.estado==='en_transito'||c.estado==='en_aduana'||c.estado==='en_puerto'?'🚢':'📦'));
+        var lbl = (c.lote||c.ref)+(c.lote&&c.ref&&c.lote!==c.ref?' (• '+c.ref+')':'');
+        var val = c.lote||c.ref;
+        var sel = (m.contenedor&&m.contenedor===val)?'selected':'';
+        return '<option value="'+val+'" '+sel+'>'+ic+' Lote: '+lbl+'</option>';
+      }).join('');
+  mo.innerHTML = '<div style="background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:22px;max-width:400px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.6)">'
+    + '<div style="font-size:14px;font-weight:700;margin-bottom:4px">✏️ Editar movimiento</div>'
+    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:16px">'+fD(m.fecha)+' · '+m.tipo+' · '+m.producto+' · '+m.cantidad+' uds</div>'
+    + '<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">🚢 LOTE / CONTENEDOR</label>'
+    + (CONTENEDORES.length
+        ? '<select id="mov-edit-cnt" class="adm-inp" style="width:100%;margin-bottom:12px">'+cntOpts+'</select>'
+        : '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:12px;padding:8px;background:var(--color-background-secondary);border-radius:4px">Sin contenedores. Crea uno en Admin → 🚢 Contenedores.</div><input type="hidden" id="mov-edit-cnt" value="'+(m.contenedor||'')+'">')
+    + '<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">MOTIVO / REFERENCIA</label>'
+    + '<input id="mov-edit-motivo" class="adm-inp" style="width:100%;margin-bottom:16px" value="'+(m.motivo||'')+'">'
+    + '<input type="hidden" id="mov-edit-id" value="'+id+'">'
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="adm-btn" style="flex:1" onclick="document.getElementById(\'mov-edit-modal\').style.display=\'none\'">Cancelar</button>'
+    + '<button class="adm-btn adm-btn-p" style="flex:1" onclick="_saveMovLote()">✓ Guardar</button>'
+    + '</div></div>';
+  mo.style.display = 'flex';
+}
+
+function _saveMovLote() {
+  var id     = (document.getElementById('mov-edit-id')||{}).value||'';
+  var cnt    = (document.getElementById('mov-edit-cnt')||{}).value||'';
+  var motivo = (document.getElementById('mov-edit-motivo')||{}).value||'';
+  var m = STOCK_MOVS.find(function(x){ return String(x.id) === String(id); });
+  if (!m) { showToast('Movimiento no encontrado'); return; }
+  m.contenedor = cnt;
+  m.motivo = motivo;
+  saveStockMovs();
+  // Sync patch to Supabase if online
+  if (typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
+    supaReq('PATCH', 'stock_movimientos?id=eq.'+encodeURIComponent(id), {
+      contenedor: cnt||'', motivo: motivo||''
+    }).catch(function(e){ console.warn('mov patch supabase:', e); });
+  }
+  document.getElementById('mov-edit-modal').style.display = 'none';
+  showToast('✓ Movimiento actualizado');
+  renderStockMovimientos();
 }
 
 
