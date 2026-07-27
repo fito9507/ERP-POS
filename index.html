@@ -2959,6 +2959,33 @@ const PRODS=[
 ];
 function _loadReservas(){try{return JSON.parse(localStorage.getItem('erp_reservas')||'[]');}catch(e){return[];}}
 function _saveReservas(){try{localStorage.setItem('erp_reservas',JSON.stringify(S.reservas));}catch(e){}}
+// ── CONTENEDORES ──────────────────────────────────────────────
+var CONTENEDORES=[];
+(function(){
+  try{var _c=JSON.parse(localStorage.getItem('erp_contenedores')||'[]');if(Array.isArray(_c))CONTENEDORES=_c;}catch(e){}
+})();
+function _saveContenedores(){try{localStorage.setItem('erp_contenedores',JSON.stringify(CONTENEDORES));}catch(e){}}
+function _cntLabel(ref){
+  if(!ref)return'';
+  var c=CONTENEDORES.find(function(x){return (x.lote&&x.lote===ref)||x.ref===ref||x.id===ref;});
+  if(!c)return ref;
+  var lbl=c.lote||c.ref||ref;
+  return lbl+(c.ref&&c.lote&&c.ref!==c.lote?' ('+c.ref+')':'');
+}
+function _cntBadge(ref){
+  if(!ref)return'';
+  var c=CONTENEDORES.find(function(x){return (x.lote&&x.lote===ref)||x.ref===ref||x.id===ref;});
+  var col='var(--color-text-secondary)';
+  var ic='📦';
+  if(c){
+    if(c.estado==='recibido'||c.estado==='cerrado'){col='var(--color-text-success)';ic='✅';}
+    else if(c.estado==='retrasado'){col='var(--color-text-danger)';ic='⚠️';}
+    else if(c.estado==='en_transito'||c.estado==='en_aduana'||c.estado==='en_puerto'){col='var(--color-text-info)';ic='🚢';}
+    else if(c.estado==='preparando'||c.estado==='reservado'){col='var(--color-text-warning)';ic='📦';}
+  }
+  var lbl=c?(c.lote||c.ref||ref):ref;
+  return '<span style="font-size:10px;color:'+col+';white-space:nowrap">'+ic+' Lote: '+lbl+'</span>';
+}
 let S={user:'',alm:'',tipo:'Minorista',cli:'',cart:[],pagos:[],vueltos:[],cartMon:'USD',reservas:_loadReservas()};
 // Restore session state if page was reloaded
 (function(){
@@ -3395,10 +3422,45 @@ function ventaCreditoPOS() {
 }
 function reservar(){
   if(!S.cart.length)return;
-  var nota = prompt("Añadir nota o nombre para la reserva (Opcional):", "");
-  if(nota === null) return; // cancelado
-  nota = nota.trim();
-  S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli, nota:nota,
+  // Build modal — lotes/contenedores activos
+  var cntOpts='<option value="">— Sin lote/contenedor —</option>'
+    +CONTENEDORES
+      .filter(function(c){return c.estado!=='cerrado';}) // excluir solo cerrados
+      .map(function(c){
+        var ic=c.estado==='retrasado'?'⚠️':(c.estado==='recibido'?'✅':(c.estado==='en_transito'||c.estado==='en_aduana'||c.estado==='en_puerto'?'🚢':'📦'));
+        var lbl=(c.lote||c.ref)+(c.lote&&c.ref&&c.lote!==c.ref?' (• '+c.ref+')':'');
+        var val=c.lote||c.ref; // usar lote o ref como valor de asociación
+        return '<option value="'+val+'">'+ic+' '+lbl+'</option>';
+      }).join('');
+  var mo=document.getElementById('res-modal-cnt');
+  if(!mo){
+    mo=document.createElement('div');mo.id='res-modal-cnt';
+    mo.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+    document.body.appendChild(mo);
+  }
+  mo.innerHTML='<div style="background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:22px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.5)">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:16px">📋 Nueva Reserva</div>'
+    +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:14px;background:var(--color-background-secondary);padding:8px 10px;border-radius:var(--border-radius-md)">'
+    +S.cart.map(function(c){return c.q+'× '+c.n;}).join('<br>')+'</div>'
+    +'<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">NOTA / NOMBRE</label>'
+    +'<input id="res-nota-inp" class="adm-inp" placeholder="Nombre del cliente, referencia..." style="width:100%;margin-bottom:12px">'
+    +'<label style="font-size:11px;font-weight:600;color:var(--color-text-secondary);display:block;margin-bottom:4px">🚢 LOTE / CONTENEDOR (OPCIONAL)</label>'
+    +(CONTENEDORES.length?'<select id="res-cnt-sel" class="adm-inp" style="width:100%;margin-bottom:16px">'+cntOpts+'</select>'
+      :'<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:16px;padding:8px;background:var(--color-background-secondary);border-radius:4px">Sin contenedores creados. Ve a Admin → 🚢 Contenedores.</div><input type="hidden" id="res-cnt-sel" value="">')
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="adm-btn" style="flex:1" onclick="document.getElementById(\'res-modal-cnt\').style.display=\'none\'">Cancelar</button>'
+    +'<button class="adm-btn adm-btn-p" style="flex:1" onclick="_confirmarReserva()">✓ Reservar</button>'
+    +'</div></div>';
+  mo.style.display='flex';
+  setTimeout(function(){var n=document.getElementById('res-nota-inp');if(n)n.focus();},80);
+}
+function _confirmarReserva(){
+  var nota=(document.getElementById('res-nota-inp')||{}).value||'';
+  nota=nota.trim();
+  var cnt=(document.getElementById('res-cnt-sel')||{}).value||'';
+  var mo=document.getElementById('res-modal-cnt');
+  if(mo)mo.style.display='none';
+  S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli, nota:nota, contenedor:cnt,
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
@@ -3407,9 +3469,10 @@ function reservar(){
     var _rT=S.cart.reduce(function(a,c){return a+c.precioUSD*c.q;},0);
     var tgMsg = '\uD83D\uDCCB <b>Reserva</b>\n\uD83D\uDC64 '+(S.user||'?')+' \u2022 '+(S.alm||'')+'\n\uD83D\uDED2 '+(S.cli||'Walk-in')+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_rP+'\n\uD83D\uDCB5 <b>$'+fN(_rT)+'</b>';
     if(nota) tgMsg += '\n\uD83D\uDCDD ' + String(nota).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if(cnt)  tgMsg += '\n\uD83D\uDE22 Contenedor: '+cnt;
     tgSend(tgMsg,S.alm,'pedido');
   }
-  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado \u2014 stock bloqueado');
+  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
 }
 function syncReservasGlobal(){
   RESERVAS_GLOBAL=S.reservas.slice();
@@ -3430,12 +3493,14 @@ function openRes(){
   document.getElementById('res-list').innerHTML=act.length?act.map(r=>{
     var _mia = r.user===S.user;
     var _puedeCancelar = _isAdmRes || _mia;
+    var _cntHtml = r.contenedor ? '<div style="margin-bottom:6px">'+_cntBadge(r.contenedor)+'</div>' : '';
     return `<div class="res-card">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px">
         <span style="font-weight:500">${r.cli||'Walk-in'} · ${r.user} · ${r.alm} · ${r.fecha}</span>
         <span style="font-weight:500">${fN(r.totalUSD)} USD</span>
       </div>
       ${r.nota?`<div style="font-size:12px;color:var(--color-primary);background:var(--color-bg-secondary);padding:4px 8px;border-radius:4px;margin-bottom:6px">📝 ${r.nota}</div>`:''}
+      ${_cntHtml}
       <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:10px">${r.lineas.map(l=>l.q+'× '+l.n).join(' · ')}</div>
       <div style="display:flex;gap:6px">
         ${_mia?`<button class="btn btn-p" style="flex:1;font-size:12px;padding:8px" onclick="cobrarReserva(${r.id})">Cobrar ahora</button>`:''}
@@ -8092,6 +8157,7 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'tasas'  ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
     + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
     + '<button class="adm-tab' + (adminTab === 'comisiones' ? ' act' : '') + '" onclick="setAdminTab(\'comisiones\')">🏆 Comisiones</button>'
+    + '<button class="adm-tab' + (adminTab === 'contenedores' ? ' act' : '') + '" onclick="setAdminTab(\'contenedores\')">🚢 Contenedores</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -8113,12 +8179,190 @@ function renderAdminContent() {
   else if (adminTab === 'tasas')     renderAdminTasas();
   else if (adminTab === 'cajas')     renderAdminCajas();
   else if (adminTab === 'comisiones') renderAdminComisiones();
+  else if (adminTab === 'contenedores') renderAdminContenedores();
   else if (adminTab === 'categorias') {
     var el=document.getElementById('admin-content');if(!el)return;
     el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:12px">🏷️ Categorías</div><div id="cat-manager-content"></div>';
     renderCatManager();
   }
 }
+
+// ── ADMIN CONTENEDORES ────────────────────────────────────────
+var _cntDetalle = null; // id del contenedor en detalle, null = lista
+
+function renderAdminContenedores() {
+  var el = document.getElementById('admin-content'); if (!el) return;
+  if (_cntDetalle) { _renderCntDetalle(_cntDetalle); return; }
+
+  var estadoCol = {recibido:'var(--color-text-success)', en_transito:'var(--color-text-info)', retrasado:'var(--color-text-danger)'};
+  var estadoIco = {recibido:'✅', en_transito:'🚢', retrasado:'⚠️'};
+  var estadoLbl = {recibido:'Recibido', en_transito:'En tránsito', retrasado:'Retrasado'};
+
+  var cardsHtml = CONTENEDORES.length ? CONTENEDORES.map(function(c){
+    var movsCnt = STOCK_MOVS.filter(function(m){return m.contenedor===c.id&&m.tipo==='entrada';}).length;
+    var resCnt  = (typeof S!=='undefined'&&S.reservas?S.reservas:[]).filter(function(r){return r.contenedor===c.id&&r.activa;}).length;
+    var estC = estadoCol[c.estado]||'var(--color-text-secondary)';
+    var estI = estadoIco[c.estado]||'📦';
+    var estL = estadoLbl[c.estado]||c.estado;
+    return '<div class="adm-card" style="cursor:pointer;border:1px solid var(--color-border-secondary)" onclick="_cntDetalle=\''+c.id+'\';renderAdminContenedores()">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+      +'<div><div style="font-weight:700;font-size:13px">'+c.id+'</div>'
+      +(c.nombre&&c.nombre!==c.id?'<div style="font-size:11px;color:var(--color-text-secondary)">'+c.nombre+'</div>':'')'
+      +'</div>'
+      +'<div style="font-size:11px;font-weight:600;color:'+estC+'">'+estI+' '+estL+'</div>'
+      +'</div>'
+      +(c.eta?'<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">ETA: '+fD(c.eta)+'</div>':'')
+      +'<div style="display:flex;gap:10px;font-size:11px">'
+      +'<span>📥 '+movsCnt+' entrada'+(movsCnt===1?'':'s')+'</span>'
+      +'<span>📋 '+resCnt+' reserva'+(resCnt===1?'':'s')+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:10px" onclick="event.stopPropagation()">'
+      +'<button class="adm-btn" style="font-size:11px;padding:3px 8px" onclick="_editCnt(\''+c.id+'\')">✏️ Editar</button>'
+      +'<button class="adm-btn" style="font-size:11px;padding:3px 8px;color:var(--color-text-danger)" onclick="_delCnt(\''+c.id+'\')">✕</button>'
+      +'</div>'
+      +'</div>';
+  }).join('') : '<div style="text-align:center;padding:30px;color:var(--color-text-tertiary);font-size:12px">Sin contenedores. Crea uno abajo.</div>';
+
+  el.innerHTML = '<div style="font-size:14px;font-weight:700;margin-bottom:16px">🚢 Contenedores</div>'
+    +'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:14px">Asocia entradas de stock y reservas a un contenedor para rastrear qué pedidos van en cada envío.</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:20px">'+cardsHtml+'</div>'
+    +'<div class="adm-card" id="cnt-form-wrap">'
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:12px" id="cnt-form-title">➕ Nuevo contenedor</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:500px">'
+    +'<div style="grid-column:1/-1"><label class="adm-lbl-f"># Contenedor *</label><input class="adm-inp" id="cnt-id-inp" placeholder="CNT-2026-A"></div>'
+    +'<div style="grid-column:1/-1"><label class="adm-lbl-f">Nombre descriptivo</label><input class="adm-inp" id="cnt-nombre-inp" placeholder="Container julio España"></div>'
+    +'<div><label class="adm-lbl-f">Estado</label><select class="adm-inp" id="cnt-estado-sel">'
+    +'<option value="en_transito">🚢 En tránsito</option>'
+    +'<option value="retrasado">⚠️ Retrasado</option>'
+    +'<option value="recibido">✅ Recibido</option>'
+    +'</select></div>'
+    +'<div><label class="adm-lbl-f">ETA (fecha estimada)</label><input class="adm-inp" type="date" id="cnt-eta-inp"></div>'
+    +'<div style="grid-column:1/-1"><label class="adm-lbl-f">Notas</label><input class="adm-inp" id="cnt-notas-inp" placeholder="Forwarder, puerto, referencia..."></div>'
+    +'</div>'
+    +'<input type="hidden" id="cnt-edit-id" value="">'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button class="adm-btn adm-btn-p" onclick="_saveCnt()">✓ Guardar contenedor</button>'
+    +'<button class="adm-btn" id="cnt-cancel-btn" style="display:none" onclick="_cancelEditCnt()">Cancelar</button>'
+    +'</div></div>';
+}
+
+function _saveCnt() {
+  var id   = (document.getElementById('cnt-id-inp')||{}).value.trim().toUpperCase();
+  var nombre = (document.getElementById('cnt-nombre-inp')||{}).value.trim();
+  var estado = (document.getElementById('cnt-estado-sel')||{}).value||'en_transito';
+  var eta  = (document.getElementById('cnt-eta-inp')||{}).value||'';
+  var notas= (document.getElementById('cnt-notas-inp')||{}).value.trim();
+  var editId = (document.getElementById('cnt-edit-id')||{}).value||'';
+  if(!id){showToast('⚠ El # de contenedor es obligatorio');return;}
+  if(!editId && CONTENEDORES.find(function(c){return c.id===id;})){showToast('⚠ Ya existe ese # de contenedor');return;}
+  if(editId){
+    var idx=CONTENEDORES.findIndex(function(c){return c.id===editId;});
+    if(idx>=0)CONTENEDORES[idx]={id:id,nombre:nombre||id,estado:estado,eta:eta,notas:notas};
+  } else {
+    CONTENEDORES.push({id:id,nombre:nombre||id,estado:estado,eta:eta,notas:notas});
+  }
+  _saveContenedores();
+  showToast('✓ Contenedor '+id+' guardado');
+  renderAdminContenedores();
+}
+
+function _editCnt(id) {
+  var c=CONTENEDORES.find(function(x){return x.id===id;});if(!c)return;
+  renderAdminContenedores(); // reset form
+  setTimeout(function(){
+    var fi=document.getElementById('cnt-id-inp');
+    var fn=document.getElementById('cnt-nombre-inp');
+    var fe=document.getElementById('cnt-estado-sel');
+    var feta=document.getElementById('cnt-eta-inp');
+    var fno=document.getElementById('cnt-notas-inp');
+    var feid=document.getElementById('cnt-edit-id');
+    var ftit=document.getElementById('cnt-form-title');
+    var fcancel=document.getElementById('cnt-cancel-btn');
+    if(fi)fi.value=c.id;
+    if(fn)fn.value=c.nombre||'';
+    if(fe)fe.value=c.estado||'en_transito';
+    if(feta)feta.value=c.eta||'';
+    if(fno)fno.value=c.notas||'';
+    if(feid)feid.value=c.id;
+    if(ftit)ftit.textContent='✏️ Editar: '+c.id;
+    if(fcancel)fcancel.style.display='';
+  },0);
+}
+
+function _cancelEditCnt(){
+  var feid=document.getElementById('cnt-edit-id');
+  if(feid)feid.value='';
+  renderAdminContenedores();
+}
+
+function _delCnt(id){
+  if(!confirm('¿Eliminar contenedor '+id+'? Las entradas y reservas asociadas perderán esta referencia.'))return;
+  CONTENEDORES=CONTENEDORES.filter(function(c){return c.id!==id;});
+  _saveContenedores();
+  showToast('Contenedor '+id+' eliminado');
+  renderAdminContenedores();
+}
+
+function _renderCntDetalle(cntId){
+  var el=document.getElementById('admin-content');if(!el)return;
+  var c=CONTENEDORES.find(function(x){return x.id===cntId;});
+  if(!c){_cntDetalle=null;renderAdminContenedores();return;}
+  var estadoCol={recibido:'var(--color-text-success)',en_transito:'var(--color-text-info)',retrasado:'var(--color-text-danger)'};
+  var estadoIco={recibido:'✅',en_transito:'🚢',retrasado:'⚠️'};
+  var estadoLbl={recibido:'Recibido',en_transito:'En tránsito',retrasado:'Retrasado'};
+  var estC=estadoCol[c.estado]||'var(--color-text-secondary)';
+  var movs=STOCK_MOVS.filter(function(m){return m.contenedor===cntId&&m.tipo==='entrada';});
+  var reservas=(typeof S!=='undefined'&&S.reservas?S.reservas:[]).filter(function(r){return r.contenedor===cntId;});
+
+  // Resumen por producto de entradas
+  var prodMap={};
+  movs.forEach(function(m){
+    if(!prodMap[m.producto])prodMap[m.producto]=0;
+    prodMap[m.producto]+=m.cantidad;
+  });
+
+  var movsHtml=Object.keys(prodMap).length
+    ?'<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Producto</th><th style="text-align:right">Uds entradas</th></tr></thead><tbody>'
+      +Object.keys(prodMap).sort().map(function(pn){
+        return '<tr><td style="font-size:12px">'+pn+'</td><td style="text-align:right;font-weight:600">'+fN(prodMap[pn],0)+'</td></tr>';
+      }).join('')
+      +'</tbody></table></div>'
+    :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:14px 0">Sin entradas de stock registradas para este contenedor.</div>';
+
+  var resHtml=reservas.length
+    ?'<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Cliente</th><th>Vendedor</th><th>Almacén</th><th>Fecha</th><th>Productos</th><th style="text-align:right">Total</th><th>Estado</th></tr></thead><tbody>'
+      +reservas.map(function(r){
+        return '<tr>'
+          +'<td style="font-size:12px">'+(r.cli||'Walk-in')+(r.nota?'<br><span style="color:var(--color-text-tertiary);font-size:10px">'+r.nota+'</span>':'')+'</td>'
+          +'<td style="font-size:11px">'+r.user+'</td>'
+          +'<td style="font-size:11px">'+r.alm+'</td>'
+          +'<td style="font-size:11px">'+r.fecha+'</td>'
+          +'<td style="font-size:11px;color:var(--color-text-secondary)">'+r.lineas.map(function(l){return l.q+'× '+l.n;}).join(', ')+'</td>'
+          +'<td style="text-align:right;font-weight:600">'+fN(r.totalUSD)+' USD</td>'
+          +'<td style="font-size:11px">'+( r.activa?'<span style="color:var(--color-text-info)">Activa</span>':'<span style="color:var(--color-text-tertiary)">Cerrada</span>' )+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>'
+    :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:14px 0">Sin reservas asociadas a este contenedor.</div>';
+
+  el.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
+    +'<button class="adm-btn" onclick="_cntDetalle=null;renderAdminContenedores()">← Volver</button>'
+    +'<div><div style="font-size:16px;font-weight:800">'+c.id+'</div>'
+    +(c.nombre&&c.nombre!==c.id?'<div style="font-size:12px;color:var(--color-text-secondary)">'+c.nombre+'</div>':'')
+    +'</div>'
+    +'<div style="margin-left:auto;font-size:13px;font-weight:700;color:'+estC+'">'+estadoIco[c.estado]+' '+estadoLbl[c.estado]+'</div>'
+    +'</div>'
+    +(c.eta?'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px">📅 ETA: <strong>'+fD(c.eta)+'</strong></div>':'')
+    +(c.notas?'<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:16px">📝 '+c.notas+'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-bottom:20px">'
+    +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Entradas</div><div class="adm-val" style="color:var(--color-text-success)">'+movs.length+'</div></div>'
+    +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Reservas</div><div class="adm-val" style="color:var(--color-text-info)">'+reservas.filter(function(r){return r.activa;}).length+'</div></div>'
+    +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Productos</div><div class="adm-val">'+Object.keys(prodMap).length+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:13px;font-weight:600;margin-bottom:8px">📥 Entradas de stock</div>'
+    +movsHtml
+    +'<div style="font-size:13px;font-weight:600;margin:16px 0 8px">📋 Reservas</div>'
+    +resHtml;
 
 // ── COMISIONES ADMIN ─────────────────────────────────────────
 async function renderAdminComisiones(){
@@ -11435,50 +11679,29 @@ function eliminarPrestamo(id) {
     supaReq('DELETE','mov_cajas?'+q).catch(function(e){console.warn('delete inicial:',e);});
   }
   if(typeof _cajasMovs!=='undefined') {
-    var cIdx=_cajasMovs.findIndex(function(m){return m.fecha===p.fechaInicio && m.monto_origen===p.capital && m.notas===descApertura;});
-    if(cIdx>=0) _cajasMovs.splice(cIdx,1);
-  }
-
-  PRESTAMOS = PRESTAMOS.filter(function(x){ return x.id !== id; });
-  savePrestamos(null, id);
-  if(typeof renderDeudas === 'function') renderDeudas();
-  else if(typeof renderPrestamos === 'function') renderPrestamos();
-}
-
-function toggleDeudasLiquidadas() {
-  var act = localStorage.getItem('erp_mostrar_liquidadas') === 'true';
-  localStorage.setItem('erp_mostrar_liquidadas', !act);
-  if(typeof renderDeudas === 'function') renderDeudas();
-}
-
-</script>
-
-<script>
-
-
-
-
-
-// ==SCRIPT==
-
-
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// MÓDULO: MOVIMIENTOS DE STOCK
-// Tipos: entrada, salida, ajuste, traslado
-// ═══════════════════════════════════════════════════════════════
-
-var STOCK_MOVS = (function(){
-  try { return JSON.parse(localStorage.getItem('erp_stock_movs')||'[]'); } catch(e) { return []; }
-})();
-
-function saveStockMovs() {
-  try { localStorage.setItem('erp_stock_movs', JSON.stringify(STOCK_MOVS.slice(0,500))); } catch(e) {}
-}
-
-// Apply a movement to PRODS array
+    var cIdx=_cajas    if (!movs.length) {
+      html += '<div style="text-align:center;padding:30px;color:var(--color-text-tertiary)">Sin movimientos registrados</div>';
+    } else {
+      html += '<div class="adm-table-wrap"><table class="adm-table"><thead><tr>'
+        + '<th>Fecha</th><th>Tipo</th><th>Producto</th><th>Almacén</th><th style="text-align:right">Cant.</th><th>Contenedor</th><th>Motivo</th><th>Usuario</th>'
+        + '</tr></thead><tbody>'
+        + movs.map(function(m){
+            var dest = (m.tipo === 'traslado' && m.almacenDest) ? ' → '+m.almacenDest : '';
+            return '<tr>'
+              + '<td style="font-size:11px">'+fD(m.fecha)+'</td>'
+              + '<td style="font-size:11px;color:'+(tipoColor[m.tipo]||'')+'">'+( tipoIcon[m.tipo]||'')+' '+m.tipo.replace('_',' ')+'</td>'
+              + '<td style="font-size:11px;max-width:140px">'+m.producto+'</td>'
+              + '<td style="font-size:11px">'+m.almacen+dest+'</td>'
+              + '<td style="text-align:right;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'
+              + (m.tipo==='salida'||m.tipo==='ajuste_baja'?'−':m.tipo==='traslado'?'↔':'+')
+              + m.cantidad+'</td>'
+              + '<td style="font-size:11px">'+(m.contenedor?_cntBadge(m.contenedor):'<span style="color:var(--color-text-tertiary)">—</span>')+'</td>'
+              + '<td style="font-size:11px;color:var(--color-text-secondary)">'+(m.motivo||'—')+'</td>'
+              + '<td style="font-size:11px;color:var(--color-text-tertiary)">'+m.usuario+'</td>'
+              + '</tr>';
+          }).join('')
+        + '</tbody></table></div>';
+    }rray
 function applyStockMov(mov) {
   var p = PRODS.find(function(x){ return x.n === mov.producto; });
   if (!p) return false;
@@ -11512,6 +11735,7 @@ function registrarMovStock(data) {
     almacenDest: data.almacenDest || '',
     cantidad: parseFloat(data.cantidad) || 0,
     motivo: data.motivo || '',
+    contenedor: data.contenedor || '',
     usuario: (typeof S !== 'undefined' && S.user) || 'Admin'
   };
   if (!applyStockMov(mov)) { showToast('Producto no encontrado'); return false; }
@@ -11528,13 +11752,14 @@ function registrarMovStock(data) {
       almacen_dest: mov.almacenDest||'',
       cantidad: mov.cantidad,
       motivo: mov.motivo||'',
+      contenedor: mov.contenedor||'',
       usuario: mov.usuario
     }).catch(function(e){console.warn('mov supabase:',e);});
   } else {
     enqueue({method:'POST',path:'stock_movimientos',body:{
       id:mov.id,fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
       almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
-      cantidad:mov.cantidad,motivo:mov.motivo||'',usuario:mov.usuario
+      cantidad:mov.cantidad,motivo:mov.motivo||'',contenedor:mov.contenedor||'',usuario:mov.usuario
     }});
   }
   // Sync stock to Supabase
@@ -11622,6 +11847,16 @@ function renderStockMovimientos() {
       + '<input class="adm-inp" type="date" id="smov-fecha" value="'+today()+'"></div>'
       + '<div style="grid-column:1/-1"><label class="adm-lbl-f">Motivo / Referencia</label>'
       + '<input class="adm-inp" id="smov-motivo" placeholder="Ej: Llegada container #3, Merma transporte..."></div>'
+      + '<div id="smov-cnt-wrap" style="grid-column:1/-1"><label class="adm-lbl-f">🚢 Lote / Contenedor (para entradas)</label>'
+      + '<select class="adm-inp" id="smov-cnt">'
+      + '<option value="">— Sin lote —</option>'
+      + CONTENEDORES.map(function(c){
+          var ic=c.estado==='retrasado'?'⚠️':(c.estado==='recibido'||c.estado==='cerrado'?'✅':(c.estado==='en_transito'||c.estado==='en_aduana'||c.estado==='en_puerto'?'🚢':'📦'));
+          var lbl=(c.lote||c.ref)+(c.lote&&c.ref&&c.lote!==c.ref?' (• '+c.ref+')':'');
+          var val=c.lote||c.ref;
+          return '<option value="'+val+'">'+ic+' Lote: '+lbl+'</option>';
+        }).join('')
+      + '</select></div>'
       + '</div>'
       + '<button class="adm-btn adm-btn-p" style="margin-top:14px" onclick="admRegistrarMovStock()">Registrar movimiento</button>'
       + '</div>';
@@ -11676,6 +11911,7 @@ function admRegistrarMovStock() {
   var qty    = parseFloat((document.getElementById('smov-qty') || {}).value) || 0;
   var fecha  = (document.getElementById('smov-fecha') || {}).value || today();
   var motivo = (document.getElementById('smov-motivo') || {}).value || '';
+  var cnt    = (document.getElementById('smov-cnt') || {}).value || '';
 
   if (!tipo || !prod) { showToast('Selecciona tipo y producto'); return; }
   if (qty <= 0) { showToast('La cantidad debe ser mayor que 0'); return; }
@@ -11683,18 +11919,20 @@ function admRegistrarMovStock() {
 
   var data = {
     tipo: tipo, producto: prod, almacen: alm,
-    almacenDest: almD, cantidad: qty, fecha: fecha, motivo: motivo
+    almacenDest: almD, cantidad: qty, fecha: fecha, motivo: motivo, contenedor: cnt
   };
   var ok = registrarMovStock(data);
   if (ok) {
-    showToast('✓ Movimiento registrado: ' + qty + ' uds ' + tipo);
+    showToast('✓ Movimiento registrado: ' + qty + ' uds ' + tipo + (cnt?' · '+cnt:''));
     // Re-render stock table immediately
     if (typeof renderStock === 'function') renderStock();
     // Reset form fields but keep tipo/alm selection
     var qEl = document.getElementById('smov-qty');
     var mEl = document.getElementById('smov-motivo');
+    var cEl = document.getElementById('smov-cnt');
     if (qEl) qEl.value = '1';
     if (mEl) mEl.value = '';
+    if (cEl) cEl.value = '';
   } else {
     showToast('Error: producto no encontrado');
   }
@@ -12509,8 +12747,13 @@ function _showFormCnt(c) {
     +'<div style="font-size:16px;font-weight:700;margin-bottom:16px">🚢 '+(isEdit?'Editar Contenedor':'Nuevo Contenedor')+'</div>'
     
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
-    +'<div><label class="lbl">Referencia (EJ: MSKU-1234) *</label><input type="text" id="fcnt-ref" class="adm-inp" value="'+(isEdit?c.ref:'')+'"></div>'
-    +'<div><label class="lbl">Estado</label><select id="fcnt-est" class="adm-sel">'
+    +'<div><label class="lbl">Referencia Contenedor (EJ: MSKU-1234) *</label><input type="text" id="fcnt-ref" class="adm-inp" value="'+(isEdit?c.ref:'')+'"></div>'
+    +'<div><label class="lbl"># Lote (ID de pedido/lote)</label><input type="text" id="fcnt-lote" class="adm-inp" placeholder="Auto = misma referencia" value="'+(isEdit?(c.lote||''):'')+'"></div>'
+    +'<div style="grid-column:1/-1;font-size:10px;color:var(--color-text-tertiary);margin-top:-6px">El # Lote es el código que se asocia a entradas de stock y reservas. Si lo dejas vacío, usará la referencia del contenedor.</div>'
+    +'</div>'
+    
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
+    +'<div style="grid-column:1/-1"><label class="lbl">Estado</label><select id="fcnt-est" class="adm-sel">'
     +'<option value="preparando" '+(isEdit&&c.estado==='preparando'?'selected':'')+'>Preparando</option>'
     +'<option value="reservado" '+(isEdit&&c.estado==='reservado'?'selected':'')+'>Reservado</option>'
     +'<option value="en_puerto" '+(isEdit&&c.estado==='en_puerto'?'selected':'')+'>En Puerto (Origen)</option>'
@@ -12544,6 +12787,7 @@ function _showFormCnt(c) {
 function saveFormContenedor(id) {
   var ref=document.getElementById('fcnt-ref').value.trim();
   if(!ref){showToast('Referencia obligatoria');return;}
+  var lote=(document.getElementById('fcnt-lote')||{value:''}).value.trim()||ref;
   var est=document.getElementById('fcnt-est').value;
   var prov=document.getElementById('fcnt-prov').value.trim();
   var trans=document.getElementById('fcnt-trans').value.trim();
@@ -12555,20 +12799,20 @@ function saveFormContenedor(id) {
   if (id) {
     var c=CONTENEDORES.find(function(x){return x.id===id;});
     if(c) {
-      c.ref=ref; c.estado=est; c.proveedor=prov; c.transitario=trans; 
+      c.ref=ref; c.lote=lote; c.estado=est; c.proveedor=prov; c.transitario=trans; 
       c.moneda=mon; c.almacen_destino=dest; c.fecha_eta=eta; c.notas=notas;
       saveContenedor(c);
       showToast('Contenedor actualizado');
     }
   } else {
     var nc = {
-      id:'cnt-'+Date.now(), ref:ref, estado:est, proveedor:prov, transitario:trans,
+      id:'cnt-'+Date.now(), ref:ref, lote:lote, estado:est, proveedor:prov, transitario:trans,
       moneda:mon, almacen_destino:dest, fecha_eta:eta, notas:notas,
       gastos:[], audit_log:[], created_at:new Date().toISOString()
     };
     CONTENEDORES.unshift(nc);
     saveContenedor(nc);
-    showToast('Contenedor creado');
+    showToast('Contenedor / Lote '+lote+' creado');
   }
   document.getElementById('cnt-form-modal').style.display='none';
 }
