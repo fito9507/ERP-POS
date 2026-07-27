@@ -838,7 +838,7 @@ function transitCardHTML(p){
   var showPrice = pvPrice > 0;
   return '<div class="card" style="border:1px solid rgba(245,158,11,.35);position:relative">'
     +'<div class="card-img" style="position:relative">'
-    +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="cursor:zoom-in" onclick="_zoomImg(this.src)" title="Ampliar imagen">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(function(){
         var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
         b+='<div style="background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
@@ -912,7 +912,7 @@ function cardHTML(p){
   if(_isRes) stkLabel = '<span style="color:#7c3aed;font-weight:600">🔒 Reservado</span>';
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="cursor:zoom-in" onclick="_zoomImg(this.src)" title="Ampliar imagen">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(function(){
         var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
         if(_transit) b+='<div style="background:#f59e0b;color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
@@ -1031,7 +1031,7 @@ function encargoCardHTML(p){
 
     +'<div class="card-img" style="position:relative">'
 
-    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
+    +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="cursor:zoom-in" onclick="_zoomImg(this.src)" title="Ampliar imagen">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
 
     +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
 
@@ -1235,6 +1235,20 @@ function renderEsquemaCalculado(esquemaStr, price, qty) {
 }
 
 function esc(s){ return (s||'').replace(/['"<>&]/g,function(c){return {'\'':'&#39;','"':'&quot;','<':'&lt;','>':'&gt;','&':'&amp;'}[c];}); }
+
+function _zoomImg(src) {
+  var mo = document.getElementById('img-zoom-modal');
+  if (!mo) {
+    mo = document.createElement('div'); mo.id = 'img-zoom-modal';
+    mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;transition:opacity 0.2s;opacity:0';
+    mo.onclick = function() { mo.style.opacity = 0; setTimeout(function(){ mo.style.display = 'none'; }, 200); };
+    mo.innerHTML = '<img id="img-zoom-target" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.5)">';
+    document.body.appendChild(mo);
+  }
+  document.getElementById('img-zoom-target').src = src;
+  mo.style.display = 'flex';
+  setTimeout(function(){ mo.style.opacity = 1; }, 10);
+}
 
 // ── CART ──────────────────────────────────────────────────
 function getQtyInpIdx(idx){ return document.querySelector('.qty-inp[data-idx="'+idx+'"]'); }
