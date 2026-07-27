@@ -1472,6 +1472,19 @@ function showToast(msg){
   clearTimeout(_gToastTimer);_gToastTimer=setTimeout(()=>t.style.opacity=0,2800);
 }
 
+function _zoomImg(src) {
+  var mo = document.getElementById('img-zoom-modal');
+  if (!mo) {
+    mo = document.createElement('div'); mo.id = 'img-zoom-modal';
+    mo.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;transition:opacity 0.2s';
+    mo.onclick = function() { mo.style.display = 'none'; };
+    mo.innerHTML = '<img id="img-zoom-target" style="max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.5)">';
+    document.body.appendChild(mo);
+  }
+  document.getElementById('img-zoom-target').src = src;
+  mo.style.display = 'flex';
+}
+
 function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
 
 function today(){return new Date().toISOString().slice(0,10);}
@@ -8682,7 +8695,7 @@ function renderFormProducto() {
     + '</div>'
     + '<div style="margin-top:14px;padding:14px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">'
     + '<div style="font-size:12px;font-weight:600;margin-bottom:10px">🖼️ Foto del producto (catálogo público)</div>'
-    + (p.img ? '<img src="'+p.img+'" style="width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block" onerror="this.style.display=\'none\'">' : '')
+    + (p.img ? '<img src="'+p.img+'" style="width:100%;max-width:240px;border-radius:8px;margin-bottom:10px;display:block;cursor:zoom-in" onclick="_zoomImg(this.src)" onerror="this.style.display=\'none\'" title="Click para ampliar">' : '')
     + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
     + '<input type="file" id="ep-img-file" accept="image/*" style="display:none" onchange="admUploadImg(this,' + (isNew?-1:editingProd) + ')">'
     + '<button class="adm-btn" onclick="document.getElementById(\'ep-img-file\').click()" id="btn-upload-img">📷 Subir foto</button>'
