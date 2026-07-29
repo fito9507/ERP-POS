@@ -2945,7 +2945,7 @@ async function syncLoadContenedores() {
 async function syncLoadStockMovs() {
   if (!_supaOnline || typeof supaReq !== 'function') return false;
   try {
-    var r = await supaReq('GET', 'stock_movimientos?select=*&order=fecha.desc,created_at.desc&limit=1000');
+    var r = await supaReq('GET', 'stock_movimientos?select=*&order=fecha.desc,created_at.desc&limit=5000');
     if (!r.ok) return false;
     var data = await r.json();
     if (!Array.isArray(data)) return false;
@@ -11994,6 +11994,10 @@ function renderStockMovimientos() {
   if (!el) return;
   var _isAdmStock = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
 
+  var wasFocused = document.activeElement && document.activeElement.id === 'smov-q';
+  var selStart = 0;
+  if (wasFocused) selStart = document.activeElement.selectionStart || 0;
+
   var html = '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
     + (_isAdmStock ? '<button class="adm-tab'+(_stockMovTab==='nuevo'?' act':'')+'" onclick="_stockMovTab=\'nuevo\';renderStockMovimientos()">📥 Nuevo movimiento</button>' : '')
     + '<button class="adm-tab'+(_stockMovTab==='historial'?' act':'')+'" onclick="_stockMovTab=\'historial\';renderStockMovimientos()">📋 Historial</button>'
@@ -12054,15 +12058,16 @@ function renderStockMovimientos() {
 
   } else {
     // Historial
-    var q = (document.getElementById('smov-q')?.value||'').toLowerCase();
-    var movs = STOCK_MOVS.filter(function(m){ return !q || m.producto.toLowerCase().includes(q) || m.motivo.toLowerCase().includes(q); });
+    var rawQ = document.getElementById('smov-q')?.value || '';
+    var q = rawQ.toLowerCase();
+    var movs = STOCK_MOVS.filter(function(m){ return !q || m.producto.toLowerCase().includes(q) || (m.motivo||'').toLowerCase().includes(q); });
     var tipoColor = { entrada:'var(--color-text-success)', salida:'var(--color-text-danger)',
       traslado:'var(--color-text-info)', ajuste_abs:'var(--color-text-secondary)',
       ajuste_alta:'var(--color-text-success)', ajuste_baja:'var(--color-text-warning)' };
     var tipoIcon = { entrada:'📥', salida:'📤', traslado:'🔄', ajuste_abs:'✏️', ajuste_alta:'➕', ajuste_baja:'➖' };
 
     html += '<div style="display:flex;gap:8px;margin-bottom:10px">'
-      + '<input class="adm-inp" id="smov-q" placeholder="Buscar producto o motivo..." '
+      + '<input class="adm-inp" id="smov-q" placeholder="Buscar producto o motivo..." value="'+rawQ.replace(/"/g,'&quot;')+'" '
       + 'oninput="_dRender(function(){renderStockMovimientos()})" style="flex:1;max-width:300px">'
       + '<span style="font-size:12px;color:var(--color-text-tertiary);align-self:center">'+movs.length+' movimientos</span>'
       + '</div>';
@@ -12096,6 +12101,14 @@ function renderStockMovimientos() {
   }
 
   el.innerHTML = html;
+  
+  if (wasFocused) {
+    var inp = document.getElementById('smov-q');
+    if (inp) {
+      inp.focus();
+      try { inp.setSelectionRange(selStart, selStart); } catch(e) {}
+    }
+  }
 }
 
 // ── EDITAR LOTE / MOTIVO DE MOVIMIENTO EXISTENTE ────────────────
