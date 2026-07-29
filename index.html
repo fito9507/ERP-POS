@@ -12152,6 +12152,39 @@ function _saveMovLote() {
   var motivo = (document.getElementById('mov-edit-motivo')||{}).value||'';
   var m = STOCK_MOVS.find(function(x){ return String(x.id) === String(id); });
   if (!m) { showToast('Movimiento no encontrado'); return; }
+  
+  var oldCnt = m.contenedor || '';
+  if (oldCnt !== cnt && typeof adjustStockByDelta === 'function') {
+    var p = PRODS.find(function(x){ return x.n === m.producto; });
+    if (p) {
+      var q = m.cantidad || 0;
+      var oldLote = oldCnt || 'SIN LOTE';
+      var newLote = cnt || 'SIN LOTE';
+      (async function() {
+        if (!p.supaId && typeof _supaOnline !== 'undefined' && _supaOnline && typeof supaReq === 'function') {
+          try {
+            var lr = await supaReq('GET','productos?nombre=eq.'+encodeURIComponent(p.n)+'&select=id');
+            if (lr.ok) { var ld=await lr.json(); if(ld&&ld[0]) p.supaId=ld[0].id; }
+          } catch(e) {}
+        }
+        if (m.tipo === 'entrada' || m.tipo === 'ajuste_alta') {
+          await adjustStockByDelta(p, m.almacen, -q, oldLote);
+          await adjustStockByDelta(p, m.almacen, q, newLote);
+        } else if (m.tipo === 'salida' || m.tipo === 'ajuste_baja') {
+          await adjustStockByDelta(p, m.almacen, q, oldLote);
+          await adjustStockByDelta(p, m.almacen, -q, newLote);
+        } else if (m.tipo === 'traslado') {
+          await adjustStockByDelta(p, m.almacen, q, oldLote);
+          await adjustStockByDelta(p, m.almacenDest, -q, oldLote);
+          await adjustStockByDelta(p, m.almacen, -q, newLote);
+          await adjustStockByDelta(p, m.almacenDest, q, newLote);
+        }
+        offlineSaveProds();
+        if (typeof renderStock === 'function') renderStock();
+      })();
+    }
+  }
+
   m.contenedor = cnt;
   m.motivo = motivo;
   saveStockMovs();
