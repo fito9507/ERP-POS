@@ -8349,7 +8349,6 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'tasas'  ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
     + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
     + '<button class="adm-tab' + (adminTab === 'comisiones' ? ' act' : '') + '" onclick="setAdminTab(\'comisiones\')">🏆 Comisiones</button>'
-    + '<button class="adm-tab' + (adminTab === 'contenedores' ? ' act' : '') + '" onclick="setAdminTab(\'contenedores\')">🚢 Contenedores</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -8371,7 +8370,6 @@ function renderAdminContent() {
   else if (adminTab === 'tasas')     renderAdminTasas();
   else if (adminTab === 'cajas')     renderAdminCajas();
   else if (adminTab === 'comisiones') renderAdminComisiones();
-  else if (adminTab === 'contenedores') renderAdminContenedores();
   else if (adminTab === 'categorias') {
     var el=document.getElementById('admin-content');if(!el)return;
     el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:12px">🏷️ Categorías</div><div id="cat-manager-content"></div>';
