@@ -11928,7 +11928,6 @@ function registrarMovStock(data) {
   // Save to Supabase
   if (_supaOnline) {
     supaReq('POST','stock_movimientos',{
-      id: mov.id,
       fecha: mov.fecha,
       tipo: mov.tipo,
       producto: mov.producto,
@@ -11938,10 +11937,19 @@ function registrarMovStock(data) {
       motivo: mov.motivo||'',
       contenedor: mov.contenedor||'',
       usuario: mov.usuario
+    }).then(async function(r){
+      if(r.ok){
+        var d = await r.json();
+        if(d&&d.length&&d[0].id){
+          mov.id = d[0].id;
+          saveStockMovs();
+          if(typeof renderStockMovimientos === 'function') try { renderStockMovimientos(); } catch(e){}
+        }
+      }
     }).catch(function(e){console.warn('mov supabase:',e);});
   } else {
     enqueue({method:'POST',path:'stock_movimientos',body:{
-      id:mov.id,fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
+      fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
       almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
       cantidad:mov.cantidad,motivo:mov.motivo||'',contenedor:mov.contenedor||'',usuario:mov.usuario
     }});
