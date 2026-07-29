@@ -2437,6 +2437,7 @@ async function supaInit() {
     await syncLoadPrestamos();
     await syncLoadContenedores();
     await syncLoadMovsIG();
+    await syncLoadStockMovs();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -2939,6 +2940,39 @@ async function syncLoadContenedores() {
     if (typeof renderContenedores === 'function') try { renderContenedores(); } catch(e) {}
     return true;
   } catch(e) { console.warn('syncLoadContenedores:', e); return false; }
+}
+
+async function syncLoadStockMovs() {
+  if (!_supaOnline || typeof supaReq !== 'function') return false;
+  try {
+    var r = await supaReq('GET', 'stock_movimientos?select=*&order=fecha.desc,created_at.desc&limit=1000');
+    if (!r.ok) return false;
+    var data = await r.json();
+    if (!Array.isArray(data)) return false;
+
+    STOCK_MOVS = data.map(function(row) {
+      return {
+        id: row.id,
+        fecha: row.fecha || '',
+        tipo: row.tipo || '',
+        producto: row.producto || '',
+        almacen: row.almacen || '',
+        almacenDest: row.almacen_dest || '',
+        cantidad: parseFloat(row.cantidad) || 0,
+        motivo: row.motivo || '',
+        contenedor: row.contenedor || '',
+        usuario: row.usuario || ''
+      };
+    });
+    saveStockMovs();
+    if (typeof renderStockMovimientos === 'function') try { renderStockMovimientos(); } catch(e) {}
+    return true;
+  } catch(e) { console.warn('syncLoadStockMovs:', e); return false; }
+}
+
+function saveStockMovs() {
+  // Not strictly needed in local storage if we always fetch from Supabase, but useful for offline backup
+  try { localStorage.setItem('erp_stock_movs', JSON.stringify(STOCK_MOVS.slice(0, 500))); } catch(e) {}
 }
 
 function _cntToRow(c) {

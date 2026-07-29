@@ -14,7 +14,7 @@ UPDATE stock_almacen sa
 SET 
   costo = COALESCE(p.precio_ddp, p.precio_cif, 0),
   precio_venta = COALESCE(p.precio_min, p.precio_maj, 0),
-  fecha_entrada = COALESCE(sa.created_at, NOW())
+  fecha_entrada = NOW()
 FROM productos p
 WHERE sa.producto_id = p.id
   AND (sa.costo IS NULL OR sa.costo = 0);
