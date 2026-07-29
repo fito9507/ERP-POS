@@ -1,0 +1,228 @@
+{
+  "main": {
+    "id": "23de4b6efd33f588",
+    "type": "split",
+    "children": [
+      {
+        "id": "5a2ce9045f3c774d",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "fc5d7e8423ddb705",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Vista gráfica"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "30caf44e90370def",
+    "type": "split",
+    "children": [
+      {
+        "id": "4da1fe21dc50484f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "7061e1c4c4600f08",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Explorador de archivos"
+            }
+          },
+          {
+            "id": "3dc2b854301f9645",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Buscar"
+            }
+          },
+          {
+            "id": "a453f3cbe441f135",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Marcadores"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "1d816b11c9cf4fed",
+    "type": "split",
+    "children": [
+      {
+        "id": "c46de8e3dea96066",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d32a6b8feb962c59",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "Business/10 Normativas/goc-2022-ex6 RC 1 2021 aranceles para el comercio exterior 1.pdf",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Enlaces entrantes de goc-2022-ex6 RC 1 2021 aranceles para el comercio exterior 1"
+            }
+          },
+          {
+            "id": "f16d4c0715a43eb0",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Enlaces salientes"
+            }
+          },
+          {
+            "id": "430ebc9a50ef7b8d",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Etiquetas"
+            }
+          },
+          {
+            "id": "c0a3c0105e5de979",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "Todas las propiedades"
+            }
+          },
+          {
+            "id": "d32191cad6898124",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Esquema"
+            }
+          },
+          {
+            "id": "abe02d2b9ffa4105",
+            "type": "leaf",
+            "state": {
+              "type": "smart-connections-view",
+              "state": {},
+              "icon": "lucide-ghost",
+              "title": "smart-connections-view"
+            }
+          },
+          {
+            "id": "4a2f7b07e931cf59",
+            "type": "leaf",
+            "state": {
+              "type": "smart-lookup-view-connections",
+              "state": {},
+              "icon": "lucide-ghost",
+              "title": "smart-lookup-view-connections"
+            }
+          }
+        ],
+        "currentTab": 6
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Abrir selector rápido": false,
+      "graph:Abrir vista gráfica": false,
+      "canvas:Crear nuevo lienzo": false,
+      "daily-notes:Abrir la nota de hoy": false,
+      "templates:Insertar plantilla": false,
+      "command-palette:Abrir paleta de comandos": false,
+      "bases:Crear nueva base": false,
+      "smart-connections:Smart Connections: Open connections view": false,
+      "smart-connections:Toggle Footer Connections": false,
+      "smart-connections:Smart Connections: Open random connection": false,
+      "smart-connections:Smart Lookup: Open lookup view": false,
+      "omnisearch:Omnisearch": false
+    }
+  },
+  "active": "fc5d7e8423ddb705",
+  "lastOpenFiles": [
+    "Manual de Cajas y Préstamos.md",
+    "docs/Arquitectura.md",
+    "Business/04 Logistica/Forwarders Cuba.md",
+    "Business/10 Normativas/Aranceles Cuba.md",
+    "Business/10 Normativas/goc-2022-ex6 RC 1 2021 aranceles para el comercio exterior.pdf",
+    "Business/10 Normativas/goc-2022-ex6 RC 1 2021 aranceles para el comercio exterior 1.pdf",
+    "Business/10 Normativas/Sin título.canvas",
+    "goc-2022-ex6 RC 1 2021 aranceles para el comercio exterior 1.pdf",
+    "Business/06 SOPs/Sin título.canvas",
+    "Business/06 SOPs/SOP - Revision BL Cuba.md",
+    "Business/06 SOPs/Sin título.base",
+    "Business/04 Logistica/Sin título.canvas",
+    "Business/10 Normativas",
+    "Business/09 Plantillas",
+    "Business/08 IA",
+    "Business/07 Lecciones",
+    "Business/06 SOPs",
+    "Business/05 Finanzas",
+    "docs/Inicio.md"
+  ]
+}

@@ -647,15 +647,20 @@ async function init(){
     }
     PRODS = (rows||[]).map(function(r){
       var stk_alm = {};
-      (r.stock_almacen||[]).forEach(function(s){ stk_alm[s.almacen]=s.cantidad||0; });
+      (r.stock_almacen||[]).forEach(function(s){ stk_alm[s.almacen]=(stk_alm[s.almacen]||0)+(s.cantidad||0); });
       return {
         id: r.id,
         n: r.nombre,
         cat: r.categoria||'',
+        stk_alm: stk_alm,
+        lotes: (r.stock_almacen || []).map(function(s){
+          s.costo = parseFloat(s.costo)||0;
+          s.precio_venta = parseFloat(s.precio_venta)||0;
+          return s;
+        }),
         min: parseFloat(r.precio_min)||0,
         maj: parseFloat(r.precio_maj)||0,
         stk: Object.values(stk_alm).reduce(function(a,b){return a+b;},0),
-        stk_alm: stk_alm,
         img: r.imagen_url||'',
         enStock: r.en_stock!==false,
         enTransito: {Habana:r.en_transito_habana===true, Placetas:r.en_transito_placetas===true, Xportprise:r.en_transito_xportprise===true},
@@ -684,6 +689,32 @@ async function init(){
       };
     }).filter(function(p){ return p.enWeb !== false; });
 
+// ── Motor de Lote Activo ──────────────────────────────────────
+var LOTE_RULE = (typeof localStorage !== 'undefined' && localStorage.getItem('erp_lote_rule')) || 'precio_desc_fifo';
+
+function getLoteActivo(prod, almacen) {
+  var lotes = (prod.lotes || []).filter(function(l) {
+    return l.almacen === almacen && (l.cantidad || 0) > 0;
+  });
+  if (!lotes.length) return null;
+  
+  lotes.sort(function(a, b) {
+    if (LOTE_RULE === 'precio_desc_fifo') {
+      if ((b.precio_venta||0) !== (a.precio_venta||0)) 
+        return (b.precio_venta||0) - (a.precio_venta||0);
+      return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    }
+    if (LOTE_RULE === 'fifo') {
+      return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    }
+    if (LOTE_RULE === 'lifo') {
+      return new Date(b.fecha_entrada||0) - new Date(a.fecha_entrada||0);
+    }
+    return 0;
+  });
+  
+  return lotes[0];
+}
 
 
 
@@ -820,7 +851,9 @@ function transitCardHTML(p){
   var moq = p.moq || 1;
   var moq = p.moq || 1;
   var qty = cartItem ? cartItem.qty : moq;
-  var normPrice = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0);
+  var loteActivo = (typeof getLoteActivo === 'function') ? getLoteActivo(p, ALM) : null;
+  var lotePrecio = (loteActivo && loteActivo.precio_venta > 0) ? loteActivo.precio_venta : 0;
+  var normPrice = lotePrecio > 0 ? lotePrecio : ((ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||p.maj||0));
   
   var pvPrice = null;
   if (p.preventa_min != null) {
@@ -900,8 +933,10 @@ function cardHTML(p){
   // Mayorista si qty >= MIN_MAY (10 uds por defecto)
   var MIN_MAY = p.min_may || 10;
   var isMay = qty >= MIN_MAY && p.maj > 0;
-  var priceMin = (ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0);
-  var priceMaj = (ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0);
+  var loteActivo = (typeof getLoteActivo === 'function') ? getLoteActivo(p, ALM) : null;
+  var lotePrecio = (loteActivo && loteActivo.precio_venta > 0) ? loteActivo.precio_venta : 0;
+  var priceMin = lotePrecio > 0 ? lotePrecio : ((ALM==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0));
+  var priceMaj = lotePrecio > 0 ? lotePrecio : ((ALM==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0));
   var hasEscala = p.escala && p.escala.length > 0;
   var escalaPrice = hasEscala ? (getEscalaPrice(p,qty) || p.escala[0].precio) : null;
   var price = hasEscala ? escalaPrice : (isMay ? priceMaj : priceMin);
@@ -1008,7 +1043,9 @@ function encargoCardHTML(p){
 
   var transito = p.tiempo_transito;
 
-  var price = p.min || p.maj || 0;
+  var loteActivo = (typeof getLoteActivo === 'function') ? getLoteActivo(p, ALM) : null;
+  var lotePrecio = (loteActivo && loteActivo.precio_venta > 0) ? loteActivo.precio_venta : 0;
+  var price = lotePrecio > 0 ? lotePrecio : (p.min || p.maj || 0);
 
   var cifP = p.precio_cif;
 
@@ -1488,8 +1525,10 @@ function getEscalaPrice(p, qty){
 function getCartPrice(i){
   var p = i.prod;
   var isPlac = ALM === 'Placetas';
-  var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min||0);
-  var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj||0);
+  var loteActivo = (typeof getLoteActivo === 'function') ? getLoteActivo(p, ALM) : null;
+  var lotePrecio = (loteActivo && loteActivo.precio_venta > 0) ? loteActivo.precio_venta : 0;
+  var min = lotePrecio > 0 ? lotePrecio : ((isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min||0));
+  var maj = lotePrecio > 0 ? lotePrecio : ((isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj||0));
   var MIN_MAY = p.min_may || 10;
   var isMay = i.qty >= MIN_MAY && maj > 0;
   var isTransit = p.enTransito && p.enTransito[ALM];

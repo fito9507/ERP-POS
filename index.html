@@ -2134,10 +2134,17 @@ async function syncLoadProductos() {
     if (!rows || !rows.length) return true;
     rows.forEach(function(row) {
       var stk_alm = {};
-      (row.stock_almacen || []).forEach(function(s) { stk_alm[s.almacen] = s.cantidad; });
+      (row.stock_almacen || []).forEach(function(s) { stk_alm[s.almacen] = (stk_alm[s.almacen] || 0) + s.cantidad; });
       var stk = Object.values(stk_alm).reduce(function(a,v){return a+v;}, 0);
       var prod = {
         n: row.nombre, cat: row.categoria||'',
+        stk_alm: stk_alm,
+        lotes: (row.stock_almacen || []).map(function(s){
+          return {producto_id:s.producto_id, almacen:s.almacen, lote:s.lote||'SIN LOTE',
+            cantidad:s.cantidad||0, costo:parseFloat(s.costo)||0,
+            precio_venta:parseFloat(s.precio_venta)||0,
+            fecha_entrada:s.fecha_entrada||null};
+        }),
         min: row.precio_min != null ? parseFloat(row.precio_min) : null,
         maj: row.precio_maj != null ? parseFloat(row.precio_maj) : null,
         escala: (function(v){ try{ return v ? (typeof v==='string'?JSON.parse(v):v) : null; }catch(e){ return null; } })(row.precios_escala),
@@ -2183,11 +2190,118 @@ async function getOrCreateProductoId(p) {
   return null;
 }
 
+// ── Motor de Lote Activo ─────────────────────────────────────────
+var LOTE_RULE = localStorage.getItem('erp_lote_rule') || 'precio_desc_fifo';
+
+window.getLoteActivo = function(prod, almacen) {
+  var lotes = (prod.lotes || []).filter(function(l) {
+    return l.almacen === almacen && (l.cantidad || 0) > 0;
+  });
+  if (!lotes.length) return null;
+  lotes.sort(function(a, b) {
+    if (LOTE_RULE === 'precio_desc_fifo') {
+      if ((b.precio_venta||0) !== (a.precio_venta||0))
+        return (b.precio_venta||0) - (a.precio_venta||0);
+      return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    }
+    if (LOTE_RULE === 'fifo') return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    if (LOTE_RULE === 'lifo') return new Date(b.fecha_entrada||0) - new Date(a.fecha_entrada||0);
+    return 0;
+  });
+  return lotes[0];
+};
+
+// Obtener todos los lotes ordenados por regla activa (para selector en POS)
+window.getLotesOrdenados = function(prod, almacen) {
+  var lotes = (prod.lotes || []).filter(function(l) {
+    return l.almacen === almacen && (l.cantidad || 0) > 0;
+  });
+  lotes.sort(function(a, b) {
+    if (LOTE_RULE === 'precio_desc_fifo') {
+      if ((b.precio_venta||0) !== (a.precio_venta||0))
+        return (b.precio_venta||0) - (a.precio_venta||0);
+      return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    }
+    if (LOTE_RULE === 'fifo') return new Date(a.fecha_entrada||0) - new Date(b.fecha_entrada||0);
+    if (LOTE_RULE === 'lifo') return new Date(b.fecha_entrada||0) - new Date(a.fecha_entrada||0);
+    return 0;
+  });
+  return lotes;
+};
+
+// adjustStockByDelta: Acepta opciones de costo y precio_venta para lotes nuevos
+// opts = { costo, precio_venta, loteEspecifico }
+window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, opts) {
+  if(!prod || !prod.supaId || delta === 0) return true;
+  opts = opts || {};
+  var lotes = (prod.lotes || []).filter(function(l){return l.almacen === almacen;});
+  var isAdd = delta > 0;
+  
+  if(isAdd) {
+    var lName = preferredLote || 'SIN LOTE';
+    var exist = lotes.find(function(l){return l.lote === lName;});
+    var nQty = (exist ? exist.cantidad : 0) + delta;
+    var loteCosto = opts.costo != null ? opts.costo : (exist ? exist.costo : 0);
+    var lotePrecio = opts.precio_venta != null ? opts.precio_venta : (exist ? exist.precio_venta : 0);
+    if(exist) {
+      exist.cantidad = nQty;
+      if(opts.costo != null) exist.costo = loteCosto;
+      if(opts.precio_venta != null) exist.precio_venta = lotePrecio;
+    } else {
+      prod.lotes = prod.lotes || [];
+      prod.lotes.push({producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty,
+        costo:loteCosto, precio_venta:lotePrecio, fecha_entrada:new Date().toISOString()});
+    }
+    
+    var body = {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty,
+      costo:loteCosto, precio_venta:lotePrecio};
+    if(!exist) body.fecha_entrada = new Date().toISOString();
+    await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', body);
+    return true;
+  } else {
+    // Descontar de un lote específico si se indica
+    var toDeduct = Math.abs(delta);
+    if(opts.loteEspecifico) {
+      var tgt = lotes.find(function(l){return l.lote === opts.loteEspecifico;});
+      if(tgt) {
+        var take = Math.min(tgt.cantidad, toDeduct);
+        tgt.cantidad -= take;
+        toDeduct -= take;
+        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+          {producto_id:prod.supaId, almacen:almacen, lote:tgt.lote, cantidad:tgt.cantidad});
+        if(toDeduct <= 0) return true;
+      }
+    }
+    // Descontar FIFO según regla de lote activo
+    var ordenados = getLotesOrdenados(prod, almacen);
+    for(var i=0; i<ordenados.length; i++) {
+      var l = ordenados[i];
+      if(l.cantidad > 0) {
+        var qtyToTake = Math.min(l.cantidad, toDeduct);
+        l.cantidad -= qtyToTake;
+        toDeduct -= qtyToTake;
+        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+          {producto_id:prod.supaId, almacen:almacen, lote:l.lote, cantidad:l.cantidad});
+        if(toDeduct <= 0) break;
+      }
+    }
+    // Si queda por descontar, poner negativo en 'SIN LOTE'
+    if(toDeduct > 0) {
+      var lDef = lotes.find(function(l){return l.lote === 'SIN LOTE';});
+      var nQtyDef = (lDef ? lDef.cantidad : 0) - toDeduct;
+      if(lDef) lDef.cantidad = nQtyDef; else { prod.lotes = prod.lotes || []; prod.lotes.push({producto_id:prod.supaId, almacen:almacen, lote:'SIN LOTE', cantidad:nQtyDef, costo:0, precio_venta:0, fecha_entrada:new Date().toISOString()}); }
+      await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+        {producto_id:prod.supaId, almacen:almacen, lote:'SIN LOTE', cantidad:nQtyDef});
+    }
+    return true;
+  }
+}
+
 async function syncStockAlmacen(prodId, almacen, cantidad) {
-  // Upsert — works whether row exists or not
+  // We keep this for backward compatibility if needed, but it should be avoided
   var r = await supaReq('POST',
-    'stock_almacen?on_conflict=producto_id,almacen',
-    {producto_id:prodId, almacen:almacen, cantidad:cantidad});
+    'stock_almacen?on_conflict=producto_id,almacen,lote',
+    {producto_id:prodId, almacen:almacen, lote:'SIN LOTE', cantidad:cantidad});
   return r.ok;
 }
 
@@ -2243,8 +2357,14 @@ async function syncSaveProducto(p) {
     }
     // Sync stock for all almacenes
     for (var alm of ['Habana','Placetas','Xportprise']) {
-      var stk = (p.stk_alm&&p.stk_alm[alm]!=null) ? p.stk_alm[alm] : 0;
-      await syncStockAlmacen(p.supaId, alm, stk);
+      if (p.lotes && p.lotes.length > 0) {
+        for (var l of p.lotes.filter(function(x){return x.almacen===alm;})) {
+          await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', {producto_id:p.supaId, almacen:alm, lote:l.lote, cantidad:l.cantidad});
+        }
+      } else {
+        var stk = (p.stk_alm&&p.stk_alm[alm]!=null) ? p.stk_alm[alm] : 0;
+        await syncStockAlmacen(p.supaId, alm, stk);
+      }
     }
     return true;
   } catch(e) { console.error('syncSaveProducto:', e); return false; }
@@ -2972,8 +3092,9 @@ const PRODS=[
 ];
 function _loadReservas(){try{return JSON.parse(localStorage.getItem('erp_reservas')||'[]');}catch(e){return[];}}
 function _saveReservas(){try{localStorage.setItem('erp_reservas',JSON.stringify(S.reservas));}catch(e){}}
-// ── CONTENEDORES ──────────────────────────────────────────────
+// ── CONTENEDORES Y MOVIMIENTOS ─────────────────────────────────
 var CONTENEDORES=[];
+var STOCK_MOVS=[];
 (function(){
   try{var _c=JSON.parse(localStorage.getItem('erp_contenedores')||'[]');if(Array.isArray(_c))CONTENEDORES=_c;}catch(e){}
 })();
@@ -3126,8 +3247,11 @@ function setCartMon(m,btn){
 }
 function getPorEscala(p, q){
   var isPlac = S.alm==='Placetas';
-  var min = (isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min??p.maj??0);
-  var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj??p.min??0);
+  // Precio base del lote activo (si existe y tiene precio_venta > 0)
+  var loteAct = (typeof getLoteActivo === 'function') ? getLoteActivo(p, S.alm) : null;
+  var lotePr = (loteAct && loteAct.precio_venta > 0) ? loteAct.precio_venta : 0;
+  var min = lotePr > 0 ? lotePr : ((isPlac && p.min_placetas!=null) ? p.min_placetas : (p.min??p.maj??0));
+  var maj = lotePr > 0 ? lotePr : ((isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj??p.min??0));
   if(p.escala && p.escala.length && q > 0){
     var sorted = p.escala.slice().sort(function(a,b){return b.desde-a.desde;});
     for(var i=0;i<sorted.length;i++){
@@ -3198,8 +3322,24 @@ function addCart(n){
   // Use escala price for new quantity, fallback to escala[0] if maj/min=0
   var precioUSD = _getCartPriceUSD(p, newQty);
   if(!precioUSD && p.escala && p.escala.length) precioUSD = parseFloat(p.escala[0].precio)||0;
+  // Seleccionar lote activo automáticamente
+  var loteAct = (typeof getLoteActivo === 'function') ? getLoteActivo(p, S.alm) : null;
+  var loteNombre = loteAct ? loteAct.lote : null;
   if(ex){if(ex.q>=stk)return;ex.q++;ex.precioUSD=precioUSD;}
-  else S.cart.push({n,q:1,precioUSD,tipo:S.tipo,modified:false});
+  else S.cart.push({n,q:1,precioUSD,tipo:S.tipo,modified:false,loteSeleccionado:loteNombre});
+  renderCart();
+}
+// Cambiar lote manualmente en el carrito POS
+function changeLoteCart(i, loteNombre){
+  var c = S.cart[i]; if(!c) return;
+  var p = PRODS.find(x=>x.n===c.n); if(!p) return;
+  c.loteSeleccionado = loteNombre;
+  // Actualizar precio al del lote seleccionado si no fue modificado manualmente
+  if(!c.modified) {
+    var lote = (p.lotes||[]).find(function(l){return l.lote===loteNombre && l.almacen===S.alm;});
+    if(lote && lote.precio_venta > 0) c.precioUSD = lote.precio_venta;
+    else c.precioUSD = _getCartPriceUSD(p, c.q);
+  }
   renderCart();
 }
 function setQtyDirect(i,val){
@@ -3280,6 +3420,14 @@ function renderCart(){
         <div class="ci-badges">
           <span class="badge ${tipoCls}">${c.tipo==='Mayorista'?'May':'Min'}</span>
           ${c.modified?`<span class="badge" style="background:var(--color-background-danger);color:var(--color-text-danger)">mod</span>`:''}
+          ${(function(){
+            var _p=PRODS.find(x=>x.n===c.n);
+            var _lotes=_p?(typeof getLotesOrdenados==='function'?getLotesOrdenados(_p,S.alm):[]):[];
+            if(_lotes.length<=1) return c.loteSeleccionado?'<span style="font-size:8px;color:var(--color-text-tertiary)" title="Lote">📦'+c.loteSeleccionado+'</span>':'';
+            return '<select style="font-size:9px;padding:1px 3px;border:1px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);max-width:90px" onchange="changeLoteCart('+i+',this.value)" title="Cambiar lote">'
+              +_lotes.map(function(l){return '<option value="'+l.lote+'"'+(c.loteSeleccionado===l.lote?' selected':'')+'>'+l.lote+' ('+l.cantidad+')</option>';}).join('')
+              +'</select>';
+          })()}
           <span style="font-size:9px;color:var(--color-text-tertiary)">stk:${stk}</span>
         </div>
       </div>
@@ -4234,19 +4382,16 @@ function _revertirVenta(v){
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
         // Persist to Supabase
-        if(v.alm&&typeof syncStockAlmacen==='function'){
-          var newStk=prod.stk_alm[v.alm]||0;
+        if(v.alm&&typeof adjustStockByDelta==='function'){
           if(prod.supaId){
-            // Have supaId — update directly
-            syncStockAlmacen(prod.supaId, v.alm, newStk);
+            adjustStockByDelta(prod, v.alm, l.q);
           } else if(_supaOnline){
-            // No supaId — fetch id from Supabase first then update
             supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id').then(function(r){
               if(r.ok) return r.json();
             }).then(function(d){
               if(d&&d[0]&&d[0].id){
                 prod.supaId=d[0].id;
-                syncStockAlmacen(prod.supaId, v.alm, newStk);
+                adjustStockByDelta(prod, v.alm, l.q);
               }
             }).catch(function(e){console.warn('revertir supaId lookup:',e);});
           }
@@ -7311,8 +7456,8 @@ function elimL(cid,fid,i){
     if(f.alm){
       if(!prod.stk_alm)prod.stk_alm={};
       prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
-      if(typeof syncStockAlmacen==='function'&&prod.supaId){
-        syncStockAlmacen(prod.supaId,f.alm,prod.stk_alm[f.alm]);
+      if(typeof adjustStockByDelta==='function'&&prod.supaId){
+        adjustStockByDelta(prod,f.alm,l.q);
       }
     }
   }
@@ -7358,8 +7503,8 @@ function elimFolioCli(cid,fid){
           if(f.alm){
             if(!prod.stk_alm)prod.stk_alm={};
             prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
-            if(typeof syncStockAlmacen==='function'&&prod.supaId){
-              syncStockAlmacen(prod.supaId,f.alm,prod.stk_alm[f.alm]);
+            if(typeof adjustStockByDelta==='function'&&prod.supaId){
+              adjustStockByDelta(prod,f.alm,l.q);
             }
           }
         }
@@ -11021,8 +11166,8 @@ async function syncTodosProductos() {
           p.supaId = pid;
           for (var alm of ['Habana','Placetas','Xportprise']) {
             var qty = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : 0;
-            await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen',
-              { producto_id: pid, almacen: alm, cantidad: qty });
+            await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+              { producto_id: pid, almacen: alm, lote: 'SIN LOTE', cantidad: qty });
           }
           ok++;
         } else { fail++; errors.push(p.n + ': no id'); }
@@ -11781,21 +11926,26 @@ function registrarMovStock(data) {
         } catch(e) {}
       }
       if (!p.supaId) return;
-      // Patch affected almacenes
-      var almsToSync = mov.tipo==='traslado'
-        ? [mov.almacen, mov.almacenDest]
-        : [mov.almacen];
-      for (var a of almsToSync) {
-        if (!a) continue;
-        var qty = (p.stk_alm&&p.stk_alm[a]!=null) ? p.stk_alm[a] : 0;
-        try {
-          // Use upsert — always works whether row exists or not
-          await supaReq('POST',
-            'stock_almacen?on_conflict=producto_id,almacen',
-            {producto_id:p.supaId, almacen:a, cantidad:qty});
-        } catch(e){ console.warn('mov stock sync:',e); }
+      // Sync lots to Supabase
+      if(typeof adjustStockByDelta === 'function') {
+        var loteSelected = mov.contenedor || 'SIN LOTE';
+        if(mov.tipo === 'traslado') {
+          await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
+          await adjustStockByDelta(p, mov.almacenDest, mov.cantidad, loteSelected);
+        } else if (mov.tipo === 'entrada' || mov.tipo === 'ajuste_alta') {
+          await adjustStockByDelta(p, mov.almacen, mov.cantidad, loteSelected);
+        } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
+          await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
+        } else if (mov.tipo === 'ajuste_abs') {
+          // Adjust absolute by calculating diff before applyStockMov. Wait, applyStockMov already ran.
+          // Since applyStockMov modified p.stk_alm, we shouldn't use it.
+          // Better let adjustStockByDelta recalculate diff:
+          var currentLotes = p.lotes ? p.lotes.filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,b){return a+(b.cantidad||0);},0) : 0;
+          var diff = mov.cantidad - currentLotes;
+          await adjustStockByDelta(p, mov.almacen, diff, loteSelected);
+        }
+        console.log('✓ Stock lots synced:', mov.producto);
       }
-      console.log('✓ Stock synced:', mov.producto, almsToSync.join('+'));
     })();
   }
   if (typeof renderStock === 'function') try { renderStock(); } catch(e) {}
@@ -12693,7 +12843,7 @@ function renderStock(){
   if(!prods.length){h+='<tr><td colspan="'+(visAlms.length+4)+'" style="text-align:center;padding:20px;color:var(--color-text-tertiary)">Sin resultados</td></tr>';}
   else{prods.forEach(function(p){
     var bajo=(p.stk||0)<=(p.stk_min||10);
-    h+='<tr'+(bajo?' style="background:rgba(251,191,36,.07)"':'')+'>'
+    h+='<tr style="cursor:pointer'+(bajo?';background:rgba(251,191,36,.07)':'')+'" onclick="if(typeof openStockLotes===\'function\')openStockLotes(\''+p.supaId+'\')">'
       +'<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'
       +'<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
     visAlms.forEach(function(a){
@@ -12708,6 +12858,89 @@ function renderStock(){
   if(wasFocused){ var inp=document.getElementById('stock-search-inp'); if(inp){ inp.focus(); try{inp.setSelectionRange(selStart, typeof selEnd!=='undefined'?selEnd:selStart);}catch(e){} } }
   if(typeof renderStockMovimientos==='function')try{renderStockMovimientos();}catch(e){}
 }
+
+window.openStockLotes = function(supaId) {
+  var p = PRODS.find(function(x){return x.supaId === supaId || x.id === supaId;});
+  if(!p) return;
+  var lotes = p.lotes || [];
+  
+  var mo = document.getElementById('lotes-modal');
+  if(!mo){
+    mo = document.createElement('div');
+    mo.id = 'lotes-modal';
+    mo.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:99999;display:flex;align-items:center;justify-content:center;';
+    document.body.appendChild(mo);
+  }
+  
+  window.renombrarLote = async function(idx, sId) {
+    var l = p.lotes[idx];
+    var nLote = prompt('Nuevo nombre para el lote (actual: '+l.lote+'):', l.lote);
+    if(!nLote || nLote === l.lote) nLote = l.lote; // Default to keep same name if just changing prices
+    
+    var nCosto = prompt('Costo USD (actual: '+(l.costo||0)+'):', l.costo||'0');
+    if(nCosto===null) return;
+    
+    var nPrecio = prompt('Precio de venta USD (actual: '+(l.precio_venta||0)+'):', l.precio_venta||'0');
+    if(nPrecio===null) return;
+    
+    try {
+      mo.style.pointerEvents = 'none'; mo.style.opacity = '0.5';
+      
+      var existLot = p.lotes.find(function(x){return x.almacen === l.almacen && x.lote === nLote && nLote !== l.lote;});
+      var newCant = l.cantidad + (existLot ? existLot.cantidad : 0);
+      
+      await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', {
+        producto_id: p.supaId,
+        almacen: l.almacen,
+        lote: nLote,
+        cantidad: newCant,
+        costo: parseFloat(nCosto)||0,
+        precio_venta: parseFloat(nPrecio)||0
+      });
+      
+      if(nLote !== l.lote) {
+        await supaReq('DELETE', 'stock_almacen?producto_id=eq.' + p.supaId + '&almacen=eq.' + encodeURIComponent(l.almacen) + '&lote=eq.' + encodeURIComponent(l.lote));
+      }
+      
+      if(typeof showToast==='function') showToast('Lote actualizado');
+      await syncLoadProductos();
+      renderStock();
+      openStockLotes(sId);
+    } catch(e) {
+      console.error(e);
+      alert('Error actualizando lote');
+    } finally {
+      mo.style.pointerEvents = 'auto'; mo.style.opacity = '1';
+    }
+  };
+
+  var h = '<div style="background:var(--color-background-primary);padding:20px;border-radius:8px;width:95%;max-width:650px;max-height:90vh;overflow-y:auto;position:relative;color:var(--color-text-primary)">';
+  h += '<button onclick="document.getElementById(\'lotes-modal\').style.display=\'none\'" style="position:absolute;top:10px;right:10px;background:transparent;border:none;font-size:20px;cursor:pointer;color:var(--color-text-primary)">&times;</button>';
+  h += '<h3 style="margin-top:0;margin-bottom:15px">Lotes: ' + (p.n||'') + '</h3>';
+  
+  if(lotes.length === 0) {
+    h += '<p style="color:var(--color-text-tertiary)">No hay lotes registrados.</p>';
+  } else {
+    h += '<table class="adm-table" style="width:100%;margin-bottom:20px"><thead><tr><th>Almacén</th><th>Lote</th><th style="text-align:right">Cant.</th><th style="text-align:right">Costo</th><th style="text-align:right">Precio</th><th></th></tr></thead><tbody>';
+    lotes.forEach(function(l, i){
+      h += '<tr>';
+      h += '<td>' + l.almacen + '</td>';
+      h += '<td>' + l.lote + '</td>';
+      h += '<td style="text-align:right;font-weight:600">' + (l.cantidad||0) + '</td>';
+      h += '<td style="text-align:right">$' + (l.costo||0) + '</td>';
+      h += '<td style="text-align:right">$' + (l.precio_venta||0) + '</td>';
+      h += '<td style="text-align:right"><button class="adm-btn adm-btn-s" onclick="renombrarLote(' + i + ',\'' + p.supaId + '\')">Editar</button></td>';
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+  }
+  
+  h += '<button class="adm-btn adm-btn-p" style="width:100%" onclick="document.getElementById(\'lotes-modal\').style.display=\'none\'">Cerrar</button>';
+  h += '</div>';
+  mo.innerHTML = h;
+  mo.style.display = 'flex';
+};
+
 function shareStockWhatsApp() {
   var q=(window._stockQ||'').toLowerCase(),catF=window._stockCat||'',almF=window._stockAlm||'';
   var activos=PRODS.filter(function(p){return p.activo!==false && p.enStock!==false;});
