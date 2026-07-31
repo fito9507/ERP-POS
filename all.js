@@ -555,8 +555,8 @@ function encargoCardHTML(p){
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
-    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
-    +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
+    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px;">'
+    +'<div style="display:flex;align-items:center;gap:4px;line-height:1.2"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
     +'<div style="display:flex;align-items:center;background:rgba(59,130,246,0.1);border-radius:6px;padding:3px;border:1px solid rgba(59,130,246,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);">'
     +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\','+pidx+','+price+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:3px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s">EN EXTERIOR</span>'
     +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\','+pidx+','+price+')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:3px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s">EN CUBA</span>'
