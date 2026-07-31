@@ -563,10 +563,17 @@ function encargoCardHTML(p){
     +'</div>'
     +'</div>'
     +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, price, qty) + '</div>'
-    +(transito ? '<div style="display:flex;align-items:flex-start;gap:6px;padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
-               + '<span style="font-size:12px">⏳</span>'
-               + '<div><div style="font-weight:700;color:#3b82f6;margin-bottom:1px">Tiempo de tránsito:</div>'
-               + esc(transito)+'</div></div>' : '')
+    +(transito ?
+        (function(t){
+          var pts = t.split('|');
+          var h = '<div style="font-weight:800;color:var(--text-main);font-size:13px;margin-top:2px">'+esc(pts[0].trim())+'</div>';
+          if(pts.length > 1) h += '<div style="font-style:italic;font-size:11px;color:var(--text-secondary);margin-top:2px;line-height:1.3">'+esc(pts.slice(1).join('|').trim())+'</div>';
+          return '<div style="padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
+            +'<div style="font-weight:700;color:#3b82f6;font-size:11px">&#9203; Tiempo de tr\u00e1nsito:</div>'
+            + h
+            +'</div>';
+        })(transito)
+      :'')
     +(p.ficha_tecnica ? '<div style="margin-top:8px;text-align:center"><button onclick="openFichaModal('+pidx+')" style="background:rgba(59,130,246,0.1);color:#3b82f6;border:1px solid rgba(59,130,246,0.3);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;width:100%">📄 Ver Ficha Técnica</button></div>' : '')
     +'</div>'
     +'<div class="prices">'
