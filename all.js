@@ -610,6 +610,10 @@ window._tPago = function(id, tipo, pidx, basePrice) {
   if (!p) return;
 
   var recargo_cuba = p.recargo_cuba || '';
+  console.log("=== DEBUG _tPago ===");
+  console.log("Producto:", p.n);
+  console.log("Recargo almacenado (p.recargo_cuba):", p.recargo_cuba);
+  console.log("Valor base CIF:", p.precio_cif, " DDP:", p.precio_ddp);
   var esquemaStr = p.esquema_pago || '';
   
   var sp = document.getElementById('qd-tr-'+id) || document.getElementById('qd-'+id);
@@ -630,6 +634,7 @@ window._tPago = function(id, tipo, pidx, basePrice) {
   var newBase = applyRecargo(basePrice);
   var newCif = p ? applyRecargo(p.precio_cif) : null;
   var newDdp = p ? applyRecargo(p.precio_ddp) : null;
+  console.log("Valores Recalculados -> CIF:", newCif, "DDP:", newDdp, "Base:", newBase);
   
   var activePrice = newBase;
   var btnCif = document.getElementById('ptbtn-cif-'+id);
