@@ -1050,7 +1050,7 @@ window._tPago = function(id, tipo, pidx, basePrice) {
   var recargo_cuba = p.recargo_cuba || '';
   var esquemaStr = p.esquema_pago || '';
   
-  var sp = document.getElementById('qd-'+id);
+  var sp = document.getElementById('qd-tr-'+id) || document.getElementById('qd-'+id);
   var qty = sp ? Math.max(p.moq||1, parseInt(sp.textContent)||p.moq||1) : (p.moq||1);
   
   var applyRecargo = function(val) {
