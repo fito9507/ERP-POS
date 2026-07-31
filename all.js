@@ -618,7 +618,7 @@ window._tPago = function(id, tipo, pidx, basePrice) {
   var applyRecargo = function(val) {
     if (val == null) return val;
     if (tipo === 'ext' || !recargo_cuba) return val;
-    if (recargo_cuba.includes('%')) {
+    if (String(recargo_cuba).includes('%')) {
       var pct = parseFloat(recargo_cuba) / 100;
       return isNaN(pct) ? val : val * (1 + pct);
     } else {
