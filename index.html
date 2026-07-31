@@ -2768,7 +2768,8 @@ async function syncSaveCliente(c){
 
 async function syncSaveFolio(cliId, f){
   var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
-    almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[]};
+    almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[],
+    contenedor:f.contenedor||null};
   if(f.mon) body.moneda=f.mon;
   if(!_supaOnline||typeof supaReq==='undefined'){
     enqueue({method:'POST',path:'folios?on_conflict=id',body:body});
@@ -2882,7 +2883,7 @@ async function syncLoadClientes(){
             enCaja:a.en_caja,caja:a.caja,cajaTipo:a.caja_tipo};
         });
         return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
-          desc:f.descripcion,lineas:lineas,abonos:abonos};
+          desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||''};
       });
       CLIENTES.push({
         id:row.id, nombre:row.nombre, tel:row.telefono||'',
@@ -3503,6 +3504,24 @@ function ventaCreditoPOS() {
   if(iniStr===null) return;
   var ini = parseFloat(iniStr)||0;
   
+  // ── Container selector ──
+  var cntVal = '';
+  var _cntsDisp = (typeof CONTENEDORES!=='undefined'?CONTENEDORES:[]).filter(function(x){return x.estado!=='cerrado';});
+  if(_cntsDisp.length > 0){
+    var _cntOpts = '0 → Sin contenedor\n';
+    _cntsDisp.forEach(function(x,i){
+      var ic=x.estado==='retrasado'?'⚠️':(x.estado==='recibido'?'✅':'🚢');
+      _cntOpts+=(i+1)+' → '+ic+' '+(x.lote||x.ref||x.id)+(x.nombre&&x.nombre!==(x.lote||x.ref||x.id)?' — '+x.nombre:'')+'\n';
+    });
+    var _cntPick = prompt('🚢 ¿Asociar a un contenedor? (Opcional)\n\n'+_cntOpts, '0');
+    if(_cntPick===null) return;
+    var _cntNum = parseInt(_cntPick);
+    if(_cntNum > 0 && _cntNum <= _cntsDisp.length){
+      var _selCnt = _cntsDisp[_cntNum-1];
+      cntVal = _selCnt.lote||_selCnt.ref||_selCnt.id;
+    }
+  }
+  
   var lineas = S.cart.map(c => ({prod: c.n, q: c.q, precio: c.precioUSD, mon: 'USD'}));
   var alm = S.alm;
   var mon = 'USD';
@@ -3558,6 +3577,7 @@ function ventaCreditoPOS() {
       newFolio.alm = alm;
       newFolio.mon = mon;
       newFolio.desc = desc;
+      newFolio.contenedor = cntVal;
       newFolio.lineas = lineas.map(l=>({...l,qO:l.q,pO:l.precio}));
       delete newFolio.tipo;
       delete newFolio.ref;
@@ -3569,7 +3589,7 @@ function ventaCreditoPOS() {
     }
     if(ini>0) newFolio.abonos.push(abonos[0]);
   } else {
-    newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+    newFolio={id:fid,fecha,alm,mon,desc,contenedor:cntVal,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
     c.folios.push(newFolio);
   }
   
@@ -7406,6 +7426,7 @@ function renderFichaFolios(c){
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
             <div style="font-size:11px;color:var(--color-text-secondary)">${f.desc}</div>
+            ${f.contenedor ? '<div style="margin-top:3px">'+_cntBadge(f.contenedor)+'</div>' : '<button class="btn-sm" style="font-size:10px;padding:2px 6px;margin-top:3px;border-color:var(--color-text-tertiary);color:var(--color-text-tertiary)" onclick="event.stopPropagation();_asignarCntFolio(\''+c.id+'\',\''+f.id+'\')">🚢 Asignar contenedor</button>'}
             <div class="pay-bar" style="width:200px;margin:5px 0 2px"><div class="pay-bar-fill" style="width:${pag>tot?100:pct}%;${pag>tot?'background:linear-gradient(90deg,#22c55e,#4ade80)':''}"></div></div>
             <div style="font-size:10px;color:var(--color-text-secondary)">${pag>tot?'Crédito a favor':pct+'%'} · ${f.lineas.length} productos · ${f.abonos.length} abonos</div>
           </div>
@@ -7519,6 +7540,30 @@ function elimL(cid,fid,i){
   renderFichaFolios(c);
 }
 function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function _asignarCntFolio(cid,fid){
+  var c=CLIENTES.find(function(x){return x.id===cid;});if(!c)return;
+  var f=c.folios.find(function(x){return x.id===fid;});if(!f)return;
+  var cnts=(typeof CONTENEDORES!=='undefined'?CONTENEDORES:[]).filter(function(x){return x.estado!=='cerrado';});
+  if(!cnts.length){alert('No hay contenedores disponibles. Crea uno en Admin → 🚢 Contenedores.');return;}
+  var opts='0 → ❌ Sin contenedor\n';
+  cnts.forEach(function(x,i){
+    var ic=x.estado==='retrasado'?'⚠️':(x.estado==='recibido'?'✅':'🚢');
+    opts+=(i+1)+' → '+ic+' '+(x.lote||x.ref||x.id)+(x.nombre&&x.nombre!==(x.lote||x.ref||x.id)?' — '+x.nombre:'')+'\n';
+  });
+  var pick=prompt('Asignar contenedor al Folio '+fid+':\n\n'+opts,'0');
+  if(pick===null)return;
+  var n=parseInt(pick);
+  if(n>0&&n<=cnts.length){
+    var sel=cnts[n-1];
+    f.contenedor=sel.lote||sel.ref||sel.id;
+  } else {
+    f.contenedor='';
+  }
+  if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  renderFichaFolios(c);
+  showToast(f.contenedor?'✓ Contenedor '+f.contenedor+' asignado al Folio '+fid:'Contenedor removido del Folio '+fid);
+}
 function elimFolioCli(cid,fid){
   if(!confirm('¿Eliminar este folio completo? Esto devolverá el stock a los productos y borrará la venta del libro de ventas.')) return;
   const c=CLIENTES.find(x=>x.id===cid);
@@ -8015,6 +8060,16 @@ function renderFichaNF(c){
         <div><label class="lbl">Moneda ref.</label><select id="nf-mon-${c.id}"><option>USD</option><option>EUR</option><option>CUP</option></select></div>
       </div>
       <div><label class="lbl">Descripción</label><input type="text" id="nf-desc-${c.id}" placeholder="Ej: Container #4 — perfiles"></div>
+      <div><label class="lbl">🚢 Lote / Contenedor (opcional)</label>
+        <select id="nf-cnt-${c.id}" style="width:100%">
+          <option value="">— Sin contenedor —</option>
+          ${(typeof CONTENEDORES!=='undefined'?CONTENEDORES:[]).filter(function(x){return x.estado!=='cerrado';}).map(function(x){
+            var ic=x.estado==='retrasado'?'⚠️':(x.estado==='recibido'?'✅':(x.estado==='en_transito'||x.estado==='en_aduana'||x.estado==='en_puerto'?'🚢':'📦'));
+            var lbl=(x.lote||x.ref||x.id)+(x.nombre&&x.nombre!==(x.lote||x.ref||x.id)?' — '+x.nombre:'');
+            return '<option value="'+(x.lote||x.ref||x.id)+'">'+ic+' '+lbl+'</option>';
+          }).join('')}
+        </select>
+      </div>
       <div id="nfl-${c.id}"></div>
       <button class="btn-sm" onclick="addNFLCli('${c.id}')" style="align-self:flex-start">+ añadir producto</button>
       <div class="sep"></div>
@@ -8103,6 +8158,7 @@ function crearFolioCli(cid){
   const desc=document.getElementById('nf-desc-'+cid)?.value||'Nueva venta';
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
+  const cnt=(document.getElementById('nf-cnt-'+cid)||{}).value||'';
   const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
   const fid=String(nextFid++);
   // Validate stock before creating
@@ -8115,7 +8171,7 @@ function crearFolioCli(cid){
   });
   if(stockError){alert(stockError);return;}
 
-  var newFolio={id:fid,fecha,alm,mon,desc,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+  var newFolio={id:fid,fecha,alm,mon,desc,contenedor:cnt,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
   c.folios.push(newFolio);
   // Discount stock
   lineas.forEach(function(l){
@@ -8535,6 +8591,51 @@ function _renderCntDetalle(cntId){
       +'</tbody></table></div>'
     :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:14px 0">Sin reservas asociadas a este contenedor.</div>';
 
+  // ── Folios de clientes vinculados a este contenedor ──
+  var _cntFolios = [];
+  var _cntRef = c.lote || c.ref || c.id;
+  (typeof CLIENTES!=='undefined'?CLIENTES:[]).forEach(function(cli){
+    (cli.folios||[]).forEach(function(f){
+      if(f.contenedor && (f.contenedor===cntId || f.contenedor===_cntRef)){
+        _cntFolios.push({cli:cli, folio:f});
+      }
+    });
+  });
+  var _foliosTotUSD = _cntFolios.reduce(function(a,x){return a+(typeof totF==='function'?totF(x.folio):0);},0);
+  var _foliosPagUSD = _cntFolios.reduce(function(a,x){return a+(typeof pagF==='function'?pagF(x.folio):0);},0);
+  var _foliosPdtUSD = Math.max(0, _foliosTotUSD - _foliosPagUSD);
+
+  var foliosHtml = _cntFolios.length
+    ?'<div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Cliente</th><th>Folio</th><th>Almacén</th><th>Fecha</th><th>Productos</th><th style="text-align:right">Total</th><th style="text-align:right">Pagado</th><th style="text-align:right">Pendiente</th><th>Estado</th></tr></thead><tbody>'
+      +_cntFolios.map(function(x){
+        var _ft=typeof totF==='function'?totF(x.folio):0;
+        var _fp=typeof pagF==='function'?pagF(x.folio):0;
+        var _fd=Math.max(0,_ft-_fp);
+        var _fe=typeof estF==='function'?estF(x.folio):'';
+        var _feCol=_fe==='pagado'?'var(--color-text-success)':(_fe==='parcial'?'var(--color-text-warning)':'var(--color-text-danger)');
+        var _feL={pagado:'Pagado',parcial:'Parcial',pendiente:'Pendiente'};
+        var _prods=(x.folio.lineas||[]).map(function(l){return l.q+'× '+l.prod;}).join(', ');
+        if(_prods.length>50) _prods=_prods.substring(0,47)+'...';
+        return '<tr>'
+          +'<td style="font-size:12px;font-weight:500">'+x.cli.nombre+'</td>'
+          +'<td style="font-size:11px">'+x.folio.id+'</td>'
+          +'<td style="font-size:11px">'+(x.folio.alm||'')+'</td>'
+          +'<td style="font-size:11px">'+(typeof fD==='function'?fD(x.folio.fecha):x.folio.fecha)+'</td>'
+          +'<td style="font-size:11px;color:var(--color-text-secondary)">'+_prods+'</td>'
+          +'<td style="text-align:right;font-weight:600">'+fN(_ft)+' USD</td>'
+          +'<td style="text-align:right;color:var(--color-text-success)">'+fN(_fp)+'</td>'
+          +'<td style="text-align:right;color:var(--color-text-danger);font-weight:600">'+fN(_fd)+'</td>'
+          +'<td style="font-size:11px;color:'+_feCol+'">'+(_feL[_fe]||_fe)+'</td>'
+          +'</tr>';
+      }).join('')
+      +'<tr style="border-top:2px solid var(--color-border-secondary);font-weight:700"><td colspan="5" style="text-align:right;font-size:12px">Totales:</td>'
+      +'<td style="text-align:right">'+fN(_foliosTotUSD)+' USD</td>'
+      +'<td style="text-align:right;color:var(--color-text-success)">'+fN(_foliosPagUSD)+'</td>'
+      +'<td style="text-align:right;color:var(--color-text-danger)">'+fN(_foliosPdtUSD)+'</td>'
+      +'<td></td></tr>'
+      +'</tbody></table></div>'
+    :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:14px 0">Sin folios de clientes vinculados a este contenedor.</div>';
+
   el.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
     +'<button class="adm-btn" onclick="_cntDetalle=null;renderAdminContenedores()">← Volver</button>'
     +'<div><div style="font-size:16px;font-weight:800">'+c.id+'</div>'
@@ -8544,15 +8645,20 @@ function _renderCntDetalle(cntId){
     +'</div>'
     +(c.eta?'<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px">📅 ETA: <strong>'+fD(c.eta)+'</strong></div>':'')
     +(c.notas?'<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:16px">📝 '+c.notas+'</div>':'')
-    +'<div style="display:flex;gap:8px;margin-bottom:20px">'
+    +'<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">'
     +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Entradas</div><div class="adm-val" style="color:var(--color-text-success)">'+movs.length+'</div></div>'
     +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Reservas</div><div class="adm-val" style="color:var(--color-text-info)">'+reservas.filter(function(r){return r.activa;}).length+'</div></div>'
     +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">Productos</div><div class="adm-val">'+Object.keys(prodMap).length+'</div></div>'
+    +'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">📄 Folios</div><div class="adm-val" style="color:var(--color-primary)">'+_cntFolios.length+'</div></div>'
+    +(_cntFolios.length?'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">💰 Facturado</div><div class="adm-val" style="color:var(--color-text-success)">'+fN(_foliosTotUSD)+'</div></div>':'')
+    +(_foliosPdtUSD>0?'<div class="adm-card" style="text-align:center;min-width:100px"><div class="adm-lbl">⏳ Pendiente</div><div class="adm-val" style="color:var(--color-text-danger)">'+fN(_foliosPdtUSD)+'</div></div>':'')
     +'</div>'
     +'<div style="font-size:13px;font-weight:600;margin-bottom:8px">📥 Entradas de stock</div>'
     +movsHtml
     +'<div style="font-size:13px;font-weight:600;margin:16px 0 8px">📋 Reservas</div>'
-    +resHtml;
+    +resHtml
+    +'<div style="font-size:13px;font-weight:600;margin:16px 0 8px">📄 Folios de clientes</div>'
+    +foliosHtml;
 }
 
 // ── COMISIONES ADMIN ─────────────────────────────────────────
@@ -11928,6 +12034,7 @@ function registrarMovStock(data) {
   // Save to Supabase
   if (_supaOnline) {
     supaReq('POST','stock_movimientos',{
+      id: mov.id,
       fecha: mov.fecha,
       tipo: mov.tipo,
       producto: mov.producto,
@@ -11949,7 +12056,7 @@ function registrarMovStock(data) {
     }).catch(function(e){console.warn('mov supabase:',e);});
   } else {
     enqueue({method:'POST',path:'stock_movimientos',body:{
-      fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
+      id:mov.id,fecha:mov.fecha,tipo:mov.tipo,producto:mov.producto,
       almacen:mov.almacen,almacen_dest:mov.almacenDest||'',
       cantidad:mov.cantidad,motivo:mov.motivo||'',contenedor:mov.contenedor||'',usuario:mov.usuario
     }});
