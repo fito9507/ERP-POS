@@ -1096,7 +1096,7 @@ function encargoCardHTML(p){
 
         +'<div id="ahorro-tot-'+cardId+'" style="font-size:22px;font-weight:900;color:#10b981;letter-spacing:-0.5px;word-break:break-word;line-height:1.1">'+fPrice(ganancia,MON,ALM)+'</div>'
 
-        +'<div style="font-size:10px;color:var(--text-secondary);margin-top:2px">'+fPrice(ahorro,MON,ALM)+' margen/ud · DDP · Mariel: '+fPrice(gananciaBaseP,MON,ALM)+'</div>'
+        +'<div id="margen-det-'+cardId+'" style="font-size:10px;color:var(--text-secondary);margin-top:2px">'+fPrice(ahorro,MON,ALM)+' margen/ud · DDP · Mariel: '+fPrice(gananciaBaseP,MON,ALM)+'</div>'
 
         +'</div>'
 
@@ -1112,7 +1112,7 @@ function encargoCardHTML(p){
 
         +'<span style="font-size:12px;color:var(--text-tertiary);text-decoration:line-through">Mercado: '+fPrice(p.precio_mercado,MON,ALM)+'</span>'
 
-        +'<span style="font-size:11px;font-weight:800;color:#fff;background:#10b981;padding:2px 7px;border-radius:4px;white-space:nowrap">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
+        +'<span id="ahorro-pill-'+cardId+'" style="font-size:11px;font-weight:800;color:#fff;background:#10b981;padding:2px 7px;border-radius:4px;white-space:nowrap">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
 
         +'</div>'
 
@@ -1130,7 +1130,7 @@ function encargoCardHTML(p){
 
                     +'<div style="font-size:9px;opacity:.75">CIF</div>'
 
-                    +'<div style="font-size:14px;font-weight:800">'+fPrice(cifP,MON,ALM)+'</div>'
+                    +'<div id="cif-val-'+cardId+'" style="font-size:14px;font-weight:800">'+fPrice(cifP,MON,ALM)+'</div>'
 
                     +'<div style="font-size:9px;margin-top:1px">'+esc(nombrePuerto)+'</div>'
 
@@ -1140,7 +1140,7 @@ function encargoCardHTML(p){
 
                     +'<div style="font-size:9px;opacity:.75">DDP</div>'
 
-                    +'<div style="font-size:14px;font-weight:800">'+fPrice(ddpP,MON,ALM)+'</div>'
+                    +'<div id="ddp-val-'+cardId+'" style="font-size:14px;font-weight:800">'+fPrice(ddpP,MON,ALM)+'</div>'
 
                     +'<div style="font-size:9px;margin-top:1px">Mariel</div>'
 
@@ -1165,8 +1165,8 @@ function encargoCardHTML(p){
     +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
     +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">&#128176;</span> Esquema de Pagos:</div>'
     +'<div style="display:flex;gap:4px;">'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\',\''+esc(p.recargo_cuba||'')+'\','+esqPrice+','+qty+',\''+esc(p.esquema_pago||'')+'\')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\',\''+esc(p.recargo_cuba||'')+'\','+esqPrice+','+qty+',\''+esc(p.esquema_pago||'')+'\')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\',\''+esc(p.recargo_cuba||'')+'\','+esqPrice+','+qty+',\''+esc(p.esquema_pago||'')+'\','+pidx+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\',\''+esc(p.recargo_cuba||'')+'\','+esqPrice+','+qty+',\''+esc(p.esquema_pago||'')+'\','+pidx+')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
     +'</div>'
     +'</div>'
 
@@ -1238,6 +1238,19 @@ function selectPriceTipo(cardId, pidx, tipo) {
   var cifP = p.precio_cif; var ddpP = p.precio_ddp;
   var baseP = p.min || p.maj || 0;
   var price = tipo==='cif'?(cifP!=null?cifP:baseP):(tipo==='ddp'?(ddpP!=null?ddpP:baseP):baseP);
+  
+  var bCub = document.getElementById('pb-cub-'+cardId);
+  var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+  if (isCub && p.recargo_cuba) {
+    if (p.recargo_cuba.includes('%')) {
+      var pct = parseFloat(p.recargo_cuba) / 100;
+      if (!isNaN(pct)) price = price * (1 + pct);
+    } else {
+      var val = parseFloat(p.recargo_cuba);
+      if (!isNaN(val)) price = price + val;
+    }
+  }
+
   var sp = document.getElementById('qd-'+cardId);
   var qty = sp ? Math.max(p.moq||1, parseInt(sp.textContent)||p.moq||1) : (p.moq||1);
   // Toggle button states
