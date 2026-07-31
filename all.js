@@ -558,8 +558,8 @@ function encargoCardHTML(p){
     +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
     +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
     +'<div style="display:flex;gap:4px;">'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\',\''+esc(p.recargo_cuba||'')+'\','+price+','+qty+',\''+esc(p.esquema_pago||'')+'\')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\',\''+esc(p.recargo_cuba||'')+'\','+price+','+qty+',\''+esc(p.esquema_pago||'')+'\')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
     +'</div>'
     +'</div>'
     +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, price, qty) + '</div>'
@@ -589,18 +589,36 @@ function encargoCardHTML(p){
     +'</div>';
 }
 
-window._tPago = function(id, tipo) {
+window._tPago = function(id, tipo, recargo_cuba, basePrice, qty, esquemaStr) {
   var bExt = document.getElementById('pb-ext-'+id);
   var bCub = document.getElementById('pb-cub-'+id);
+  var calcContainer = document.getElementById('calc-esq-'+id);
   if(!bExt || !bCub) return;
   var actBg = '#3b82f6', actCol = '#fff', actBord = '#3b82f6';
   var inBg = 'transparent', inCol = 'var(--text-secondary)', inBord = 'var(--text-tertiary)';
+  
+  var newPrice = basePrice;
+
   if(tipo === 'ext') {
     bExt.style.background = actBg; bExt.style.color = actCol; bExt.style.borderColor = actBord;
     bCub.style.background = inBg; bCub.style.color = inCol; bCub.style.borderColor = inBord;
   } else {
     bCub.style.background = actBg; bCub.style.color = actCol; bCub.style.borderColor = actBord;
     bExt.style.background = inBg; bExt.style.color = inCol; bExt.style.borderColor = inBord;
+    
+    if (recargo_cuba) {
+      if (recargo_cuba.includes('%')) {
+        var pct = parseFloat(recargo_cuba) / 100;
+        if (!isNaN(pct)) newPrice = basePrice * (1 + pct);
+      } else {
+        var val = parseFloat(recargo_cuba);
+        if (!isNaN(val)) newPrice = basePrice + val;
+      }
+    }
+  }
+
+  if (calcContainer) {
+    calcContainer.innerHTML = renderEsquemaCalculado(esquemaStr, newPrice, qty);
   }
 };
 

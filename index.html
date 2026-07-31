@@ -2166,6 +2166,7 @@ async function syncLoadProductos() {
         reservado: row.badge_texto==='RESERVADO',
         por_encargo: row.por_encargo===true,
         esquema_pago: row.esquema_pago||'',
+        recargo_cuba: row.recargo_cuba||'',
         tiempo_transito: row.tiempo_transito||'',
         precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
         cif: row.precio_cif!=null?parseFloat(row.precio_cif):null,
@@ -2326,6 +2327,7 @@ async function syncSaveProducto(p) {
     precio_oferta_placetas:p.precioOfertaPlacetas!=null?p.precioOfertaPlacetas:null,
     por_encargo:p.por_encargo===true,
     esquema_pago:p.esquema_pago||null,
+    recargo_cuba:p.recargo_cuba||null,
     tiempo_transito:p.tiempo_transito||null,
     precio_mercado:p.precio_mercado!=null?p.precio_mercado:null,
     ficha_tecnica:p.ficha_tecnica||null,
@@ -8905,6 +8907,10 @@ function renderFormProducto() {
     + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="Ej: 50% al reservar...">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Recargo Pago en Cuba</label>'
+    + '<input class="adm-inp" id="ep-recargo-cuba" value="' + (p.recargo_cuba||'') + '" placeholder="Ej: 10% o 50">'
+    + '</div>'
+    + '<div style="display:grid;gap:4px">'
     + '<label style="font-size:11px;font-weight:600">Tiempo de Tránsito / Entrega</label>'
     + '<input class="adm-inp" id="ep-tiempo-transito" value="' + (p.tiempo_transito||'') + '" placeholder="Ej: 45 a 60 días">'
     + '</div>'
@@ -9052,6 +9058,7 @@ function admGuardarProd(idx) {
   var reservado = !!(document.getElementById('ep-reservado') && document.getElementById('ep-reservado').checked);
   var por_encargo = !!(document.getElementById('ep-por-encargo') && document.getElementById('ep-por-encargo').checked);
   var esquema_pago = (document.getElementById('ep-esquema-pago')?.value||'').trim();
+  var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
   var tiempo_transito = (document.getElementById('ep-tiempo-transito')?.value||'').trim();
   var pMercadoV = document.getElementById('ep-precio-mercado')?.value;
   var precio_mercado = pMercadoV!==''&&!isNaN(parseFloat(pMercadoV)) ? parseFloat(pMercadoV) : null;
@@ -9066,7 +9073,7 @@ function admGuardarProd(idx) {
     cif: cif,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
