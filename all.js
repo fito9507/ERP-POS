@@ -555,7 +555,10 @@ function encargoCardHTML(p){
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
-    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;gap:4px"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
+    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
+    +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
+    +'<span style="font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;">PAGO EN EL EXTERIOR</span>'
+    +'</div>'
     +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, price, qty) + '</div>'
     +(transito ? '<div style="display:flex;align-items:flex-start;gap:6px;padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
                + '<span style="font-size:12px">⏳</span>'
