@@ -1569,8 +1569,20 @@ function addToCartIdx(idx){
       return;
     }
   }
+  var isCub = false;
+  var tipoImport = 'base';
+  if (p.por_encargo) {
+    var bCub = document.getElementById('pb-cub-'+cardId);
+    isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+    var btnCif = document.getElementById('ptbtn-cif-'+cardId);
+    var btnDdp = document.getElementById('ptbtn-ddp-'+cardId);
+    if (btnDdp && btnDdp.className.indexOf('active-ddp') !== -1) tipoImport = 'ddp';
+    else if (btnCif && btnCif.className.indexOf('active-cif') !== -1) tipoImport = 'cif';
+    else if (p.precio_ddp != null) tipoImport = 'ddp';
+    else if (p.precio_cif != null) tipoImport = 'cif';
+  }
   
-  CART[p.n] = {prod:p, qty:qty};
+  CART[p.n] = {prod:p, qty:qty, tipoImport:tipoImport, enCuba:!!isCub};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
   if(btn){ btn.textContent = p.por_encargo ? '✓ Encargado' : ((p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'); btn.classList.add('added'); }
   updCart(); saveCartState();
@@ -1677,11 +1689,25 @@ function getCartPrice(i){
   var escalaPrice = getEscalaPrice(p, i.qty);
   var basePrice = escalaPrice!=null ? escalaPrice : (isMay ? (maj||min||0) : (min||maj||0));
   // Fallback for por_encargo products: use precio_ddp > precio_cif > precio_mercado if base is 0
-  if(basePrice === 0 && p.por_encargo){
-    basePrice = (p.precio_ddp!=null && p.precio_ddp>0) ? p.precio_ddp
-              : (p.precio_cif!=null && p.precio_cif>0) ? p.precio_cif
-              : (p.precio_mercado!=null && p.precio_mercado>0) ? p.precio_mercado
-              : 0;
+  if(p.por_encargo){
+    if (i.tipoImport === 'ddp') basePrice = p.precio_ddp || 0;
+    else if (i.tipoImport === 'cif') basePrice = p.precio_cif || 0;
+    else if (basePrice === 0) {
+      basePrice = (p.precio_ddp!=null && p.precio_ddp>0) ? p.precio_ddp
+                : (p.precio_cif!=null && p.precio_cif>0) ? p.precio_cif
+                : (p.precio_mercado!=null && p.precio_mercado>0) ? p.precio_mercado
+                : 0;
+    }
+
+    if (i.enCuba && p.recargo_cuba) {
+      if (String(p.recargo_cuba).includes('%')) {
+        var pct = parseFloat(p.recargo_cuba) / 100;
+        if (!isNaN(pct)) basePrice = basePrice * (1 + pct);
+      } else {
+        var num = parseFloat(p.recargo_cuba);
+        if (!isNaN(num)) basePrice = Number(basePrice) + num;
+      }
+    }
   }
   return {price:basePrice, isMay:isMay, MIN_MAY:MIN_MAY, isTransit:false, hasEscala:escalaPrice!=null};
 }
@@ -1719,6 +1745,15 @@ function renderCart(){
       : (i.prod.maj>0 ? (r.isMay
         ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
         : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '');
+    
+    if (i.prod.por_encargo) {
+      var encargoTagStr = "Importación";
+      if (i.tipoImport === 'cif') encargoTagStr = "CIF";
+      else if (i.tipoImport === 'ddp') encargoTagStr = "DDP";
+      encargoTagStr += i.enCuba ? " (Cuba)" : " (Ext)";
+      tag += '<span style="font-size:9px;background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">'+encargoTagStr+'</span>';
+    }
+    
     return '<div class="cart-item">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">'
       +'<div class="cart-item-name" style="flex:1">'+esc(i.prod.n)+tag+'</div>'
@@ -1770,8 +1805,12 @@ function sendWA(){
     var ln = '• '+i.qty+'× '+i.prod.n+' @ '+fPrice(r.price, CART_MON)+' → '+fPrice(r.price*i.qty, CART_MON)+(r.isMay?' (May)':' (Min)');
     if (i.prod.por_encargo) {
       var totalItem = r.price * i.qty;
-      if (i.prod.precio_cif != null) ln += '\n  ↳ 📦 Precio CIF (Puerto Cuba): ' + fPrice(i.prod.precio_cif, CART_MON) + '/ud';
-      if (i.prod.precio_ddp != null) ln += '\n  ↳ ✅ Precio DDP (Nacionalizado): ' + fPrice(i.prod.precio_ddp, CART_MON) + '/ud';
+      var optionStr = i.tipoImport==='cif'?'CIF':(i.tipoImport==='ddp'?'DDP':'Importación');
+      optionStr += i.enCuba ? " (Pagado en Cuba)" : " (Pagado en Exterior)";
+      ln += '\n  ↳ 📦 Opción Seleccionada: ' + optionStr;
+      
+      if (i.prod.precio_cif != null) ln += '\n  ↳ ⚓ Precio Referencia CIF: ' + fPrice(i.prod.precio_cif, CART_MON) + '/ud';
+      if (i.prod.precio_ddp != null) ln += '\n  ↳ 🚚 Precio Referencia DDP: ' + fPrice(i.prod.precio_ddp, CART_MON) + '/ud';
       var eParts = (i.prod.esquema_pago||'').split(/[|\n]/).map(function(s){ return s.trim(); }).filter(Boolean);
       var esqLines = [];
       eParts.forEach(function(part){
