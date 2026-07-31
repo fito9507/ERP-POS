@@ -557,7 +557,10 @@ function encargoCardHTML(p){
     +'<div style="margin:8px 0;padding:8px;background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;font-size:11px;color:var(--text-secondary)">'
     +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
     +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">💰</span> Esquema de Pagos:</div>'
-    +'<span style="font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;">PAGO EN EL EXTERIOR</span>'
+    +'<div style="display:flex;gap:4px;">'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
+    +'</div>'
     +'</div>'
     +'<div id="calc-esq-'+cardId+'">' + renderEsquemaCalculado(p.esquema_pago, price, qty) + '</div>'
     +(transito ? '<div style="display:flex;align-items:flex-start;gap:6px;padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
@@ -585,6 +588,21 @@ function encargoCardHTML(p){
     +'</div>'
     +'</div>';
 }
+
+window._tPago = function(id, tipo) {
+  var bExt = document.getElementById('pb-ext-'+id);
+  var bCub = document.getElementById('pb-cub-'+id);
+  if(!bExt || !bCub) return;
+  var actBg = '#3b82f6', actCol = '#fff', actBord = '#3b82f6';
+  var inBg = 'transparent', inCol = 'var(--text-secondary)', inBord = 'var(--text-tertiary)';
+  if(tipo === 'ext') {
+    bExt.style.background = actBg; bExt.style.color = actCol; bExt.style.borderColor = actBord;
+    bCub.style.background = inBg; bCub.style.color = inCol; bCub.style.borderColor = inBord;
+  } else {
+    bCub.style.background = actBg; bCub.style.color = actCol; bCub.style.borderColor = actBord;
+    bExt.style.background = inBg; bExt.style.color = inCol; bExt.style.borderColor = inBord;
+  }
+};
 
 function renderEsquemaCalculado(esquemaStr, price, qty) {
   if (!esquemaStr) return '<div style="color:var(--text-dim)">Pago escalado / A convenir</div>';
