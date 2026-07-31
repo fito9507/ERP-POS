@@ -1000,9 +1000,9 @@ function cardHTML(p){
           +'<span style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(_origPrice,MON,ALM)+'</span>'
         +'</span></div>';
       return (p.maj>0&&p.min>0&&p.maj!==p.min
-        ? '<div class="price-row" data-minmaj="min"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val minmaj-val" data-tipo="min" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
-          +'<div class="price-row" data-minmaj="maj"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val minmaj-val" data-tipo="maj" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
-        : '<div class="price-row main"><span class="lbl">Precio</span><span class="val">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
+        ? '<div class="price-row" data-minmaj="min"><span class="lbl" style="font-size:10px">Minorista (1-'+(MIN_MAY-1)+' uds)</span><span class="val minmaj-val" data-tipo="min" id="min-val-'+cardId+'" style="font-size:12px'+(isMay?';color:var(--text-dim)':';color:var(--accent)')+'">'+fPrice(priceMin,MON,ALM)+'</span></div>'
+          +'<div class="price-row" data-minmaj="maj"><span class="lbl" style="font-size:10px">Mayorista (+'+MIN_MAY+' uds)</span><span class="val minmaj-val" data-tipo="maj" id="maj-val-'+cardId+'" style="font-size:12px'+(isMay?';color:var(--accent)':';color:var(--text-dim)')+'">'+fPrice(priceMaj,MON,ALM)+'</span></div>'
+        : '<div class="price-row main"><span class="lbl">Precio</span><span class="val" id="main-val-'+cardId+'">'+fPrice(price||priceMaj||priceMin,MON,ALM)+'</span></div>');
     })()
     + '<div style="border-top:1px solid var(--border);margin:6px 0 4px"></div>'
     + ['USD','EUR','CUP','CUPT'].filter(function(m){return m!==MON;}).map(function(m){
@@ -1112,6 +1112,18 @@ window._tPago = function(id, tipo, pidx, basePrice) {
 
   var elSinglePrice = document.getElementById('single-price-'+id);
   if (elSinglePrice) elSinglePrice.innerHTML = fPrice(activePrice, _mon, _alm);
+
+  var loteActivo = (typeof getLoteActivo === 'function') ? getLoteActivo(p, _alm) : null;
+  var lotePrecio = (loteActivo && loteActivo.precio_venta > 0) ? loteActivo.precio_venta : 0;
+  var priceMinCalc = lotePrecio > 0 ? lotePrecio : ((_alm==='Placetas'&&p.min_placetas!=null)?p.min_placetas:(p.min||0));
+  var priceMajCalc = lotePrecio > 0 ? lotePrecio : ((_alm==='Placetas'&&p.maj_placetas!=null)?p.maj_placetas:((p.maj||p.min)||0));
+
+  var elMin = document.getElementById('min-val-'+id);
+  if (elMin) elMin.innerHTML = fPrice(applyRecargo(priceMinCalc), _mon, _alm);
+  var elMaj = document.getElementById('maj-val-'+id);
+  if (elMaj) elMaj.innerHTML = fPrice(applyRecargo(priceMajCalc), _mon, _alm);
+  var elMain = document.getElementById('main-val-'+id);
+  if (elMain) elMain.innerHTML = fPrice(applyRecargo(priceMinCalc||priceMajCalc), _mon, _alm);
 
   if (calcContainer && typeof renderEsquemaCalculado === 'function') {
     calcContainer.innerHTML = renderEsquemaCalculado(esquemaStr, activePrice, qty);
@@ -1243,7 +1255,7 @@ function encargoCardHTML(p){
 
       :(cifP==null&&ddpP==null?
 
-          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#10b981">'+fPrice(price,MON,ALM)+'</span></div>'
+          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#10b981" id="single-price-'+cardId+'">'+fPrice(price,MON,ALM)+'</span></div>'
 
         :''))
 
@@ -1255,9 +1267,9 @@ function encargoCardHTML(p){
 
     +'<div style="font-weight:700;color:#3b82f6;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;">'
     +'<div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px">&#128176;</span> Esquema de Pagos:</div>'
-    +'<div style="display:flex;gap:4px;">'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\','+pidx+','+esqPrice+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid #3b82f6;">EN EXTERIOR</span>'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\','+pidx+','+esqPrice+')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:2px 6px;border-radius:4px;letter-spacing:0.5px;font-weight:800;border:1px solid var(--text-tertiary);">EN CUBA</span>'
+    +'<div style="display:flex;align-items:center;background:rgba(59,130,246,0.1);border-radius:6px;padding:3px;border:1px solid rgba(59,130,246,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);">'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\','+pidx+','+esqPrice+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:3px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s">EN EXTERIOR</span>'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\','+pidx+','+esqPrice+')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:3px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s">EN CUBA</span>'
     +'</div>'
     +'</div>'
 
