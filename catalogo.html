@@ -685,7 +685,8 @@ async function init(){
         precio_cif: r.precio_cif!=null?parseFloat(r.precio_cif):null,
         precio_ddp: r.precio_ddp!=null?parseFloat(r.precio_ddp):null,
         nombre_puerto: r.nombre_puerto||'',
-        ficha_tecnica: r.ficha_tecnica||''
+        ficha_tecnica: r.ficha_tecnica||'',
+        recargo_cuba: r.recargo_cuba||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
 
