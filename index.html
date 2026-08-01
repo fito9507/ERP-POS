@@ -13414,7 +13414,7 @@ function shareStockWhatsApp() {
 }
 
 function shareStockQtyWhatsApp() {
-  var q=(window._stockQ||'').toLowerCase(), catF=window._stockCat||'', almF=window._stockAlm||'';
+  var q=(window._stockQ||'').toLowerCase(), catF=window._stockCat||'', almF=window._stockAlm||'', contF=window._stockCont||'';
   var activos=PRODS.filter(function(p){return p.activo!==false && p.enStock!==false;});
   var prods=activos.filter(function(p){
     if(q&&p.n.toLowerCase().indexOf(q)<0)return false;
@@ -13424,15 +13424,23 @@ function shareStockQtyWhatsApp() {
       var almQty = (p.stk_alm&&p.stk_alm[almF])||0;
       if(almQty<=0) return false;
     }
-    return total>0;
+    if(contF){
+      var inCont = (p.lotes||[]).some(function(l){ return l.lote === contF && (l.cantidad > 0 || _getLoteDisp(p.n, contF) !== null); });
+      if(!inCont) return false;
+      var d = _getLoteDisp(p.n, contF);
+      if(d !== null && d <= 0) return false; // Hide if fully reserved when sharing stock
+    } else {
+      if(total<=0) return false;
+    }
+    return true;
   }).sort(function(a,b){return a.n.localeCompare(b.n, undefined, {numeric: true});});
 
-  if(!prods.length){ showToast('No hay productos con stock'); return; }
+  if(!prods.length){ showToast('No hay productos con stock disponible'); return; }
 
   var alms = almF ? [almF] : ['Habana','Placetas','Xportprise'];
   var fecha = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  var text = "📊 *STOCK" + (almF ? " — " + almF.toUpperCase() : "") + (catF ? " — " + catF.toUpperCase() : "") + "* 📊\n";
+  var text = "📊 *STOCK DISPONIBLE" + (almF ? " — " + almF.toUpperCase() : "") + (catF ? " — " + catF.toUpperCase() : "") + (contF ? " — " + contF : "") + "* 📊\n";
   text += "📅 " + fecha + "\n\n";
 
   // Group by category
@@ -13447,7 +13455,10 @@ function shareStockQtyWhatsApp() {
     text += "━━━ *" + cat + "* ━━━\n";
     byCat[cat].forEach(function(p){
       var line = "▪ " + p.n + "\n";
-      if(almF){
+      if (contF) {
+        var d = _getLoteDisp(p.n, contF);
+        line += "   📦 " + fN(d,0) + " uds disp.\n";
+      } else if(almF){
         var qty = (p.stk_alm&&p.stk_alm[almF])||0;
         line += "   📦 " + fN(qty,0) + " uds\n";
       } else {
@@ -13467,6 +13478,10 @@ function shareStockQtyWhatsApp() {
   });
 
   var totalUnits = prods.reduce(function(a,p){
+    if (contF) {
+      var d = _getLoteDisp(p.n, contF);
+      return a + (d !== null && d > 0 ? d : 0);
+    }
     if(almF) return a + ((p.stk_alm&&p.stk_alm[almF])||0);
     return a + (p.stk||0);
   },0);
