@@ -2258,7 +2258,6 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
     
     var body = {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty,
       costo:loteCosto, precio_venta:lotePrecio};
-    if(!exist) body.fecha_entrada = new Date().toISOString();
     await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', body);
     return true;
   } else {
