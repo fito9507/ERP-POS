@@ -13179,7 +13179,7 @@ function renderStock(){
       if(!hasStk && !inTrans) return false;
     }
     if(contF){
-      var inCont = (p.lotes||[]).some(function(l){ return l.lote === contF && l.cantidad > 0; });
+      var inCont = (p.lotes||[]).some(function(l){ return l.lote === contF && (l.cantidad > 0 || _getLoteDisp(p.n, contF) !== null); });
       if(!inCont) return false;
     }
     return true;
