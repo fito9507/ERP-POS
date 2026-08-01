@@ -12169,8 +12169,18 @@ function applyStockMov(mov) {
     p.stk_alm[mov.almacen] = Math.max(0, (p.stk_alm[mov.almacen]||0) - mov.cantidad);
     p.stk_alm[mov.almacenDest] = (p.stk_alm[mov.almacenDest]||0) + mov.cantidad;
   } else if (mov.tipo === 'ajuste_abs') {
-    // Set absolute value
-    p.stk_alm[mov.almacen] = mov.cantidad;
+    // Ajuste del lote específico: recalcular stk_alm sumando todos los lotes
+    // Primero actualizar el lote específico localmente
+    var loteAbs = mov.contenedor || 'SIN LOTE';
+    if (!p.lotes) p.lotes = [];
+    var loteEntry = p.lotes.find(function(x){ return x.lote===loteAbs && x.almacen===mov.almacen; });
+    if (loteEntry) {
+      loteEntry.cantidad = mov.cantidad;
+    } else {
+      p.lotes.push({producto_id:p.supaId||'', almacen:mov.almacen, lote:loteAbs, cantidad:mov.cantidad});
+    }
+    // Recalcular el total del almacen sumando todos sus lotes
+    p.stk_alm[mov.almacen] = (p.lotes||[]).filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,x){return a+(x.cantidad||0);},0);
   }
   // Recalculate total
   p.stk = Object.values(p.stk_alm).reduce(function(a,v){return a+v;},0);
