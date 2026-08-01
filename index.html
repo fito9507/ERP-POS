@@ -12237,26 +12237,25 @@ function registrarMovStock(data) {
       }
       if (!p.supaId) return;
       // Sync lots to Supabase
-      if(typeof adjustStockByDelta === 'function') {
-        var loteSelected = mov.contenedor || 'SIN LOTE';
-        if(mov.tipo === 'traslado') {
-          await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
-          await adjustStockByDelta(p, mov.almacenDest, mov.cantidad, loteSelected);
-        } else if (mov.tipo === 'entrada' || mov.tipo === 'ajuste_alta') {
-          await adjustStockByDelta(p, mov.almacen, mov.cantidad, loteSelected);
-        } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
-          await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
-        } else if (mov.tipo === 'ajuste_abs') {
-          // Adjust absolute by calculating diff before applyStockMov. Wait, applyStockMov already ran.
-          // Since applyStockMov modified p.stk_alm, we shouldn't use it.
-          // Better let adjustStockByDelta recalculate diff:
-          var currentLotes = p.lotes ? p.lotes.filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,b){return a+(b.cantidad||0);},0) : 0;
-          var diff = mov.cantidad - currentLotes;
-          await adjustStockByDelta(p, mov.almacen, diff, loteSelected);
+        if(typeof adjustStockByDelta === 'function') {
+          var loteSelected = mov.contenedor || 'SIN LOTE';
+          if(mov.tipo === 'traslado') {
+            await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
+            await adjustStockByDelta(p, mov.almacenDest, mov.cantidad, loteSelected);
+          } else if (mov.tipo === 'entrada' || mov.tipo === 'ajuste_alta') {
+            await adjustStockByDelta(p, mov.almacen, mov.cantidad, loteSelected);
+          } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
+            await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
+          } else if (mov.tipo === 'ajuste_abs') {
+            var currentLotes = p.lotes ? p.lotes.filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,b){return a+(b.cantidad||0);},0) : 0;
+            var diff = mov.cantidad - currentLotes;
+            await adjustStockByDelta(p, mov.almacen, diff, loteSelected);
+          }
+          console.log('✓ Stock lots synced:', mov.producto);
+          if (typeof offlineSaveProds === 'function') offlineSaveProds();
+          if (typeof renderStock === 'function') { window.requestAnimationFrame(function(){ renderStock(); }); }
         }
-        console.log('✓ Stock lots synced:', mov.producto);
-      }
-    })();
+      })();
   }
   if (typeof renderStock === 'function') try { renderStock(); } catch(e) {}
   return true;
