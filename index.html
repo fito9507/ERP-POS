@@ -12194,7 +12194,12 @@ function renderStockMovimientos() {
     // Historial
     var rawQ = document.getElementById('smov-q')?.value || '';
     var q = rawQ.toLowerCase();
-    var movs = STOCK_MOVS.filter(function(m){ return !q || m.producto.toLowerCase().includes(q) || (m.motivo||'').toLowerCase().includes(q); });
+    var movs = STOCK_MOVS.filter(function(m){
+      if (!q) return true;
+      var pObj = PRODS.find(function(x){ return x.n === m.producto; });
+      var cat = pObj ? (pObj.cat || '').toLowerCase() : '';
+      return m.producto.toLowerCase().includes(q) || (m.motivo||'').toLowerCase().includes(q) || cat.includes(q);
+    });
     var tipoColor = { entrada:'var(--color-text-success)', salida:'var(--color-text-danger)',
       traslado:'var(--color-text-info)', ajuste_abs:'var(--color-text-secondary)',
       ajuste_alta:'var(--color-text-success)', ajuste_baja:'var(--color-text-warning)' };
