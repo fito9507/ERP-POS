@@ -3317,11 +3317,23 @@ function getPorEscala(p, q){
 function getP(p){ return getPorEscala(p, 1); }
 function stkDisp(p){
   if (p.reservado || p.badgeTexto === 'RESERVADO') return 0;
-  // Block stock reserved by ANY user globally
+  // Subtract POS session reservations
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
-  const res=allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
+  const resSession = allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
+  // Subtract quantities committed in active client folios (pedidos)
+  var resFolios = 0;
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(c){
+      (c.folios||[]).forEach(function(f){
+        if (typeof estF === 'function' && estF(f) === 'pagado') return;
+        (f.lineas||[]).forEach(function(l){
+          if (l.prod === p.n) resFolios += (l.q||0);
+        });
+      });
+    });
+  }
   const base=S.alm&&p.stk_alm&&p.stk_alm[S.alm]!=null?p.stk_alm[S.alm]:(p.stk||0);
-  return Math.max(0, base-res);
+  return Math.max(0, base - resSession - resFolios);
 }
 function renderProds(){
   const q=(document.getElementById('srch')?.value||'').toLowerCase();
