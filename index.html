@@ -3316,11 +3316,12 @@ function getPorEscala(p, q){
 }
 function getP(p){ return getPorEscala(p, 1); }
 function stkDisp(p){
+  if (p.reservado || p.badgeTexto === 'RESERVADO') return 0;
   // Block stock reserved by ANY user globally
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
   const res=allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
   const base=S.alm&&p.stk_alm&&p.stk_alm[S.alm]!=null?p.stk_alm[S.alm]:(p.stk||0);
-  return base-res;
+  return Math.max(0, base-res);
 }
 function renderProds(){
   const q=(document.getElementById('srch')?.value||'').toLowerCase();
@@ -3482,7 +3483,10 @@ function renderCart(){
             var _lotes=_p?(typeof getLotesOrdenados==='function'?getLotesOrdenados(_p,S.alm):[]):[];
             if(_lotes.length<=1) return c.loteSeleccionado?'<span style="font-size:8px;color:var(--color-text-tertiary)" title="Lote">📦'+c.loteSeleccionado+'</span>':'';
             return '<select style="font-size:9px;padding:1px 3px;border:1px solid var(--color-border-secondary);border-radius:4px;background:var(--color-background-secondary);color:var(--color-text-secondary);max-width:90px" onchange="changeLoteCart('+i+',this.value)" title="Cambiar lote">'
-              +_lotes.map(function(l){return '<option value="'+l.lote+'"'+(c.loteSeleccionado===l.lote?' selected':'')+'>'+l.lote+' ('+l.cantidad+')</option>';}).join('')
+              +_lotes.map(function(l){
+                var d = _getLoteDisp(c.n, l.lote);
+                return '<option value="'+l.lote+'"'+(c.loteSeleccionado===l.lote?' selected':'')+'>'+l.lote+' ('+d+' disp)</option>';
+              }).join('')
               +'</select>';
           })()}
           <span style="font-size:9px;color:var(--color-text-tertiary)">stk:${stk}</span>
