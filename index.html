@@ -7594,12 +7594,33 @@ function renderFichaFolios(c){
   });
 }
 function renderPL(c,f){
-  var opts = _getProdNames(f.alm).map(p=>`<option value="${p.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)">${p}</option>`).join('');
+  var optsMap = {};
+  var cnt = f.contenedor;
+  PRODS.forEach(function(p){
+    if(p.activo===false) return;
+    if(f.alm){
+       var stk = p.stk_alm&&p.stk_alm[f.alm]!=null ? p.stk_alm[f.alm] : (p.stk||0);
+       var inTransit = p.enTransito&&p.enTransito[f.alm];
+       if (!(stk > 0 || inTransit)) return;
+    }
+    var suffix = '';
+    if(cnt) {
+       var lote = (p.lotes||[]).find(function(l){return l.lote===cnt;});
+       var qt = lote ? lote.cantidad : 0;
+       suffix = ' (Stk: ' + fN(qt) + ')';
+    }
+    optsMap[p.n] = suffix;
+  });
+  var optNames = Object.keys(optsMap).sort(function(a,b){return a.localeCompare(b, undefined, {numeric: true});});
+  var opts = optNames.map(function(n){
+    return '<option value="'+n.replace(/"/g,'&quot;')+'" style="background:var(--color-background-primary);color:var(--color-text-primary)">'+n+optsMap[n]+'</option>';
+  }).join('');
+  
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
       <span style="font-size:11px;min-width:0">
         <select class="adm-inp" style="width:100%;max-width:100%;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer;text-overflow:ellipsis" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
-          <option value="${l.prod.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)" selected>${l.prod}</option>
+          <option value="${l.prod.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)" selected>${l.prod}${optsMap[l.prod]||''}</option>
           ${opts}
         </select>
       </span>
