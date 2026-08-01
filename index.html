@@ -1351,6 +1351,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="nav" id="main-nav">
   <button class="act" onclick="navTo('lista',this)">Clientes</button>
   <button onclick="showModal()">+ Nuevo cliente</button>
+  <button onclick="exportarReservasPDF()" style="margin-left:auto;background:var(--color-text-secondary);color:#fff;border:none">📄 Exportar Reservas PDF</button>
 </div>
 
 <!-- ══ LISTA CLIENTES ══ -->
@@ -7300,8 +7301,90 @@ function renderFicha(){
     <button id="fn-abonar" onclick="fichaNavTo('f-abonar')">+ Abonar</button>
     <button id="fn-nuevo-folio" onclick="fichaNavTo('f-nuevo-folio')">+ Nueva venta</button>
     ${(_isAdmCli||c.owner===(S&&S.user))?`<button class="btn-sm" onclick="editarCliente('${c.id}')" style="margin-left:auto">\u270f\ufe0f Editar</button>`:''}
-    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger)">🗑 Eliminar</button>`:''}`;
+    ${_isAdmCli?`<button class="btn-sm" onclick="eliminarCliente('${c.id}')" style="color:var(--color-text-danger)">🗑 Eliminar</button>`:''}
+    <button class="btn-sm" onclick="exportarReservasPDF('${c.id}')" style="${(_isAdmCli||c.owner===(S&&S.user))?'margin-left:6px':'margin-left:auto'};background:var(--color-text-secondary);color:#fff;border:none">📄 PDF Folios</button>`;
   fichaNavTo('f-cuenta');
+}
+
+function exportarReservasPDF(clienteId) {
+  var clis = clienteId ? [CLIENTES.find(function(c) { return c.id === clienteId; })] : CLIENTES;
+  clis = clis.filter(Boolean);
+  if (!clis.length) return;
+
+  var html = '<!DOCTYPE html><html><head><title>Resumen de Reservas</title>';
+  html += '<style>';
+  html += 'body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; margin: 20px; color: #333; }';
+  html += 'table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }';
+  html += 'th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }';
+  html += 'th { background-color: #f4f4f4; font-weight: 600; }';
+  html += 'h2 { margin-top: 30px; border-bottom: 1px solid #000; padding-bottom: 5px; font-size: 16px; margin-bottom:10px; }';
+  html += '.text-right { text-align: right; }';
+  html += '.tot-row td { font-weight: bold; background: #f9f9f9; }';
+  html += '.prod-row { font-size: 10.5px; color: #555; }';
+  html += '@media print { @page { margin: 1cm; } button { display: none; } }';
+  html += '</style></head><body>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+  html += '<h1 style="font-size:20px;margin:0">Resumen de Reservas (Folios)</h1>';
+  html += '<button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer;background:#2563eb;color:#fff;border:none;border-radius:4px">🖨️ Imprimir / Guardar PDF</button>';
+  html += '</div>';
+  html += '<p style="margin:5px 0 20px 0;font-size:12px;color:#666">Fecha de emisión: ' + new Date().toLocaleString() + '</p>';
+
+  var totalDeuda = 0, totalPdte = 0;
+
+  clis.forEach(function(c) {
+    var folios = c.folios || [];
+    if (!folios.length) return;
+    html += '<h2>Cliente: ' + c.nombre + '</h2>';
+    html += '<table><thead><tr><th>Folio / Productos</th><th>Fecha</th><th>Estado</th><th>Lote</th><th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Pdte</th></tr></thead><tbody>';
+    
+    var cTot = 0, cPag = 0, cPdt = 0;
+    folios.forEach(function(f) {
+      var t = totF(f), p = pagF(f), pd = pdtF(f);
+      cTot += t; cPag += p; cPdt += pd;
+      totalDeuda += t; totalPdte += pd;
+      
+      var bg = pd > 0 ? '#fff5f5' : '#f0fdf4';
+      if (t === 0) bg = '#fff';
+      
+      html += '<tr style="background:'+bg+';font-weight:600">';
+      html += '<td>#' + f.id + (f.desc ? ' - ' + f.desc : '') + '</td>';
+      html += '<td>' + fD(f.fecha) + '</td>';
+      html += '<td>' + EL[estF(f)] + '</td>';
+      html += '<td>' + (f.contenedor || '—') + '</td>';
+      html += '<td class="text-right">$' + fN(t) + '</td>';
+      html += '<td class="text-right">$' + fN(p) + '</td>';
+      html += '<td class="text-right" style="color:'+(pd>0?'#dc2626':'#16a34a')+'">$' + fN(pd) + '</td>';
+      html += '</tr>';
+      
+      // Add product lines
+      if (f.lineas && f.lineas.length > 0) {
+        html += '<tr class="prod-row"><td colspan="7" style="padding:4px 8px 12px 16px"><ul style="margin:0;padding-left:20px">';
+        f.lineas.forEach(function(l) {
+          html += '<li>' + l.q + 'x ' + l.n + ' ($' + fN(l.p) + ')</li>';
+        });
+        html += '</ul></td></tr>';
+      }
+    });
+    
+    html += '<tr class="tot-row"><td colspan="4" class="text-right">TOTALES CLIENTE (' + folios.length + ' folios):</td>';
+    html += '<td class="text-right">$' + fN(cTot) + '</td>';
+    html += '<td class="text-right">$' + fN(cPag) + '</td>';
+    html += '<td class="text-right">$' + fN(cPdt) + '</td>';
+    html += '</tr>';
+    html += '</tbody></table>';
+  });
+
+  html += '<div style="margin-top:20px;padding:15px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px">';
+  html += '<h3 style="margin:0 0 10px 0">Resumen Global</h3>';
+  html += '<div>Total reservas: <b>$' + fN(totalDeuda) + '</b></div>';
+  html += '<div style="color:#dc2626">Total pendiente: <b>$' + fN(totalPdte) + '</b></div>';
+  html += '</div>';
+  html += '</body></html>';
+
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function() { w.print(); }, 500);
 }
 
 // ── LISTA ─────────────────────────────────────────────────
