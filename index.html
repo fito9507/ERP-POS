@@ -7311,8 +7311,10 @@ function exportarReservasPDF(clienteId) {
   var clis = clienteId ? [CLIENTES.find(function(c) { return c.id === clienteId; })] : CLIENTES;
   clis = clis.filter(Boolean);
   if (!clis.length) return;
-
-  var html = '<!DOCTYPE html><html><head><title>Resumen de Reservas</title>';
+  var d = new Date();
+  var dateStr = d.getDate().toString().padStart(2, '0') + '-' + (d.getMonth()+1).toString().padStart(2, '0') + '-' + d.getFullYear();
+  var title = 'Reservas ' + (clienteId ? clis[0].nombre : 'Todos') + ' ' + dateStr;
+  var html = '<!DOCTYPE html><html><head><title>' + title + '</title>';
   html += '<style>';
   html += 'body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; margin: 20px; color: #333; }';
   html += 'table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }';
