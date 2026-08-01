@@ -2801,22 +2801,27 @@ async function _recalcReservas(){
     });
   });
 
-  // 2. For each product in transit, update qty_reservada and badge_texto
+  // 2. For each product, update qty_reservada and badge_texto
   var updates = [];
   PRODS.forEach(function(p){
-    var isTransit = p.enTransito && (p.enTransito.Habana || p.enTransito.Placetas || p.enTransito.Xportprise);
-    if(!isTransit) return;
-
     var oldQtyRes = p.qty_reservada || 0;
     var oldBadge = p.badgeTexto || '';
     var newQtyRes = reservasPorProd[p.n] || 0;
-    var totalStock = p.stk || 0;
+    
+    var physStock = p.stk || 0;
+    var transitStock = 0;
+    if(p.enTransito) {
+      transitStock += (p.enTransito.Habana||0) + (p.enTransito.Placetas||0) + (p.enTransito.Xportprise||0);
+    }
+    var totalInventory = physStock + transitStock;
+    var available = totalInventory - newQtyRes;
+    
     var newBadge = oldBadge;
     
-    if (totalStock <= 0 && newQtyRes > 0) {
-      // Si el stock restante es 0 y hay ventas, se agotó todo el contenedor -> Auto-Reservado
+    if (available <= 0 && newQtyRes > 0) {
+      // Si el stock disponible (físico + tránsito - reservas) es <= 0 y hay reservas -> Auto-Reservado
       newBadge = 'RESERVADO';
-    } else if (totalStock > 0) {
+    } else if (available > 0 && oldBadge === 'RESERVADO') {
       // Si queda stock disponible, NO está reservado al 100% -> Auto-Limpiar
       newBadge = '';
     }
