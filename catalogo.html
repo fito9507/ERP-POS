@@ -968,14 +968,14 @@ function cardHTML(p){
     +'<div class="card-name">'+esc(p.n)+'</div>'
     +'<div class="card-stock">'+stkLabel+'</div>'
     +(function(){
-      if(!_transit) return '';
-      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
+      if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado</div>';
       var qr=p.qty_reservada||0;
       var ts=p.stk||0;
       if(ts<=0 && qr>0) ts=qr; // fallback
       if(qr<=0 || ts<=0) return '';
       var pct=Math.min(Math.round(qr/ts*100),100);
-      if(pct>=100) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado en preventa</div>';
+      if(pct>=100) return '<div style="margin:2px 0;font-size:10px;font-weight:700;color:#7c3aed">🔒 Agotado</div>';
+      if(pct<=0) return '';
       var text = '🔥 Reservando rápido';
       if(pct > 80) text = '⚡ Últimas unidades disponibles';
       else if(pct > 50) text = '🔥 Más del 50% reservado';
