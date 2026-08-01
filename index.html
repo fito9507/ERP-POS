@@ -3324,12 +3324,26 @@ function renderProds(){
   const cats=[''].concat([...new Set(PRODS.filter(p=>p.activo!==false&&p.cat).map(p=>p.cat))].sort());
   const cpanel=document.getElementById('cat-pills');
   if(cpanel)cpanel.innerHTML=cats.map(c=>`<button class="cat-pill${catF===c?' act':''}" onclick="setCatFilter('${c}')">${c||'Todos'}</button>`).join('');
-  g.innerHTML=PRODS.filter(p=>{
+  const filtered = PRODS.filter(p=>{
     if(p.activo===false)return false;
     if(!p.n.toLowerCase().includes(q))return false;
     if(catF&&p.cat!==catF)return false;
     return true;
-  }).map(p=>{
+  });
+
+  filtered.sort((a,b) => {
+    const stkA = stkDisp(a);
+    const stkB = stkDisp(b);
+    const hasA = (stkA > 0 && !a.reservado) ? 1 : 0;
+    const hasB = (stkB > 0 && !b.reservado) ? 1 : 0;
+    if (hasA !== hasB) return hasB - hasA;
+    const resA = a.reservado ? 1 : 0;
+    const resB = b.reservado ? 1 : 0;
+    if (resA !== resB) return resB - resA;
+    return a.n.localeCompare(b.n);
+  });
+
+  g.innerHTML=filtered.map(p=>{
     const pr=getP(p)||(p.escala&&p.escala.length?p.escala[0].precio:0);if(pr==null||pr==='')return'';
     const stk=stkDisp(p);const ns=stk<=0;
     const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
