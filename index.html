@@ -12307,16 +12307,20 @@ function _saveMovLote() {
           } catch(e) {}
         }
         if (m.tipo === 'entrada' || m.tipo === 'ajuste_alta') {
-          await adjustStockByDelta(p, m.almacen, -q, oldLote);
+          await adjustStockByDelta(p, m.almacen, -q, null, {loteEspecifico: oldLote});
           await adjustStockByDelta(p, m.almacen, q, newLote);
         } else if (m.tipo === 'salida' || m.tipo === 'ajuste_baja') {
-          await adjustStockByDelta(p, m.almacen, q, oldLote);
+          await adjustStockByDelta(p, m.almacen, q, null, {loteEspecifico: oldLote});
           await adjustStockByDelta(p, m.almacen, -q, newLote);
         } else if (m.tipo === 'traslado') {
-          await adjustStockByDelta(p, m.almacen, q, oldLote);
-          await adjustStockByDelta(p, m.almacenDest, -q, oldLote);
+          await adjustStockByDelta(p, m.almacen, q, null, {loteEspecifico: oldLote});
+          await adjustStockByDelta(p, m.almacenDest, -q, null, {loteEspecifico: oldLote});
           await adjustStockByDelta(p, m.almacen, -q, newLote);
           await adjustStockByDelta(p, m.almacenDest, q, newLote);
+        } else if (m.tipo === 'ajuste_abs') {
+          // Si editó el lote de un ajuste absoluto, movemos la cantidad reportada en ese ajuste
+          await adjustStockByDelta(p, m.almacen, -q, null, {loteEspecifico: oldLote});
+          await adjustStockByDelta(p, m.almacen, q, newLote);
         }
         offlineSaveProds();
         if (typeof renderStock === 'function') renderStock();
