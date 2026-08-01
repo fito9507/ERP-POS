@@ -7507,6 +7507,10 @@ function renderFichaCuenta(c){
 
 // ── FICHA — FOLIOS ────────────────────────────────────────
 function renderFichaFolios(c){
+  var openFolios = [];
+  document.querySelectorAll('.folio-body').forEach(function(el) {
+    if(el.style.display === 'block') openFolios.push(el.id);
+  });
   const data=folioFiltro==='todos'?c.folios:c.folios.filter(f=>estF(f)===folioFiltro);
   document.getElementById('f-folios-body').innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
@@ -7583,11 +7587,21 @@ function renderFichaFolios(c){
         </div>
       </div>`;
     }).join('')||`<div class="card" style="text-align:center;color:var(--color-text-tertiary);padding:20px">Sin folios "${folioFiltro}"</div>`}`;
+  openFolios.forEach(function(id) {
+    var el = document.getElementById(id);
+    if(el) el.style.display = 'block';
+  });
 }
 function renderPL(c,f){
+  var opts = _getProdNames(f.alm).map(p=>`<option value="${p.replace(/"/g,'&quot;')}">${p}</option>`).join('');
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
-      <span style="font-size:11px">${l.prod}</span>
+      <span style="font-size:11px">
+        <select class="adm-inp" style="width:100%;max-width:180px;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
+          <option value="${l.prod.replace(/"/g,'&quot;')}" selected>${l.prod}</option>
+          ${opts}
+        </select>
+      </span>
       <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
       <span><input type="number" class="pi" value="${l.precio}" step="0.01" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
@@ -7599,6 +7613,7 @@ function renderPL(c,f){
 }
 function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
+function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
 function elimL(cid,fid,i){
   const c=CLIENTES.find(x=>x.id===cid);
