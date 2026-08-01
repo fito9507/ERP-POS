@@ -7595,6 +7595,25 @@ function renderFichaFolios(c){
     if(el) el.style.display = 'block';
   });
 }
+function _getLoteDisp(prodName, loteName) {
+  var p = PRODS.find(x=>x.n===prodName);
+  if(!p) return 0;
+  var lote = (p.lotes||[]).find(x=>x.lote===loteName);
+  var qt = lote ? lote.cantidad : 0;
+  var res = 0;
+  CLIENTES.forEach(c => {
+    (c.folios||[]).forEach(f => {
+      // Omitir folios pagados (ya descontaron físico) y anulados/cancelados (si existieran)
+      if (estF(f)!=='pagado' && f.contenedor === loteName) {
+        (f.lineas||[]).forEach(l => {
+          if (l.prod === prodName) res += (l.q||0);
+        });
+      }
+    });
+  });
+  return qt - res;
+}
+
 function renderPL(c,f){
   var optsMap = {};
   var cnt = f.contenedor;
@@ -7607,9 +7626,8 @@ function renderPL(c,f){
     }
     var suffix = '';
     if(cnt) {
-       var lote = (p.lotes||[]).find(function(l){return l.lote===cnt;});
-       var qt = lote ? lote.cantidad : 0;
-       suffix = ' (Stk: ' + fN(qt) + ')';
+       var disp = _getLoteDisp(p.n, cnt);
+       suffix = ' (Disp: ' + fN(disp) + ')';
     }
     optsMap[p.n] = suffix;
   });
