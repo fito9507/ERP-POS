@@ -12485,6 +12485,10 @@ function _saveMovLote() {
 }
 
 function admRegistrarMovStock() {
+  if (window._isRegisteringMov) return;
+  window._isRegisteringMov = true;
+  setTimeout(function(){ window._isRegisteringMov = false; }, 500);
+
   var tipo   = (document.getElementById('smov-tipo') || {}).value;
   var prod   = (document.getElementById('smov-prod') || {}).value;
   var alm    = (document.getElementById('smov-alm') || {}).value;
