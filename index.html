@@ -7597,8 +7597,8 @@ function renderPL(c,f){
   var opts = _getProdNames(f.alm).map(p=>`<option value="${p.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)">${p}</option>`).join('');
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
-      <span style="font-size:11px">
-        <select class="adm-inp" style="width:100%;max-width:180px;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
+      <span style="font-size:11px;min-width:0">
+        <select class="adm-inp" style="width:100%;max-width:100%;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer;text-overflow:ellipsis" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
           <option value="${l.prod.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)" selected>${l.prod}</option>
           ${opts}
         </select>
