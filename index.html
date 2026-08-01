@@ -7627,7 +7627,7 @@ function renderPL(c,f){
     var suffix = '';
     if(cnt) {
        var disp = _getLoteDisp(p.n, cnt);
-       suffix = ' (Disp: ' + fN(disp) + ')';
+       suffix = ' (Disp: ' + fN(disp, 0) + ')';
     }
     optsMap[p.n] = suffix;
   });
@@ -13228,7 +13228,7 @@ function renderStock(){
     var lotesStr = (p.lotes||[]).map(function(l){
       var disp = _getLoteDisp(p.n, l.lote);
       if (disp <= 0 && l.cantidad <= 0) return '';
-      return '<span style="font-size:10px;padding:2px 4px;background:var(--color-background-secondary);border-radius:3px;margin:1px;display:inline-block;white-space:nowrap;border:.5px solid var(--color-border-tertiary)">'+(l.lote==='SIN LOTE'?'S/L':l.lote)+': '+fN(disp)+'</span>';
+      return '<span style="font-size:10px;padding:2px 4px;background:var(--color-background-secondary);border-radius:3px;margin:1px;display:inline-block;white-space:nowrap;border:.5px solid var(--color-border-tertiary)">'+(l.lote==='SIN LOTE'?'S/L':l.lote)+': '+fN(disp, 0)+'</span>';
     }).filter(Boolean).join('');
     if(!lotesStr) lotesStr = '<span style="color:var(--color-text-tertiary);font-size:10px">—</span>';
     
