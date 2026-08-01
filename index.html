@@ -437,7 +437,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #mod-clientes .abono-row {display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
 #mod-clientes .abono-row:last-child {border-bottom:none}
 #mod-clientes .abono-icon {width:26px;height:26px;border-radius:50%;background:var(--color-background-success);color:var(--color-text-success);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
-#mod-clientes .prod-row {display:grid;grid-template-columns:1fr 76px 86px 52px 80px 50px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
+#mod-clientes .prod-row {display:grid;grid-template-columns:1fr 76px 95px 45px 95px 40px;gap:6px;align-items:center;padding:5px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
 #mod-clientes .prod-row:last-child {border-bottom:none}
 #mod-clientes .prod-row.hdr {font-size:10px;color:var(--color-text-secondary)}
 #mod-clientes .qi {width:72px !important;font-size:11px !important;padding:2px 5px !important;text-align:right !important;border-radius:4px !important;-moz-appearance:textfield}
@@ -631,13 +631,14 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #ficha-nav button{white-space:nowrap;min-height:36px!important;font-size:11px!important}
   /* Folio header: wrap */
   .folio-hdr{flex-wrap:wrap!important;gap:6px!important;padding:10px!important}
-  /* Prod-row en folio: simplificar a 3 cols */
+  /* Prod-row en folio: simplificar a 4 cols */
   #mod-clientes .prod-row{
-    grid-template-columns:1fr 48px 70px!important;
+    grid-template-columns: 1fr 50px 75px 80px;
+    gap:4px;
     font-size:11px!important;
   }
-  #mod-clientes .prod-row .qi{width:44px!important}
-  #mod-clientes .prod-row .pi{width:62px!important}
+  #mod-clientes .prod-row .qi{width:46px!important}
+  #mod-clientes .prod-row .pi{width:70px!important}
   /* Ocultar columna moneda y acción en mobile (menos críticas) */
   #mod-clientes .prod-row span:nth-child(4),
   #mod-clientes .prod-row span:nth-child(6){display:none!important}
