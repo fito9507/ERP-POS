@@ -8993,7 +8993,23 @@ function renderAdminProductos() {
   });
 
   html += '</tbody></table></div>';
+
+  // Save focus state before replacing DOM
+  var wasFocused = document.activeElement && document.activeElement.id === 'adm-prod-q';
+  var selStart = wasFocused ? document.activeElement.selectionStart : 0;
+  var selEnd   = wasFocused ? document.activeElement.selectionEnd   : 0;
+
   el.innerHTML = html;
+
+  // Restore focus & cursor so typing is not interrupted by re-render
+  if (wasFocused) {
+    var inp2 = document.getElementById('adm-prod-q');
+    if (inp2) {
+      inp2.focus();
+      try { inp2.setSelectionRange(selStart, selEnd); } catch(e) {}
+    }
+  }
+
   // Attach change listeners for sel bar
   document.querySelectorAll('.prod-chk').forEach(function(c){
     c.addEventListener('change', admUpdSelBar);
