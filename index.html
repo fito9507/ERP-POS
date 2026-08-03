@@ -7551,9 +7551,10 @@ function renderFichaFolios(c){
               <span style="font-size:13px;font-weight:500">Folio ${f.id}</span>
               <span class="badge ${EC[est]}">${EL[est]}</span>
               <span style="font-size:11px;color:var(--color-text-secondary)">${fD(f.fecha)} · ${f.alm}</span>
+              <button style="border:none;background:none;cursor:pointer;font-size:13px;padding:0;color:var(--color-text-tertiary);opacity:.7" onclick="event.stopPropagation();renombrarFolio('${c.id}','${f.id}')" title="Renombrar folio">✏️</button>
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
-            <div style="font-size:11px;color:var(--color-text-secondary)">${f.desc}</div>
+            <div style="font-size:11px;color:var(--color-text-secondary)" id="fdesc-${c.id}-${f.id}">${f.desc}</div>
             ${f.contenedor ? '<div style="margin-top:3px">'+_cntBadge(f.contenedor)+'</div>' : '<button class="btn-sm" style="font-size:10px;padding:2px 6px;margin-top:3px;border-color:var(--color-text-tertiary);color:var(--color-text-tertiary)" onclick="event.stopPropagation();_asignarCntFolio(\''+c.id+'\',\''+f.id+'\')">🚢 Asignar contenedor</button>'}
             <div class="pay-bar" style="width:200px;margin:5px 0 2px"><div class="pay-bar-fill" style="width:${pag>tot?100:pct}%;${pag>tot?'background:linear-gradient(90deg,#22c55e,#4ade80)':''}"></div></div>
             <div style="font-size:10px;color:var(--color-text-secondary)">${pag>tot?'Crédito a favor':pct+'%'} · ${f.lineas.length} productos · ${f.abonos.length} abonos</div>
@@ -7784,6 +7785,33 @@ function elimFolioCli(cid,fid){
   renderFichaFolios(c);
   showToast('Folio y venta eliminados con éxito');
 }
+
+async function renombrarFolio(cid, fid) {
+  const c = CLIENTES.find(x => x.id === cid);
+  if(!c) return;
+  const f = c.folios.find(x => x.id === fid);
+  if(!f) return;
+  const nuevo = prompt('Nombre / descripción del folio:', f.desc || '');
+  if(nuevo === null) return; // cancelled
+  const descNueva = nuevo.trim();
+  f.desc = descNueva;
+  // Update UI immediately without full re-render
+  const descEl = document.getElementById('fdesc-'+cid+'-'+fid);
+  if(descEl) descEl.textContent = descNueva;
+  offlineSaveClientes();
+  try {
+    if(typeof supaReq !== 'undefined' && _supaOnline) {
+      await supaReq('PATCH', 'folios?id=eq.'+fid, { desc: descNueva });
+      showToast('✓ Nombre actualizado');
+    } else {
+      enqueue({ method:'PATCH', path:'folios?id=eq.'+fid, body:{ desc: descNueva } });
+      showToast('✓ Guardado (se sincronizará online)');
+    }
+  } catch(e) {
+    showToast('Error al guardar: '+e.message, 'error');
+  }
+}
+
 function cruzarSaldoFolio(cid, fid) {
   const c = CLIENTES.find(x => x.id === cid);
   if(!c) return;
