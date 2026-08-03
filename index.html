@@ -830,6 +830,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div class="prod-panel">
     <div class="card" style="padding:10px">
       <div class="tbar">
+        <div class="toggle-group" id="tg-dispo">
+          <button class="tg-btn dispo-btn act" onclick="selDispoMode('stock',this)">📦 Stock Inmediato</button>
+          <button class="tg-btn dispo-btn" onclick="selDispoMode('transit',this)">🚢 Prereserva En Tránsito</button>
+        </div>
         <div class="toggle-group">
           <button class="tg-btn act" id="tb-min" onclick="selTipo('Minorista',this)">Minorista</button>
           <button class="tg-btn" id="tb-may" onclick="selTipo('Mayorista',this)">Mayorista</button>
@@ -3320,12 +3324,13 @@ function stkDisp(p){
   // Subtract POS session reservations
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
   const resSession = allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
-  // Subtract quantities committed in active client folios (pedidos)
+  // Subtract quantities committed in active client folios (only stock folios, not prereservas)
   var resFolios = 0;
   if (typeof CLIENTES !== 'undefined') {
     CLIENTES.forEach(function(c){
       (c.folios||[]).forEach(function(f){
         if (typeof estF === 'function' && estF(f) === 'pagado') return;
+        if (f.tipo_reserva === 'prereserva') return; // Prereservas de tránsito no descuentan stock físico
         (f.lineas||[]).forEach(function(l){
           if (l.prod === p.n) resFolios += (l.q||0);
         });
@@ -3335,24 +3340,59 @@ function stkDisp(p){
   const base=S.alm&&p.stk_alm&&p.stk_alm[S.alm]!=null?p.stk_alm[S.alm]:(p.stk||0);
   return Math.max(0, base - resSession - resFolios);
 }
+
+function stkTransitDisp(p, alm){
+  var _alm = alm || S.alm || 'Habana';
+  var totalTrans = (p.enTransito && p.enTransito[_alm]) ? p.enTransito[_alm] : 0;
+  var resFolios = 0;
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(c){
+      (c.folios||[]).forEach(function(f){
+        if (typeof estF === 'function' && estF(f) === 'pagado') return;
+        if (f.tipo_reserva !== 'prereserva') return;
+        if (f.alm && f.alm !== _alm) return;
+        (f.lineas||[]).forEach(function(l){
+          if (l.prod === p.n) resFolios += (l.q||0);
+        });
+      });
+    });
+  }
+  return Math.max(0, totalTrans - resFolios);
+}
+
+function selDispoMode(mode, btn){
+  S.dispoMode = mode;
+  document.querySelectorAll('.dispo-btn').forEach(function(b){ b.classList.remove('act'); });
+  if(btn) btn.classList.add('act');
+  if(mode === 'transit'){
+    var preBtn = document.getElementById('tb-pre');
+    if(preBtn) selTipo('Preventa', preBtn);
+  }
+  renderProds();
+  renderCartCtx();
+}
 function renderProds(){
   const q=(document.getElementById('srch')?.value||'').toLowerCase();
   const catF=(document.getElementById('cat-filter')?.value||'');
   const g=document.getElementById('pgrid');if(!g)return;
   const m=S.cartMon;
+  const isTransitMode = (S.dispoMode === 'transit');
+
   const cats=[''].concat([...new Set(PRODS.filter(p=>p.activo!==false&&p.cat).map(p=>p.cat))].sort());
   const cpanel=document.getElementById('cat-pills');
   if(cpanel)cpanel.innerHTML=cats.map(c=>`<button class="cat-pill${catF===c?' act':''}" onclick="setCatFilter('${c}')">${c||'Todos'}</button>`).join('');
+  
   const filtered = PRODS.filter(p=>{
     if(p.activo===false)return false;
     if(!p.n.toLowerCase().includes(q))return false;
     if(catF&&p.cat!==catF)return false;
+    if(isTransitMode && (!p.enTransito || !p.enTransito[S.alm])) return false;
     return true;
   });
 
   filtered.sort((a,b) => {
-    const stkA = stkDisp(a);
-    const stkB = stkDisp(b);
+    const stkA = isTransitMode ? stkTransitDisp(a, S.alm) : stkDisp(a);
+    const stkB = isTransitMode ? stkTransitDisp(b, S.alm) : stkDisp(b);
     const hasA = (stkA > 0 && !a.reservado) ? 1 : 0;
     const hasB = (stkB > 0 && !b.reservado) ? 1 : 0;
     if (hasA !== hasB) return hasB - hasA;
@@ -3364,14 +3404,16 @@ function renderProds(){
 
   g.innerHTML=filtered.map(p=>{
     const pr=getP(p)||(p.escala&&p.escala.length?p.escala[0].precio:0);if(pr==null||pr==='')return'';
-    const stk=stkDisp(p);const ns=stk<=0;
+    const stk=isTransitMode ? stkTransitDisp(p, S.alm) : stkDisp(p);
+    const ns=stk<=0;
     const alt=m!=='USD'?`<div class="pbt">${fN(fromUSD(pr,m,S.alm),dFor(m))} ${m}</div>`:'';
-    var _bH=p.reservado?'<div class="badge-reservado" style="margin:0 0 4px;font-size:9px;padding:1px 6px">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto?`<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px">${p.badgeTexto}</div>`:'');
+    var _bH=isTransitMode ? `<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)">🚢 PREVENTA (${S.alm})</div>` : (p.reservado?'<div class="badge-reservado" style="margin:0 0 4px;font-size:9px;padding:1px 6px">🔒 RESERVADO</div>':(p.oferta&&p.badgeTexto?`<div class="badge-oferta" style="margin:0 0 4px;font-size:9px;padding:1px 6px">${p.badgeTexto}</div>`:''));
     var _ofePr=p.oferta?(S.alm==='Placetas'?(p.precioOfertaPlacetas||p.precioOfertaHabana||null):(p.precioOfertaHabana||null)):null;
     var _priceHtml=_ofePr!=null?`<span style="color:#ef4444;font-weight:700">${fN(_ofePr)}</span> <span style="text-decoration:line-through;color:var(--color-text-tertiary);font-size:10px">${fN(pr)}</span> USD`:fN(pr)+' USD';
+    var stkLabel = isTransitMode ? (ns ? 'Sin cupo tránsito' : '🚢 Disp: '+stk) : (ns ? 'Sin stock' : 'Stk: '+stk);
     return `<button class="pb${ns?' no-stk':''}" ${ns?'':`onclick="addCart(this.getAttribute('data-n'))" data-n="${p.n.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}"`}>
       ${_bH}<div class="pbn">${p.n}</div><div class="pbp">${_priceHtml}</div>${alt}
-      <div class="pbs">${ns?'Sin stock':'Stk:'+stk}</div>
+      <div class="pbs">${stkLabel}</div>
     </button>`;
   }).join('');
 }
@@ -3445,8 +3487,9 @@ function editPriceMon(i,v,mon){
 function renderCartCtx(){
   const el=document.getElementById('cart-ctx');if(!el)return;
   const u=USERS[S.user];
+  var almBadge = S.dispoMode==='transit' ? '<span class="badge ba" style="font-weight:600">🚢 Prereserva ('+S.alm+')</span>' : '<span class="badge bb">'+S.alm+'</span>';
   el.innerHTML=`<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:100px;background:${u?.color};color:${u?.tc};font-size:11px">${S.user}</span>
-    <span class="badge bb">${S.alm}</span>
+    ${almBadge}
     <span style="font-size:11px;color:var(--color-text-tertiary)">${S.cli||'Walk-in'}</span>`;
 }
 function renderCartTotalsOnly(){
@@ -3570,31 +3613,36 @@ function ventaCreditoPOS() {
   // stock check — same logic as stkDisp but exclude the current folio being created
   var stockError = null;
   var stockWarn = null;
+  var isTransitMode = (typeof S !== 'undefined' && S.dispoMode === 'transit');
   lineas.forEach(function(l){
     var p=PRODS.find(function(x){return x.n===l.prod;});
     if(!p){stockError='Producto no encontrado: '+l.prod;return;}
-    // Physical stock in the target almacen
-    var fisico=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
-    // Subtract existing folio commitments (not paid) for this product+almacen
-    var resFolios=0;
-    if(typeof CLIENTES!=='undefined'){
-      CLIENTES.forEach(function(cc){
-        (cc.folios||[]).forEach(function(ff){
-          if(typeof estF==='function'&&estF(ff)==='pagado') return;
-          if(ff.alm&&ff.alm!==alm) return; // only same almacen
-          (ff.lineas||[]).forEach(function(lf){
-            if(lf.prod===l.prod) resFolios+=(lf.q||0);
+    if(isTransitMode){
+      var transQty = stkTransitDisp(p, alm);
+      if(l.q > transQty){
+        stockWarn = (stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+transQty+' libres en tránsito para '+alm+'. ¿Prereservar '+l.q+' igualmente?';
+      }
+    } else {
+      var fisico=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+      var resFolios=0;
+      if(typeof CLIENTES!=='undefined'){
+        CLIENTES.forEach(function(cc){
+          (cc.folios||[]).forEach(function(ff){
+            if(typeof estF==='function'&&estF(ff)==='pagado') return;
+            if(ff.tipo_reserva === 'prereserva') return; // ignore prereservas when checking physical stock
+            if(ff.alm&&ff.alm!==alm) return;
+            (ff.lineas||[]).forEach(function(lf){
+              if(lf.prod===l.prod) resFolios+=(lf.q||0);
+            });
           });
         });
-      });
-    }
-    var disponible=Math.max(0,fisico-resFolios);
-    if(l.q>fisico){
-      // Hard block: not even in physical stock
-      stockError='Stock insuficiente: '+l.prod+' (disp: '+fisico+', ped: '+l.q+')';
-    } else if(l.q>disponible){
-      // Soft warn: in stock but already committed to another folio
-      stockWarn=(stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+disponible+' libres de '+fisico+' en stock ('+resFolios+' comprometido en otros folios). ¿Continuar igualmente?';
+      }
+      var disponible=Math.max(0,fisico-resFolios);
+      if(l.q>fisico){
+        stockError='Stock insuficiente: '+l.prod+' (disp: '+fisico+', ped: '+l.q+')';
+      } else if(l.q>disponible){
+        stockWarn=(stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+disponible+' libres de '+fisico+' en stock ('+resFolios+' comprometido en otros folios). ¿Continuar igualmente?';
+      }
     }
   });
   if(stockError){alert(stockError);return;}
@@ -7573,6 +7621,7 @@ function renderFichaFolios(c){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
               <span style="font-size:13px;font-weight:500">Folio ${f.id}</span>
               <span class="badge ${EC[est]}">${EL[est]}</span>
+              ${f.tipo_reserva==='prereserva'?'<span class="badge ba" style="font-weight:600">🚢 PRERESERVA TRÁNSITO</span>':'<span class="badge bb">📦 STOCK FÍSICO</span>'}
               <span style="font-size:11px;color:var(--color-text-secondary)">${fD(f.fecha)} · ${f.alm}</span>
               <button style="border:none;background:none;cursor:pointer;font-size:13px;padding:0;color:var(--color-text-tertiary);opacity:.7" onclick="event.stopPropagation();renombrarFolio('${c.id}','${f.id}')" title="Renombrar folio">✏️</button>
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
