@@ -13485,7 +13485,7 @@ function shareStockQtyWhatsApp() {
       var inCont = (p.lotes||[]).some(function(l){ return l.lote === contF && (l.cantidad > 0 || _getLoteDisp(p.n, contF) !== null); });
       if(!inCont) return false;
       var d = _getLoteDisp(p.n, contF);
-      if(d !== null && d <= 0) return false; // Hide if fully reserved when sharing stock
+      if(d !== null && d <= 0) return false;
     } else {
       if(total<=0) return false;
     }
@@ -13497,7 +13497,7 @@ function shareStockQtyWhatsApp() {
   var alms = almF ? [almF] : ['Habana','Placetas','Xportprise'];
   var fecha = new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'});
 
-  var text = "📊 *STOCK DISPONIBLE" + (almF ? " — " + almF.toUpperCase() : "") + (catF ? " — " + catF.toUpperCase() : "") + (contF ? " — " + contF : "") + "* 📊\n";
+  var text = "📦 *STOCK + PRECIOS" + (almF ? " — " + almF.toUpperCase() : "") + (catF ? " — " + catF.toUpperCase() : "") + (contF ? " — " + contF : "") + "* 📦\n";
   text += "📅 " + fecha + "\n\n";
 
   // Group by category
@@ -13511,13 +13511,15 @@ function shareStockQtyWhatsApp() {
   Object.keys(byCat).sort().forEach(function(cat){
     text += "━━━ *" + cat + "* ━━━\n";
     byCat[cat].forEach(function(p){
-      var line = "▪ " + p.n + "\n";
+      text += "▪ *" + p.n + "*\n";
+
+      // Stock disponible
       if (contF) {
         var d = _getLoteDisp(p.n, contF);
-        line += "   📦 " + fN(d,0) + " uds disp.\n";
+        text += "   📦 " + fN(Math.max(0,d),0) + " uds disp.\n";
       } else if(almF){
         var qty = (p.stk_alm&&p.stk_alm[almF])||0;
-        line += "   📦 " + fN(qty,0) + " uds\n";
+        text += "   📦 " + fN(qty,0) + " uds\n";
       } else {
         var parts = [];
         alms.forEach(function(a){
@@ -13525,24 +13527,40 @@ function shareStockQtyWhatsApp() {
           if(qty>0) parts.push(a.substring(0,3) + ": " + fN(qty,0));
         });
         var total = p.stk||0;
-        line += "   📦 " + fN(total,0) + " total";
-        if(parts.length>1) line += " (" + parts.join(" | ") + ")";
-        line += "\n";
+        text += "   📦 " + fN(total,0) + " uds";
+        if(parts.length>1) text += " (" + parts.join(" | ") + ")";
+        text += "\n";
       }
-      text += line;
+
+      // Precio
+      if(p.oferta){
+        var ofPr = almF==='Placetas' ? (p.precioOfertaPlacetas||p.precioOfertaHabana) : p.precioOfertaHabana;
+        var norm = p.min||p.maj||(p.escala&&p.escala.length?p.escala[0].precio:null);
+        if(ofPr!=null){ text += "   🔥 *OFERTA: " + fN(ofPr) + " USD*"; }
+        if(norm!=null && ofPr!==norm) text += " ~~" + fN(norm) + "~~";
+        text += "\n";
+      } else if(p.escala&&p.escala.length){
+        text += "   💲 Precio/escala: " + p.escala.map(function(r){
+          return (r.desde+(r.hasta?'-'+r.hasta:'+')+'uds → '+fN(r.precio)+' USD');
+        }).join(' | ') + "\n";
+      } else if(p.min!=null && p.maj!=null && p.min!==p.maj){
+        text += "   💲 Min: " + fN(p.min) + " USD  |  May: " + fN(p.maj) + " USD\n";
+      } else {
+        var pr = p.min!=null?p.min:p.maj;
+        if(pr!=null) text += "   💲 " + fN(pr) + " USD\n";
+      }
+
+      text += "\n";
     });
-    text += "\n";
   });
 
   var totalUnits = prods.reduce(function(a,p){
-    if (contF) {
-      var d = _getLoteDisp(p.n, contF);
-      return a + (d !== null && d > 0 ? d : 0);
-    }
+    if (contF) { var d = _getLoteDisp(p.n, contF); return a + (d!==null&&d>0?d:0); }
     if(almF) return a + ((p.stk_alm&&p.stk_alm[almF])||0);
     return a + (p.stk||0);
   },0);
-  text += "📋 *" + prods.length + " productos* — *" + fN(totalUnits,0) + " unidades totales*";
+  text += "📋 *" + prods.length + " productos* — *" + fN(totalUnits,0) + " unidades*\n";
+  text += "👉 Responde para hacer tu pedido";
 
   window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
 }
