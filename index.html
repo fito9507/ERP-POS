@@ -3567,15 +3567,38 @@ function ventaCreditoPOS() {
   var abonos = ini>0?[{id:'a'+(nextAid++),fecha:fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:'USD',tasa:null,equivUSD:ini,enCaja:false,caja:null,cajaTipo:null}]:[];
   var fid = String(nextFid++);
   
-  // stock check
+  // stock check — same logic as stkDisp but exclude the current folio being created
   var stockError = null;
+  var stockWarn = null;
   lineas.forEach(function(l){
     var p=PRODS.find(function(x){return x.n===l.prod;});
     if(!p){stockError='Producto no encontrado: '+l.prod;return;}
-    var disponible=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
-    if(l.q>disponible) stockError='Stock insuficiente: '+l.prod+' (disp: '+disponible+', ped: '+l.q+')';
+    // Physical stock in the target almacen
+    var fisico=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+    // Subtract existing folio commitments (not paid) for this product+almacen
+    var resFolios=0;
+    if(typeof CLIENTES!=='undefined'){
+      CLIENTES.forEach(function(cc){
+        (cc.folios||[]).forEach(function(ff){
+          if(typeof estF==='function'&&estF(ff)==='pagado') return;
+          if(ff.alm&&ff.alm!==alm) return; // only same almacen
+          (ff.lineas||[]).forEach(function(lf){
+            if(lf.prod===l.prod) resFolios+=(lf.q||0);
+          });
+        });
+      });
+    }
+    var disponible=Math.max(0,fisico-resFolios);
+    if(l.q>fisico){
+      // Hard block: not even in physical stock
+      stockError='Stock insuficiente: '+l.prod+' (disp: '+fisico+', ped: '+l.q+')';
+    } else if(l.q>disponible){
+      // Soft warn: in stock but already committed to another folio
+      stockWarn=(stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+disponible+' libres de '+fisico+' en stock ('+resFolios+' comprometido en otros folios). ¿Continuar igualmente?';
+    }
   });
   if(stockError){alert(stockError);return;}
+  if(stockWarn&&!confirm(stockWarn)) return;
   
   var newFolio;
   // ── Let user choose: new folio or add to existing ──
