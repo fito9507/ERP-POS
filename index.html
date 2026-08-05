@@ -2852,11 +2852,11 @@ async function recalcReservasGlobales(){
       
       var newBadge = oldBadge;
       
-      if (available <= 0 && newQtyRes > 0) {
-        // Si el stock disponible (físico + tránsito - reservas) es <= 0 y hay reservas -> Auto-Reservado
+      if (totalInventory <= 0 && newQtyRes > 0) {
+        // Si el stock disponible (físico + tránsito) es 0 y hay reservas -> Auto-Reservado
         newBadge = 'RESERVADO';
-      } else if (available > 0 && oldBadge === 'RESERVADO') {
-        // Si queda stock disponible, NO está reservado al 100% -> Auto-Limpiar
+      } else if (totalInventory > 0 && oldBadge === 'RESERVADO') {
+        // Si queda stock disponible, NO está reservado -> Auto-Limpiar
         newBadge = '';
       }
 
@@ -3357,22 +3357,9 @@ function stkDisp(p){
   if (p.reservado || p.badgeTexto === 'RESERVADO') return 0;
   // Subtract POS session reservations
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
-  const resSession = allRes.filter(r=>r.activa).reduce((a,r)=>{const l=r.lineas.find(l=>l.n===p.n);return a+(l?l.q:0);},0);
-  // Subtract quantities committed in active client folios (only stock folios, not prereservas)
-  var resFolios = 0;
-  if (typeof CLIENTES !== 'undefined') {
-    CLIENTES.forEach(function(c){
-      (c.folios||[]).forEach(function(f){
-        if (typeof estF === 'function' && estF(f) === 'pagado') return;
-        if (f.tipo_reserva === 'prereserva') return; // Prereservas de tránsito no descuentan stock físico
-        (f.lineas||[]).forEach(function(l){
-          if (l.prod === p.n) resFolios += (l.q||0);
-        });
-      });
-    });
-  }
-  const base=S.alm&&p.stk_alm&&p.stk_alm[S.alm]!=null?p.stk_alm[S.alm]:(p.stk||0);
-  return Math.max(0, base - resSession - resFolios);
+  const resSession = (allRes||[]).filter(r=>r.activa).reduce((a,r)=>{const l=(r.lineas||[]).find(l=>l.n===p.n);return a+(l?l.q:0);},0);
+  const base = S.alm && p.stk_alm && p.stk_alm[S.alm] != null ? p.stk_alm[S.alm] : (p.stk||0);
+  return Math.max(0, base - resSession);
 }
 
 function stkTransitDisp(p, alm){
