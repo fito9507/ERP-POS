@@ -2791,12 +2791,13 @@ async function syncSaveFolio(cliId, f){
 var _recalcTimer=null;
 function _dRecalcReservas(){ clearTimeout(_recalcTimer); _recalcTimer=setTimeout(_recalcReservas, 2000); }
 
-async function _recalcReservas(){
+function recalcReservasGlobales(){
   if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
-  // 1. Sum all quantities per product name across ALL client folios
+  // 1. Sum all quantities per product name across active (unpaid) client folios
   var reservasPorProd = {};
   CLIENTES.forEach(function(cli){
     (cli.folios||[]).forEach(function(f){
+      if(typeof estF==='function' && estF(f)==='pagado') return; // Exclude paid folios!
       (f.lineas||[]).forEach(function(l){
         if(!l.prod) return;
         if(!reservasPorProd[l.prod]) reservasPorProd[l.prod] = 0;
@@ -2815,7 +2816,10 @@ async function _recalcReservas(){
     var physStock = p.stk || 0;
     var transitStock = 0;
     if(p.enTransito) {
-      transitStock += (p.enTransito.Habana||0) + (p.enTransito.Placetas||0) + (p.enTransito.Xportprise||0);
+      var hTr = typeof p.enTransito.Habana === 'number' ? p.enTransito.Habana : 0;
+      var pTr = typeof p.enTransito.Placetas === 'number' ? p.enTransito.Placetas : 0;
+      var xTr = typeof p.enTransito.Xportprise === 'number' ? p.enTransito.Xportprise : 0;
+      transitStock += hTr + pTr + xTr;
     }
     var totalInventory = physStock + transitStock;
     var available = totalInventory - newQtyRes;
