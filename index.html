@@ -2445,6 +2445,7 @@ async function supaInit() {
     await syncLoadContenedores();
     await syncLoadMovsIG();
     await syncLoadStockMovs();
+    if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -2791,7 +2792,7 @@ async function syncSaveFolio(cliId, f){
 var _recalcTimer=null;
 function _dRecalcReservas(){ clearTimeout(_recalcTimer); _recalcTimer=setTimeout(_recalcReservas, 2000); }
 
-function recalcReservasGlobales(){
+async function recalcReservasGlobales(){
   if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
   // 1. Sum all quantities per product name across active (unpaid) client folios
   var reservasPorProd = {};
@@ -2917,6 +2918,7 @@ async function syncLoadClientes(){
     offlineSaveClientes();
     if(typeof renderLista==='function') try{renderLista();}catch(e){}
     console.log('Clientes loaded from Supabase:', CLIENTES.length);
+    if(typeof recalcReservasGlobales==='function') recalcReservasGlobales();
   }catch(e){console.warn('syncLoadClientes:',e);}
 }
 
