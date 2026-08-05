@@ -3317,8 +3317,14 @@ function goProductos(){
   goStep('pg-prod',2);
 }
 function selTipo(t,btn){
-  S.tipo=t;
-  document.querySelectorAll('.tg-btn').forEach(b=>b.classList.remove('act'));btn.classList.add('act');
+  if (t === 'Preventa' && S.dispoMode === 'stock') {
+    if (typeof showToast === 'function') showToast('⚠️ Precio de Pre-venta solo aplica para productos En Tránsito');
+    return;
+  }
+  S.tipo = t;
+  var bMin = document.getElementById('tb-min'); if(bMin) bMin.classList.toggle('act', t === 'Minorista');
+  var bMay = document.getElementById('tb-may'); if(bMay) bMay.classList.toggle('act', t === 'Mayorista');
+  var bPre = document.getElementById('tb-pre'); if(bPre) bPre.classList.toggle('act', t === 'Preventa');
   renderProds();
 }
 function setCartMon(m,btn){
@@ -3344,7 +3350,7 @@ function getPorEscala(p, q){
     // No range matched — use first range as fallback
     return parseFloat(p.escala[0].precio)||maj||min;
   }
-  if(S.tipo==='Preventa'){
+  if(S.tipo==='Preventa' && S.dispoMode==='transit'){
     if (p.preventa_min != null) return parseFloat(p.preventa_min);
     if (RATES.DTO_PREVENTA > 0) return Number((min * (1 - RATES.DTO_PREVENTA/100)).toFixed(4));
     return min||maj;
@@ -3385,9 +3391,18 @@ function selDispoMode(mode, btn){
   S.dispoMode = mode;
   document.querySelectorAll('.dispo-btn').forEach(function(b){ b.classList.remove('act'); });
   if(btn) btn.classList.add('act');
+
+  var preBtn = document.getElementById('tb-pre');
   if(mode === 'transit'){
-    var preBtn = document.getElementById('tb-pre');
-    if(preBtn) selTipo('Preventa', preBtn);
+    if(preBtn) { preBtn.style.opacity = '1'; preBtn.style.pointerEvents = ''; preBtn.title = ''; }
+    selTipo('Preventa', preBtn || document.getElementById('tb-may'));
+  } else {
+    // Stock Inmediato mode — disable Pre-venta price selector
+    if(preBtn) { preBtn.style.opacity = '0.35'; preBtn.style.pointerEvents = 'none'; preBtn.title = 'Pre-venta solo disponible en modo En Tránsito'; }
+    if(S.tipo === 'Preventa') {
+      var mayBtn = document.getElementById('tb-may');
+      selTipo('Mayorista', mayBtn || document.getElementById('tb-min'));
+    }
   }
   renderProds();
   renderCartCtx();
