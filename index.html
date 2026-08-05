@@ -7725,19 +7725,9 @@ function renderFichaFolios(c){
 function _getLoteDisp(prodName, loteName) {
   var p = PRODS.find(x=>x.n===prodName);
   if(!p) return 0;
-  // Sum quantity across ALL almacenes for this lote name
+  // Physical stock remaining in lot
   var qt = (p.lotes||[]).filter(x=>x.lote===loteName).reduce(function(a,x){return a+(x.cantidad||0);},0);
-  var res = 0;
-  CLIENTES.forEach(c => {
-    (c.folios||[]).forEach(f => {
-      if (estF(f)!=='pagado' && f.contenedor === loteName) {
-        (f.lineas||[]).forEach(l => {
-          if (l.prod === prodName) res += (l.q||0);
-        });
-      }
-    });
-  });
-  return qt - res;
+  return Math.max(0, qt);
 }
 
 function renderPL(c,f){
