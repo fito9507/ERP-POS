@@ -4566,34 +4566,37 @@ async function setEstCom(id,est){
 function _revertirVenta(v){
   if(!v) return;
   // 1. Devolver stock
-  if(v.prods && typeof PRODS!=='undefined'){
+  if((v.prods || v.productos_json) && typeof PRODS!=='undefined'){
     var lineas=[];
-    // Parse prods string: "2× Perfil Angular, 1× Chapa..."
-    var parts=(v.prods||'').split(',');
-    parts.forEach(function(p){
-      var m=p.trim().match(/^(\d+)×\s*(.+)/);
-      if(m){lineas.push({q:parseInt(m[1]),n:m[2].split(' @ $')[0].trim()});}
-    });
+    var vProds = v.productos_json;
+    if(typeof vProds === 'string') { try{ vProds = JSON.parse(vProds); }catch(e){ vProds = null; } }
+    if(Array.isArray(vProds) && vProds.length) {
+      vProds.forEach(function(item){
+        var q = item.q || item.cantidad || 1;
+        var n = item.n || item.prod || item.nombre || item.producto;
+        if(n) lineas.push({q: q, n: n});
+      });
+    } else {
+      var parts=(v.prods||'').split(',');
+      parts.forEach(function(p){
+        var m=p.trim().match(/^(\d+)[\u00d7xX]\s*(.+)/);
+        if(m){
+          lineas.push({q:parseInt(m[1]), n:m[2].split(' @ $')[0].trim()});
+        } else {
+          var clean = p.trim().split(' @ $')[0].trim();
+          if(clean) lineas.push({q:1, n:clean});
+        }
+      });
+    }
     lineas.forEach(function(l){
       var prod=PRODS.find(function(p){return p.n===l.n;});
       if(prod){
         prod.stk=(prod.stk||0)+l.q;
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
-        // Persist to Supabase
-        if(v.alm&&typeof adjustStockByDelta==='function'){
-          if(prod.supaId){
-            adjustStockByDelta(prod, v.alm, l.q);
-          } else if(_supaOnline){
-            supaReq('GET','productos?nombre=eq.'+encodeURIComponent(prod.n)+'&select=id').then(function(r){
-              if(r.ok) return r.json();
-            }).then(function(d){
-              if(d&&d[0]&&d[0].id){
-                prod.supaId=d[0].id;
-                adjustStockByDelta(prod, v.alm, l.q);
-              }
-            }).catch(function(e){console.warn('revertir supaId lookup:',e);});
-          }
+        // Persist stock update to Supabase!
+        if(v.alm && typeof syncStockUpdate==='function'){
+          syncStockUpdate([{n:prod.n}], v.alm);
         }
       }
     });
