@@ -2139,13 +2139,30 @@ async function syncLoadProductos() {
     var rows = await r.json();
     if (!rows || !rows.length) return true;
     rows.forEach(function(row) {
+      var rawLotes = row.stock_almacen || [];
+      var byAlm = {};
+      rawLotes.forEach(function(s){
+        if(!byAlm[s.almacen]) byAlm[s.almacen] = [];
+        byAlm[s.almacen].push(s);
+      });
+      var cleanLotes = [];
       var stk_alm = {};
-      (row.stock_almacen || []).forEach(function(s) { stk_alm[s.almacen] = (stk_alm[s.almacen] || 0) + s.cantidad; });
+      Object.keys(byAlm).forEach(function(alm){
+        var list = byAlm[alm];
+        var named = list.filter(function(s){ return s.lote && s.lote !== 'SIN LOTE'; });
+        if(named.length > 0){
+          stk_alm[alm] = named.reduce(function(a,v){ return a + (v.cantidad||0); }, 0);
+          cleanLotes.push.apply(cleanLotes, named);
+        } else {
+          stk_alm[alm] = list.reduce(function(a,v){ return a + (v.cantidad||0); }, 0);
+          cleanLotes.push.apply(cleanLotes, list);
+        }
+      });
       var stk = Object.values(stk_alm).reduce(function(a,v){return a+v;}, 0);
       var prod = {
         n: row.nombre, cat: row.categoria||'',
         stk_alm: stk_alm,
-        lotes: (row.stock_almacen || []).map(function(s){
+        lotes: cleanLotes.map(function(s){
           return {producto_id:s.producto_id, almacen:s.almacen, lote:s.lote||'SIN LOTE',
             cantidad:s.cantidad||0, costo:parseFloat(s.costo)||0,
             precio_venta:parseFloat(s.precio_venta)||0,
