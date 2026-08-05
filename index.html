@@ -12411,24 +12411,36 @@ function registrarMovStock(data) {
       }
       if (!p.supaId) return;
       // Sync lots to Supabase
-        if(typeof adjustStockByDelta === 'function') {
-          var loteSelected = mov.contenedor || 'SIN LOTE';
-          if(mov.tipo === 'traslado') {
-            await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
-            await adjustStockByDelta(p, mov.almacenDest, mov.cantidad, loteSelected);
-          } else if (mov.tipo === 'entrada' || mov.tipo === 'ajuste_alta') {
-            await adjustStockByDelta(p, mov.almacen, mov.cantidad, loteSelected);
-          } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
-            await adjustStockByDelta(p, mov.almacen, -mov.cantidad, loteSelected);
-          } else if (mov.tipo === 'ajuste_abs') {
-            var currentLotes = p.lotes ? p.lotes.filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,b){return a+(b.cantidad||0);},0) : 0;
-            var diff = mov.cantidad - currentLotes;
-            await adjustStockByDelta(p, mov.almacen, diff, loteSelected);
-          }
-          console.log('✓ Stock lots synced:', mov.producto);
-          if (typeof offlineSaveProds === 'function') offlineSaveProds();
-          if (typeof renderStock === 'function') { window.requestAnimationFrame(function(){ renderStock(); }); }
+      var loteSelected = mov.contenedor || 'SIN LOTE';
+      async function syncLote(alm, loteName) {
+        var loteEntry = (p.lotes||[]).find(function(x){ return x.lote===loteName && x.almacen===alm; });
+        var qty = loteEntry ? (loteEntry.cantidad||0) : 0;
+        var qStr = 'producto_id=eq.'+p.supaId+'&almacen=eq.'+encodeURIComponent(alm)+'&lote=eq.'+encodeURIComponent(loteName);
+        var chk = await supaReq('GET', 'stock_almacen?'+qStr);
+        if(chk.ok) {
+           var d = await chk.json();
+           if(d && d.length > 0) {
+             await supaReq('PATCH', 'stock_almacen?'+qStr, {cantidad: qty});
+           } else {
+             await supaReq('POST', 'stock_almacen', {producto_id: p.supaId, almacen: alm, lote: loteName, cantidad: qty});
+           }
         }
+      }
+      
+      try {
+        if(mov.tipo === 'traslado') {
+          await syncLote(mov.almacen, loteSelected);
+          await syncLote(mov.almacenDest, loteSelected);
+        } else {
+          await syncLote(mov.almacen, loteSelected);
+        }
+        console.log('✓ Stock lots synced:', mov.producto);
+        if (typeof offlineSaveProds === 'function') offlineSaveProds();
+        if (typeof renderStock === 'function') { window.requestAnimationFrame(function(){ renderStock(); }); }
+        if (typeof _dRecalcReservas === 'function') _dRecalcReservas();
+      } catch(err) {
+        console.warn('Sync lote error:', err);
+      }
       })();
   }
   if (typeof renderStock === 'function') try { renderStock(); } catch(e) {}
