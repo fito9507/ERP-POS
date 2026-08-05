@@ -740,6 +740,7 @@ function getLoteActivo(prod, almacen) {
     });
 
     document.getElementById('last-update').textContent = '● En línea';
+    await loadFoliosRes();
     loadCartState();
     render();
   }catch(e){
@@ -748,8 +749,60 @@ function getLoteActivo(prod, almacen) {
   }
 }
 
-// ── FILTERS ───────────────────────────────────────────────
+// ── FILTERS & RESERVATIONS ────────────────────────────────
 let MODO = 'stock'; // 'stock' | 'transit' | 'import'
+let FOLIOS = [];
+
+async function loadFoliosRes(){
+  try {
+    var fRows = await supa('folios?select=almacen,tipo_reserva,lineas,estado');
+    if (Array.isArray(fRows)) FOLIOS = fRows;
+  } catch(e){ FOLIOS = []; }
+}
+
+function getCommittedFoliosQty(prodName, alm, isTransit) {
+  var total = 0;
+  (FOLIOS || []).forEach(function(f){
+    if (f.estado === 'pagado' || f.estado === 'Pagado') return;
+    var fAlm = f.almacen || f.alm;
+    if (fAlm && fAlm !== alm) return;
+    var fIsTransit = (f.tipo_reserva === 'prereserva');
+    if (isTransit !== fIsTransit) return;
+    var lns = f.lineas;
+    if (typeof lns === 'string') {
+      try { lns = JSON.parse(lns); } catch(e){ lns = []; }
+    }
+    if (Array.isArray(lns)) {
+      lns.forEach(function(l){
+        var lName = l.prod || l.producto || l.n;
+        if (lName === prodName) {
+          total += (l.q || l.cantidad || 0);
+        }
+      });
+    }
+  });
+  return total;
+}
+
+function getAvailableStock(p, alm, modo) {
+  var _alm = alm || ALM || 'Habana';
+  var _modo = modo || MODO || 'stock';
+  if (p.por_encargo || _modo === 'import') return 999999;
+  var isTransit = (_modo === 'transit');
+  var committed = getCommittedFoliosQty(p.n, _alm, isTransit);
+  
+  if (isTransit) {
+    var trVal = (p.enTransito && p.enTransito[_alm]);
+    if (!trVal) return 0;
+    if (typeof trVal === 'number' && trVal > 0) {
+      return Math.max(0, trVal - committed);
+    }
+    return committed > 0 ? Math.max(0, 999 - committed) : 999;
+  }
+  
+  var base = (p.stk_alm && p.stk_alm[_alm] != null) ? p.stk_alm[_alm] : (p.stk || 0);
+  return Math.max(0, base - committed);
+}
 
 function setModo(modo, btn){
   MODO = modo;
@@ -784,9 +837,8 @@ function filteredProds(){
     if(cat && p.cat !== cat) return false;
     if(q && p.n.toLowerCase().indexOf(q)<0) return false;
     if(MODO==='import') return p.por_encargo;
-    if(MODO==='transit') return p.enTransito && p.enTransito[ALM];
-    var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    return stk > 0;
+    if(MODO==='transit') return p.enTransito && p.enTransito[ALM] && getAvailableStock(p, ALM, 'transit') > 0;
+    return getAvailableStock(p, ALM, 'stock') > 0;
   });
 }
 
@@ -829,7 +881,7 @@ function render(){
   }
 
   if (MODO === 'transit') {
-    var transitProds = baseFiltered.filter(function(p){ return !p.por_encargo && p.enTransito && p.enTransito[ALM]; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
+    var transitProds = baseFiltered.filter(function(p){ return !p.por_encargo && p.enTransito && p.enTransito[ALM] && getAvailableStock(p, ALM, 'transit') > 0; }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
     if(!transitProds.length){
       grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🚢</div><p>Sin productos próximamente en tránsito para <strong>'+ALM+'</strong>.<br>Prueba con otro almacén o categoría.</p></div>';
       return;
@@ -847,8 +899,7 @@ function render(){
   // Stock section (Habana / Placetas)
   var normalProds = baseFiltered.filter(function(p){
     if(p.por_encargo) return false;
-    var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
-    return stk > 0;
+    return getAvailableStock(p, ALM, 'stock') > 0;
   }).sort(function(a,b) { return (a.n||'').localeCompare(b.n||'', undefined, {numeric:true, sensitivity:'base'}); });
 
   if(!normalProds.length){
@@ -947,10 +998,10 @@ function transitCardHTML(p){
     +'</div></div>';
 }
 function cardHTML(p){
-  var stk = (p.stk_alm&&p.stk_alm[ALM])||0;
+  var stk = getAvailableStock(p, ALM, 'stock');
   var _transit = p.enTransito && p.enTransito[ALM];
   var stkLabel = _transit ? '<span style="color:#f59e0b;font-weight:600">\uD83D\uDEA2 Pr\u00f3ximamente</span>'
-               : stk > 0 ? '<span class="stock-ok">\u2713 Disponible</span>'
+               : stk > 0 ? '<span class="stock-ok">\u2713 Disponible ('+stk+' libre'+(stk!==1?'s':'')+')</span>'
                : '<span style="color:#e84b4b">\u2717 Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
@@ -1470,9 +1521,9 @@ function _qdBlur(el, idx){
   var isT = p.enTransito && p.enTransito[ALM];
   var moq = isT ? (p.moq||1) : 1;
   v = Math.max(moq, v);
-  // Cap at available stock (including transit products)
-  var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-  if(maxStk > 0) v = Math.min(v, maxStk);
+  // Cap at available stock incorporating prereservas/folios
+  var maxStk = getAvailableStock(p, ALM, MODO);
+  if(!p.por_encargo && maxStk >= 0) v = Math.min(v, maxStk);
   el.textContent = v;
   var cardId = p.id ? String(p.id) : p.n.replace(/[^a-zA-Z0-9]/g,'_');
   updCardPrices(cardId, p, v);
@@ -1486,10 +1537,10 @@ function chgQtyIdx(idx, d){
   var moq = (isT || p.por_encargo) ? (p.moq||1) : 1;
   var v = parseInt(sp.textContent)||moq;
   v = d > 0 ? v + 1 : Math.max(moq, v - 1);
-  // Cap at available stock (skip for import products — no stock limit)
+  // Cap at available stock incorporating prereservas/folios
   if(d > 0 && !p.por_encargo){
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
-    if(maxStk > 0) v = Math.min(v, maxStk);
+    var maxStk = getAvailableStock(p, ALM, MODO);
+    if(maxStk >= 0) v = Math.min(v, maxStk);
   }
   sp.textContent = v;
   updCardPrices(cardId, p, v);
@@ -1578,16 +1629,16 @@ function addToCartIdx(idx){
   var moq = (isT || p.por_encargo) ? (p.moq||1) : 1;
   var qty = sp ? Math.max(moq, parseInt(sp.textContent)||moq) : moq;
   
-  // Skip stock limit check for import products
+  // Enforce available stock limit considering committed folios/prereservas
   if(!p.por_encargo){
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    var maxStk = getAvailableStock(p, ALM, MODO);
     if(qty > maxStk) {
       qty = Math.max(0, maxStk);
       if(sp) sp.textContent = qty;
-      if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
+      if(typeof showToast==='function') showToast("Stock disponible alcanzado: " + maxStk + " uds");
     }
     if(qty <= 0) {
-      if(typeof showToast==='function') showToast("Producto sin stock disponible");
+      if(typeof showToast==='function') showToast("Sin stock disponible por reservas activas");
       return;
     }
   }
