@@ -7737,7 +7737,7 @@ function renderPL(c,f){
         </select>
       </span>
       <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
-      <span><input type="number" class="pi" value="${l.precio}" step="0.01" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="pi" value="${l.precio}" step="0.0001" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
       <span style="text-align:right;font-weight:500">${fN(parseFloat(toUSD(l.q*l.precio,l.mon).toFixed(2)))}</span>
       <span>${l.q!==l.qO||l.precio!==l.pO?`<span class="badge ba" style="font-size:9px;cursor:pointer" onclick="restL('${c.id}','${f.id}',${i})">mod</span>`:''}
@@ -8404,7 +8404,7 @@ function renderNFLCli(cid){
         ${_getProdNames(document.getElementById('nf-alm-'+cid)?.value||'').map(p=>`<option value="${p.replace(/"/g,'&quot;')}" ${p===l.prod?'selected':''}>${p}</option>`).join('')}
       </select>
       <input type="number" value="${l.q}" min="1" style="width:60px;font-size:11px;padding:4px 6px" oninput="var _p=PRODS.find(function(x){return x.n===window['nfl_${cid}'][${i}].prod;});var _alm=document.getElementById('nf-alm-${cid}')?.value||'';var _stkF=_p?(_p.stk_alm&&_p.stk_alm[_alm]!=null?_p.stk_alm[_alm]:(_p.stk||0)):0;var _max=_p?_stkF:9999;var _v=parseInt(this.value)||1;if(_v>_max){this.value=_max;_v=_max;}window['nfl_${cid}'][${i}].q=_v;if(_p&&!window['nfl_${cid}'][${i}]._manualPrice){var _np=_getPrecioNF(_p,_alm,_v);window['nfl_${cid}'][${i}].precio=_np;var _pInp=this.parentNode.querySelector('input[type=number]:nth-of-type(2)');if(_pInp)_pInp.value=_np;}updNFTotCli('${cid}')">
-      <input type="number" value="${l.precio}" step="0.01" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;window['nfl_${cid}'][${i}]._manualPrice=true;updNFTotCli('${cid}')">
+      <input type="number" value="${l.precio}" step="0.0001" style="width:76px;font-size:11px;padding:4px 6px" oninput="window['nfl_${cid}'][${i}].precio=parseFloat(this.value)||0;window['nfl_${cid}'][${i}]._manualPrice=true;updNFTotCli('${cid}')">
       <select style="width:64px;font-size:11px;padding:4px 6px" onchange="window['nfl_${cid}'][${i}].mon=this.value;updNFTotCli('${cid}')">
         <option>USD</option><option>EUR</option><option>CUP</option>
       </select>
