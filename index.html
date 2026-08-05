@@ -2445,7 +2445,9 @@ async function supaInit() {
     await syncLoadContenedores();
     await syncLoadMovsIG();
     await syncLoadStockMovs();
-    if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
+    try {
+      if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
+    } catch(errRes){ console.warn('recalcReservasGlobales non-blocking:', errRes); }
     } else {
       _supaOnline = false; updOnlineDot();
       showToast('Error al conectar con Supabase');
@@ -2790,77 +2792,86 @@ async function syncSaveFolio(cliId, f){
 
 // ── Auto-RESERVADO: recalcula qty reservada desde folios ──
 var _recalcTimer=null;
-function _dRecalcReservas(){ clearTimeout(_recalcTimer); _recalcTimer=setTimeout(_recalcReservas, 2000); }
+function _dRecalcReservas(){ clearTimeout(_recalcTimer); _recalcTimer=setTimeout(recalcReservasGlobales, 2000); }
 
 async function recalcReservasGlobales(){
-  if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
-  // 1. Sum all quantities per product name across active (unpaid) client folios
-  var reservasPorProd = {};
-  CLIENTES.forEach(function(cli){
-    (cli.folios||[]).forEach(function(f){
-      if(typeof estF==='function' && estF(f)==='pagado') return; // Exclude paid folios!
-      (f.lineas||[]).forEach(function(l){
-        if(!l.prod) return;
-        if(!reservasPorProd[l.prod]) reservasPorProd[l.prod] = 0;
-        reservasPorProd[l.prod] += (l.q||0);
+  try {
+    if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
+    // 1. Sum all quantities per product name across active (unpaid) client folios
+    var reservasPorProd = {};
+    CLIENTES.forEach(function(cli){
+      (cli.folios||[]).forEach(function(f){
+        var isPag = (f.estado === 'pagado' || f.estado === 'Pagado');
+        if(!isPag && typeof estF === 'function'){
+          try { isPag = (estF(f) === 'pagado'); } catch(e){}
+        }
+        if(isPag) return; // Exclude paid folios!
+        (f.lineas||[]).forEach(function(l){
+          var pname = l.prod || l.n || l.producto;
+          if(!pname) return;
+          if(!reservasPorProd[pname]) reservasPorProd[pname] = 0;
+          reservasPorProd[pname] += (l.q||0);
+        });
       });
     });
-  });
 
-  // 2. For each product, update qty_reservada and badge_texto
-  var updates = [];
-  PRODS.forEach(function(p){
-    var oldQtyRes = p.qty_reservada || 0;
-    var oldBadge = p.badgeTexto || '';
-    var newQtyRes = reservasPorProd[p.n] || 0;
-    
-    var physStock = p.stk || 0;
-    var transitStock = 0;
-    if(p.enTransito) {
-      var hTr = typeof p.enTransito.Habana === 'number' ? p.enTransito.Habana : 0;
-      var pTr = typeof p.enTransito.Placetas === 'number' ? p.enTransito.Placetas : 0;
-      var xTr = typeof p.enTransito.Xportprise === 'number' ? p.enTransito.Xportprise : 0;
-      transitStock += hTr + pTr + xTr;
-    }
-    var totalInventory = physStock + transitStock;
-    var available = totalInventory - newQtyRes;
-    
-    var newBadge = oldBadge;
-    
-    if (available <= 0 && newQtyRes > 0) {
-      // Si el stock disponible (físico + tránsito - reservas) es <= 0 y hay reservas -> Auto-Reservado
-      newBadge = 'RESERVADO';
-    } else if (available > 0 && oldBadge === 'RESERVADO') {
-      // Si queda stock disponible, NO está reservado al 100% -> Auto-Limpiar
-      newBadge = '';
-    }
+    // 2. For each product, update qty_reservada and badge_texto
+    var updates = [];
+    PRODS.forEach(function(p){
+      var oldQtyRes = p.qty_reservada || 0;
+      var oldBadge = p.badgeTexto || '';
+      var newQtyRes = reservasPorProd[p.n] || 0;
+      
+      var physStock = p.stk || 0;
+      var transitStock = 0;
+      if(p.enTransito) {
+        var hTr = typeof p.enTransito.Habana === 'number' ? p.enTransito.Habana : 0;
+        var pTr = typeof p.enTransito.Placetas === 'number' ? p.enTransito.Placetas : 0;
+        var xTr = typeof p.enTransito.Xportprise === 'number' ? p.enTransito.Xportprise : 0;
+        transitStock += hTr + pTr + xTr;
+      }
+      var totalInventory = physStock + transitStock;
+      var available = totalInventory - newQtyRes;
+      
+      var newBadge = oldBadge;
+      
+      if (available <= 0 && newQtyRes > 0) {
+        // Si el stock disponible (físico + tránsito - reservas) es <= 0 y hay reservas -> Auto-Reservado
+        newBadge = 'RESERVADO';
+      } else if (available > 0 && oldBadge === 'RESERVADO') {
+        // Si queda stock disponible, NO está reservado al 100% -> Auto-Limpiar
+        newBadge = '';
+      }
 
-    // Only sync if something changed
-    if(newQtyRes !== oldQtyRes || newBadge !== oldBadge){
-      p.qty_reservada = newQtyRes;
-      p.badgeTexto = newBadge;
-      if(!newBadge) p.reservado = false;
-      else p.reservado = true;
-      updates.push(p);
-    }
-  });
+      // Only sync if something changed
+      if(newQtyRes !== oldQtyRes || newBadge !== oldBadge){
+        p.qty_reservada = newQtyRes;
+        p.badgeTexto = newBadge;
+        if(!newBadge) p.reservado = false;
+        else p.reservado = true;
+        updates.push(p);
+      }
+    });
 
-  // 3. Sync changed products to Supabase
-  if(!updates.length) return;
-  console.log('[Reservas] Actualizando '+updates.length+' productos');
-  for(var i=0; i<updates.length; i++){
-    var p = updates[i];
-    var patchBody = {
-      qty_reservada: p.qty_reservada,
-      badge_texto: p.badgeTexto || null
-    };
-    if(p.supaId){
-      await supaReq('PATCH','productos?id=eq.'+p.supaId, patchBody);
-    } else {
-      await supaReq('PATCH','productos?nombre=eq.'+encodeURIComponent(p.n), patchBody);
+    // 3. Sync changed products to Supabase
+    if(!updates.length) return;
+    console.log('[Reservas] Actualizando '+updates.length+' productos');
+    for(var i=0; i<updates.length; i++){
+      var p = updates[i];
+      var patchBody = {
+        qty_reservada: p.qty_reservada,
+        badge_texto: p.badgeTexto || null
+      };
+      if(p.supaId){
+        await supaReq('PATCH','productos?id=eq.'+p.supaId, patchBody);
+      } else {
+        await supaReq('PATCH','productos?nombre=eq.'+encodeURIComponent(p.n), patchBody);
+      }
     }
+    console.log('[Reservas] ✓ Sincronizado');
+  } catch(err) {
+    console.warn('recalcReservasGlobales non-blocking error:', err);
   }
-  console.log('[Reservas] ✓ Sincronizado');
 }
 
 async function syncSaveAbono(cliId, folioId, ab){
