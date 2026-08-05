@@ -3524,8 +3524,8 @@ function renderCart(){
         <div class="ci-pu-row">
           <span class="ci-pu-lbl">P.u.</span>
           <input type="number" class="ci-pu"
-            value="${precMon.toFixed(dFor(m))}"
-            step="${m==='CUP'||m==='CUPT'?'1':'0.01'}"
+            value="${(function(val, mon){ if(mon==='CUP'||mon==='CUPT') return val.toFixed(0); var rounded=Math.round(val*10000)/10000; var str=rounded.toString(); if(str.indexOf('.')>=0){ var decs=str.split('.')[1].length; return rounded.toFixed(Math.max(2,decs)); } return rounded.toFixed(2); })(precMon, m)}"
+            step="${m==='CUP'||m==='CUPT'?'1':'0.0001'}"
             onchange="editPriceMon(${i},this.value,'${m}')"
             onfocus="this.select()" title="Precio unitario — editable">
           <span class="ci-pu-lbl">${m}</span>
