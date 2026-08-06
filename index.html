@@ -7515,7 +7515,9 @@ function exportarReservasPDF(clienteId) {
             var aMon = a.mon || 'USD';
             var aMonto = a.monto || 0;
             var aEq = a.equivUSD || aMonto;
-            html += '<li style="color:#16a34a">' + aFecha + ' - ' + aDesc + fN(aMonto) + ' ' + aMon + (aMon !== 'USD' ? ' (equiv. $' + fN(aEq) + ')' : '') + '</li>';
+            var _t = a.tasa || (aMon !== 'USD' && aEq > 0 && aMonto > 0 ? (aMon === 'EUR' ? aEq / aMonto : aMonto / aEq) : null);
+            var tasaStr = _t ? ' (Tasa: ' + fN(_t, _t < 10 ? 4 : 2) + ')' : '';
+            html += '<li style="color:#16a34a">' + aFecha + ' - ' + aDesc + fN(aMonto) + ' ' + aMon + tasaStr + (aMon !== 'USD' ? ' (equiv. $' + fN(aEq) + ')' : '') + '</li>';
           });
           html += '</ul>';
         }
