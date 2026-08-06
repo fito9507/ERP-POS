@@ -8679,8 +8679,8 @@ function adminInit() {
       var total = p.stk || 0;
       p.stk_alm = {
         Habana:     Math.round(total * 0.3),
-        Placetas:   Math.round(total * 0.6),
-        Xportprise: total - Math.round(total * 0.3) - Math.round(total * 0.6)
+        Placetas:   total - Math.round(total * 0.3),
+        Xportprise: 0
       };
     }
     if (!p.stk_min) p.stk_min = 10;
