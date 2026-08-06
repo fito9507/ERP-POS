@@ -1078,7 +1078,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Almacén</label>
         <select id="l-alm"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
       <div class="ff"><label class="lbl">Tasa CUP/USD</label>
-        <input type="number" id="l-tasa" value="512.88" step="0.01"></div>
+        <input type="number" id="l-tasa" value="512.88" step="0.0001"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
         <select id="l-mon-pago" onchange="renderLiqCuentas()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
       <div class="ff"><label class="lbl">Cuenta de pago</label>
@@ -8104,7 +8104,7 @@ function renderFichaAbonar(c){
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label class="lbl">Tasa (opcional)</label>
-          <input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto"
+          <input type="number" id="a-tasa-${c.id}" step="0.0001" placeholder="auto"
             oninput="calcEquivCli('${c.id}')" style="width:100%"></div>
         <div><label class="lbl">Equiv. USD</label>
           <input type="number" id="a-equiv-${c.id}" step="0.01"
