@@ -7507,11 +7507,15 @@ function exportarReservasPDF(clienteId) {
         }
         
         if (hasAbonos) {
-          html += '<div style="font-weight:bold;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
+          html += '<div style="font-weight:bold;margin-top:4px;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
           html += '<ul style="margin:0;padding-left:20px">';
           f.abonos.forEach(function(a) {
             var aFecha = a.fecha ? fD(a.fecha) : 'Sin fecha';
-            html += '<li style="color:#16a34a">' + aFecha + ' - ' + (a.desc ? a.desc + ' - ' : '') + fN(a.monto) + ' ' + (a.mon||'USD') + (a.mon && a.mon!=='USD' ? ' (equiv. $' + fN(a.equivUSD) + ')' : '') + '</li>';
+            var aDesc = a.desc ? a.desc + ' - ' : (a.concepto ? a.concepto + ' - ' : '');
+            var aMon = a.mon || 'USD';
+            var aMonto = a.monto || 0;
+            var aEq = a.equivUSD || aMonto;
+            html += '<li style="color:#16a34a">' + aFecha + ' - ' + aDesc + fN(aMonto) + ' ' + aMon + (aMon !== 'USD' ? ' (equiv. $' + fN(aEq) + ')' : '') + '</li>';
           });
           html += '</ul>';
         }
