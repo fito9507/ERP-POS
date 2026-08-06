@@ -1385,7 +1385,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div><label class="lbl">Nombre *</label><input type="text" id="nc-nombre" placeholder="Nombre del cliente"></div>
       <div><label class="lbl">Teléfono</label><input type="text" id="nc-tel" placeholder="+53 ..."></div>
       <div><label class="lbl">Almacén asociado</label>
-        <select id="nc-alm"><option>Placetas</option><option>Habana</option><option>España</option><option>Varios</option></select></div>
+        <select id="nc-alm"><option>Placetas</option><option>Habana</option><option>Xportprise</option><option>Varios</option></select></div>
       <div><label class="lbl">Color de identificación</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="nc-colores"></div>
       </div>
@@ -8362,7 +8362,7 @@ function renderFichaNF(c){
     <div style="display:flex;flex-direction:column;gap:9px">
       <div class="g3">
         <div><label class="lbl">Fecha</label><input type="date" id="nf-fecha-${c.id}" value="${today()}"></div>
-        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>España</option></select></div>
+        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>Xportprise</option></select></div>
         <div><label class="lbl">Moneda ref.</label><select id="nf-mon-${c.id}"><option>USD</option><option>EUR</option><option>CUP</option></select></div>
       </div>
       <div><label class="lbl">Descripción</label><input type="text" id="nf-desc-${c.id}" placeholder="Ej: Container #4 — perfiles"></div>
