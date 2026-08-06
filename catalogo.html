@@ -1019,7 +1019,7 @@ function cardHTML(p){
   var stk = getAvailableStock(p, ALM, 'stock');
   var _transit = p.enTransito && p.enTransito[ALM];
   var stkLabel = _transit ? '<span style="color:#f59e0b;font-weight:600">\uD83D\uDEA2 Pr\u00f3ximamente</span>'
-               : stk > 0 ? '<span class="stock-ok">\u2713 Disponible ('+stk+' libre'+(stk!==1?'s':'')+')</span>'
+               : stk > 0 ? '<span class="stock-ok">\u2713 Disponible</span>'
                : '<span style="color:#e84b4b">\u2717 Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
