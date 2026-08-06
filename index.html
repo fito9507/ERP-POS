@@ -7515,8 +7515,15 @@ function exportarReservasPDF(clienteId) {
             var aMon = a.mon || 'USD';
             var aMonto = a.monto || 0;
             var aEq = a.equivUSD || aMonto;
-            var _t = a.tasa || (aMon !== 'USD' && aEq > 0 && aMonto > 0 ? (aMon === 'EUR' ? aEq / aMonto : aMonto / aEq) : null);
-            var tasaStr = _t ? ' (Tasa: ' + fN(_t, _t < 10 ? 4 : 2) + ')' : '';
+            
+            var tasaVal = 0;
+            if (a.tasa && a.tasa > 0) {
+              tasaVal = a.tasa;
+            } else if (aMon !== 'USD' && aEq > 0 && aMonto > 0) {
+              tasaVal = (aMon === 'EUR' || aMon === 'MLC') ? (aEq / aMonto) : (aMonto / aEq);
+            }
+            var tasaStr = tasaVal > 0 ? ' (Tasa: ' + fN(tasaVal, tasaVal < 10 ? 4 : 2) + ')' : '';
+            
             html += '<li style="color:#16a34a">' + aFecha + ' - ' + aDesc + fN(aMonto) + ' ' + aMon + tasaStr + (aMon !== 'USD' ? ' (equiv. $' + fN(aEq) + ')' : '') + '</li>';
           });
           html += '</ul>';
