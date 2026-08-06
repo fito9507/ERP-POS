@@ -8240,7 +8240,7 @@ function updPrevCli(cid){
     var tasaEl=document.getElementById('a-tasa-'+cid);
     if(tasaEl){
       // Mostrar la tasa calculada como valor en el campo
-      tasaEl.value=tasaImplied.toFixed(2);
+      tasaEl.value=tasaImplied.toFixed(4);
     }
   }
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
@@ -8270,7 +8270,7 @@ function calcEquivCli(cid){
     equivEl.value=equiv>0?equiv.toFixed(4):'';
     // Mostrar tasa efectiva en placeholder
     if(!tasaManual&&monto>0&&equiv>0){
-      tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(2);
+      tasaEl.placeholder=(mon==='EUR'||mon==='MLC')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(4);
     }
   } else {
     equiv=monto;
