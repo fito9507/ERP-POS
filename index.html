@@ -2211,7 +2211,8 @@ async function syncLoadProductos() {
         tiempo_transito: row.tiempo_transito||'',
         precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
         cif: row.precio_cif!=null?parseFloat(row.precio_cif):null,
-        ficha_tecnica: row.ficha_tecnica||''
+        planes_pago: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||PLANES:')!==-1) ? JSON.parse(row.ficha_tecnica.split('|||PLANES:')[1]||'[]') : [],
+        ficha_tecnica: row.ficha_tecnica ? row.ficha_tecnica.split('|||PLANES:')[0] : ''
       };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);

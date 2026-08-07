@@ -714,7 +714,8 @@ async function init(){
         precio_cif: r.precio_cif!=null?parseFloat(r.precio_cif):null,
         precio_ddp: r.precio_ddp!=null?parseFloat(r.precio_ddp):null,
         nombre_puerto: r.nombre_puerto||'',
-        ficha_tecnica: r.ficha_tecnica||'',
+        planes_pago: (r.ficha_tecnica && r.ficha_tecnica.indexOf('|||PLANES:')!==-1) ? JSON.parse(r.ficha_tecnica.split('|||PLANES:')[1]||'[]') : [],
+        ficha_tecnica: r.ficha_tecnica ? r.ficha_tecnica.split('|||PLANES:')[0] : '',
         recargo_cuba: r.recargo_cuba||''
       };
     }).filter(function(p){ return p.enWeb !== false; });
