@@ -2340,9 +2340,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
 }
 
 async function syncStockAlmacen(prodId, almacen, cantidad) {
-  // We keep this for backward compatibility if needed, but it should be avoided
-  var r = await supaReq('POST',
-    'stock_almacen?on_conflict=producto_id,almacen,lote',
+  var r = await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
     {producto_id:prodId, almacen:almacen, lote:'SIN LOTE', cantidad:cantidad});
   return r.ok;
 }
@@ -2371,7 +2369,7 @@ async function syncSaveProducto(p) {
     recargo_cuba:p.recargo_cuba||null,
     tiempo_transito:p.tiempo_transito||null,
     precio_mercado:p.precio_mercado!=null?p.precio_mercado:null,
-    ficha_tecnica:p.ficha_tecnica||null,
+    ficha_tecnica:(p.ficha_tecnica||'') + (p.planes_pago && p.planes_pago.length ? '|||PLANES:'+JSON.stringify(p.planes_pago) : ''),
     nombre_puerto:p.nombre_puerto||null};
 
   if (!_supaOnline) {
