@@ -1213,7 +1213,7 @@ window._tPago = function(id, tipo, pidx, basePrice) {
     
     var elMargenDet = document.getElementById('margen-det-'+id);
     if (elMargenDet && ahorro != null) {
-      elMargenDet.innerHTML = fPrice(ahorro, _mon, _alm) + ' margen/ud &middot; DDP &middot; Mariel: ' + fPrice(gananciaBaseP, _mon, _alm);
+      elMargenDet.innerHTML = 'Margen aproximado: ' + fPrice(ahorro, _mon, _alm) + ' por unidad<br>Compra DDP: ' + fPrice(gananciaBaseP, _mon, _alm) + ' | Venta sugerida: ' + fPrice(p.precio_mercado, _mon, _alm);
     }
 
     var elAhorroPill = document.getElementById('ahorro-pill-'+id);
@@ -1510,6 +1510,14 @@ function selectPlanPago(cardId, pidx, planIdxStr) {
   if(typeof selectPriceTipo === 'function') {
       selectPriceTipo(cardId, pidx, tipoImport);
   }
+  if(typeof window._tPago === 'function') {
+      var bCub = document.getElementById('pb-cub-'+cardId);
+      var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+      var actTipo = isCub ? 'cub' : 'ext';
+      var actPrice = isCub ? p.precio_ddp : p.precio_cif;
+      if (actPrice == null) actPrice = p.precio_cif != null ? p.precio_cif : (p.min || p.maj || 0);
+      window._tPago(cardId, actTipo, pidx, actPrice);
+  }
 
   // Update button styles
   var bBase = document.getElementById('pb-plan-'+cardId+'-base');
@@ -1717,7 +1725,7 @@ function updCardPrices(cardId, p, qty){
     var _margen   = p.precio_mercado > _gbP ? (p.precio_mercado - _gbP) : 0;
     ahorroTot.textContent = fPrice(_ganancia, MON, ALM);
     var _subEl = ahorroTot.nextElementSibling;
-    if(_subEl) _subEl.textContent = fPrice(_margen,MON,ALM)+' margen/ud · DDP · Mariel: '+fPrice(_gbP,MON,ALM);
+    if(_subEl) _subEl.innerHTML = 'Margen aproximado: ' + fPrice(_margen,MON,ALM) + ' por unidad<br>Compra DDP: ' + fPrice(_gbP,MON,ALM) + ' | Venta sugerida: ' + fPrice(p.precio_mercado,MON,ALM);
   }
   card.querySelectorAll('[data-equiv]').forEach(function(row){
     var mon=row.dataset.equiv;
@@ -1737,7 +1745,7 @@ function updCardPrices(cardId, p, qty){
   
   var ahorroTot = document.getElementById('ahorro-tot-'+cardId);
   if (ahorroTot && p.precio_mercado && p.precio_mercado > _equivRef) {
-    ahorroTot.textContent = 'Ganancia Potencial: ' + fPrice((p.precio_mercado - _equivRef)*qty, MON, ALM);
+    ahorroTot.textContent = 'Beneficio Estimado: ' + fPrice((p.precio_mercado - _equivRef)*qty, MON, ALM);
   }
 }
 function addToCartIdx(idx){
