@@ -2211,9 +2211,10 @@ async function syncLoadProductos() {
         tiempo_transito: row.tiempo_transito||'',
         precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
         cif: row.precio_cif!=null?parseFloat(row.precio_cif):null,
-        planes_pago: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||PLANES:')!==-1) ? JSON.parse(row.ficha_tecnica.split('|||PLANES:')[1]||'[]') : [],
-        ficha_tecnica: row.ficha_tecnica ? row.ficha_tecnica.split('|||PLANES:')[0] : ''
-      };
+        planes_pago: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||PLANES:')!==-1) ? JSON.parse(row.ficha_tecnica.split('|||PLANES:')[1].split('|||')[0]||'[]') : [],
+          nombre_esquema_base: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||NOMBRE_BASE:')!==-1) ? row.ficha_tecnica.split('|||NOMBRE_BASE:')[1].split('|||')[0] : '',
+          ficha_tecnica: row.ficha_tecnica ? row.ficha_tecnica.split('|||')[0] : ''
+        };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
     });
@@ -2369,8 +2370,8 @@ async function syncSaveProducto(p) {
     recargo_cuba:p.recargo_cuba||null,
     tiempo_transito:p.tiempo_transito||null,
     precio_mercado:p.precio_mercado!=null?p.precio_mercado:null,
-    ficha_tecnica:(p.ficha_tecnica||'') + (p.planes_pago && p.planes_pago.length ? '|||PLANES:'+JSON.stringify(p.planes_pago) : ''),
-    nombre_puerto:p.nombre_puerto||null};
+      ficha_tecnica:(p.ficha_tecnica||'') + (p.planes_pago && p.planes_pago.length ? '|||PLANES:'+JSON.stringify(p.planes_pago) : '') + (p.nombre_esquema_base ? '|||NOMBRE_BASE:'+p.nombre_esquema_base : ''),
+      nombre_puerto:p.nombre_puerto||null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
@@ -9268,7 +9269,8 @@ function renderFormProducto() {
             maj: window.clonedProdData.maj,
             escala: window.clonedProdData.escala ? JSON.parse(JSON.stringify(window.clonedProdData.escala)) : [],
               planes_pago: window.clonedProdData.planes_pago ? JSON.parse(JSON.stringify(window.clonedProdData.planes_pago)) : [],
-            ddp: window.clonedProdData.ddp,
+              nombre_esquema_base: window.clonedProdData.nombre_esquema_base,
+              ddp: window.clonedProdData.ddp,
             oferta: window.clonedProdData.oferta===true,
             badgeTexto: window.clonedProdData.badgeTexto==='RESERVADO' ? '' : (window.clonedProdData.badgeTexto||''),
             precioOfertaHabana: window.clonedProdData.precioOfertaHabana,
@@ -9338,7 +9340,11 @@ function renderFormProducto() {
     + '<button type="button" onclick="admAddPlanRow()" class="adm-btn" style="font-size:12px;padding:4px 10px">+ Añadir plan</button>'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
-    + '<label style="font-size:11px;font-weight:600">Esquema de Pagos</label>'
+    + '<label style="font-size:11px;font-weight:600">Nombre Esquema Base</label>'
+    + '<input class="adm-inp" id="ep-esquema-base-nombre" value="' + (p.nombre_esquema_base||'') + '" placeholder="Ej: 100% Anticipado">'
+    + '</div>'
+    + '<div style="display:grid;gap:4px">'
+    + '<label style="font-size:11px;font-weight:600">Detalle Esquema Base</label>'
     + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="Ej: 50% al reservar...">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
@@ -9493,7 +9499,8 @@ function admGuardarProd(idx) {
   var reservado = !!(document.getElementById('ep-reservado') && document.getElementById('ep-reservado').checked);
   var por_encargo = !!(document.getElementById('ep-por-encargo') && document.getElementById('ep-por-encargo').checked);
   var esquema_pago = (document.getElementById('ep-esquema-pago')?.value||'').trim();
-  var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
+    var nombre_esquema_base = (document.getElementById('ep-esquema-base-nombre')?.value||'').trim();
+    var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
   var planes_pago = [];
   document.querySelectorAll('#ep-planes-rows > .ep-plan-row').forEach(function(row){
     var nombre = row.querySelector('.ep-plan-nombre').value.trim();
@@ -9520,7 +9527,7 @@ function admGuardarProd(idx) {
     cif: cif,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, planes_pago: planes_pago, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, planes_pago: planes_pago, nombre_esquema_base: nombre_esquema_base, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)
