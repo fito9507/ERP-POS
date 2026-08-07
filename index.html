@@ -9319,6 +9319,25 @@ function renderFormProducto() {
     + '<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);padding:12px;border-radius:8px;display:grid;gap:10px">'
     + '<div class="adm-lbl" style="color:#3b82f6;font-weight:700">🚢 Opciones de Importación</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+    + '<div style="grid-column:1/-1;background:#fff;border-radius:8px;padding:10px;border:1px solid rgba(0,0,0,0.08);margin-bottom:8px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--color-text-secondary)">Múltiples Esquemas de Pago (Opcional)</div>'
+    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Si defines planes aquí, el cliente podrá elegir uno. El precio base se sobrescribirá.</div>'
+    + '<div id="ep-planes-rows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">'
+    + (function(){
+        var rows = p.planes_pago&&p.planes_pago.length ? p.planes_pago : [];
+        return rows.map(function(r,i){
+          return '<div class="ep-plan-row" style="display:grid;grid-template-columns:1fr 1.5fr 80px 80px auto;gap:6px;align-items:center;background:rgba(0,0,0,0.02);padding:6px;border-radius:6px;border:1px solid rgba(0,0,0,0.05)">'
+            +'<input class="adm-inp ep-plan-nombre" type="text" value="'+(r.nombre||'').replace(/"/g,'&quot;')+'" placeholder="Nombre (ej: 50/50)">'
+            +'<input class="adm-inp ep-plan-esquema" type="text" value="'+(r.esquema||'').replace(/"/g,'&quot;')+'" placeholder="Detalle">'
+            +'<input class="adm-inp ep-plan-cif" type="number" value="'+(r.cif!=null?r.cif:'')+'" placeholder="CIF" step="0.01">'
+            +'<input class="adm-inp ep-plan-ddp" type="number" value="'+(r.ddp!=null?r.ddp:'')+'" placeholder="DDP" step="0.01">'
+            +'<button type="button" onclick="this.closest(\'.ep-plan-row\').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>'
+            +'</div>';
+        }).join('');
+      })()
+    + '</div>'
+    + '<button type="button" onclick="admAddPlanRow()" class="adm-btn" style="font-size:12px;padding:4px 10px">+ Añadir plan</button>'
+    + '</div>'
     + '<div style="display:grid;gap:4px">'
     + '<label style="font-size:11px;font-weight:600">Esquema de Pagos</label>'
     + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="Ej: 50% al reservar...">'
