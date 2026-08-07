@@ -1378,7 +1378,7 @@ function encargoCardHTML(p){
       '<div style="margin-bottom:12px;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px;background:rgba(255,255,255,0.02)">'
       +'<div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:8px;display:flex;align-items:center;gap:6px">'
       +'<span>Opciones de Pago</span></div>'
-      +'<select class="w3-select w3-border" style="background:#1e293b;color:white;font-size:12px;padding:6px;border-radius:4px" '
+      +'<select class="w3-select w3-border" style="background:#1e293b;color:white;font-size:12px;padding:6px;border-radius:4px;width:100%;max-width:100%;text-overflow:ellipsis;overflow:hidden;white-space:nowrap" '
       +'onchange="selectPlanPago(\''+cardId+'\', '+pidx+', this.value)">'
       +'<option value="-1">Esquema Base ('+(p.esquema_pago||'').substring(0,20)+'...) - DDP '+fN(p.ddp,0)+'</option>'
       + p.planes_pago.map(function(pl, idx) { return '<option value="'+idx+'" '+(window._selectedPlan&&window._selectedPlan[cardId]===idx?'selected':'')+'>'+pl.nombre+' (DDP '+fN(pl.ddp,0)+')</option>'; }).join('')
