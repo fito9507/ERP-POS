@@ -9238,6 +9238,20 @@ function admAddEscalaRow(){
   container.appendChild(div);
 }
 
+function admAddPlanRow() {
+  var container = document.getElementById('ep-planes-rows');
+  if(!container) return;
+  var div = document.createElement('div');
+  div.className = 'ep-plan-row';
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1.5fr 80px 80px auto;gap:6px;align-items:center;background:rgba(0,0,0,0.02);padding:6px;border-radius:6px;border:1px solid rgba(0,0,0,0.05)';
+  div.innerHTML = '<input class="adm-inp ep-plan-nombre" type="text" placeholder="Nombre (ej: 50/50)">'
+    +'<input class="adm-inp ep-plan-esquema" type="text" placeholder="Detalle (ej: 50% reserva | 50% arribo)">'
+    +'<input class="adm-inp ep-plan-cif" type="number" placeholder="CIF" step="0.01">'
+    +'<input class="adm-inp ep-plan-ddp" type="number" placeholder="DDP" step="0.01">'
+    +'<button type="button" onclick="this.closest('.ep-plan-row').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>';
+  container.appendChild(div);
+}
+
 function renderFormProducto() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -9254,6 +9268,7 @@ function renderFormProducto() {
             min: window.clonedProdData.min,
             maj: window.clonedProdData.maj,
             escala: window.clonedProdData.escala ? JSON.parse(JSON.stringify(window.clonedProdData.escala)) : [],
+              planes_pago: window.clonedProdData.planes_pago ? JSON.parse(JSON.stringify(window.clonedProdData.planes_pago)) : [],
             ddp: window.clonedProdData.ddp,
             oferta: window.clonedProdData.oferta===true,
             badgeTexto: window.clonedProdData.badgeTexto==='RESERVADO' ? '' : (window.clonedProdData.badgeTexto||''),
@@ -9461,6 +9476,18 @@ function admGuardarProd(idx) {
   var por_encargo = !!(document.getElementById('ep-por-encargo') && document.getElementById('ep-por-encargo').checked);
   var esquema_pago = (document.getElementById('ep-esquema-pago')?.value||'').trim();
   var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
+  var planes_pago = [];
+  document.querySelectorAll('#ep-planes-rows > .ep-plan-row').forEach(function(row){
+    var nombre = row.querySelector('.ep-plan-nombre').value.trim();
+    var esquema = row.querySelector('.ep-plan-esquema').value.trim();
+    var cifEl = row.querySelector('.ep-plan-cif').value;
+    var ddpEl = row.querySelector('.ep-plan-ddp').value;
+    var cifVal = cifEl!=='' && !isNaN(parseFloat(cifEl)) ? parseFloat(cifEl) : null;
+    var ddpVal = ddpEl!=='' && !isNaN(parseFloat(ddpEl)) ? parseFloat(ddpEl) : null;
+    if(nombre || esquema) {
+      planes_pago.push({nombre:nombre, esquema:esquema, cif:cifVal, ddp:ddpVal});
+    }
+  });
   var tiempo_transito = (document.getElementById('ep-tiempo-transito')?.value||'').trim();
   var pMercadoV = document.getElementById('ep-precio-mercado')?.value;
   var precio_mercado = pMercadoV!==''&&!isNaN(parseFloat(pMercadoV)) ? parseFloat(pMercadoV) : null;
@@ -9475,7 +9502,7 @@ function admGuardarProd(idx) {
     cif: cif,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, planes_pago: planes_pago, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)

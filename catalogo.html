@@ -1444,6 +1444,55 @@ function encargoCardHTML(p){
 }
 
 
+
+function selectPlanPago(cardId, pidx, planIdxStr) {
+  var p = PRODS[pidx]; if(!p) return;
+  var selIdx = parseInt(planIdxStr);
+  window._selectedPlan = window._selectedPlan || {};
+  window._selectedPlan[cardId] = selIdx;
+  
+  if(p._orig === undefined) {
+    p._orig = { cif: p.precio_cif, ddp: p.precio_ddp, esquema: p.esquema_pago, nombre_plan: null };
+  }
+  
+  if (selIdx >= 0 && p.planes_pago && p.planes_pago[selIdx]) {
+    var plan = p.planes_pago[selIdx];
+    p.precio_cif = plan.cif != null ? plan.cif : p._orig.cif;
+    p.precio_ddp = plan.ddp != null ? plan.ddp : p._orig.ddp;
+    p.esquema_pago = plan.esquema || p._orig.esquema;
+    p.nombre_plan = plan.nombre;
+  } else {
+    p.precio_cif = p._orig.cif;
+    p.precio_ddp = p._orig.ddp;
+    p.esquema_pago = p._orig.esquema;
+    p.nombre_plan = null;
+  }
+  
+  var cifValEl = document.getElementById('cif-val-'+cardId);
+  if(cifValEl) cifValEl.textContent = p.precio_cif != null ? fPrice(p.precio_cif,MON,ALM) : '--';
+  
+  var ddpValEl = document.getElementById('ddp-val-'+cardId);
+  if(ddpValEl) ddpValEl.textContent = p.precio_ddp != null ? fPrice(p.precio_ddp,MON,ALM) : '--';
+  
+  var singlePriceEl = document.getElementById('single-price-'+cardId);
+  if(singlePriceEl) {
+     var price = p.precio_cif != null ? p.precio_cif : (p.precio_ddp != null ? p.precio_ddp : (p.min || p.maj || 0));
+     singlePriceEl.textContent = fPrice(price,MON,ALM);
+  }
+  
+  var tipoImport = 'base';
+  var btnDdp = document.getElementById('ptbtn-ddp-'+cardId);
+  var btnCif = document.getElementById('ptbtn-cif-'+cardId);
+  if (btnDdp && btnDdp.className.indexOf('active-ddp') !== -1) tipoImport = 'ddp';
+  else if (btnCif && btnCif.className.indexOf('active-cif') !== -1) tipoImport = 'cif';
+  else if (p.precio_ddp != null) tipoImport = 'ddp';
+  else if (p.precio_cif != null) tipoImport = 'cif';
+  
+  if(typeof selectPriceTipo === 'function') {
+      selectPriceTipo(cardId, pidx, tipoImport);
+  }
+}
+
 function selectPriceTipo(cardId, pidx, tipo) {
   var p = PRODS[pidx]; if(!p) return;
   var cifP = p.precio_cif; var ddpP = p.precio_ddp;
@@ -1684,7 +1733,7 @@ function addToCartIdx(idx){
     else if (p.precio_cif != null) tipoImport = 'cif';
   }
   
-  CART[p.n] = {prod:p, qty:qty, tipoImport:tipoImport, enCuba:!!isCub};
+  CART[p.n] = {prod:p, qty:qty, tipoImport:tipoImport, enCuba:!!isCub, plan_idx: window._selectedPlan ? window._selectedPlan[cardId] : -1, nombre_plan: p.nombre_plan};
   var btn = document.getElementById('addbtn-'+cardId) || document.getElementById('addbtn-tr-'+cardId);
   if(btn){ btn.textContent = p.por_encargo ? '✓ Encargado' : ((p.enTransito&&p.enTransito[ALM]) ? '✓ Reservado' : '✓ Agregado'); btn.classList.add('added'); }
   updCart(); saveCartState();
@@ -1909,6 +1958,7 @@ function sendWA(){
       var totalItem = r.price * i.qty;
       var optionStr = i.tipoImport==='cif'?'CIF':(i.tipoImport==='ddp'?'DDP':'Importación');
       optionStr += i.enCuba ? " (Pagado en Cuba)" : " (Pagado en Exterior)";
+      if(i.nombre_plan) optionStr += " [" + i.nombre_plan + "]";
       ln += '\n  ↳ 📦 Opción Seleccionada: ' + optionStr;
       
       if (i.prod.precio_cif != null) ln += '\n  ↳ ⚓ Precio Referencia CIF: ' + fPrice(i.prod.precio_cif, CART_MON) + '/ud';
