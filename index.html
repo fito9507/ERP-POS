@@ -8231,9 +8231,9 @@ function resetOnMonChangeCli(cid){
 }
 // Actualiza solo la barra de preview usando el equiv actual (manual o auto)
 function updPrevCli(cid){
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value.replace(/,/g, '.'))||0;
   const mon=document.getElementById('a-mon-'+cid).value;
-  const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
+  const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value.replace(/,/g, '.'))||0;
   // Recalcular la tasa implícita a partir del equiv manual
   if(monto>0&&equiv>0&&mon!=='USD'){
     var tasaImplied=(mon==='EUR')?(equiv/monto):(monto/equiv);
@@ -8252,15 +8252,15 @@ function updPrevCli(cid){
   } else prev.style.display='none';
 }
 function calcEquivCli(cid){
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value.replace(/,/g, '.'))||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const tasaEl=document.getElementById('a-tasa-'+cid);
-  const tasaManual=parseFloat(tasaEl.value)||0;
+  const tasaManual=parseFloat(tasaEl.value.replace(/,/g, '.'))||0;
   const equivEl=document.getElementById('a-equiv-'+cid);
   let equiv;
   if(window['em_'+cid]){
     // Usuario editó equiv directamente — respetar ese valor
-    equiv=parseFloat(equivEl.value)||0;
+    equiv=parseFloat(equivEl.value.replace(/,/g, '.'))||0;
   } else if(mon!=='USD'){
     if(tasaManual>0){
       equiv=(mon==='EUR')?(monto*tasaManual):(monto/tasaManual);
@@ -8311,10 +8311,10 @@ function registrarAbonoCli(cid){
   const fecha=document.getElementById('a-fecha-'+cid).value||today();
   const concepto=document.getElementById('a-concepto-'+cid).value;
   const desc=document.getElementById('a-desc-'+cid).value;
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value.replace(/,/g, '.'))||0;
   const mon=document.getElementById('a-mon-'+cid).value;
-  const tasaManual=parseFloat(document.getElementById('a-tasa-'+cid).value)||0;
-  const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
+  const tasaManual=parseFloat(document.getElementById('a-tasa-'+cid).value.replace(/,/g, '.'))||0;
+  const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value.replace(/,/g, '.'))||0;
   // Calcular equivUSD: prioridad: 1) equiv editado manualmente, 2) tasa manual, 3) tasa automática
   let equivUSD;
   if(window['em_'+cid] && equivRaw>0){
