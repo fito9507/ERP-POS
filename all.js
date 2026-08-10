@@ -6807,7 +6807,7 @@ function renderFichaAbonar(c){
       <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
         <div><label class="lbl">Monto</label>
           <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
-            oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
+            oninput="window['em_'+'${c.id}']=false; calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
         <div><label class="lbl">Moneda</label>
           <select id="a-mon-${c.id}" onchange="resetOnMonChangeCli('${c.id}')" style="width:100%">
             <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
@@ -6817,7 +6817,7 @@ function renderFichaAbonar(c){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label class="lbl">Tasa (opcional)</label>
           <input type="number" id="a-tasa-${c.id}" step="0.0001" placeholder="auto"
-            oninput="calcEquivCli('${c.id}')" style="width:100%"></div>
+            oninput="window['em_'+'${c.id}']=false; calcEquivCli('${c.id}')" style="width:100%"></div>
         <div><label class="lbl">Equiv. USD</label>
           <input type="number" id="a-equiv-${c.id}" step="0.01"
             style="width:100%;font-size:15px;font-weight:600;background:var(--color-background-secondary)"
@@ -6861,18 +6861,29 @@ function resetOnMonChangeCli(cid){
 }
 // Actualiza solo la barra de preview usando el equiv actual (manual o auto)
 function updPrevCli(cid){
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
+  var montoEl=document.getElementById('a-monto-'+cid);
+  var tasaEl=document.getElementById('a-tasa-'+cid);
+  var equivEl=document.getElementById('a-equiv-'+cid);
+  if(!montoEl || !tasaEl || !equivEl) return;
+  
   const mon=document.getElementById('a-mon-'+cid).value;
-  const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
-  // Recalcular la tasa implícita a partir del equiv manual
-  if(monto>0&&equiv>0&&mon!=='USD'){
-    var tasaImplied=(mon==='EUR')?(equiv/monto):(monto/equiv);
-    var tasaEl=document.getElementById('a-tasa-'+cid);
-    if(tasaEl){
-      // Mostrar la tasa calculada como valor en el campo
-      tasaEl.value=tasaImplied.toFixed(2);
+  let monto=parseFloat(montoEl.value)||0;
+  let equiv=parseFloat(equivEl.value)||0;
+  let tasaManual=parseFloat(tasaEl.value)||0;
+
+  // Si el usuario editó equiv manualmente, recalcular lo demás
+  if(window['em_'+cid] && equiv > 0 && mon !== 'USD'){
+    if(tasaManual > 0) {
+      // Si hay tasa fija, recalculamos monto
+      monto = (mon === 'EUR') ? (equiv / tasaManual) : (equiv * tasaManual);
+      montoEl.value = monto > 0 ? parseFloat(monto.toFixed(2)) : '';
+    } else if(monto > 0) {
+      // Si no hay tasa fija, recalculamos tasa
+      var tasaImplied = (mon === 'EUR') ? (equiv / monto) : (monto / equiv);
+      tasaEl.value = tasaImplied.toFixed(4);
     }
   }
+
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
   const pdt=pdtCli(c);
   const prev=document.getElementById('a-prev-'+cid);
@@ -6900,7 +6911,7 @@ function calcEquivCli(cid){
     equivEl.value=equiv>0?equiv.toFixed(4):'';
     // Mostrar tasa efectiva en placeholder
     if(!tasaManual&&monto>0&&equiv>0){
-      tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(2);
+      tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(4);
     }
   } else {
     equiv=monto;
