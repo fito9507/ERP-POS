@@ -4928,10 +4928,13 @@ function exportarDeudasDeudorPDF(nombre) {
     if (p.notas) html += '<br>Notas: <em>' + p.notas + '</em>';
     html += '</p>';
     
+    var tc = esDeuda ? '#dc2626' : '#16a34a';
+    if(saldo <= 0) tc = '#16a34a'; // green/success when liquidated
+    
     html += '<div style="display:flex; flex-wrap:wrap; gap:20px; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:6px;">';
     html += '<div>Capital Original / Total: <br><strong style="font-size:14px">' + fN(p.capitalOriginal||total, 2) + ' ' + p.moneda + '</strong></div>';
     html += '<div>Capital Pagado: <br><strong style="font-size:14px">' + fN(pagado, 2) + ' ' + p.moneda + '</strong></div>';
-    html += '<div style="color:' + (saldo>0 ? '#dc2626' : '#16a34a') + '">Saldo Pendiente: <br><strong style="font-size:14px">' + fN(saldo, 2) + ' ' + p.moneda + '</strong></div>';
+    html += '<div style="color:' + tc + '">Saldo Pendiente: <br><strong style="font-size:14px">' + fN(saldo, 2) + ' ' + p.moneda + '</strong></div>';
     if(intPagados>0) html += '<div>Intereses Pagados: <br><strong style="font-size:14px">' + fN(intPagados, 2) + ' ' + p.moneda + '</strong></div>';
     html += '</div>';
 
