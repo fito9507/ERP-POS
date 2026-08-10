@@ -6243,6 +6243,7 @@ function renderDeudas(){
       +(items.length>1?'<span style="font-size:10px;background:rgba('+accentRgb+',.2);padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap">'+items.length+' deudas</span>':'')
       +(allLiquidada?'<span style="font-size:10px;background:rgba(74,222,128,.15);color:var(--color-text-success);padding:1px 6px;border-radius:4px;font-weight:500">✓</span>':'')
       +chevron
+      +'<button title="Exportar a PDF" onclick="event.stopPropagation(); exportarDeudasDeudorPDF(\''+nombre.replace(/'/g,"\\'")+'\')" style="margin-left:6px;padding:2px 8px;font-size:10px;background:rgba(0,0,0,.08);color:inherit;border:1px solid rgba(0,0,0,.15);border-radius:4px;cursor:pointer">📄 PDF</button>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0">'
       +'<div style="font-size:13px;font-weight:700;color:rgb('+accentRgb+')">'+fN(totalUSD,2)+' USD</div>'
@@ -6316,6 +6317,112 @@ function renderDeudas(){
       }
     });
   });
+}
+
+function exportarDeudasDeudorPDF(nombre) {
+  var deudas = PRESTAMOS.filter(function(p){ return p.nombre.trim() === nombre; });
+  if(!deudas.length) return;
+
+  var d = new Date();
+  var dateStr = d.getDate().toString().padStart(2, '0') + '-' + (d.getMonth()+1).toString().padStart(2, '0') + '-' + d.getFullYear();
+  var title = 'Estado de Cuenta - ' + nombre + ' ' + dateStr;
+  var html = '<!DOCTYPE html><html><head><title>' + title + '</title>';
+  html += '<style>';
+  html += 'body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; margin: 20px; color: #333; }';
+  html += 'table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }';
+  html += 'th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }';
+  html += 'th { background-color: #f4f4f4; font-weight: 600; }';
+  html += 'h2 { margin-top: 30px; border-bottom: 1px solid #000; padding-bottom: 5px; font-size: 16px; margin-bottom:10px; }';
+  html += 'h3 { margin-top: 20px; font-size: 14px; margin-bottom:8px; color: #444; }';
+  html += '.text-right { text-align: right; }';
+  html += '.tot-row td { font-weight: bold; background: #f9f9f9; }';
+  html += '@media print { @page { margin: 1cm; } button { display: none; } }';
+  html += '</style></head><body>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+  html += '<h1 style="font-size:20px;margin:0">Estado de Cuenta: ' + nombre + '</h1>';
+  html += '<button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer;background:#2563eb;color:#fff;border:none;border-radius:4px">🖨️ Imprimir / Guardar PDF</button>';
+  html += '</div>';
+  html += '<p style="margin:5px 0 20px 0;font-size:12px;color:#666">Fecha de emisión: ' + new Date().toLocaleString() + '</p>';
+
+  var totalPendienteUSD = 0;
+  
+  deudas.forEach(function(p) {
+    var total = _totalDeuda(p);
+    var pagado = _pagadoDeuda(p);
+    var saldo = _saldoDeuda(p);
+    var intPagados = _interesesPagadosDeuda(p);
+    var esDeuda = p.direccion !== 'nos_deben';
+    var tipoLabel = {simple:'Deuda simple',interes_simple:'Solo intereses (bullet)',revolving:'Línea de Crédito / Tarjeta Revolving',frances:'Cuota fija (francés)'}[p.tipo]||p.tipo;
+    
+    var sdUSD = p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda):saldo/(RATES[p.moneda]||1));
+    totalPendienteUSD += (esDeuda ? -sdUSD : sdUSD);
+    
+    html += '<div style="page-break-inside: avoid; margin-bottom:30px; border:1px solid #eee; padding:15px; border-radius:8px;">';
+    html += '<h2>' + tipoLabel + (p.tasa && p.tipo !== 'simple' ? ' (' + p.tasa + '%/mes)' : '') + ' - ' + p.moneda + '</h2>';
+    html += '<p style="margin-top:0;margin-bottom:10px">Sentido: <strong>' + (esDeuda ? 'Por pagar (debemos)' : 'Por cobrar (nos deben)') + '</strong>';
+    if (p.notas) html += '<br>Notas: <em>' + p.notas + '</em>';
+    html += '</p>';
+    
+    html += '<div style="display:flex; flex-wrap:wrap; gap:20px; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:6px;">';
+    html += '<div>Capital Original / Total: <br><strong style="font-size:14px">' + fN(p.capitalOriginal||total, 2) + ' ' + p.moneda + '</strong></div>';
+    html += '<div>Capital Pagado: <br><strong style="font-size:14px">' + fN(pagado, 2) + ' ' + p.moneda + '</strong></div>';
+    html += '<div style="color:' + (saldo>0 ? '#dc2626' : '#16a34a') + '">Saldo Pendiente: <br><strong style="font-size:14px">' + fN(saldo, 2) + ' ' + p.moneda + '</strong></div>';
+    if(intPagados>0) html += '<div>Intereses Pagados: <br><strong style="font-size:14px">' + fN(intPagados, 2) + ' ' + p.moneda + '</strong></div>';
+    html += '</div>';
+
+    var pagos = p.pagos || [];
+    if (pagos.length > 0) {
+      html += '<h3>Historial de Movimientos (Amortizaciones, Incrementos, Pagos)</h3>';
+      html += '<table><thead><tr><th>Fecha</th><th>Concepto / Tipo</th><th class="text-right">Monto</th><th class="text-right">Amortiza a Deuda</th><th>Nota</th></tr></thead><tbody>';
+      pagos.slice().sort(function(a,b){var c=((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')); return c!==0?c:(b.id||'').localeCompare(a.id||'');}).forEach(function(pg) {
+        html += '<tr>';
+        html += '<td>' + (pg.fecha ? fD(pg.fecha) : '—') + (pg.hora ? ' ' + pg.hora : '') + '</td>';
+        html += '<td>' + (pg.tipoPago || 'pago') + '</td>';
+        html += '<td class="text-right">' + fN(pg.monto, 2) + ' ' + pg.mon + '</td>';
+        html += '<td class="text-right">' + (pg.montoDeuda != null ? fN(pg.montoDeuda, 2) + ' ' + p.moneda : fN(pg.monto, 2) + ' ' + p.moneda) + '</td>';
+        html += '<td>' + (pg.nota || '') + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    } else {
+      html += '<p><em>Sin movimientos registrados.</em></p>';
+    }
+
+    if (p.cuotas && p.cuotas.length > 0) {
+      html += '<h3>Esquema de Pagos (Cuadro de amortización)</h3>';
+      html += '<table><thead><tr><th>#</th><th>Vencimiento</th><th class="text-right">Capital</th><th class="text-right">Interés</th><th class="text-right">Total</th><th>Estado</th></tr></thead><tbody>';
+      p.cuotas.forEach(function(c) {
+        var esPagada = pagos.some(function(pg){return pg._cuotaNum === c.num;});
+        html += '<tr style="'+(esPagada?'color:#999':'')+'">';
+        html += '<td>' + c.num + '</td>';
+        html += '<td>' + (c.fecha ? fD(c.fecha) : '—') + '</td>';
+        if (p.tipo !== 'simple') {
+          html += '<td class="text-right">' + fN(c.capital, 2) + '</td>';
+          html += '<td class="text-right">' + fN(c.interes, 2) + '</td>';
+        } else {
+          html += '<td class="text-right">—</td><td class="text-right">—</td>';
+        }
+        html += '<td class="text-right" style="font-weight:bold">' + fN(c.total, 2) + '</td>';
+        html += '<td>' + (esPagada ? '✅ Pagada' : 'Pendiente') + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+    html += '</div>';
+  });
+
+  html += '<div style="margin-top:20px;padding:15px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px">';
+  html += '<h3 style="margin:0 0 10px 0">Resumen Global (Balance equivalente)</h3>';
+  html += '<div style="margin-bottom:6px">Positivo = nos deben, Negativo = debemos.</div>';
+  html += '<div style="font-size:16px;">Balance Neto Pendiente: <b style="color:'+(totalPendienteUSD>=0?'#16a34a':'#dc2626')+'">' + fN(totalPendienteUSD) + ' USD</b></div>';
+  html += '</div>';
+  
+  html += '</body></html>';
+
+  var w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function() { w.print(); }, 500);
 }
 
 // ── HELPERS ──────────────────────────────────────────
