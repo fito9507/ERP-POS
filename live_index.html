@@ -1078,7 +1078,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Almacén</label>
         <select id="l-alm"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
       <div class="ff"><label class="lbl">Tasa CUP/USD</label>
-        <input type="number" id="l-tasa" value="512.88" step="0.0001"></div>
+        <input type="number" id="l-tasa" value="512.88" step="0.01"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
         <select id="l-mon-pago" onchange="renderLiqCuentas()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
       <div class="ff"><label class="lbl">Cuenta de pago</label>
@@ -1356,7 +1356,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 <div class="nav" id="main-nav">
   <button class="act" onclick="navTo('lista',this)">Clientes</button>
   <button onclick="showModal()">+ Nuevo cliente</button>
-  <button onclick="openExportarReservasModal()" style="margin-left:auto;background:var(--color-text-secondary);color:#fdf6e3;border:none">📄 Exportar Reservas PDF</button>
+  <button onclick="exportarReservasPDF()" style="margin-left:auto;background:var(--color-text-secondary);color:#fdf6e3;border:none">📄 Exportar Reservas PDF</button>
 </div>
 
 <!-- ══ LISTA CLIENTES ══ -->
@@ -1374,24 +1374,6 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div class="page" id="f-nuevo-folio"><div id="f-nf-body"></div></div>
 </div>
 
-<!-- MODAL EXPORTAR PDF -->
-<div class="modal-bg" id="modal-export-pdf">
-  <div class="modal">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h3 style="margin:0">Exportar Reservas (PDF)</h3>
-      <button style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--color-text-secondary)" onclick="document.getElementById('modal-export-pdf').style.display='none'">×</button>
-    </div>
-    <div style="margin-bottom:10px;font-size:13px">Selecciona los clientes que deseas incluir:</div>
-    <div style="margin-bottom:10px;display:flex;gap:10px">
-      <button class="btn-sm" onclick="toggleExportPdfAll(true)">Todos</button>
-      <button class="btn-sm" onclick="toggleExportPdfAll(false)">Ninguno</button>
-    </div>
-    <div id="export-pdf-clients" style="max-height:300px;overflow-y:auto;border:1px solid var(--color-border-primary);border-radius:var(--border-radius-sm);padding:8px;display:flex;flex-direction:column;gap:6px">
-    </div>
-    <button class="btn" style="width:100%;margin-top:14px" onclick="executeExportarPDF()">Generar PDF</button>
-  </div>
-</div>
-
 <!-- MODAL NUEVO CLIENTE -->
 <div class="modal-bg" id="modal-cli">
   <div class="modal">
@@ -1403,7 +1385,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div><label class="lbl">Nombre *</label><input type="text" id="nc-nombre" placeholder="Nombre del cliente"></div>
       <div><label class="lbl">Teléfono</label><input type="text" id="nc-tel" placeholder="+53 ..."></div>
       <div><label class="lbl">Almacén asociado</label>
-        <select id="nc-alm"><option>Placetas</option><option>Habana</option><option>Xportprise</option><option>Varios</option></select></div>
+        <select id="nc-alm"><option>Placetas</option><option>Habana</option><option>España</option><option>Varios</option></select></div>
       <div><label class="lbl">Color de identificación</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="nc-colores"></div>
       </div>
@@ -2211,10 +2193,8 @@ async function syncLoadProductos() {
         tiempo_transito: row.tiempo_transito||'',
         precio_mercado: row.precio_mercado!=null?parseFloat(row.precio_mercado):null,
         cif: row.precio_cif!=null?parseFloat(row.precio_cif):null,
-        planes_pago: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||PLANES:')!==-1) ? JSON.parse(row.ficha_tecnica.split('|||PLANES:')[1].split('|||')[0]||'[]') : [],
-          nombre_esquema_base: (row.ficha_tecnica && row.ficha_tecnica.indexOf('|||NOMBRE_BASE:')!==-1) ? row.ficha_tecnica.split('|||NOMBRE_BASE:')[1].split('|||')[0] : '',
-          ficha_tecnica: row.ficha_tecnica ? row.ficha_tecnica.split('|||')[0] : ''
-        };
+        ficha_tecnica: row.ficha_tecnica||''
+      };
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
     });
@@ -2341,7 +2321,9 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
 }
 
 async function syncStockAlmacen(prodId, almacen, cantidad) {
-  var r = await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+  // We keep this for backward compatibility if needed, but it should be avoided
+  var r = await supaReq('POST',
+    'stock_almacen?on_conflict=producto_id,almacen,lote',
     {producto_id:prodId, almacen:almacen, lote:'SIN LOTE', cantidad:cantidad});
   return r.ok;
 }
@@ -2370,8 +2352,8 @@ async function syncSaveProducto(p) {
     recargo_cuba:p.recargo_cuba||null,
     tiempo_transito:p.tiempo_transito||null,
     precio_mercado:p.precio_mercado!=null?p.precio_mercado:null,
-      ficha_tecnica:(p.ficha_tecnica||'') + (p.planes_pago && p.planes_pago.length ? '|||PLANES:'+JSON.stringify(p.planes_pago) : '') + (p.nombre_esquema_base ? '|||NOMBRE_BASE:'+p.nombre_esquema_base : ''),
-      nombre_puerto:p.nombre_puerto||null};
+    ficha_tecnica:p.ficha_tecnica||null,
+    nombre_puerto:p.nombre_puerto||null};
 
   if (!_supaOnline) {
     // Offline: use PATCH if supaId known, else POST upsert by nombre
@@ -6243,7 +6225,6 @@ function renderDeudas(){
       +(items.length>1?'<span style="font-size:10px;background:rgba('+accentRgb+',.2);padding:1px 7px;border-radius:10px;font-weight:600;white-space:nowrap">'+items.length+' deudas</span>':'')
       +(allLiquidada?'<span style="font-size:10px;background:rgba(133,153,0,.15);color:var(--color-text-success);padding:1px 6px;border-radius:4px;font-weight:500">✓</span>':'')
       +chevron
-      +'<button title="Exportar a PDF" onclick="event.stopPropagation(); exportarDeudasDeudorPDF(\''+nombre.replace(/'/g,"\\'")+'\')" style="margin-left:6px;padding:2px 8px;font-size:10px;background:rgba(0,0,0,.08);color:inherit;border:1px solid rgba(0,0,0,.15);border-radius:4px;cursor:pointer">📄 PDF</button>'
       +'</div>'
       +'<div style="text-align:right;flex-shrink:0">'
       +'<div style="font-size:13px;font-weight:700;color:rgb('+accentRgb+')">'+fN(totalUSD,2)+' USD</div>'
@@ -6317,115 +6298,6 @@ function renderDeudas(){
       }
     });
   });
-}
-
-function exportarDeudasDeudorPDF(nombre) {
-  var deudas = PRESTAMOS.filter(function(p){ return p.nombre.trim() === nombre; });
-  if(!deudas.length) return;
-
-  var d = new Date();
-  var dateStr = d.getDate().toString().padStart(2, '0') + '-' + (d.getMonth()+1).toString().padStart(2, '0') + '-' + d.getFullYear();
-  var title = 'Estado de Cuenta - ' + nombre + ' ' + dateStr;
-  var html = '<!DOCTYPE html><html><head><title>' + title + '</title>';
-  html += '<style>';
-  html += 'body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; margin: 20px; color: #0e4350; }';
-  html += 'table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }';
-  html += 'th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }';
-  html += 'th { background-color: #f4f4f4; font-weight: 600; }';
-  html += 'h2 { margin-top: 30px; border-bottom: 1px solid #002b36; padding-bottom: 5px; font-size: 16px; margin-bottom:10px; }';
-  html += 'h3 { margin-top: 20px; font-size: 14px; margin-bottom:8px; color: #1a5060; }';
-  html += '.text-right { text-align: right; }';
-  html += '.tot-row td { font-weight: bold; background: #f9f9f9; }';
-  html += '@media print { @page { margin: 1cm; } button { display: none; } }';
-  html += '</style></head><body>';
-  html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-  html += '<h1 style="font-size:20px;margin:0">Estado de Cuenta: ' + nombre + '</h1>';
-  html += '<button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer;background:#2563eb;color:#fdf6e3;border:none;border-radius:4px">🖨️ Imprimir / Guardar PDF</button>';
-  html += '</div>';
-  html += '<p style="margin:5px 0 20px 0;font-size:12px;color:#666">Fecha de emisión: ' + new Date().toLocaleString() + '</p>';
-
-  var totalPendienteUSD = 0;
-  
-  deudas.forEach(function(p) {
-    var total = _totalDeuda(p);
-    var pagado = _pagadoDeuda(p);
-    var saldo = _saldoDeuda(p);
-    var intPagados = _interesesPagadosDeuda(p);
-    var esDeuda = p.direccion !== 'nos_deben';
-    var tipoLabel = {simple:'Deuda simple',interes_simple:'Solo intereses (bullet)',revolving:'Línea de Crédito / Tarjeta Revolving',frances:'Cuota fija (francés)'}[p.tipo]||p.tipo;
-    
-    var sdUSD = p.moneda==='USD'?saldo:(typeof toUSD==='function'?toUSD(saldo,p.moneda):saldo/(RATES[p.moneda]||1));
-    totalPendienteUSD += (esDeuda ? -sdUSD : sdUSD);
-    
-    html += '<div style="page-break-inside: avoid; margin-bottom:30px; border:1px solid #eee; padding:15px; border-radius:8px;">';
-    html += '<h2>' + tipoLabel + (p.tasa && p.tipo !== 'simple' ? ' (' + p.tasa + '%/mes)' : '') + ' - ' + p.moneda + '</h2>';
-    html += '<p style="margin-top:0;margin-bottom:10px">Sentido: <strong>' + (esDeuda ? 'Por pagar (debemos)' : 'Por cobrar (nos deben)') + '</strong>';
-    if (p.notas) html += '<br>Notas: <em>' + p.notas + '</em>';
-    html += '</p>';
-    
-    var tc = esDeuda ? '#dc2626' : '#16a34a';
-    if(saldo <= 0) tc = '#16a34a'; // green/success when liquidated
-    
-    html += '<div style="display:flex; flex-wrap:wrap; gap:20px; margin-bottom:15px; background:#f9fafb; padding:10px; border-radius:6px;">';
-    html += '<div>Capital Original / Total: <br><strong style="font-size:14px">' + fN(p.capitalOriginal||total, 2) + ' ' + p.moneda + '</strong></div>';
-    html += '<div>Capital Pagado: <br><strong style="font-size:14px">' + fN(pagado, 2) + ' ' + p.moneda + '</strong></div>';
-    html += '<div style="color:' + tc + '">Saldo Pendiente: <br><strong style="font-size:14px">' + fN(saldo, 2) + ' ' + p.moneda + '</strong></div>';
-    if(intPagados>0) html += '<div>Intereses Pagados: <br><strong style="font-size:14px">' + fN(intPagados, 2) + ' ' + p.moneda + '</strong></div>';
-    html += '</div>';
-
-    var pagos = p.pagos || [];
-    if (pagos.length > 0) {
-      html += '<h3>Historial de Movimientos (Amortizaciones, Incrementos, Pagos)</h3>';
-      html += '<table><thead><tr><th>Fecha</th><th>Concepto / Tipo</th><th class="text-right">Monto</th><th class="text-right">Amortiza a Deuda</th><th>Nota</th></tr></thead><tbody>';
-      pagos.slice().sort(function(a,b){var c=((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')); return c!==0?c:(b.id||'').localeCompare(a.id||'');}).forEach(function(pg) {
-        html += '<tr>';
-        html += '<td>' + (pg.fecha ? fD(pg.fecha) : '—') + (pg.hora ? ' ' + pg.hora : '') + '</td>';
-        html += '<td>' + (pg.tipoPago || 'pago') + '</td>';
-        html += '<td class="text-right">' + fN(pg.monto, 2) + ' ' + pg.mon + '</td>';
-        html += '<td class="text-right">' + (pg.montoDeuda != null ? fN(pg.montoDeuda, 2) + ' ' + p.moneda : fN(pg.monto, 2) + ' ' + p.moneda) + '</td>';
-        html += '<td>' + (pg.nota || '') + '</td>';
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-    } else {
-      html += '<p><em>Sin movimientos registrados.</em></p>';
-    }
-
-    if (p.cuotas && p.cuotas.length > 0) {
-      html += '<h3>Esquema de Pagos (Cuadro de amortización)</h3>';
-      html += '<table><thead><tr><th>#</th><th>Vencimiento</th><th class="text-right">Capital</th><th class="text-right">Interés</th><th class="text-right">Total</th><th>Estado</th></tr></thead><tbody>';
-      p.cuotas.forEach(function(c) {
-        var esPagada = pagos.some(function(pg){return pg._cuotaNum === c.num;});
-        html += '<tr style="'+(esPagada?'color:#999':'')+'">';
-        html += '<td>' + c.num + '</td>';
-        html += '<td>' + (c.fecha ? fD(c.fecha) : '—') + '</td>';
-        if (p.tipo !== 'simple') {
-          html += '<td class="text-right">' + fN(c.capital, 2) + '</td>';
-          html += '<td class="text-right">' + fN(c.interes, 2) + '</td>';
-        } else {
-          html += '<td class="text-right">—</td><td class="text-right">—</td>';
-        }
-        html += '<td class="text-right" style="font-weight:bold">' + fN(c.total, 2) + '</td>';
-        html += '<td>' + (esPagada ? '✅ Pagada' : 'Pendiente') + '</td>';
-        html += '</tr>';
-      });
-      html += '</tbody></table>';
-    }
-    html += '</div>';
-  });
-
-  html += '<div style="margin-top:20px;padding:15px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:4px">';
-  html += '<h3 style="margin:0 0 10px 0">Resumen Global (Balance equivalente)</h3>';
-  html += '<div style="margin-bottom:6px">Positivo = nos deben, Negativo = debemos.</div>';
-  html += '<div style="font-size:16px;">Balance Neto Pendiente: <b style="color:'+(totalPendienteUSD>=0?'#16a34a':'#dc2626')+'">' + fN(totalPendienteUSD) + ' USD</b></div>';
-  html += '</div>';
-  
-  html += '</body></html>';
-
-  var w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
-  setTimeout(function() { w.print(); }, 500);
 }
 
 // ── HELPERS ──────────────────────────────────────────
@@ -7565,40 +7437,8 @@ function renderFicha(){
   fichaNavTo('f-cuenta');
 }
 
-function openExportarReservasModal() {
-  var html = '';
-  CLIENTES.forEach(function(c) {
-    html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="export-cli-cb" value="' + c.id + '" checked> ' + c.nombre + '</label>';
-  });
-  document.getElementById('export-pdf-clients').innerHTML = html;
-  document.getElementById('modal-export-pdf').style.display = 'flex';
-}
-
-function toggleExportPdfAll(state) {
-  var cbs = document.querySelectorAll('.export-cli-cb');
-  cbs.forEach(function(cb) { cb.checked = state; });
-}
-
-function executeExportarPDF() {
-  var cbs = document.querySelectorAll('.export-cli-cb:checked');
-  var ids = Array.from(cbs).map(function(cb) { return cb.value; });
-  if (ids.length === 0) {
-    showToast('Selecciona al menos un cliente');
-    return;
-  }
-  document.getElementById('modal-export-pdf').style.display = 'none';
-  exportarReservasPDF(ids);
-}
-
 function exportarReservasPDF(clienteId) {
-  var clis = [];
-  if (Array.isArray(clienteId)) {
-    clis = CLIENTES.filter(function(c) { return clienteId.includes(c.id); });
-  } else if (clienteId) {
-    clis = [CLIENTES.find(function(c) { return c.id === clienteId; })];
-  } else {
-    clis = CLIENTES;
-  }
+  var clis = clienteId ? [CLIENTES.find(function(c) { return c.id === clienteId; })] : CLIENTES;
   clis = clis.filter(Boolean);
   if (!clis.length) return;
   var d = new Date();
@@ -7649,47 +7489,15 @@ function exportarReservasPDF(clienteId) {
       html += '<td class="text-right" style="color:'+(pd>0?'#dc2626':'#16a34a')+'">$' + fN(pd) + '</td>';
       html += '</tr>';
       
-      // Add product lines and abonos
-      var hasLineas = f.lineas && f.lineas.length > 0;
-      var hasAbonos = f.abonos && f.abonos.length > 0;
-      if (hasLineas || hasAbonos) {
-        html += '<tr class="prod-row"><td colspan="7" style="padding:4px 8px 12px 16px">';
-        
-        if (hasLineas) {
-          html += '<div style="font-weight:bold;margin-bottom:2px">Productos:</div>';
-          html += '<ul style="margin:0 0 8px 0;padding-left:20px">';
-          f.lineas.forEach(function(l) {
-            var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
-            var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
-            html += '<li>' + l.q + 'x ' + pname + ' ($' + fN(pprice) + ')</li>';
-          });
-          html += '</ul>';
-        }
-        
-        if (hasAbonos) {
-          html += '<div style="font-weight:bold;margin-top:4px;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
-          html += '<ul style="margin:0;padding-left:20px">';
-          f.abonos.forEach(function(a) {
-            var aFecha = a.fecha ? fD(a.fecha) : 'Sin fecha';
-            var aDesc = a.desc ? a.desc + ' - ' : (a.concepto ? a.concepto + ' - ' : '');
-            var aMon = a.mon || 'USD';
-            var aMonto = a.monto || 0;
-            var aEq = a.equivUSD || aMonto;
-            
-            var tasaVal = 0;
-            if (a.tasa && a.tasa > 0) {
-              tasaVal = a.tasa;
-            } else if (aMon !== 'USD' && aEq > 0 && aMonto > 0) {
-              tasaVal = (aMon === 'EUR' || aMon === 'MLC') ? (aEq / aMonto) : (aMonto / aEq);
-            }
-            var tasaStr = tasaVal > 0 ? ' (Tasa: ' + fN(tasaVal, tasaVal < 10 ? 4 : 2) + ')' : '';
-            
-            html += '<li style="color:#16a34a">' + aFecha + ' - ' + aDesc + fN(aMonto) + ' ' + aMon + tasaStr + (aMon !== 'USD' ? ' (equiv. $' + fN(aEq) + ')' : '') + '</li>';
-          });
-          html += '</ul>';
-        }
-        
-        html += '</td></tr>';
+      // Add product lines
+      if (f.lineas && f.lineas.length > 0) {
+        html += '<tr class="prod-row"><td colspan="7" style="padding:4px 8px 12px 16px"><ul style="margin:0;padding-left:20px">';
+        f.lineas.forEach(function(l) {
+          var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
+          var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
+          html += '<li>' + l.q + 'x ' + pname + ' ($' + fN(pprice) + ')</li>';
+        });
+        html += '</ul></td></tr>';
       }
     });
     
@@ -8286,8 +8094,8 @@ function renderFichaAbonar(c){
 
       <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
         <div><label class="lbl">Monto</label>
-          <input type="text" inputmode="decimal" id="a-monto-${c.id}" placeholder="0"
-            oninput="window['em_'+'${c.id}']=false; calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
+          <input type="number" id="a-monto-${c.id}" step="0.01" placeholder="0"
+            oninput="calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
         <div><label class="lbl">Moneda</label>
           <select id="a-mon-${c.id}" onchange="resetOnMonChangeCli('${c.id}')" style="width:100%">
             <option>USD</option><option>EUR</option><option>CUP</option><option>CUPT</option>
@@ -8296,10 +8104,10 @@ function renderFichaAbonar(c){
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div><label class="lbl">Tasa (opcional)</label>
-          <input type="text" inputmode="decimal" id="a-tasa-${c.id}" placeholder="auto"
-            oninput="window['em_'+'${c.id}']=false; calcEquivCli('${c.id}')" style="width:100%"></div>
+          <input type="number" id="a-tasa-${c.id}" step="0.01" placeholder="auto"
+            oninput="calcEquivCli('${c.id}')" style="width:100%"></div>
         <div><label class="lbl">Equiv. USD</label>
-          <input type="text" inputmode="decimal" id="a-equiv-${c.id}"
+          <input type="number" id="a-equiv-${c.id}" step="0.01"
             style="width:100%;font-size:15px;font-weight:600;background:var(--color-background-secondary)"
             oninput="window['em_${c.id}']=true;updPrevCli('${c.id}')"></div>
       </div>
@@ -8341,29 +8149,18 @@ function resetOnMonChangeCli(cid){
 }
 // Actualiza solo la barra de preview usando el equiv actual (manual o auto)
 function updPrevCli(cid){
-  var montoEl=document.getElementById('a-monto-'+cid);
-  var tasaEl=document.getElementById('a-tasa-'+cid);
-  var equivEl=document.getElementById('a-equiv-'+cid);
-  if(!montoEl || !tasaEl || !equivEl) return;
-
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
-  let monto=parseFloat(montoEl.value.replace(/,/g, '.'))||0;
-  let equiv=parseFloat(equivEl.value.replace(/,/g, '.'))||0;
-  let tasaManual=parseFloat(tasaEl.value.replace(/,/g, '.'))||0;
-
-  // Si el usuario editó equiv manualmente, recalcular lo demás
-  if(window['em_'+cid] && equiv > 0 && mon !== 'USD'){
-    if(tasaManual > 0) {
-      // Si hay tasa fija, recalculamos monto
-      monto = (mon === 'EUR') ? (equiv / tasaManual) : (equiv * tasaManual);
-      montoEl.value = monto > 0 ? parseFloat(monto.toFixed(2)) : '';
-    } else if(monto > 0) {
-      // Si no hay tasa fija, recalculamos tasa
-      var tasaImplied = (mon === 'EUR') ? (equiv / monto) : (monto / equiv);
-      tasaEl.value = tasaImplied.toFixed(4);
+  const equiv=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
+  // Recalcular la tasa implícita a partir del equiv manual
+  if(monto>0&&equiv>0&&mon!=='USD'){
+    var tasaImplied=(mon==='EUR')?(equiv/monto):(monto/equiv);
+    var tasaEl=document.getElementById('a-tasa-'+cid);
+    if(tasaEl){
+      // Mostrar la tasa calculada como valor en el campo
+      tasaEl.value=tasaImplied.toFixed(2);
     }
   }
-
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
   const pdt=pdtCli(c);
   const prev=document.getElementById('a-prev-'+cid);
@@ -8373,15 +8170,15 @@ function updPrevCli(cid){
   } else prev.style.display='none';
 }
 function calcEquivCli(cid){
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value.replace(/,/g, '.'))||0;
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
   const tasaEl=document.getElementById('a-tasa-'+cid);
-  const tasaManual=parseFloat(tasaEl.value.replace(/,/g, '.'))||0;
+  const tasaManual=parseFloat(tasaEl.value)||0;
   const equivEl=document.getElementById('a-equiv-'+cid);
   let equiv;
   if(window['em_'+cid]){
     // Usuario editó equiv directamente — respetar ese valor
-    equiv=parseFloat(equivEl.value.replace(/,/g, '.'))||0;
+    equiv=parseFloat(equivEl.value)||0;
   } else if(mon!=='USD'){
     if(tasaManual>0){
       equiv=(mon==='EUR')?(monto*tasaManual):(monto/tasaManual);
@@ -8391,7 +8188,7 @@ function calcEquivCli(cid){
     equivEl.value=equiv>0?equiv.toFixed(4):'';
     // Mostrar tasa efectiva en placeholder
     if(!tasaManual&&monto>0&&equiv>0){
-      tasaEl.placeholder=(mon==='EUR'||mon==='MLC')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(4);
+      tasaEl.placeholder=(mon==='EUR')?(equiv/monto).toFixed(4):(monto/equiv).toFixed(2);
     }
   } else {
     equiv=monto;
@@ -8432,10 +8229,10 @@ function registrarAbonoCli(cid){
   const fecha=document.getElementById('a-fecha-'+cid).value||today();
   const concepto=document.getElementById('a-concepto-'+cid).value;
   const desc=document.getElementById('a-desc-'+cid).value;
-  const monto=parseFloat(document.getElementById('a-monto-'+cid).value.replace(/,/g, '.'))||0;
+  const monto=parseFloat(document.getElementById('a-monto-'+cid).value)||0;
   const mon=document.getElementById('a-mon-'+cid).value;
-  const tasaManual=parseFloat(document.getElementById('a-tasa-'+cid).value.replace(/,/g, '.'))||0;
-  const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value.replace(/,/g, '.'))||0;
+  const tasaManual=parseFloat(document.getElementById('a-tasa-'+cid).value)||0;
+  const equivRaw=parseFloat(document.getElementById('a-equiv-'+cid).value)||0;
   // Calcular equivUSD: prioridad: 1) equiv editado manualmente, 2) tasa manual, 3) tasa automática
   let equivUSD;
   if(window['em_'+cid] && equivRaw>0){
@@ -8565,7 +8362,7 @@ function renderFichaNF(c){
     <div style="display:flex;flex-direction:column;gap:9px">
       <div class="g3">
         <div><label class="lbl">Fecha</label><input type="date" id="nf-fecha-${c.id}" value="${today()}"></div>
-        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>Xportprise</option></select></div>
+        <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>España</option></select></div>
         <div><label class="lbl">Moneda ref.</label><select id="nf-mon-${c.id}"><option>USD</option><option>EUR</option><option>CUP</option></select></div>
       </div>
       <div><label class="lbl">Descripción</label><input type="text" id="nf-desc-${c.id}" placeholder="Ej: Container #4 — perfiles"></div>
@@ -8882,8 +8679,8 @@ function adminInit() {
       var total = p.stk || 0;
       p.stk_alm = {
         Habana:     Math.round(total * 0.3),
-        Placetas:   total - Math.round(total * 0.3),
-        Xportprise: 0
+        Placetas:   Math.round(total * 0.6),
+        Xportprise: total - Math.round(total * 0.3) - Math.round(total * 0.6)
       };
     }
     if (!p.stk_min) p.stk_min = 10;
@@ -9359,20 +9156,6 @@ function admAddEscalaRow(){
   container.appendChild(div);
 }
 
-function admAddPlanRow() {
-  var container = document.getElementById('ep-planes-rows');
-  if(!container) return;
-  var div = document.createElement('div');
-  div.className = 'ep-plan-row';
-  div.style.cssText = 'display:grid;grid-template-columns:1fr 1.5fr 80px 80px auto;gap:6px;align-items:center;background:rgba(0,0,0,0.02);padding:6px;border-radius:6px;border:1px solid rgba(0,0,0,0.05)';
-  div.innerHTML = '<input class="adm-inp ep-plan-nombre" type="text" placeholder="Nombre (ej: 50/50)">'
-    +'<input class="adm-inp ep-plan-esquema" type="text" placeholder="Detalle (ej: 50% reserva | 50% arribo)">'
-    +'<input class="adm-inp ep-plan-cif" type="number" placeholder="CIF" step="0.01">'
-    +'<input class="adm-inp ep-plan-ddp" type="number" placeholder="DDP" step="0.01">'
-    +'<button type="button" onclick="this.closest(\'.ep-plan-row\').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>';
-  container.appendChild(div);
-}
-
 function renderFormProducto() {
   var el = document.getElementById('admin-content');
   if (!el) return;
@@ -9389,9 +9172,7 @@ function renderFormProducto() {
             min: window.clonedProdData.min,
             maj: window.clonedProdData.maj,
             escala: window.clonedProdData.escala ? JSON.parse(JSON.stringify(window.clonedProdData.escala)) : [],
-              planes_pago: window.clonedProdData.planes_pago ? JSON.parse(JSON.stringify(window.clonedProdData.planes_pago)) : [],
-              nombre_esquema_base: window.clonedProdData.nombre_esquema_base,
-              ddp: window.clonedProdData.ddp,
+            ddp: window.clonedProdData.ddp,
             oferta: window.clonedProdData.oferta===true,
             badgeTexto: window.clonedProdData.badgeTexto==='RESERVADO' ? '' : (window.clonedProdData.badgeTexto||''),
             precioOfertaHabana: window.clonedProdData.precioOfertaHabana,
@@ -9441,35 +9222,12 @@ function renderFormProducto() {
     + '<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.2);padding:12px;border-radius:8px;display:grid;gap:10px">'
     + '<div class="adm-lbl" style="color:#3b82f6;font-weight:700">🚢 Opciones de Importación</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-    + '<div style="grid-column:1/-1;background:#fdf6e3;border-radius:8px;padding:10px;border:1px solid rgba(0,0,0,0.08);margin-bottom:8px">'
-    + '<div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--color-text-secondary)">Múltiples Esquemas de Pago (Opcional)</div>'
-    + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Si defines planes aquí, el cliente podrá elegir uno. El precio base se sobrescribirá.</div>'
-    + '<div id="ep-planes-rows" style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">'
-    + (function(){
-        var rows = p.planes_pago&&p.planes_pago.length ? p.planes_pago : [];
-        return rows.map(function(r,i){
-          return '<div class="ep-plan-row" style="display:grid;grid-template-columns:1fr 1.5fr 80px 80px auto;gap:6px;align-items:center;background:rgba(0,0,0,0.02);padding:6px;border-radius:6px;border:1px solid rgba(0,0,0,0.05)">'
-            +'<input class="adm-inp ep-plan-nombre" type="text" value="'+(r.nombre||'').replace(/"/g,'&quot;')+'" placeholder="Nombre (ej: 50/50)">'
-            +'<input class="adm-inp ep-plan-esquema" type="text" value="'+(r.esquema||'').replace(/"/g,'&quot;')+'" placeholder="Detalle">'
-            +'<input class="adm-inp ep-plan-cif" type="number" value="'+(r.cif!=null?r.cif:'')+'" placeholder="CIF" step="0.01">'
-            +'<input class="adm-inp ep-plan-ddp" type="number" value="'+(r.ddp!=null?r.ddp:'')+'" placeholder="DDP" step="0.01">'
-            +'<button type="button" onclick="this.closest(\'.ep-plan-row\').remove()" style="background:transparent;border:1px solid var(--color-border-danger);color:var(--color-text-danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✕</button>'
-            +'</div>';
-        }).join('');
-      })()
-    + '</div>'
-    + '<button type="button" onclick="admAddPlanRow()" class="adm-btn" style="font-size:12px;padding:4px 10px">+ Añadir plan</button>'
-    + '</div>'
     + '<div style="display:grid;gap:4px">'
-    + '<label style="font-size:11px;font-weight:600">Nombre Esquema Base</label>'
-    + '<input class="adm-inp" id="ep-esquema-base-nombre" value="' + (p.nombre_esquema_base||'') + '" placeholder="Ej: 100% Anticipado">'
-    + '</div>'
-    + '<div style="display:grid;gap:4px">'
-    + '<label style="font-size:11px;font-weight:600">Detalle Esquema Base</label>'
+    + '<label style="font-size:11px;font-weight:600">Esquema de Pagos</label>'
     + '<input class="adm-inp" id="ep-esquema-pago" value="' + (p.esquema_pago||'') + '" placeholder="Ej: 50% al reservar...">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
-    + '<label style="font-size:11px;font-weight:600">Recargo DDP / Pago en Cuba (+USD o %)</label>'
+    + '<label style="font-size:11px;font-weight:600">Recargo Pago en Cuba</label>'
     + '<input class="adm-inp" id="ep-recargo-cuba" value="' + (p.recargo_cuba||'') + '" placeholder="Ej: 10% o 50">'
     + '</div>'
     + '<div style="display:grid;gap:4px">'
@@ -9620,20 +9378,7 @@ function admGuardarProd(idx) {
   var reservado = !!(document.getElementById('ep-reservado') && document.getElementById('ep-reservado').checked);
   var por_encargo = !!(document.getElementById('ep-por-encargo') && document.getElementById('ep-por-encargo').checked);
   var esquema_pago = (document.getElementById('ep-esquema-pago')?.value||'').trim();
-    var nombre_esquema_base = (document.getElementById('ep-esquema-base-nombre')?.value||'').trim();
-    var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
-  var planes_pago = [];
-  document.querySelectorAll('#ep-planes-rows > .ep-plan-row').forEach(function(row){
-    var nombre = row.querySelector('.ep-plan-nombre').value.trim();
-    var esquema = row.querySelector('.ep-plan-esquema').value.trim();
-    var cifEl = row.querySelector('.ep-plan-cif').value;
-    var ddpEl = row.querySelector('.ep-plan-ddp').value;
-    var cifVal = cifEl!=='' && !isNaN(parseFloat(cifEl)) ? parseFloat(cifEl) : null;
-    var ddpVal = ddpEl!=='' && !isNaN(parseFloat(ddpEl)) ? parseFloat(ddpEl) : null;
-    if(nombre || esquema) {
-      planes_pago.push({nombre:nombre, esquema:esquema, cif:cifVal, ddp:ddpVal});
-    }
-  });
+  var recargo_cuba = (document.getElementById('ep-recargo-cuba')?.value||'').trim();
   var tiempo_transito = (document.getElementById('ep-tiempo-transito')?.value||'').trim();
   var pMercadoV = document.getElementById('ep-precio-mercado')?.value;
   var precio_mercado = pMercadoV!==''&&!isNaN(parseFloat(pMercadoV)) ? parseFloat(pMercadoV) : null;
@@ -9648,7 +9393,7 @@ function admGuardarProd(idx) {
     cif: cif,
     oferta: oferta, badgeTexto: badgeTexto,
     precioOfertaHabana: precioOfertaHabana, precioOfertaPlacetas: precioOfertaPlacetas,
-    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, planes_pago: planes_pago, nombre_esquema_base: nombre_esquema_base, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
+    reservado: reservado, por_encargo: por_encargo, esquema_pago: esquema_pago, recargo_cuba: recargo_cuba, tiempo_transito: tiempo_transito, precio_mercado: precio_mercado, ficha_tecnica: ficha_tecnica, nombre_puerto: nombre_puerto };
   if (idx === -1) { PRODS.push(prod); showToast('Producto creado: ' + n); }
   else {
     // Preserve supaId so PATCH uses correct id (avoids duplicate on rename)

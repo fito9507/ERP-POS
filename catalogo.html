@@ -20,14 +20,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --steel: #1a1f2e;
-    --steel-mid: #242938;
-    --steel-light: #2e3548;
-    --accent: #e8b84b;
-    --accent2: #4b8fe8;
-    --text: #f0f2f8;
-    --text-dim: #8892a4;
-    --border: rgba(255,255,255,0.07);
+    --steel: #002b36;
+    --steel-mid: #073642;
+    --steel-light: #0a3f4e;
+    --accent: #b58900;
+    --accent2: #268bd2;
+    --text: #eee8d5;
+    --text-dim: #93a1a1;
+    --border: rgba(238,232,213,0.07);
     --radius: 12px;
     --wa-green: #25D366;
   }
@@ -58,7 +58,7 @@
   }
   .logo-icon{
     width:80px;height:80px;
-    background:#000;
+    background:#002b36;
     border-radius:12px;
     display:flex;align-items:center;justify-content:center;
     flex-shrink:0;
@@ -92,7 +92,7 @@
     transition:border-color .2s;
     min-width:140px;
   }
-  select:focus, .search-inp:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(232,184,75,.12)}
+  select:focus, .search-inp:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(181,137,0,.12)}
   .search-inp{min-width:200px}
   .search-inp::placeholder{color:var(--text-dim)}
 
@@ -106,12 +106,12 @@
     cursor:pointer;transition:all .2s;
   }
   .modo-btn.active{
-    background:var(--accent2);color:#fff;
+    background:var(--accent2);color:#fdf6e3;
     border-color:var(--accent2);font-weight:600;
   }
   .modo-btn:not(.active):hover{border-color:var(--accent2);color:var(--accent2)}
   .alm-btn.active{
-    background:var(--accent);color:#1a1f2e;
+    background:var(--accent);color:#002b36;
     border-color:var(--accent);font-weight:600;
   }
   .alm-btn:not(.active):hover{border-color:var(--accent);color:var(--accent)}
@@ -126,7 +126,7 @@
     cursor:pointer;transition:all .18s;
   }
   .mon-pill.active{
-    background:var(--accent2);color:#fff;
+    background:var(--accent2);color:#fdf6e3;
     border-color:var(--accent2);
   }
   .mon-pill:not(.active):hover{border-color:var(--accent2);color:var(--accent2)}
@@ -160,8 +160,8 @@
     position:relative;overflow:visible;
   }
   .card-img img{width:100%;height:100%;object-fit:contain;position:absolute;inset:0;z-index:1;background:var(--steel-light)}
-  .badge-oferta-cat{position:absolute;top:8px;left:8px;z-index:10;display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;box-shadow:0 2px 8px rgba(239,68,68,.5)}
-  .badge-reservado-cat{position:absolute;top:8px;left:8px;z-index:10;display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;box-shadow:0 2px 8px rgba(124,58,237,.5)}
+  .badge-oferta-cat{position:absolute;top:8px;left:8px;z-index:10;display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:linear-gradient(135deg,#cb4b16,#dc322f);color:#fdf6e3;box-shadow:0 2px 8px rgba(220,50,47,.5)}
+  .badge-reservado-cat{position:absolute;top:8px;left:8px;z-index:10;display:inline-block;font-size:10px;font-weight:800;padding:3px 10px;border-radius:6px;background:linear-gradient(135deg,#6c71c4,#268bd2);color:#fdf6e3;box-shadow:0 2px 8px rgba(108,113,196,.5)}
   .card-img .placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;z-index:0}
   .card-img .placeholder span{font-size:11px;color:var(--text-dim);font-weight:500}
 
@@ -169,7 +169,7 @@
   .card-name{font-size:14px;font-weight:600;line-height:1.3}
   .card-cat{font-size:10px;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px}
   .card-stock{font-size:11px;color:var(--text-dim)}
-  .stock-ok{color:#4be8a0}
+  .stock-ok{color:#859900}
   .stock-low{color:var(--accent)}
 
   .prices{
@@ -185,9 +185,9 @@
   .price-row .lbl{color:var(--text-dim);flex:1;margin-right:8px;line-height:1.15}
   .price-row .val{font-weight:600;font-size:13px;white-space:nowrap;text-align:right}
   .price-row.main .val{font-size:16px;color:var(--accent)}
-  .price-tipo-btn{flex:1;padding:8px 6px;border-radius:8px;border:2px solid rgba(59,130,246,0.25);background:rgba(59,130,246,0.05);color:var(--text-secondary);font-size:11px;font-weight:700;cursor:pointer;text-align:center;line-height:1.4;transition:all .2s;}
-  .price-tipo-btn.active-cif{border-color:#3b82f6;background:rgba(59,130,246,0.15);color:#3b82f6;}
-  .price-tipo-btn.active-ddp{border-color:#10b981;background:rgba(16,185,129,0.15);color:#10b981;}
+  .price-tipo-btn{flex:1;padding:8px 6px;border-radius:8px;border:2px solid rgba(38,139,210,0.25);background:rgba(38,139,210,0.05);color:var(--text-secondary);font-size:11px;font-weight:700;cursor:pointer;text-align:center;line-height:1.4;transition:all .2s;}
+  .price-tipo-btn.active-cif{border-color:#268bd2;background:rgba(38,139,210,0.15);color:#268bd2;}
+  .price-tipo-btn.active-ddp{border-color:#2aa198;background:rgba(42,161,152,0.15);color:#2aa198;}
 
   /* qty control */
   .qty-row{
@@ -223,14 +223,14 @@
   }
   .add-btn{
     width:100%;padding:0 16px;height:48px;
-    background:var(--accent);color:#1a1f2e;
+    background:var(--accent);color:#002b36;
     border:none;border-radius:10px;
     font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
     cursor:pointer;transition:all .15s;
     -webkit-tap-highlight-color:transparent;touch-action:manipulation;
   }
   .add-btn:active{transform:scale(0.98)}
-  .add-btn.added{background:#4be8a0;color:#1a1f2e}
+  .add-btn.added{background:#859900;color:#002b36}
 
   /* ── CART FLOAT ── */
   #cart-float{
@@ -239,7 +239,7 @@
   }
   .cart-btn{
     background:var(--wa-green);
-    color:#fff;border:none;
+    color:#fdf6e3;border:none;
     padding:14px 22px;border-radius:50px;
     font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
     cursor:pointer;box-shadow:0 8px 24px rgba(37,211,102,.4);
@@ -290,7 +290,7 @@
   .cart-item-qty{font-size:12px;color:var(--text-dim)}
   .cart-item-price{font-size:13px;font-weight:700;color:var(--accent)}
   .cart-item-rm{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;padding:0 4px}
-  .cart-item-rm:hover{color:#e84b4b}
+  .cart-item-rm:hover{color:#dc322f}
   .cart-total{
     display:flex;justify-content:space-between;
     padding:14px 0 4px;font-weight:700;font-size:16px;
@@ -305,7 +305,7 @@
   .cart-note:focus{border-color:var(--accent)}
   .wa-send-btn{
     width:100%;padding:14px;
-    background:var(--wa-green);color:#fff;
+    background:var(--wa-green);color:#fdf6e3;
     border:none;border-radius:10px;
     font-size:15px;font-weight:700;font-family:'DM Sans',sans-serif;
     cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
@@ -382,7 +382,7 @@
     transition:all .15s;
   }
   .tot-pill.sel{
-    background:var(--accent2);color:#fff;
+    background:var(--accent2);color:#fdf6e3;
     border-color:var(--accent2);
   }
 </style>
@@ -884,15 +884,15 @@ function render(){
     }
     grid.innerHTML = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;flex-direction:column;gap:8px">'
-      +'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:12px">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(38,139,210,.08);border:1px solid rgba(38,139,210,.25);border-radius:12px">'
       +'<span style="font-size:20px">🚢</span>'
-      +'<div><div style="font-size:14px;font-weight:700;color:#3b82f6">Ventas por importación directa</div>'
+      +'<div><div style="font-size:14px;font-weight:700;color:#268bd2">Ventas por importación directa</div>'
       +'<div style="font-size:12px;color:var(--text-dim)">Paga de forma fraccionada y asegúrate de recibir exactamente lo que necesitas bajo demanda.</div></div>'
       +'</div>'
       +'<div style="display:flex;gap:10px;justify-content:center;margin-bottom:8px">'
-      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Pagos seguros</span></div>'
-      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Ahorro asegurado</span></div>'
-      +'<div style="font-size:11px;color:#10b981;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Garantía de entrega</span></div>'
+      +'<div style="font-size:11px;color:#2aa198;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Pagos seguros</span></div>'
+      +'<div style="font-size:11px;color:#2aa198;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Ahorro asegurado</span></div>'
+      +'<div style="font-size:11px;color:#2aa198;display:flex;align-items:center;gap:4px">✓ <span style="color:var(--text-dim)">Garantía de entrega</span></div>'
       +'</div>'
       +'</div></div>'
       + encargoProds.map(function(p){ return encargoCardHTML(p); }).join('');
@@ -908,7 +908,7 @@ function render(){
     var transitBanner = '<div style="grid-column:1/-1;margin-bottom:4px">'
       +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:12px">'
       +'<span style="font-size:20px">🚢</span>'
-      +'<div><div style="font-size:13px;font-weight:700;color:#f59e0b">Próximamente en '+ALM+' (Preventa)</div>'
+      +'<div><div style="font-size:13px;font-weight:700;color:#cb4b16">Próximamente en '+ALM+' (Preventa)</div>'
       +'<div style="font-size:11px;color:var(--text-dim)">Reserva ahora a precio especial de preventa antes de que llegue</div></div>'
       +'</div></div>';
     grid.innerHTML = transitBanner + transitProds.map(function(p){ return transitCardHTML(p); }).join('');
@@ -926,9 +926,9 @@ function render(){
     return;
   }
   var normalBanner = '<div style="grid-column:1/-1;margin-bottom:4px">'
-    +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.25);border-radius:12px">'
+    +'<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(42,161,152,.08);border:1px solid rgba(42,161,152,.25);border-radius:12px">'
     +'<span style="font-size:20px">&#9989;</span>'
-    +'<div><div style="font-size:13px;font-weight:700;color:#10b981">Disponible ahora en '+ALM+'</div>'
+    +'<div><div style="font-size:13px;font-weight:700;color:#2aa198">Disponible ahora en '+ALM+'</div>'
     +'<div style="font-size:11px;color:var(--text-dim)">Productos con stock listo para entregar</div></div>'
     +'</div></div>';
   grid.innerHTML = normalBanner + normalProds.map(function(p){ return cardHTML(p); }).join('');
@@ -967,18 +967,18 @@ function transitCardHTML(p){
     +(p.img?'<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="cursor:zoom-in" onclick="_zoomImg(this.src)" title="Ampliar imagen">':'<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(function(){
         var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
-        b+='<div style="background:rgba(245,158,11,0.85);color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
-        if(_isRes)   b+='<div style="background:linear-gradient(135deg,rgba(124,58,237,0.85),rgba(79,70,229,0.85));color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(124,58,237,.5)">\uD83D\uDD12 RESERVADO</div>';
-        else if(p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,rgba(245,158,11,0.85),rgba(239,68,68,0.85));color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(239,68,68,.5)">'+esc(p.badgeTexto)+'</div>';
+        b+='<div style="background:rgba(245,158,11,0.85);color:#002b36;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
+        if(_isRes)   b+='<div style="background:linear-gradient(135deg,rgba(108,113,196,0.85),rgba(79,70,229,0.85));color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(108,113,196,.5)">\uD83D\uDD12 RESERVADO</div>';
+        else if(p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,rgba(245,158,11,0.85),rgba(220,50,47,0.85));color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(220,50,47,.5)">'+esc(p.badgeTexto)+'</div>';
         b+='</div>';
         return b;
       }())
-    +(hasDiscount?'<div style="position:absolute;bottom:8px;right:8px;z-index:10;background:#10b981;color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras '+savingStr+'</div>':'')
+    +(hasDiscount?'<div style="position:absolute;bottom:8px;right:8px;z-index:10;background:#2aa198;color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px">Ahorras '+savingStr+'</div>':'')
     +'</div>'
     +'<div class="card-body">'
     +(p.cat?'<div class="card-cat">'+esc(p.cat)+'</div>':'')
     +'<div class="card-name">'+esc(p.n)+'</div>'
-    +'<div style="font-size:11px;color:#f59e0b;font-weight:600">🚢 Próximamente</div>'
+    +'<div style="font-size:11px;color:#cb4b16;font-weight:600">🚢 Próximamente</div>'
     +(function(){
       if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '';
       var ts=p.stk_alm ? (p.stk_alm[ALM] || 0) : (p.stk || 0);
@@ -991,15 +991,15 @@ function transitCardHTML(p){
       var text = '🔥 Reservando rápido';
       if(pct > 80) text = '⚡ Últimas unidades disponibles';
       else if(pct > 50) text = '🔥 Más del 50% reservado';
-      var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
+      var barBg='rgba(108,113,196,.15)', barFg=pct>70?'linear-gradient(90deg,#cb4b16,#dc322f)':'linear-gradient(90deg,#cb4b16,#6c71c4)';
       return '<div style="margin:4px 0 2px">'
-        +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">'+text+'</div>'
+        +'<div style="font-size:10px;color:#b58900;font-weight:600;margin-bottom:3px">'+text+'</div>'
         +'<div style="height:6px;border-radius:3px;background:'+barBg+';overflow:hidden">'
         +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
         +'</div></div>';
     }())
     +'<div class="prices">'
-    +(showPrice?'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#f59e0b">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'<div class="price-row main"><span class="lbl">Precio</span><span class="val" style="color:var(--text-dim);font-size:12px">Consultar</span></div>')
+    +(showPrice?'<div class="price-row main"><span class="lbl">'+(hasDiscount?'Preventa':'Precio')+'</span><span class="val" style="color:#cb4b16">'+fPrice(pvPrice,MON,ALM)+'</span></div>':'<div class="price-row main"><span class="lbl">Precio</span><span class="val" style="color:var(--text-dim);font-size:12px">Consultar</span></div>')
     +(hasDiscount?'<div class="price-row"><span class="lbl" style="font-size:10px;color:var(--text-dim)">Precio normal</span><span class="val" style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(normPrice,MON,ALM)+'</span></div>':'')
     +'</div>'
     +(moq>1?'<div style="font-size:10px;color:var(--text-dim);margin-bottom:4px">M\u00ednimo '+moq+' uds</div>':'')
@@ -1010,7 +1010,7 @@ function transitCardHTML(p){
     +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
     +'</div>'
     +(_isRes
-        ?'<button class="add-btn" style="background:rgba(124,58,237,.18);color:#7c3aed;border-color:rgba(124,58,237,.4);cursor:not-allowed;opacity:.85" disabled type="button">\uD83D\uDD12 Reservado</button>'
+        ?'<button class="add-btn" style="background:rgba(108,113,196,.18);color:#6c71c4;border-color:rgba(108,113,196,.4);cursor:not-allowed;opacity:.85" disabled type="button">\uD83D\uDD12 Reservado</button>'
         :'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-tr-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'\u2713 Agregado':'+ Reservar')+'</button>'
     )
     +'</div>'
@@ -1020,9 +1020,9 @@ function transitCardHTML(p){
 function cardHTML(p){
   var stk = getAvailableStock(p, ALM, 'stock');
   var _transit = p.enTransito && p.enTransito[ALM];
-  var stkLabel = _transit ? '<span style="color:#f59e0b;font-weight:600">\uD83D\uDEA2 Pr\u00f3ximamente</span>'
+  var stkLabel = _transit ? '<span style="color:#cb4b16;font-weight:600">\uD83D\uDEA2 Pr\u00f3ximamente</span>'
                : stk > 0 ? '<span class="stock-ok">\u2713 Disponible</span>'
-               : '<span style="color:#e84b4b">\u2717 Sin stock en '+ALM+'</span>';
+               : '<span style="color:#dc322f">\u2717 Sin stock en '+ALM+'</span>';
   var cartItem = CART[p.n];
   var qty = cartItem ? cartItem.qty : 1;
   // Mayorista si qty >= MIN_MAY (10 uds por defecto)
@@ -1039,15 +1039,15 @@ function cardHTML(p){
   var pidx = PRODS.indexOf(p);
   var _isRes = (p.badgeTexto === 'RESERVADO' || p.reservado === true);
   // Override stkLabel for reserved products (regardless of transit)
-  if(_isRes) stkLabel = '<span style="color:#7c3aed;font-weight:600">🔒 Reservado</span>';
+  if(_isRes) stkLabel = '<span style="color:#6c71c4;font-weight:600">🔒 Reservado</span>';
   return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'">' 
     +'<div class="card-img" style="position:relative">'
     +(p.img ? '<img src="'+p.img+'" alt="'+esc(p.n)+'" onerror="this.style.display=\'none\'" style="cursor:zoom-in" onclick="_zoomImg(this.src)" title="Ampliar imagen">' : '<div class="placeholder"><span>&#127959;</span><span>'+esc(p.n.split(' ').slice(0,2).join(' '))+'</span></div>')
     +(function(){
         var b='<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">';
-        if(_transit) b+='<div style="background:rgba(245,158,11,0.85);color:#1a1f2e;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
-        if(_isRes)   b+='<div style="background:linear-gradient(135deg,rgba(124,58,237,0.85),rgba(79,70,229,0.85));color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(124,58,237,.5)">\uD83D\uDD12 RESERVADO</div>';
-        else if(!_transit&&p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,rgba(245,158,11,0.85),rgba(239,68,68,0.85));color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(239,68,68,.5)">'+esc(p.badgeTexto)+'</div>';
+        if(_transit) b+='<div style="background:rgba(245,158,11,0.85);color:#002b36;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">EN TRANSITO</div>';
+        if(_isRes)   b+='<div style="background:linear-gradient(135deg,rgba(108,113,196,0.85),rgba(79,70,229,0.85));color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(108,113,196,.5)">\uD83D\uDD12 RESERVADO</div>';
+        else if(!_transit&&p.oferta&&p.badgeTexto) b+='<div style="background:linear-gradient(135deg,rgba(245,158,11,0.85),rgba(220,50,47,0.85));color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 8px rgba(220,50,47,.5)">'+esc(p.badgeTexto)+'</div>';
         b+='</div>';
         return b;
       }())
@@ -1079,9 +1079,9 @@ function cardHTML(p){
       else if (avail <= 100) text = '⚡ Pocas unidades disponibles';
       else if (pct > 75) text = '🔥 Alta demanda';
       
-      var barBg='rgba(124,58,237,.15)', barFg=pct>70?'linear-gradient(90deg,#f59e0b,#ef4444)':'linear-gradient(90deg,#f59e0b,#7c3aed)';
+      var barBg='rgba(108,113,196,.15)', barFg=pct>70?'linear-gradient(90deg,#cb4b16,#dc322f)':'linear-gradient(90deg,#cb4b16,#6c71c4)';
       return '<div style="margin:2px 0">'
-        +'<div style="font-size:10px;color:#e8b84b;font-weight:600;margin-bottom:3px">'+text+'</div>'
+        +'<div style="font-size:10px;color:#b58900;font-weight:600;margin-bottom:3px">'+text+'</div>'
         +'<div style="height:6px;border-radius:3px;background:'+barBg+';overflow:hidden">'
         +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
         +'</div></div>';
@@ -1103,7 +1103,7 @@ function cardHTML(p){
       if(_isOferta) return '<div class="price-row main">'
         +'<span class="lbl">Precio</span>'
         +'<span style="display:flex;align-items:baseline;gap:6px">'
-          +'<span class="val" style="color:#ef4444">'+fPrice(_pOfe,MON,ALM)+'</span>'
+          +'<span class="val" style="color:#dc322f">'+fPrice(_pOfe,MON,ALM)+'</span>'
           +'<span style="font-size:11px;text-decoration:line-through;color:var(--text-dim)">'+fPrice(_origPrice,MON,ALM)+'</span>'
         +'</span></div>';
       return (p.maj>0&&p.min>0&&p.maj!==p.min
@@ -1126,7 +1126,7 @@ function cardHTML(p){
       +'<button class="qty-btn" onmousedown="_lpStart('+pidx+',1)" ontouchstart="_lpStart('+pidx+',1)" onmouseup="_lpStop()" onmouseleave="_lpStop()" ontouchend="_lpStop()" type="button">+</button>'
       +'</div>'
       +(_isRes
-        ?'<button class="add-btn" style="background:rgba(124,58,237,.18);color:#7c3aed;border-color:rgba(124,58,237,.4);cursor:not-allowed;opacity:.85" disabled type="button">🔒 Reservado</button>'
+        ?'<button class="add-btn" style="background:rgba(108,113,196,.18);color:#6c71c4;border-color:rgba(108,113,196,.4);cursor:not-allowed;opacity:.85" disabled type="button">🔒 Reservado</button>'
         :'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button">'+(cartItem?'✓ Agregado':'+ Agregar')+'</button>'
       )
       +'</div>':'')
@@ -1139,7 +1139,7 @@ window._tPago = function(id, tipo, pidx, basePrice) {
   var bCub = document.getElementById('pb-cub-'+id);
   var calcContainer = document.getElementById('calc-esq-'+id);
   if(!bExt || !bCub) return;
-  var actBg = '#3b82f6', actCol = '#fff', actBord = '#3b82f6';
+  var actBg = '#268bd2', actCol = '#fdf6e3', actBord = '#268bd2';
   var inBg = 'transparent', inCol = 'var(--text-secondary)', inBord = 'var(--text-tertiary)';
   
   if(tipo === 'ext') {
@@ -1279,7 +1279,7 @@ function encargoCardHTML(p){
 
 
 
-  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(59,130,246,.35)">'
+  return '<div class="card" id="card-'+cardId+'" data-pidx="'+pidx+'" style="border:1px solid rgba(38,139,210,.35)">'
 
     +'<div class="card-img" style="position:relative">'
 
@@ -1287,7 +1287,7 @@ function encargoCardHTML(p){
 
     +'<div style="position:absolute;top:8px;left:8px;z-index:10;display:flex;flex-direction:column;gap:4px">'
 
-    +'<div style="background:rgba(59,130,246,0.85);color:#fff;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">&#128674; POR IMPORTACI\u00d3N</div>'
+    +'<div style="background:rgba(38,139,210,0.85);color:#fdf6e3;font-size:10px;font-weight:800;padding:3px 8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,.4)">&#128674; POR IMPORTACI\u00d3N</div>'
 
     +'</div>'
 
@@ -1305,11 +1305,11 @@ function encargoCardHTML(p){
 
     +(ganancia ?
 
-        '<div style="background:linear-gradient(135deg,rgba(16,185,129,0.12),rgba(16,185,129,0.06));border:1.5px solid rgba(16,185,129,0.35);border-radius:10px;padding:10px 12px;margin:8px 0;text-align:center">'
+        '<div style="background:linear-gradient(135deg,rgba(42,161,152,0.12),rgba(42,161,152,0.06));border:1.5px solid rgba(42,161,152,0.35);border-radius:10px;padding:10px 12px;margin:8px 0;text-align:center">'
 
-        +'<div style="font-size:10px;font-weight:700;color:#10b981;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">&#128200; Beneficio Estimado</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#2aa198;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px">&#128200; Beneficio Estimado</div>'
 
-        +'<div id="ahorro-tot-'+cardId+'" style="font-size:22px;font-weight:900;color:#10b981;letter-spacing:-0.5px;word-break:break-word;line-height:1.1">'+fPrice(ganancia,MON,ALM)+'</div>'
+        +'<div id="ahorro-tot-'+cardId+'" style="font-size:22px;font-weight:900;color:#2aa198;letter-spacing:-0.5px;word-break:break-word;line-height:1.1">'+fPrice(ganancia,MON,ALM)+'</div>'
 
         +'<div id="margen-det-'+cardId+'" style="font-size:10px;color:var(--text-secondary);margin-top:2px"><div style="line-height:1.3;display:flex;flex-direction:column;align-items:center;margin-top:2px"><span style="font-weight:600">Margen aprox: '+fPrice(ahorro,MON,ALM)+' / ud</span><span style="opacity:0.9;text-align:center;font-size:9px">Compra DDP: '+fPrice(gananciaBaseP,MON,ALM)+' &bull; Promedio: '+fPrice(p.precio_mercado,MON,ALM)+'</span></div></div>'
 
@@ -1327,7 +1327,7 @@ function encargoCardHTML(p){
 
         +'<span style="font-size:11px;line-height:1.2;color:var(--text-tertiary);text-decoration:line-through;text-align:left;display:inline-block;max-width:65%">Precio promedio mercado:<br>'+fPrice(p.precio_mercado,MON,ALM)+'</span>'
 
-        +'<span id="ahorro-pill-'+cardId+'" style="font-size:11px;font-weight:800;color:#fff;background:#10b981;padding:2px 7px;border-radius:4px;white-space:nowrap">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
+        +'<span id="ahorro-pill-'+cardId+'" style="font-size:11px;font-weight:800;color:#fdf6e3;background:#2aa198;padding:2px 7px;border-radius:4px;white-space:nowrap">-'+fPrice(ahorro,MON,ALM)+'/ud</span>'
 
         +'</div>'
 
@@ -1367,7 +1367,7 @@ function encargoCardHTML(p){
 
       :(cifP==null&&ddpP==null?
 
-          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#10b981" id="single-price-'+cardId+'">'+fPrice(price,MON,ALM)+'</span></div>'
+          '<div class="price-row main" style="margin-bottom:8px"><span class="lbl">Precio Importaci\u00f3n</span><span class="val" style="color:#2aa198" id="single-price-'+cardId+'">'+fPrice(price,MON,ALM)+'</span></div>'
 
         :''))
 
@@ -1375,30 +1375,30 @@ function encargoCardHTML(p){
 
     /* === 4\u00ba ESQUEMA DE PAGOS === */
 
-    +'<div style="background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.15);border-radius:6px;padding:8px;font-size:11px;color:var(--text-secondary)">'
+    +'<div style="background:rgba(38,139,210,0.05);border:1px solid rgba(38,139,210,0.15);border-radius:6px;padding:8px;font-size:11px;color:var(--text-secondary)">'
 
-    +'<div style="font-weight:700;color:#3b82f6;margin-bottom:8px;display:flex;align-items:center;gap:4px;line-height:1.2"><span style="font-size:12px">&#128176;</span> Condiciones de pago:</div>'
+    +'<div style="font-weight:700;color:#268bd2;margin-bottom:8px;display:flex;align-items:center;gap:4px;line-height:1.2"><span style="font-size:12px">&#128176;</span> Condiciones de pago:</div>'
 
     +(p.planes_pago && p.planes_pago.length > 0 ? 
-      '<div style="display:flex;flex-wrap:wrap;align-items:center;background:rgba(59,130,246,0.1);border-radius:6px;padding:3px;border:1px solid rgba(59,130,246,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);gap:2px;margin-bottom:8px">'
+      '<div style="display:flex;flex-wrap:wrap;align-items:center;background:rgba(38,139,210,0.1);border-radius:6px;padding:3px;border:1px solid rgba(38,139,210,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);gap:2px;margin-bottom:8px">'
       +'<span id="pb-plan-'+cardId+'-base" onclick="selectPlanPago(\''+cardId+'\', '+pidx+', \'-1\')" style="cursor:pointer;font-size:9px;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s;text-align:center;flex:1;'
-      +( (!window._selectedPlan || window._selectedPlan[cardId] === undefined || window._selectedPlan[cardId] === -1) ? 'background:#3b82f6;color:white;' : 'background:transparent;color:var(--text-secondary);' )+'">'
+      +( (!window._selectedPlan || window._selectedPlan[cardId] === undefined || window._selectedPlan[cardId] === -1) ? 'background:#268bd2;color:white;' : 'background:transparent;color:var(--text-secondary);' )+'">'
       +(p.nombre_esquema_base ? p.nombre_esquema_base.toUpperCase() : 'BASE')
       +'</span>'
       + p.planes_pago.map(function(pl, idx) {
           var isSel = window._selectedPlan && window._selectedPlan[cardId]===idx;
-          return '<div style="width:1px;min-height:24px;background:rgba(59,130,246,0.25)"></div>'
+          return '<div style="width:1px;min-height:24px;background:rgba(38,139,210,0.25)"></div>'
           + '<span id="pb-plan-'+cardId+'-'+idx+'" onclick="selectPlanPago(\''+cardId+'\', '+pidx+', \''+idx+'\')" style="cursor:pointer;font-size:9px;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s;text-align:center;flex:1;'
-          +( isSel ? 'background:#3b82f6;color:white;' : 'background:transparent;color:var(--text-secondary);' )+'">'
+          +( isSel ? 'background:#268bd2;color:white;' : 'background:transparent;color:var(--text-secondary);' )+'">'
           + pl.nombre.toUpperCase()
           +'</span>';
       }).join('')
       +'</div>'
     : '')
 
-    +'<div style="display:flex;align-items:center;background:rgba(59,130,246,0.1);border-radius:6px;padding:3px;border:1px solid rgba(59,130,246,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);margin-bottom:8px;gap:2px">'
-    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\','+pidx+','+esqPrice+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#3b82f6;color:white;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s;text-align:center;flex:1;">EN EXTERIOR</span>'
-    +'<div style="width:1px;min-height:20px;background:rgba(59,130,246,0.25)"></div>'
+    +'<div style="display:flex;align-items:center;background:rgba(38,139,210,0.1);border-radius:6px;padding:3px;border:1px solid rgba(38,139,210,0.2);box-shadow:inset 0 1px 2px rgba(0,0,0,0.05);margin-bottom:8px;gap:2px">'
+    +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'ext\','+pidx+','+esqPrice+')" id="pb-ext-'+cardId+'" style="cursor:pointer;font-size:9px;background:#268bd2;color:white;padding:4px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s;text-align:center;flex:1;">EN EXTERIOR</span>'
+    +'<div style="width:1px;min-height:20px;background:rgba(38,139,210,0.25)"></div>'
     +'<span onclick="if(window._tPago) _tPago(\''+cardId+'\',\'cub\','+pidx+','+esqPrice+')" id="pb-cub-'+cardId+'" style="cursor:pointer;font-size:9px;background:transparent;color:var(--text-secondary);padding:4px 8px;border-radius:4px;letter-spacing:0.5px;font-weight:800;transition:all 0.2s;text-align:center;flex:1;">EN CUBA</span>'
     +'</div>'
 
@@ -1414,8 +1414,8 @@ function encargoCardHTML(p){
           // Usamos el primer segmento del texto de tiempo para "Tiempo estimado" y hardcodeamos el disclaimer.
           var pts = t.split('|');
           var mainText = pts[0].trim();
-          return '<div style="padding-top:8px;margin-top:8px;border-top:1px solid rgba(59,130,246,0.15)">'
-            +'<div style="font-weight:700;color:#3b82f6;font-size:11px">&#9203; Tiempo estimado:</div>'
+          return '<div style="padding-top:8px;margin-top:8px;border-top:1px solid rgba(38,139,210,0.15)">'
+            +'<div style="font-weight:700;color:#268bd2;font-size:11px">&#9203; Tiempo estimado:</div>'
             +'<div style="font-weight:800;color:var(--text-main);font-size:13px;margin-top:2px">'+esc(mainText)+'</div>'
             +'<div style="font-style:italic;font-size:11px;color:var(--text-secondary);margin-top:2px;line-height:1.3">Las fechas pueden variar según disponibilidad de espacio y programación naviera.</div>'
             +'</div>';
@@ -1430,7 +1430,7 @@ function encargoCardHTML(p){
 
         '<div style="margin-top:8px;text-align:center">'
 
-        +'<button onclick="openFichaModal('+pidx+')" style="background:rgba(59,130,246,0.08);color:#3b82f6;border:1px solid rgba(59,130,246,0.25);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;width:100%">&#128196; Ver Ficha T\u00e9cnica</button>'
+        +'<button onclick="openFichaModal('+pidx+')" style="background:rgba(38,139,210,0.08);color:#268bd2;border:1px solid rgba(38,139,210,0.25);padding:6px 12px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;width:100%">&#128196; Ver Ficha T\u00e9cnica</button>'
 
         +'</div>'
 
@@ -1454,7 +1454,7 @@ function encargoCardHTML(p){
 
     +'</div>'
 
-    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button" style="'+(cartItem?'':'background:linear-gradient(135deg,#f59e0b,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.4);')+'font-weight:900;font-size:14px">'+(cartItem?'&#10003; Solicitado':'Solicitar pedido')+'</button>'
+    +'<button class="add-btn'+(cartItem?' added':'')+'" id="addbtn-'+cardId+'" onclick="addToCartIdx('+pidx+')" type="button" style="'+(cartItem?'':'background:linear-gradient(135deg,#cb4b16,#d97706);box-shadow:0 4px 14px rgba(245,158,11,0.4);')+'font-weight:900;font-size:14px">'+(cartItem?'&#10003; Solicitado':'Solicitar pedido')+'</button>'
 
     +'</div>'
 
@@ -1514,7 +1514,7 @@ function selectPlanPago(cardId, pidx, planIdxStr) {
   }
   if(typeof window._tPago === 'function') {
       var bCub = document.getElementById('pb-cub-'+cardId);
-      var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+      var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#268bd2' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
       var actTipo = isCub ? 'cub' : 'ext';
       var actPrice = isCub ? p.precio_ddp : p.precio_cif;
       if (actPrice == null) actPrice = p.precio_cif != null ? p.precio_cif : (p.min || p.maj || 0);
@@ -1525,7 +1525,7 @@ function selectPlanPago(cardId, pidx, planIdxStr) {
   var bBase = document.getElementById('pb-plan-'+cardId+'-base');
   if(bBase) {
     if(selIdx === -1) {
-      bBase.style.background = '#3b82f6'; bBase.style.color = 'white';
+      bBase.style.background = '#268bd2'; bBase.style.color = 'white';
     } else {
       bBase.style.background = 'transparent'; bBase.style.color = 'var(--text-secondary)';
     }
@@ -1535,7 +1535,7 @@ function selectPlanPago(cardId, pidx, planIdxStr) {
       var bPl = document.getElementById('pb-plan-'+cardId+'-'+idx);
       if(bPl) {
         if(selIdx === idx) {
-          bPl.style.background = '#3b82f6'; bPl.style.color = 'white';
+          bPl.style.background = '#268bd2'; bPl.style.color = 'white';
         } else {
           bPl.style.background = 'transparent'; bPl.style.color = 'var(--text-secondary)';
         }
@@ -1551,7 +1551,7 @@ function selectPriceTipo(cardId, pidx, tipo) {
   var price = tipo==='cif'?(cifP!=null?cifP:baseP):(tipo==='ddp'?(ddpP!=null?ddpP:baseP):baseP);
   
   var bCub = document.getElementById('pb-cub-'+cardId);
-  var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+  var isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#268bd2' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
   if (isCub && p.recargo_cuba) {
     if (String(p.recargo_cuba).includes('%')) {
       var pct = parseFloat(p.recargo_cuba) / 100;
@@ -1587,8 +1587,8 @@ function renderEsquemaCalculado(esquemaStr, price, qty) {
       var pct = parseFloat(match[1]);
       var amount = total * (pct / 100);
       var desc = match[2];
-      html += '<div style="display:flex;flex-direction:column;background:rgba(59,130,246,0.02);padding:4px 8px;border-radius:4px;border:1px solid rgba(59,130,246,0.15)">'
-           + '<div style="font-weight:800;color:#3b82f6;font-size:11px;display:flex;justify-content:space-between">'
+      html += '<div style="display:flex;flex-direction:column;background:rgba(38,139,210,0.02);padding:4px 8px;border-radius:4px;border:1px solid rgba(38,139,210,0.15)">'
+           + '<div style="font-weight:800;color:#268bd2;font-size:11px;display:flex;justify-content:space-between">'
            + '<span>'+pct+'%</span> <span style="color:var(--text-main)">'+fPrice(amount, MON, ALM)+'</span>'
            + '</div>'
            + '<div style="font-size:10px;color:var(--text-tertiary);line-height:1.2;margin-top:2px">'+esc(desc)+'</div>'
@@ -1775,7 +1775,7 @@ function addToCartIdx(idx){
   var tipoImport = 'base';
   if (p.por_encargo) {
     var bCub = document.getElementById('pb-cub-'+cardId);
-    isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#3b82f6' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
+    isCub = bCub && (bCub.style.background === 'rgb(59, 130, 246)' || bCub.style.background === '#268bd2' || bCub.style.backgroundColor === 'rgb(59, 130, 246)');
     var btnCif = document.getElementById('ptbtn-cif-'+cardId);
     var btnDdp = document.getElementById('ptbtn-ddp-'+cardId);
     if (btnDdp && btnDdp.className.indexOf('active-ddp') !== -1) tipoImport = 'ddp';
@@ -1943,9 +1943,9 @@ function renderCart(){
     total += lineTotal;
     var isTransitProd = i.prod.enTransito && i.prod.enTransito[ALM];
     var tag = isTransitProd
-      ? '<span style="font-size:9px;background:#f59e0b;color:#1a1f2e;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">Preventa</span>'
+      ? '<span style="font-size:9px;background:#cb4b16;color:#002b36;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">Preventa</span>'
       : (i.prod.maj>0 ? (r.isMay
-        ? '<span style="font-size:9px;background:var(--accent2);color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
+        ? '<span style="font-size:9px;background:var(--accent2);color:#fdf6e3;padding:1px 6px;border-radius:4px;margin-left:6px">Mayorista</span>'
         : '<span style="font-size:9px;color:var(--text-dim);padding:1px 4px;border-radius:4px;margin-left:6px">Min·'+r.MIN_MAY+'+→May</span>') : '');
     
     if (i.prod.por_encargo) {
@@ -1953,7 +1953,7 @@ function renderCart(){
       if (i.tipoImport === 'cif') encargoTagStr = "CIF";
       else if (i.tipoImport === 'ddp') encargoTagStr = "DDP";
       encargoTagStr += i.enCuba ? " (Cuba)" : " (Ext)";
-      tag += '<span style="font-size:9px;background:#3b82f6;color:#fff;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">'+encargoTagStr+'</span>';
+      tag += '<span style="font-size:9px;background:#268bd2;color:#fdf6e3;padding:1px 6px;border-radius:4px;margin-left:6px;font-weight:700">'+encargoTagStr+'</span>';
     }
     
     return '<div class="cart-item">'
@@ -2035,8 +2035,8 @@ function sendWA(){
   var nota   = (document.getElementById('cart-note')?.value||'').trim();
   var nombre = (document.getElementById('cart-nombre')?.value||'').trim();
   var tel    = (document.getElementById('cart-tel')?.value||'').trim();
-  if(!nombre){ document.getElementById('cart-nombre').style.borderColor='#e84b4b'; document.getElementById('cart-nombre').focus(); return; }
-  if(!tel){ document.getElementById('cart-tel').style.borderColor='#e84b4b'; document.getElementById('cart-tel').focus(); return; }
+  if(!nombre){ document.getElementById('cart-nombre').style.borderColor='#dc322f'; document.getElementById('cart-nombre').focus(); return; }
+  if(!tel){ document.getElementById('cart-tel').style.borderColor='#dc322f'; document.getElementById('cart-tel').focus(); return; }
   var msg = '\uD83C\uDFF7\uFE0F *' + (hasEncargo ? 'Pedido de Importación' : 'Pedido') + ' \u2014 '+ALM+'*\n\n'
     + '\uD83D\uDC64 *'+nombre+'*'+(tel?' \u00b7 \uD83D\uDCDE '+tel:'')+'\n\n'
     + lines.join('\n') + '\n\n'
@@ -2079,10 +2079,10 @@ init();
 </script>
 
 <div id="ficha-modal" onclick="closeFicha(event)" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(5px)">
-  <div id="ficha-modal-content" style="background:var(--bg);width:100%;max-width:550px;border-radius:12px;padding:24px;border-top:4px solid #3b82f6;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-height:90vh;overflow-y:auto;position:relative">
+  <div id="ficha-modal-content" style="background:var(--bg);width:100%;max-width:550px;border-radius:12px;padding:24px;border-top:4px solid #268bd2;box-shadow:0 10px 25px rgba(0,0,0,0.5);max-height:90vh;overflow-y:auto;position:relative">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;padding-bottom:12px">
       <div style="font-weight:800;font-size:18px;color:var(--text-main)">⚙️ Especificaciones Técnicas</div>
-      <button onclick="closeFicha()" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-main);cursor:pointer;line-height:1;transition:all 0.2s">×</button>
+      <button onclick="closeFicha()" style="background:rgba(238,232,213,0.05);border:1px solid var(--border);border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--text-main);cursor:pointer;line-height:1;transition:all 0.2s">×</button>
     </div>
     <div id="ficha-content" style="color:var(--text-secondary)"></div>
   </div>
