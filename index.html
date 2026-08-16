@@ -734,6 +734,80 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   .cnt-estado-badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:500}
   .cnt-gasto-row{padding:10px 0;border-bottom:1px solid var(--color-border-tertiary)}
   .cnt-gasto-row:last-child{border-bottom:none}
+
+  /* ── ANALYTICS DASHBOARD ────────────────────────────────── */
+  .ana-wrap{padding:0}
+  .ana-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:10px}
+  .ana-header h2{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .ana-controls{display:flex;gap:8px;align-items:center}
+  .ana-sel{background:var(--color-background-primary);border:1px solid var(--color-border-secondary);color:var(--color-text-primary);padding:5px 10px;border-radius:var(--border-radius-md);font-size:12px;cursor:pointer}
+  .ana-btn{background:var(--color-background-primary);border:1px solid var(--color-border-secondary);color:var(--color-text-secondary);padding:5px 10px;border-radius:var(--border-radius-md);font-size:12px;cursor:pointer;transition:all .15s}
+  .ana-btn:hover{border-color:var(--color-border-primary);color:var(--color-text-primary)}
+
+  /* KPI Cards Row */
+  .ana-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+  .ana-kpi{background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:16px;position:relative;overflow:hidden;transition:border-color .15s}
+  .ana-kpi:hover{border-color:var(--color-border-secondary)}
+  .ana-kpi-icon{font-size:20px;margin-bottom:6px;opacity:.8}
+  .ana-kpi-lbl{font-size:10px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:4px}
+  .ana-kpi-val{font-size:22px;font-weight:700;line-height:1.1}
+  .ana-kpi-sub{font-size:10px;color:var(--color-text-tertiary);margin-top:4px}
+  .ana-kpi-bar{position:absolute;bottom:0;left:0;right:0;height:3px;background:var(--color-border-tertiary)}
+  .ana-kpi-bar-fill{height:100%;border-radius:0 2px 2px 0;transition:width .4s ease}
+
+  /* Section headings */
+  .ana-section{font-size:13px;font-weight:700;color:var(--color-text-secondary);margin:22px 0 12px;display:flex;align-items:center;gap:8px;text-transform:uppercase;letter-spacing:.06em}
+  .ana-section::after{content:'';flex:1;height:1px;background:var(--color-border-tertiary)}
+
+  /* Profitability Table */
+  .ana-table-wrap{overflow-x:auto;margin-bottom:22px;border-radius:var(--border-radius-lg);border:1px solid var(--color-border-tertiary)}
+  .ana-table{width:100%;border-collapse:collapse;font-size:12px}
+  .ana-table th{text-align:left;padding:10px 12px;background:var(--color-background-primary);color:var(--color-text-tertiary);font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:600;border-bottom:1px solid var(--color-border-tertiary);white-space:nowrap}
+  .ana-table td{padding:10px 12px;border-bottom:1px solid var(--color-border-tertiary)}
+  .ana-table tr:last-child td{border-bottom:none}
+  .ana-table tr:hover td{background:var(--color-background-secondary)}
+  .ana-table .mono{font-variant-numeric:tabular-nums;font-weight:500}
+  .ana-table .pos{color:var(--color-text-success)}
+  .ana-table .neg{color:var(--color-text-danger)}
+
+  /* Ranking Grids */
+  .ana-rankings{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px}
+  .ana-rank-card{background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px;transition:border-color .15s}
+  .ana-rank-card:hover{border-color:var(--color-border-secondary)}
+  .ana-rank-title{font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .ana-rank-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-border-tertiary);font-size:12px}
+  .ana-rank-item:last-child{border-bottom:none}
+  .ana-rank-pos{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;background:var(--color-background-secondary);color:var(--color-text-tertiary)}
+  .ana-rank-pos.gold{background:rgba(181,137,0,.2);color:#b58900}
+  .ana-rank-pos.silver{background:rgba(147,161,161,.15);color:#93a1a1}
+  .ana-rank-pos.bronze{background:rgba(203,75,22,.15);color:#cb4b16}
+  .ana-rank-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ana-rank-val{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* Container Cycle Cards */
+  .ana-cycles{display:flex;flex-direction:column;gap:10px;margin-bottom:22px}
+  .ana-cycle{background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px;transition:border-color .15s}
+  .ana-cycle:hover{border-color:var(--color-border-secondary)}
+  .ana-cycle-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px}
+  .ana-cycle-name{font-size:13px;font-weight:700}
+  .ana-cycle-pct{font-size:12px;font-weight:600}
+  .ana-cycle-bar{height:8px;background:var(--color-border-tertiary);border-radius:4px;overflow:hidden;margin-bottom:8px}
+  .ana-cycle-bar-fill{height:100%;border-radius:4px;transition:width .4s ease;background:#b58900}
+  .ana-cycle-stats{display:flex;gap:16px;font-size:11px;color:var(--color-text-secondary);flex-wrap:wrap}
+  .ana-cycle-stat b{color:var(--color-text-primary);font-weight:600}
+
+  /* No data state */
+  .ana-empty{text-align:center;padding:32px 16px;color:var(--color-text-tertiary);font-size:13px}
+  .ana-empty-icon{font-size:32px;margin-bottom:8px;opacity:.6}
+
+  /* Responsive */
+  @media(max-width:900px){
+    .ana-kpis{grid-template-columns:repeat(2,1fr)}
+    .ana-rankings{grid-template-columns:1fr}
+  }
+  @media(max-width:520px){
+    .ana-kpis{grid-template-columns:1fr}
+  }
 </style>
 
 </head>
@@ -8914,6 +8988,7 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'tasas'  ? ' act' : '') + '" onclick="setAdminTab(\'tasas\')">💱 Tasas</button>'
     + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
     + '<button class="adm-tab' + (adminTab === 'comisiones' ? ' act' : '') + '" onclick="setAdminTab(\'comisiones\')">🏆 Comisiones</button>'
+    + '<button class="adm-tab' + (adminTab === 'analytics' ? ' act' : '') + '" onclick="setAdminTab(\'analytics\')">📊 Analytics</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -8940,6 +9015,7 @@ function renderAdminContent() {
     el.innerHTML='<div style="font-size:14px;font-weight:600;margin-bottom:12px">🏷️ Categorías</div><div id="cat-manager-content"></div>';
     renderCatManager();
   }
+  else if (adminTab === 'analytics') renderAdminAnalytics();
 }
 
 // ── ADMIN CONTENEDORES ────────────────────────────────────────
@@ -14602,7 +14678,352 @@ function eliminarPagoCnt(cntId, gId, pgId) {
   if(typeof renderLibro==='function')try{renderLibro();}catch(e){}
   if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
 }
+
+// ══════════════════════════════════════════════════════════════
+// ── MÓDULO ANALYTICS / DASHBOARD KPIs ────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+var _anaPeriod = 'all';
+
+function renderAdminAnalytics() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+
+  // ── Gather data ──────────────────────────────────────────
+  var ventas = (typeof VENTAS !== 'undefined' && Array.isArray(VENTAS)) ? VENTAS : [];
+  var prods  = (typeof PRODS  !== 'undefined' && Array.isArray(PRODS))  ? PRODS  : [];
+  var conts  = (typeof CONTENEDORES !== 'undefined' && Array.isArray(CONTENEDORES)) ? CONTENEDORES : [];
+  var clientes = (typeof CLIENTES !== 'undefined' && Array.isArray(CLIENTES)) ? CLIENTES : [];
+
+  // ── Period filter ────────────────────────────────────────
+  var now = new Date();
+  var cutoff = null;
+  if (_anaPeriod === '7d')  cutoff = new Date(now - 7  * 86400000);
+  if (_anaPeriod === '30d') cutoff = new Date(now - 30 * 86400000);
+  if (_anaPeriod === '90d') cutoff = new Date(now - 90 * 86400000);
+
+  var filteredVentas = ventas;
+  if (cutoff) {
+    filteredVentas = ventas.filter(function(v) {
+      try { return new Date(v.fecha) >= cutoff; } catch(e) { return true; }
+    });
+  }
+
+  // ── Parse ventas to extract product-level detail ─────────
+  var prodSales = {};   // {prodName: {qty, revenue, cost}}
+  var clientSales = {}; // {clientName: {total, ops}}
+  var totalRevenue = 0;
+  var totalCost = 0;
+
+  filteredVentas.forEach(function(v) {
+    totalRevenue += (v.totalUSD || 0);
+    // Track client
+    var cli = v.cli || 'Walk-in';
+    if (!clientSales[cli]) clientSales[cli] = { total: 0, ops: 0 };
+    clientSales[cli].total += (v.totalUSD || 0);
+    clientSales[cli].ops++;
+
+    // Parse prods string: "10× Chapa galv. 2000x1000x1 @ $31.00, 5× Cuadrado S275JR 16 @ $20.00"
+    if (v.prods && typeof v.prods === 'string') {
+      v.prods.split(',').forEach(function(seg) {
+        seg = seg.trim();
+        var m = seg.match(/^(\d+)×\s+(.+?)\s+@\s+\$?([\d.,]+)/);
+        if (m) {
+          var qty = parseInt(m[1]) || 0;
+          var name = m[2].trim();
+          var price = parseFloat(m[3].replace(',', '.')) || 0;
+          if (!prodSales[name]) prodSales[name] = { qty: 0, revenue: 0, cost: 0 };
+          prodSales[name].qty += qty;
+          prodSales[name].revenue += qty * price;
+          // Find product cost
+          var prod = prods.find(function(p) { return p.n === name; });
+          var unitCost = prod ? (prod.ddp || prod.cif || 0) : 0;
+          prodSales[name].cost += qty * unitCost;
+        }
+      });
+    }
+  });
+
+  // Calculate total cost from product-level
+  Object.keys(prodSales).forEach(function(k) { totalCost += prodSales[k].cost; });
+
+  var grossMargin = totalRevenue - totalCost;
+  var marginPct = totalRevenue > 0 ? (grossMargin / totalRevenue * 100) : 0;
+
+  // ── Container profitability ──────────────────────────────
+  var contData = conts.map(function(c) {
+    // Total logistics cost from gastos array
+    var costLogistics = 0;
+    if (c.gastos && Array.isArray(c.gastos)) {
+      c.gastos.forEach(function(g) {
+        costLogistics += parseFloat(g.monto) || 0;
+      });
+    }
+
+    // Total product cost (DDP) from products linked to this container's lote
+    var loteKey = c.lote || c.ref || '';
+    var linkedProds = prods.filter(function(p) {
+      if (!p.lotes || !Array.isArray(p.lotes)) return false;
+      return p.lotes.some(function(l) { return l.lote === loteKey; });
+    });
+
+    var totalUnits = 0;
+    var productCost = 0;
+    linkedProds.forEach(function(p) {
+      var lotEntries = p.lotes.filter(function(l) { return l.lote === loteKey; });
+      lotEntries.forEach(function(l) {
+        var q = parseFloat(l.cantidad) || 0;
+        totalUnits += q;
+        productCost += q * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
+      });
+    });
+
+    // Revenue from sales of products from this lote
+    var revenue = 0;
+    var unitsSold = 0;
+    linkedProds.forEach(function(p) {
+      if (prodSales[p.n]) {
+        revenue += prodSales[p.n].revenue;
+        unitsSold += prodSales[p.n].qty;
+      }
+    });
+
+    var totalCostCnt = costLogistics + productCost;
+    var margin = revenue - totalCostCnt;
+    var marginP = revenue > 0 ? (margin / revenue * 100) : 0;
+    var soldPct = totalUnits > 0 ? Math.min(100, (unitsSold / totalUnits * 100)) : 0;
+
+    return {
+      id: c.id,
+      ref: c.ref || c.id,
+      lote: loteKey,
+      estado: c.estado || 'preparando',
+      costLogistics: costLogistics,
+      productCost: productCost,
+      totalCost: totalCostCnt,
+      revenue: revenue,
+      margin: margin,
+      marginPct: marginP,
+      totalUnits: totalUnits,
+      unitsSold: unitsSold,
+      soldPct: soldPct,
+      linkedProds: linkedProds.length
+    };
+  });
+
+  // Sort by revenue descending
+  contData.sort(function(a, b) { return b.revenue - a.revenue; });
+
+  // ── Top products ─────────────────────────────────────────
+  var prodArr = Object.keys(prodSales).map(function(k) {
+    var s = prodSales[k];
+    var m = s.revenue - s.cost;
+    return { name: k, qty: s.qty, revenue: s.revenue, cost: s.cost, margin: m, marginPct: s.revenue > 0 ? (m / s.revenue * 100) : 0 };
+  });
+
+  var topSold = prodArr.slice().sort(function(a, b) { return b.qty - a.qty; }).slice(0, 5);
+  var topRevenue = prodArr.slice().sort(function(a, b) { return b.revenue - a.revenue; }).slice(0, 5);
+  var topMargin = prodArr.filter(function(p) { return p.cost > 0; }).sort(function(a, b) { return b.marginPct - a.marginPct; }).slice(0, 5);
+  var worstMargin = prodArr.filter(function(p) { return p.cost > 0 && p.revenue > 0; }).sort(function(a, b) { return a.marginPct - b.marginPct; }).slice(0, 5);
+
+  // ── Top clients ──────────────────────────────────────────
+  var clientArr = Object.keys(clientSales).filter(function(k) { return k !== 'Walk-in'; }).map(function(k) {
+    return { name: k, total: clientSales[k].total, ops: clientSales[k].ops };
+  });
+  clientArr.sort(function(a, b) { return b.total - a.total; });
+  var topClients = clientArr.slice(0, 5);
+
+  // ── BUILD HTML ───────────────────────────────────────────
+  var h = '<div class="ana-wrap">';
+
+  // Header
+  h += '<div class="ana-header">';
+  h += '<h2>📊 Analytics & Rentabilidad</h2>';
+  h += '<div class="ana-controls">';
+  h += '<select class="ana-sel" onchange="_anaPeriod=this.value;renderAdminAnalytics()">';
+  h += '<option value="all"' + (_anaPeriod === 'all' ? ' selected' : '') + '>Todo el período</option>';
+  h += '<option value="7d"'  + (_anaPeriod === '7d'  ? ' selected' : '') + '>Últimos 7 días</option>';
+  h += '<option value="30d"' + (_anaPeriod === '30d' ? ' selected' : '') + '>Últimos 30 días</option>';
+  h += '<option value="90d"' + (_anaPeriod === '90d' ? ' selected' : '') + '>Últimos 90 días</option>';
+  h += '</select>';
+  h += '<button class="ana-btn" onclick="renderAdminAnalytics()">↻ Actualizar</button>';
+  h += '</div></div>';
+
+  // ── KPI Cards ────────────────────────────────────────────
+  h += '<div class="ana-kpis">';
+
+  // Revenue
+  h += '<div class="ana-kpi">';
+  h += '<div class="ana-kpi-icon">💰</div>';
+  h += '<div class="ana-kpi-lbl">Revenue Total</div>';
+  h += '<div class="ana-kpi-val">$' + fN(totalRevenue) + '</div>';
+  h += '<div class="ana-kpi-sub">' + filteredVentas.length + ' ventas</div>';
+  h += '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:100%;background:#b58900"></div></div>';
+  h += '</div>';
+
+  // Cost
+  h += '<div class="ana-kpi">';
+  h += '<div class="ana-kpi-icon">📦</div>';
+  h += '<div class="ana-kpi-lbl">Costo Total (DDP)</div>';
+  h += '<div class="ana-kpi-val">$' + fN(totalCost) + '</div>';
+  h += '<div class="ana-kpi-sub">coste de mercancía vendida</div>';
+  var costPct = totalRevenue > 0 ? Math.min(100, totalCost / totalRevenue * 100) : 0;
+  h += '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:' + costPct.toFixed(0) + '%;background:#268bd2"></div></div>';
+  h += '</div>';
+
+  // Gross Margin
+  h += '<div class="ana-kpi">';
+  h += '<div class="ana-kpi-icon">📈</div>';
+  h += '<div class="ana-kpi-lbl">Margen Bruto</div>';
+  h += '<div class="ana-kpi-val" style="color:' + (grossMargin >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)') + '">$' + fN(grossMargin) + '</div>';
+  h += '<div class="ana-kpi-sub">revenue − costo mercancía</div>';
+  h += '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:' + Math.min(100, Math.abs(marginPct)).toFixed(0) + '%;background:' + (grossMargin >= 0 ? '#859900' : '#dc322f') + '"></div></div>';
+  h += '</div>';
+
+  // Margin %
+  h += '<div class="ana-kpi">';
+  h += '<div class="ana-kpi-icon">🎯</div>';
+  h += '<div class="ana-kpi-lbl">Margen %</div>';
+  h += '<div class="ana-kpi-val" style="color:' + (marginPct >= 20 ? 'var(--color-text-success)' : marginPct >= 0 ? 'var(--color-text-warning)' : 'var(--color-text-danger)') + '">' + fN(marginPct, 1) + '%</div>';
+  h += '<div class="ana-kpi-sub">' + (marginPct >= 30 ? 'excelente' : marginPct >= 20 ? 'bueno' : marginPct >= 10 ? 'aceptable' : 'revisar') + '</div>';
+  h += '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:' + Math.min(100, Math.abs(marginPct)).toFixed(0) + '%;background:' + (marginPct >= 20 ? '#859900' : marginPct >= 0 ? '#cb4b16' : '#dc322f') + '"></div></div>';
+  h += '</div>';
+
+  h += '</div>'; // .ana-kpis
+
+  // ── CONTAINER PROFITABILITY TABLE ─────────────────────────
+  if (contData.length > 0) {
+    h += '<div class="ana-section">Rentabilidad por Contenedor</div>';
+    h += '<div class="ana-table-wrap"><table class="ana-table">';
+    h += '<thead><tr>';
+    h += '<th>Contenedor</th><th>Estado</th><th>Prods</th><th>Costo Logístico</th><th>Costo Mercancía</th><th>Costo Total</th><th>Revenue</th><th>Margen</th><th>%</th>';
+    h += '</tr></thead><tbody>';
+
+    contData.forEach(function(cd) {
+      var estadoBadge = _anaEstadoBadge(cd.estado);
+      var margenClass = cd.margin >= 0 ? 'pos' : 'neg';
+      h += '<tr>';
+      h += '<td style="font-weight:600">📦 ' + _escHtml(cd.ref) + '</td>';
+      h += '<td>' + estadoBadge + '</td>';
+      h += '<td class="mono">' + cd.linkedProds + '</td>';
+      h += '<td class="mono">$' + fN(cd.costLogistics) + '</td>';
+      h += '<td class="mono">$' + fN(cd.productCost) + '</td>';
+      h += '<td class="mono" style="font-weight:600">$' + fN(cd.totalCost) + '</td>';
+      h += '<td class="mono" style="font-weight:600">$' + fN(cd.revenue) + '</td>';
+      h += '<td class="mono ' + margenClass + '">$' + fN(cd.margin) + '</td>';
+      h += '<td class="mono ' + margenClass + '">' + fN(cd.marginPct, 1) + '%</td>';
+      h += '</tr>';
+    });
+
+    h += '</tbody></table></div>';
+  }
+
+  // ── RANKINGS ──────────────────────────────────────────────
+  h += '<div class="ana-section">Rankings Comerciales</div>';
+  h += '<div class="ana-rankings">';
+
+  // Top sold
+  h += _anaRankCard('🏆 Más Vendidos', topSold, function(p) { return p.qty + ' uds'; }, 'name');
+  // Top clients
+  h += _anaRankCard('👤 Top Clientes', topClients, function(c) { return '$' + fN(c.total); }, 'name');
+  // Most profitable
+  h += _anaRankCard('💰 Más Rentable', topMargin, function(p) { return fN(p.marginPct, 1) + '%'; }, 'name');
+  // Least profitable
+  h += _anaRankCard('📉 Menor Margen', worstMargin, function(p) { return fN(p.marginPct, 1) + '%'; }, 'name');
+
+  h += '</div>'; // .ana-rankings
+
+  // ── CONTAINER SALE CYCLES ─────────────────────────────────
+  var activeCycles = contData.filter(function(cd) { return cd.estado !== 'cerrado' && cd.totalUnits > 0; });
+  if (activeCycles.length > 0) {
+    h += '<div class="ana-section">Ciclo Contenedor → Venta</div>';
+    h += '<div class="ana-cycles">';
+
+    activeCycles.forEach(function(cd) {
+      var pctColor = cd.soldPct >= 80 ? '#859900' : cd.soldPct >= 50 ? '#b58900' : cd.soldPct >= 20 ? '#268bd2' : 'var(--color-text-tertiary)';
+      h += '<div class="ana-cycle">';
+      h += '<div class="ana-cycle-head">';
+      h += '<div class="ana-cycle-name">📦 ' + _escHtml(cd.ref) + ' <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(' + _anaEstadoBadge(cd.estado) + ')</span></div>';
+      h += '<div class="ana-cycle-pct" style="color:' + pctColor + '">' + fN(cd.soldPct, 0) + '% vendido</div>';
+      h += '</div>';
+      h += '<div class="ana-cycle-bar"><div class="ana-cycle-bar-fill" style="width:' + cd.soldPct.toFixed(0) + '%;background:' + pctColor + '"></div></div>';
+      h += '<div class="ana-cycle-stats">';
+      h += '<div class="ana-cycle-stat"><b>' + cd.totalUnits + '</b> uds total</div>';
+      h += '<div class="ana-cycle-stat"><b>' + cd.unitsSold + '</b> vendidas</div>';
+      h += '<div class="ana-cycle-stat"><b>' + (cd.totalUnits - cd.unitsSold) + '</b> en stock</div>';
+      h += '<div class="ana-cycle-stat">Revenue: <b>$' + fN(cd.revenue) + '</b></div>';
+      h += '<div class="ana-cycle-stat">Costo: <b>$' + fN(cd.totalCost) + '</b></div>';
+      var mClass = cd.margin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
+      h += '<div class="ana-cycle-stat" style="' + mClass + '">Margen: <b>$' + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
+      h += '</div>';
+      h += '</div>'; // .ana-cycle
+    });
+
+    h += '</div>'; // .ana-cycles
+  }
+
+  // ── Empty states ──────────────────────────────────────────
+  if (filteredVentas.length === 0) {
+    h += '<div class="ana-empty"><div class="ana-empty-icon">📭</div>No hay ventas en el período seleccionado</div>';
+  }
+
+  h += '</div>'; // .ana-wrap
+  el.innerHTML = h;
+}
+
+// ── Helper: rank card builder ──────────────────────────────
+function _anaRankCard(title, items, valueFn, nameKey) {
+  var h = '<div class="ana-rank-card">';
+  h += '<div class="ana-rank-title">' + title + '</div>';
+  if (items.length === 0) {
+    h += '<div style="font-size:11px;color:var(--color-text-tertiary);padding:8px 0">Sin datos</div>';
+  } else {
+    items.forEach(function(item, i) {
+      var posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      h += '<div class="ana-rank-item">';
+      h += '<div class="ana-rank-pos ' + posClass + '">' + (i + 1) + '</div>';
+      h += '<div class="ana-rank-name">' + _escHtml(item[nameKey]) + '</div>';
+      h += '<div class="ana-rank-val">' + valueFn(item) + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+// ── Helper: estado badge ───────────────────────────────────
+function _anaEstadoBadge(estado) {
+  var colors = {
+    preparando: 'var(--color-text-tertiary)',
+    reservado: 'var(--color-text-warning)',
+    en_puerto: 'var(--color-text-info)',
+    en_transito: 'var(--color-text-info)',
+    en_aduana: 'var(--color-text-warning)',
+    recibido: 'var(--color-text-success)',
+    cerrado: 'var(--color-text-tertiary)'
+  };
+  var labels = {
+    preparando: 'Preparando',
+    reservado: 'Reservado',
+    en_puerto: 'En puerto',
+    en_transito: 'En tránsito',
+    en_aduana: 'En aduana',
+    recibido: 'Recibido',
+    cerrado: 'Cerrado'
+  };
+  var col = colors[estado] || 'var(--color-text-tertiary)';
+  var lbl = labels[estado] || estado;
+  return '<span class="cnt-estado-badge" style="color:' + col + ';border:1px solid ' + col + '">' + lbl + '</span>';
+}
+
+// ── Helper: escape HTML ────────────────────────────────────
+function _escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 </script>
 </body>
 </html>
+
 
