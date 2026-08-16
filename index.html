@@ -14778,8 +14778,21 @@ function renderAdminAnalytics() {
     linkedProds.forEach(function(p) {
       var lotEntries = p.lotes.filter(function(l) { return l.lote === loteKey; });
       lotEntries.forEach(function(l) {
-        var qOriginal = l.cantidad_inicial > 0 ? parseFloat(l.cantidad_inicial) : (parseFloat(l.cantidad) || 0);
         var qCurrent = parseFloat(l.cantidad) || 0;
+        
+        // Buscar el histórico real de entradas (muy útil para contenedores viejos antes de la columna cantidad_inicial)
+        var qMovs = 0;
+        if (typeof STOCK_MOVS !== 'undefined') {
+          STOCK_MOVS.forEach(function(m) {
+            if (m.tipo === 'entrada' && m.producto === p.n && m.contenedor === c.id) {
+              qMovs += parseFloat(m.cantidad) || 0;
+            }
+          });
+        }
+        
+        var qDb = parseFloat(l.cantidad_inicial) || 0;
+        // El total original es el mayor entre lo que diga la BD, lo que diga el historial de entradas, o el actual.
+        var qOriginal = Math.max(qDb, qMovs, qCurrent);
         
         // Exact units sold from this specific lot
         var qSold = Math.max(0, qOriginal - qCurrent);
