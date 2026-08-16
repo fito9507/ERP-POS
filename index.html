@@ -14732,9 +14732,12 @@ function renderAdminAnalytics() {
           var qty = parseInt(m[1]) || 0;
           var name = m[2].trim();
           var price = m[3] ? parseFloat(m[3].replace(',', '.')) : 0;
-          if (!prodSales[name]) prodSales[name] = { qty: 0, revenue: 0, cost: 0 };
+          if (!prodSales[name]) prodSales[name] = { qty: 0, pricedQty: 0, revenue: 0, cost: 0 };
           prodSales[name].qty += qty;
-          prodSales[name].revenue += qty * price;
+          if (m[3]) {
+            prodSales[name].pricedQty += qty;
+            prodSales[name].revenue += qty * price;
+          }
           // Find product cost
           var prod = prods.find(function(p) { return p.n === name; });
           var unitCost = prod ? (prod.ddp || prod.cif || 0) : 0;
@@ -14769,24 +14772,31 @@ function renderAdminAnalytics() {
 
     var totalUnits = 0;
     var productCost = 0;
+    var revenue = 0;
+    var unitsSold = 0;
+
     linkedProds.forEach(function(p) {
       var lotEntries = p.lotes.filter(function(l) { return l.lote === loteKey; });
       lotEntries.forEach(function(l) {
-        // Usa cantidad_inicial si existe (para tener el total original), si no usa cantidad
         var qOriginal = l.cantidad_inicial > 0 ? parseFloat(l.cantidad_inicial) : (parseFloat(l.cantidad) || 0);
+        var qCurrent = parseFloat(l.cantidad) || 0;
+        
+        // Exact units sold from this specific lot
+        var qSold = Math.max(0, qOriginal - qCurrent);
+        
         totalUnits += qOriginal;
         productCost += qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
+        unitsSold += qSold;
+        
+        // Calculate proportional revenue for these specific sold units
+        var avgPrice = 0;
+        if (prodSales[p.n] && prodSales[p.n].pricedQty > 0) {
+           avgPrice = prodSales[p.n].revenue / prodSales[p.n].pricedQty;
+        } else {
+           avgPrice = parseFloat(l.precio_venta) || parseFloat(p.min) || parseFloat(p.maj) || 0;
+        }
+        revenue += qSold * avgPrice;
       });
-    });
-
-    // Revenue from sales of products from this lote
-    var revenue = 0;
-    var unitsSold = 0;
-    linkedProds.forEach(function(p) {
-      if (prodSales[p.n]) {
-        revenue += prodSales[p.n].revenue;
-        unitsSold += prodSales[p.n].qty;
-      }
     });
 
     var totalCostCnt = costLogistics + productCost;
