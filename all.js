@@ -865,8 +865,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
         costo:loteCosto, precio_venta:lotePrecio, fecha_entrada:new Date().toISOString()});
     }
     
-    var body = {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty,
-      costo:loteCosto, precio_venta:lotePrecio};
+    var body = {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty};
     await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', body);
     return true;
   } else {
@@ -12330,9 +12329,7 @@ window.openStockLotes = function(supaId) {
         producto_id: p.supaId,
         almacen: l.almacen,
         lote: nLote,
-        cantidad: newCant,
-        costo: parseFloat(nCosto)||0,
-        precio_venta: parseFloat(nPrecio)||0
+        cantidad: newCant
       });
       
       if(nLote !== l.lote) {
