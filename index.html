@@ -7631,7 +7631,7 @@ function executeExportarContenedorPDF() {
         f.lineas.forEach(function(l) {
           var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
           var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
-          html += '<li>' + l.q + 'x ' + pname + ' ($' + (typeof fN === 'function' ? fN(pprice) : pprice) + ')</li>';
+          html += '<li>' + l.q + 'x ' + pname + ' a $' + (typeof fN === 'function' ? fN(pprice) : pprice) + ' = <b>$' + (typeof fN === 'function' ? fN(l.q * pprice) : (l.q * pprice)) + '</b></li>';
         });
         html += '</ul>';
         html += '</td></tr>';
@@ -7916,7 +7916,7 @@ function exportarReservasPDF(clienteId) {
           f.lineas.forEach(function(l) {
             var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
             var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
-            html += '<li>' + l.q + 'x ' + pname + ' ($' + fN(pprice) + ')</li>';
+            html += '<li>' + l.q + 'x ' + pname + ' a $' + fN(pprice) + ' = <b>$' + fN(l.q * pprice) + '</b></li>';
           });
           html += '</ul>';
         }
