@@ -15025,21 +15025,38 @@ function renderAdminAnalytics() {
         // El total original es el mayor entre lo que diga la BD, lo que diga el historial de entradas, o el actual.
         var qOriginal = Math.max(qDb, qMovs, qCurrent);
         
-        // Exact units sold from this specific lot
-        var qSold = Math.max(0, qOriginal - qCurrent);
+        // Exact units sold and revenue from Folios explicitly tagged with this container
+        var fSold = 0;
+        var fRev = 0;
+        if (typeof CLIENTES !== 'undefined' && Array.isArray(CLIENTES)) {
+          CLIENTES.forEach(function(cli) {
+            if (cli.folios && Array.isArray(cli.folios)) {
+              cli.folios.forEach(function(f) {
+                if (f.contenedor === loteKey && f.lineas && Array.isArray(f.lineas)) {
+                  f.lineas.forEach(function(lin) {
+                    var pName = lin.prod || lin.n || lin.producto;
+                    if (pName === p.n) {
+                      var lq = parseFloat(lin.q) || 0;
+                      fSold += lq;
+                      var lp = lin.precio != null ? lin.precio : (lin.p != null ? lin.p : 0);
+                      fRev += lq * lp;
+                    }
+                  });
+                }
+              });
+            }
+          });
+        }
+        
+        var qSold = fSold;
         
         totalUnits += qOriginal;
         unitsSold += qSold;
+        revenue += fRev;
         
-        // Calculate proportional revenue for these specific sold units
-        var avgPrice = 0;
-        if (prodSales[p.n] && prodSales[p.n].pricedQty > 0) {
-           avgPrice = prodSales[p.n].revenue / prodSales[p.n].pricedQty;
-        } else {
-           avgPrice = parseFloat(l.precio_venta) || parseFloat(p.min) || parseFloat(p.maj) || 0;
-        }
-        var pRev = qSold * avgPrice;
-        revenue += pRev;
+        // Calculate a visual "Quedan" based strictly on Initial - Sold (Folios)
+        // to maintain consistency with the PDF, ignoring physical stock discrepancies
+        var qCurrentDisplay = Math.max(0, qOriginal - qSold);
         
         var pCost = qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
         productCost += pCost;
@@ -15048,9 +15065,9 @@ function renderAdminAnalytics() {
           n: p.n,
           qOriginal: qOriginal,
           qSold: qSold,
-          qCurrent: qCurrent,
+          qCurrent: qCurrentDisplay,
           pCost: pCost,
-          pRev: pRev
+          pRev: fRev
         });
       });
     });
