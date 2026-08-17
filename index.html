@@ -3076,7 +3076,7 @@ async function syncLoadContenedores() {
       data = await r.json();
     }
 
-    CONTENEDORES = data.map(function(row) { return _rowToCnt(row); });
+    CONTENEDORES = data.map(function(row) { return _rowToCnt(row); }).sort(function(a,b){return (a.lote||a.id||'').localeCompare(b.lote||b.id||'', undefined, {numeric: true});});
     try { localStorage.setItem('erp_contenedores', JSON.stringify(CONTENEDORES)); } catch(e) {}
     if (typeof renderContenedores === 'function') try { renderContenedores(); } catch(e) {}
     return true;
@@ -7519,10 +7519,24 @@ function exportarReservasContenedorPDF() {
     });
   });
   
-  var lotes = Object.keys(dataByLote).sort();
+  var lotes = Object.keys(dataByLote).sort(function(a,b){return a.localeCompare(b, undefined, {numeric: true});});
   if (!lotes.length || totalFound === 0) {
     if(typeof showToast === 'function') showToast('No hay reservas para exportar');
     return;
+  }
+
+  var optMsg = 'Selecciona el contenedor a exportar (o deja vacío para exportar todos):\n\n';
+  optMsg += '0 → Todos los contenedores\n';
+  lotes.forEach(function(l, i){
+    optMsg += (i+1) + ' → ' + l + '\n';
+  });
+  
+  var pick = prompt(optMsg, '0');
+  if (pick === null) return;
+  var pickIdx = parseInt(pick);
+  if (pickIdx > 0 && pickIdx <= lotes.length) {
+    var selLote = lotes[pickIdx - 1];
+    lotes = [selLote];
   }
   
   var d = new Date();
@@ -12329,11 +12343,15 @@ var PRESTAMOS = (function(){
 // MÓDULO: CONTENEDORES
 // ═══════════════════════════════════════════════════════════════
 var CONTENEDORES = (function(){
-  try{var d=JSON.parse(localStorage.getItem('erp_contenedores')||'[]');if(d&&d.length)return d;}catch(e){}
+  try{
+    var d=JSON.parse(localStorage.getItem('erp_contenedores')||'[]');
+    if(d&&d.length) return d.sort(function(a,b){return (a.lote||a.id||'').localeCompare(b.lote||b.id||'', undefined, {numeric: true});});
+  }catch(e){}
   return [];
 })();
 
 function saveContenedor(cnt, deletedId) {
+  CONTENEDORES.sort(function(a,b){return (a.lote||a.id||'').localeCompare(b.lote||b.id||'', undefined, {numeric: true});});
   try { localStorage.setItem('erp_contenedores', JSON.stringify(CONTENEDORES)); } catch(e) {}
   if (typeof renderContenedores === 'function') renderContenedores();
   if (cnt && typeof _syncSaveContenedor === 'function') _syncSaveContenedor(cnt);
