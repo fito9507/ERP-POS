@@ -5976,6 +5976,53 @@ function liquidarDeuda_p(id){
 
 
 
+function exportarReservasContenedorCSV() {
+  var rows = [['Contenedor (Lote)', 'Cliente', 'Folio ID', 'Fecha', 'Estado', 'Total USD', 'Pagado USD', 'Pendiente USD', 'Productos']];
+  
+  CLIENTES.forEach(function(c) {
+    if (!c.folios) return;
+    c.folios.forEach(function(f) {
+      var pStr = (f.lineas||[]).map(function(l){ return l.q + 'x ' + (l.prod||l.n||l.producto||''); }).join(' + ');
+      rows.push([
+        f.contenedor || 'Sin Lote',
+        c.nombre || 'Desconocido',
+        f.id || '',
+        typeof fD === 'function' ? fD(f.fecha) : f.fecha || '',
+        (typeof EL !== 'undefined' && EL[estF(f)]) ? EL[estF(f)] : estF(f),
+        typeof fN === 'function' ? fN(totF(f),2) : totF(f),
+        typeof fN === 'function' ? fN(pagF(f),2) : pagF(f),
+        typeof fN === 'function' ? fN(pdtF(f),2) : pdtF(f),
+        pStr
+      ]);
+    });
+  });
+  
+  rows.sort(function(a, b) {
+    if (a[0] === 'Contenedor (Lote)') return -1;
+    if (b[0] === 'Contenedor (Lote)') return 1;
+    if (a[0] !== b[0]) return String(a[0]).localeCompare(String(b[0]));
+    return String(a[1]).localeCompare(String(b[1]));
+  });
+  
+  var csv = rows.map(function(r) {
+    return r.map(function(cell) {
+      var str = String(cell).replace(/"/g, '""');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) str = '"' + str + '"';
+      return str;
+    }).join(',');
+  }).join('\n');
+  
+  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'reservas_por_contenedor.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  if(typeof showToast === 'function') showToast('Exportación CSV completada');
+}
+
 function exportCSV(){
   const data=filtrar_ig();
   let csv='Fecha,Tipo,Descripción,Monto,Moneda,Equiv.USD,Cuenta,Sentido,Notas\n';
