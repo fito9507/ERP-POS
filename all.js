@@ -3172,6 +3172,17 @@ function _revertirVenta(v){
         }
       });
     }
+    var targetContenedor = 'SIN LOTE';
+    var folioIdMatch = (v.notas||v.nota||v.desc||'').match(/Folio ([\w-]+)/);
+    if(folioIdMatch) {
+      var fid = folioIdMatch[1];
+      var cli = typeof CLIENTES!=='undefined' ? CLIENTES.find(function(c){return c.folios && c.folios.some(function(f){return f.id === fid;});}) : null;
+      if(cli) {
+        var fObj = cli.folios.find(function(f){return f.id === fid;});
+        if(fObj && fObj.contenedor) targetContenedor = fObj.contenedor;
+      }
+    }
+
     lineas.forEach(function(l){
       var prod=PRODS.find(function(p){return p.n===l.n;});
       if(prod){
@@ -3179,7 +3190,9 @@ function _revertirVenta(v){
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
         // Persist stock update to Supabase!
-        if(v.alm && typeof syncStockUpdate==='function'){
+        if(v.alm && typeof adjustStockByDelta==='function' && prod.supaId){
+          adjustStockByDelta(prod, v.alm, l.q, targetContenedor);
+        } else if(v.alm && typeof syncStockUpdate==='function'){
           syncStockUpdate([{n:prod.n}], v.alm);
         }
       }
@@ -6677,7 +6690,7 @@ function elimFolioCli(cid,fid){
             if(!prod.stk_alm)prod.stk_alm={};
             prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
             if(typeof adjustStockByDelta==='function'&&prod.supaId){
-              adjustStockByDelta(prod,f.alm,l.q);
+              adjustStockByDelta(prod,f.alm,l.q, f.contenedor || 'SIN LOTE');
             }
           }
         }
