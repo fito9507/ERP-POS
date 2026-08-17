@@ -5976,51 +5976,108 @@ function liquidarDeuda_p(id){
 
 
 
-function exportarReservasContenedorCSV() {
-  var rows = [['Contenedor (Lote)', 'Cliente', 'Folio ID', 'Fecha', 'Estado', 'Total USD', 'Pagado USD', 'Pendiente USD', 'Productos']];
+function exportarReservasContenedorPDF() {
+  var dataByLote = {};
+  var totalFound = 0;
   
   CLIENTES.forEach(function(c) {
     if (!c.folios) return;
     c.folios.forEach(function(f) {
-      var pStr = (f.lineas||[]).map(function(l){ return l.q + 'x ' + (l.prod||l.n||l.producto||''); }).join(' + ');
-      rows.push([
-        f.contenedor || 'Sin Lote',
-        c.nombre || 'Desconocido',
-        f.id || '',
-        typeof fD === 'function' ? fD(f.fecha) : f.fecha || '',
-        (typeof EL !== 'undefined' && EL[estF(f)]) ? EL[estF(f)] : estF(f),
-        typeof fN === 'function' ? fN(totF(f),2) : totF(f),
-        typeof fN === 'function' ? fN(pagF(f),2) : pagF(f),
-        typeof fN === 'function' ? fN(pdtF(f),2) : pdtF(f),
-        pStr
-      ]);
+      var lote = f.contenedor || 'Sin Lote / Desconocido';
+      if (!dataByLote[lote]) {
+        dataByLote[lote] = [];
+      }
+      dataByLote[lote].push({ cli: c, fol: f });
+      totalFound++;
     });
   });
   
-  rows.sort(function(a, b) {
-    if (a[0] === 'Contenedor (Lote)') return -1;
-    if (b[0] === 'Contenedor (Lote)') return 1;
-    if (a[0] !== b[0]) return String(a[0]).localeCompare(String(b[0]));
-    return String(a[1]).localeCompare(String(b[1]));
+  var lotes = Object.keys(dataByLote).sort();
+  if (!lotes.length || totalFound === 0) {
+    if(typeof showToast === 'function') showToast('No hay reservas para exportar');
+    return;
+  }
+  
+  var d = new Date();
+  var dateStr = d.getDate().toString().padStart(2, '0') + '-' + (d.getMonth()+1).toString().padStart(2, '0') + '-' + d.getFullYear();
+  var title = 'Reservas por Contenedor ' + dateStr;
+  var html = '<!DOCTYPE html><html><head><title>' + title + '</title>';
+  html += '<style>';
+  html += 'body { font-family: "Segoe UI", system-ui, sans-serif; font-size: 13px; margin: 20px; color: #0e4350; }';
+  html += 'table { width: 100%; border-collapse: collapse; margin-bottom: 30px; font-size: 12px; }';
+  html += 'th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }';
+  html += 'th { background-color: #f4f4f4; font-weight: 600; }';
+  html += 'h2 { margin-top: 30px; border-bottom: 1px solid #002b36; padding-bottom: 5px; font-size: 16px; margin-bottom:10px; }';
+  html += '.text-right { text-align: right; }';
+  html += '.tot-row td { font-weight: bold; background: #f9f9f9; }';
+  html += '.prod-row { font-size: 10.5px; color: #586e75; }';
+  html += '@media print { @page { margin: 1cm; } button { display: none; } }';
+  html += '</style></head><body>';
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+  html += '<h1 style="font-size:20px;margin:0">Resumen de Reservas por Contenedor</h1>';
+  html += '<button onclick="window.print()" style="padding:8px 16px;font-size:14px;cursor:pointer;background:#2563eb;color:#fdf6e3;border:none;border-radius:4px">🖨️ Imprimir / Guardar PDF</button>';
+  html += '</div>';
+  html += '<p style="margin:5px 0 20px 0;font-size:12px;color:#666">Fecha de emisión: ' + new Date().toLocaleString() + '</p>';
+
+  lotes.forEach(function(lote) {
+    var items = dataByLote[lote];
+    html += '<h2>📦 Contenedor: ' + lote + '</h2>';
+    html += '<table><thead><tr><th>Cliente / Folio</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Pdte</th></tr></thead><tbody>';
+    
+    var cTot = 0, cPag = 0, cPdt = 0;
+    
+    items.forEach(function(item) {
+      var f = item.fol;
+      var c = item.cli;
+      var t = typeof totF === 'function' ? totF(f) : 0;
+      var p = typeof pagF === 'function' ? pagF(f) : 0;
+      var pd = typeof pdtF === 'function' ? pdtF(f) : 0;
+      cTot += t; cPag += p; cPdt += pd;
+      
+      var bg = pd > 0 ? '#fff5f5' : '#f0fdf4';
+      if (t === 0) bg = '#fdf6e3';
+      
+      html += '<tr style="background:'+bg+';font-weight:600">';
+      html += '<td>' + c.nombre + ' - #' + f.id + (f.desc ? ' (' + f.desc + ')' : '') + '</td>';
+      var ffecha = typeof fD === 'function' ? fD(f.fecha) : f.fecha;
+      html += '<td>' + (ffecha || '') + '</td>';
+      var festado = (typeof EL !== 'undefined' && EL[typeof estF === 'function' ? estF(f) : '']) ? EL[estF(f)] : (typeof estF === 'function' ? estF(f) : '');
+      html += '<td>' + festado + '</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(t) : t) + '</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(p) : p) + '</td>';
+      html += '<td class="text-right" style="color:'+(pd>0?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(pd) : pd) + '</td>';
+      html += '</tr>';
+      
+      // Add product lines
+      var hasLineas = f.lineas && f.lineas.length > 0;
+      if (hasLineas) {
+        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px 12px 16px">';
+        html += '<div style="font-weight:bold;margin-bottom:2px">Productos:</div>';
+        html += '<ul style="margin:0 0 4px 0;padding-left:20px">';
+        f.lineas.forEach(function(l) {
+          var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
+          var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
+          html += '<li>' + l.q + 'x ' + pname + ' ($' + (typeof fN === 'function' ? fN(pprice) : pprice) + ')</li>';
+        });
+        html += '</ul>';
+        html += '</td></tr>';
+      }
+    });
+    
+    html += '<tr class="tot-row">';
+    html += '<td colspan="3" class="text-right">TOTALES CONTENEDOR:</td>';
+    html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(cTot) : cTot) + '</td>';
+    html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(cPag) : cPag) + '</td>';
+    html += '<td class="text-right" style="color:'+(cPdt>0?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(cPdt) : cPdt) + '</td>';
+    html += '</tr>';
+    
+    html += '</tbody></table>';
   });
   
-  var csv = rows.map(function(r) {
-    return r.map(function(cell) {
-      var str = String(cell).replace(/"/g, '""');
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) str = '"' + str + '"';
-      return str;
-    }).join(',');
-  }).join('\n');
-  
-  var blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  html += '</body></html>';
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'reservas_por_contenedor.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  if(typeof showToast === 'function') showToast('Exportación CSV completada');
+  window.open(url, '_blank');
 }
 
 function exportCSV(){
