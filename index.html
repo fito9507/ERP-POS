@@ -1456,14 +1456,28 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <h3 style="margin:0">Exportar Reservas (PDF)</h3>
       <button style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--color-text-secondary)" onclick="document.getElementById('modal-export-pdf').style.display='none'">×</button>
     </div>
-    <div style="margin-bottom:10px;font-size:13px">Selecciona los clientes que deseas incluir:</div>
-    <div style="margin-bottom:10px;display:flex;gap:10px">
+    <div style="margin-bottom:10px;font-size:13px;text-align:left">Selecciona los clientes que deseas incluir:</div>
+    <div style="margin-bottom:10px;display:flex;gap:10px;justify-content:flex-start">
       <button class="btn-sm" onclick="toggleExportPdfAll(true)">Todos</button>
       <button class="btn-sm" onclick="toggleExportPdfAll(false)">Ninguno</button>
     </div>
-    <div id="export-pdf-clients" style="max-height:300px;overflow-y:auto;border:1px solid var(--color-border-primary);border-radius:var(--border-radius-sm);padding:8px;display:flex;flex-direction:column;gap:6px">
+    <div id="export-pdf-clients" style="max-height:300px;overflow-y:auto;border:1px solid var(--color-border-primary);border-radius:var(--border-radius-sm);padding:8px;display:flex;flex-direction:column;gap:6px;text-align:left">
     </div>
     <button class="btn" style="width:100%;margin-top:14px" onclick="executeExportarPDF()">Generar PDF</button>
+  </div>
+</div>
+
+<!-- MODAL EXPORTAR CONTENEDOR PDF -->
+<div class="modal-bg" id="modal-export-cnt-pdf">
+  <div class="modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">Exportar Contenedor (PDF)</h3>
+      <button style="border:none;background:none;cursor:pointer;font-size:20px;color:var(--color-text-secondary)" onclick="document.getElementById('modal-export-cnt-pdf').style.display='none'">×</button>
+    </div>
+    <div style="margin-bottom:10px;font-size:13px;text-align:left">Selecciona el contenedor que deseas exportar:</div>
+    <div id="export-pdf-cnts" style="max-height:300px;overflow-y:auto;border:1px solid var(--color-border-primary);border-radius:var(--border-radius-sm);padding:8px;display:flex;flex-direction:column;gap:6px;text-align:left">
+    </div>
+    <button class="btn" style="width:100%;margin-top:14px" onclick="executeExportarContenedorPDF()">Generar PDF</button>
   </div>
 </div>
 
@@ -7524,19 +7538,38 @@ function exportarReservasContenedorPDF() {
     if(typeof showToast === 'function') showToast('No hay reservas para exportar');
     return;
   }
-
-  var optMsg = 'Selecciona el contenedor a exportar (o deja vacío para exportar todos):\n\n';
-  optMsg += '0 → Todos los contenedores\n';
-  lotes.forEach(function(l, i){
-    optMsg += (i+1) + ' → ' + l + '\n';
+  
+  // Guardamos temporalmente dataByLote para cuando se ejecute el modal
+  window._tempExportDataByLote = dataByLote;
+  
+  var html = '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-size:14px;cursor:pointer;text-align:left;line-height:1.2;word-break:break-word"><input type="radio" name="export_cnt_rad" value="todos" checked> <b>Todos los contenedores</b></label>';
+  lotes.forEach(function(l) {
+    html += '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-size:14px;cursor:pointer;text-align:left;line-height:1.2;word-break:break-word"><input type="radio" name="export_cnt_rad" value="' + l + '"> ' + l + '</label>';
   });
   
-  var pick = prompt(optMsg, '0');
-  if (pick === null) return;
-  var pickIdx = parseInt(pick);
-  if (pickIdx > 0 && pickIdx <= lotes.length) {
-    var selLote = lotes[pickIdx - 1];
-    lotes = [selLote];
+  document.getElementById('export-pdf-cnts').innerHTML = html;
+  document.getElementById('modal-export-cnt-pdf').style.display = 'flex';
+}
+
+function executeExportarContenedorPDF() {
+  document.getElementById('modal-export-cnt-pdf').style.display = 'none';
+  
+  var selectedRadio = document.querySelector('input[name="export_cnt_rad"]:checked');
+  if(!selectedRadio) return;
+  var selection = selectedRadio.value;
+  var dataByLote = window._tempExportDataByLote;
+  if(!dataByLote) return;
+  
+  var lotes = Object.keys(dataByLote).sort(function(a,b){return a.localeCompare(b, undefined, {numeric: true});});
+  if (selection !== 'todos') {
+    lotes = [selection];
+  }
+  
+  var totalFound = 0;
+  lotes.forEach(function(l){ totalFound += dataByLote[l].length; });
+  if (totalFound === 0) {
+    if(typeof showToast === 'function') showToast('No hay reservas para exportar');
+    return;
   }
   
   var d = new Date();
@@ -7775,7 +7808,7 @@ function renderFicha(){
 function openExportarReservasModal() {
   var html = '';
   CLIENTES.forEach(function(c) {
-    html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" class="export-cli-cb" value="' + c.id + '" checked> ' + c.nombre + '</label>';
+    html += '<label style="display:flex;align-items:center;justify-content:flex-start;gap:8px;font-size:14px;cursor:pointer;text-align:left;line-height:1.2;word-break:break-word"><input type="checkbox" class="export-cli-cb" value="' + c.id + '" checked> ' + c.nombre + '</label>';
   });
   document.getElementById('export-pdf-clients').innerHTML = html;
   document.getElementById('modal-export-pdf').style.display = 'flex';
