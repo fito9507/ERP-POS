@@ -12098,8 +12098,17 @@ function _renderCntCard(c) {
   if (rent && rent.productos.length > 0) {
     var ganColor = rent.ganancia >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
     
-    h += '<div style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--color-background-primary)">'
-      + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px">📊 Rentabilidad del Contenedor</div>';
+    h += '<details style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--color-background-primary)">'
+      + '<summary style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;outline:none;user-select:none">'
+      + '<div style="flex:1">📊 Rentabilidad</div>'
+      + '<div style="font-size:10px;font-weight:600;display:flex;gap:12px;align-items:center;color:var(--color-text-secondary);text-align:right">'
+      + '<span style="color:var(--color-text-tertiary)">📦 '+rent.productos.length+' prods</span>'
+      + '<span>Vendido: '+fN(rent.pctVendido,0)+'%</span>'
+      + '<span>Venta: $'+fN(rent.ingresoTotal,0)+'</span>'
+      + '<span style="color:'+ganColor+'">Gana: $'+fN(rent.ganancia,0)+'</span>'
+      + '</div>'
+      + '</summary>'
+      + '<div style="margin-top:16px">';
     
     // KPI cards row
     h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-bottom:12px">'
@@ -12157,7 +12166,7 @@ function _renderCntCard(c) {
       h += '</div></details>';
     }
     
-    h += '</div>';
+    h += '</div></details>';
   }
   
   // Footer actions
