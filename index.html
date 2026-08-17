@@ -14774,6 +14774,7 @@ function renderAdminAnalytics() {
     var productCost = 0;
     var revenue = 0;
     var unitsSold = 0;
+    var prodsDetail = [];
 
     linkedProds.forEach(function(p) {
       var lotEntries = p.lotes.filter(function(l) { return l.lote === loteKey; });
@@ -14798,7 +14799,6 @@ function renderAdminAnalytics() {
         var qSold = Math.max(0, qOriginal - qCurrent);
         
         totalUnits += qOriginal;
-        productCost += qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
         unitsSold += qSold;
         
         // Calculate proportional revenue for these specific sold units
@@ -14808,7 +14808,20 @@ function renderAdminAnalytics() {
         } else {
            avgPrice = parseFloat(l.precio_venta) || parseFloat(p.min) || parseFloat(p.maj) || 0;
         }
-        revenue += qSold * avgPrice;
+        var pRev = qSold * avgPrice;
+        revenue += pRev;
+        
+        var pCost = qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
+        productCost += pCost;
+        
+        prodsDetail.push({
+          n: p.n,
+          qOriginal: qOriginal,
+          qSold: qSold,
+          qCurrent: qCurrent,
+          pCost: pCost,
+          pRev: pRev
+        });
       });
     });
 
@@ -14831,7 +14844,8 @@ function renderAdminAnalytics() {
       totalUnits: totalUnits,
       unitsSold: unitsSold,
       soldPct: soldPct,
-      linkedProds: linkedProds.length
+      linkedProds: linkedProds.length,
+      prodsDetail: prodsDetail
     };
   });
 
@@ -14965,7 +14979,8 @@ function renderAdminAnalytics() {
 
     activeCycles.forEach(function(cd) {
       var pctColor = cd.soldPct >= 80 ? '#859900' : cd.soldPct >= 50 ? '#b58900' : cd.soldPct >= 20 ? '#268bd2' : 'var(--color-text-tertiary)';
-      h += '<div class="ana-cycle">';
+      h += '<details class="ana-cycle" style="cursor:pointer;outline:none">';
+      h += '<summary style="list-style:none;outline:none">';
       h += '<div class="ana-cycle-head">';
       h += '<div class="ana-cycle-name">📦 ' + _escHtml(cd.ref) + ' <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:400">(' + _anaEstadoBadge(cd.estado) + ')</span></div>';
       h += '<div class="ana-cycle-pct" style="color:' + pctColor + '">' + fN(cd.soldPct, 0) + '% vendido</div>';
@@ -14980,7 +14995,33 @@ function renderAdminAnalytics() {
       var mClass = cd.margin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
       h += '<div class="ana-cycle-stat" style="' + mClass + '">Margen: <b>$' + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
       h += '</div>';
-      h += '</div>'; // .ana-cycle
+      h += '</summary>';
+      
+      if (cd.prodsDetail && cd.prodsDetail.length > 0) {
+        h += '<div style="margin-top:12px;padding:8px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
+        h += '<table style="width:100%;font-size:10px;border-collapse:collapse">';
+        h += '<thead><tr style="border-bottom:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary)">'
+          + '<th style="text-align:left;padding:4px">Producto</th>'
+          + '<th style="text-align:right;padding:4px">Inicial</th>'
+          + '<th style="text-align:right;padding:4px">Vendido</th>'
+          + '<th style="text-align:right;padding:4px">Quedan</th>'
+          + '<th style="text-align:right;padding:4px">Ingreso</th>'
+          + '</tr></thead><tbody>';
+          
+        cd.prodsDetail.sort(function(a,b){return b.qSold - a.qSold;}).forEach(function(pd) {
+          var pct = pd.qOriginal > 0 ? Math.round((pd.qSold/pd.qOriginal)*100) : 0;
+          h += '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">'
+            + '<td style="padding:4px;font-weight:500">'+pd.n+'</td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qOriginal,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pd.qSold,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pct+'%)</span></td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pd.pRev,2)+'</td>'
+            + '</tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      
+      h += '</details>'; // .ana-cycle
     });
 
     h += '</div>'; // .ana-cycles
