@@ -8100,7 +8100,10 @@ function renderFichaFolios(c){
                   <div style="font-size:12px;font-weight:500;color:var(--color-text-success)">${fN(a.monto,dFor(a.mon))} ${a.mon}</div>
                   ${a.mon!=='USD'?`<div style="font-size:10px;color:var(--color-text-tertiary)">≈${fN(parseFloat(a.equivUSD.toFixed(2)))} USD</div>`:''}
                 </div>
-                ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:14px;padding:0 4px" onclick="elimA('${c.id}','${f.id}','${a.id}')">×</button>`:''}
+                <div style="display:flex;gap:4px;align-items:center">
+                  <button style="border:none;background:none;cursor:pointer;color:var(--color-text-info);font-size:15px;padding:0 4px;line-height:1" title="Transferir abono a otro folio" onclick="transferirA('${c.id}','${f.id}','${a.id}')">⇄</button>
+                  ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;color:var(--color-text-tertiary);font-size:16px;padding:0 4px;line-height:1" title="Eliminar abono" onclick="elimA('${c.id}','${f.id}','${a.id}')">×</button>`:''}
+                </div>
               </div>`).join('')
             :'<div style="color:var(--color-text-tertiary);font-size:12px;padding:6px 0">Sin abonos</div>'}
           </div>
@@ -8351,6 +8354,49 @@ function cruzarSaldoFolio(cid, fid) {
   showToast('Se traspasaron '+fN(traspasado)+' USD con éxito.');
 }
 function toggleBody(id){document.getElementById(id)?.classList.toggle('open');}
+async function transferirA(cid, fid, aid) {
+  const c=CLIENTES.find(x=>x.id===cid);
+  const fOrig=c?.folios.find(x=>x.id===fid);
+  if(!fOrig)return;
+  const abono=fOrig.abonos.find(a=>a.id===aid);
+  if(!abono)return;
+
+  var otrosFolios = c.folios.filter(x=>x.id!==fid);
+  if(!otrosFolios.length) {
+    showToast('El cliente no tiene otros folios a donde transferir');
+    return;
+  }
+  var opts = '';
+  otrosFolios.forEach((x,i)=>{
+    var pdt = typeof pdtF === 'function' ? pdtF(x) : 0;
+    opts += (i+1) + ' → Folio ' + x.id + (x.desc ? ' (' + x.desc + ')' : '') + (pdt > 0 ? ' [Pdte: ' + fN(pdt, 2) + ']' : ' [Pagado]') + '\n';
+  });
+  var pick = prompt('Transferir abono de ' + fN(abono.monto,dFor(abono.mon)) + ' ' + abono.mon + '\nSelecciona el folio destino:\n\n' + opts, '1');
+  if(!pick) return;
+  var n = parseInt(pick);
+  if(n>0 && n<=otrosFolios.length) {
+    var fDest = otrosFolios[n-1];
+    
+    // Move locally
+    fOrig.abonos = fOrig.abonos.filter(a=>a.id!==aid);
+    
+    abono.folio_id = fDest.id; 
+    abono.notas = (abono.notas||'') + ' (Transferido desde folio ' + fid + ')';
+    if(!fDest.abonos) fDest.abonos = [];
+    fDest.abonos.push(abono);
+    
+    offlineSaveClientes();
+    
+    // Update in Supabase
+    if(_supaOnline&&typeof supaReq!=='undefined') {
+      supaReq('PATCH','abonos?id=eq.'+encodeURIComponent(aid), { folio_id: fDest.id, notas: abono.notas }).catch(function(e){console.warn('patch abono:',e);});
+    }
+    
+    renderFichaFolios(c);
+    showToast('Abono transferido al Folio ' + fDest.id);
+  }
+}
+
 async function elimA(cid,fid,aid){
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol!=='admin'){
     showToast('⚠ Solo el admin puede eliminar abonos');return;
