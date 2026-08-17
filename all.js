@@ -752,7 +752,7 @@ async function syncLoadProductos() {
         stk_alm: stk_alm,
         lotes: cleanLotes.map(function(s){
           return {producto_id:s.producto_id, almacen:s.almacen, lote:s.lote||'SIN LOTE',
-            cantidad:s.cantidad||0, costo:parseFloat(s.costo)||0,
+            cantidad:s.cantidad||0, cantidad_inicial:parseFloat(s.cantidad_inicial)||0, costo:parseFloat(s.costo)||0,
             precio_venta:parseFloat(s.precio_venta)||0,
             fecha_entrada:s.fecha_entrada||null};
         }),
@@ -1611,7 +1611,7 @@ function saveStockMovs() {
 
 function _cntToRow(c) {
   return {
-    id: c.id, ref: c.ref, estado: c.estado||'preparando', proveedor: c.proveedor||'',
+    id: c.id, ref: c.ref, lote: c.lote||c.ref||'', estado: c.estado||'preparando', proveedor: c.proveedor||'',
     transitario: c.transitario||'', almacen_destino: c.almacen_destino||'', moneda: c.moneda||'USD',
     fecha_booking: c.fecha_booking||null, fecha_salida: c.fecha_salida||null,
     fecha_eta: c.fecha_eta||null, fecha_llegada: c.fecha_llegada||null, notas: c.notas||'',
@@ -11887,6 +11887,93 @@ function renderContenedores() {
   el.innerHTML=html;
 }
 
+function _calcCntRentabilidad(c) {
+  var loteRef = c.lote || c.ref || '';
+  if (!loteRef) return null;
+  
+  // 1. Products in this container (from stock_almacen lotes)
+  var productos = [];
+  var totalCostoMerc = 0;
+  var totalValorVenta = 0;
+  var totalUdsInicial = 0;
+  var totalUdsActual = 0;
+  
+  PRODS.forEach(function(p) {
+    var lotesDelCnt = (p.lotes || []).filter(function(l) { return l.lote === loteRef; });
+    if (!lotesDelCnt.length) return;
+    
+    var cantInicial = lotesDelCnt.reduce(function(a, l) { return a + (l.cantidad_inicial || l.cantidad || 0); }, 0);
+    var cantActual = lotesDelCnt.reduce(function(a, l) { return a + (l.cantidad || 0); }, 0);
+    var vendido = Math.max(0, cantInicial - cantActual);
+    var costoUnit = lotesDelCnt[0].costo || p.ddp || 0;
+    var precioUnit = lotesDelCnt[0].precio_venta || p.min || 0;
+    
+    productos.push({
+      nombre: p.n,
+      cantInicial: cantInicial,
+      cantActual: cantActual,
+      vendido: vendido,
+      costoUnit: costoUnit,
+      precioUnit: precioUnit,
+      costoTotal: costoUnit * cantInicial,
+      ingresoVendido: precioUnit * vendido,
+      valorRestante: precioUnit * cantActual
+    });
+    
+    totalCostoMerc += costoUnit * cantInicial;
+    totalValorVenta += precioUnit * vendido;
+    totalUdsInicial += cantInicial;
+    totalUdsActual += cantActual;
+  });
+  
+  // 2. Gastos del contenedor (already in c.gastos)
+  var totalGastos = 0;
+  (c.gastos || []).forEach(function(g) {
+    var montoG = parseFloat(g.monto || 0);
+    if (g.moneda && g.moneda !== 'USD') {
+      montoG = typeof toUSD === 'function' ? toUSD(montoG, g.moneda) : montoG / (RATES[g.moneda] || 1);
+    }
+    totalGastos += montoG;
+  });
+  
+  // 3. Folios/ventas associated to this container
+  var foliosVinculados = [];
+  var ingresosFolios = 0;
+  (typeof CLIENTES !== 'undefined' ? CLIENTES : []).forEach(function(cli) {
+    (cli.folios || []).forEach(function(f) {
+      if (f.contenedor === loteRef) {
+        var totalFolio = (f.lineas || []).reduce(function(a, l) {
+          return a + (typeof toUSD === 'function' ? toUSD((l.q || 0) * (l.precio || 0), l.mon || 'USD') : (l.q || 0) * (l.precio || 0));
+        }, 0);
+        foliosVinculados.push({ clienteNombre: cli.n || cli.nombre || cli.id, folioId: f.id, total: totalFolio });
+        ingresosFolios += totalFolio;
+      }
+    });
+  });
+  
+  // 4. Calculate
+  var costoTotal = totalCostoMerc + totalGastos;
+  var ingresoTotal = Math.max(totalValorVenta, ingresosFolios); // Use the higher value
+  var ganancia = ingresoTotal - costoTotal;
+  var margenPct = costoTotal > 0 ? ((ganancia / costoTotal) * 100) : 0;
+  var pctVendido = totalUdsInicial > 0 ? ((totalUdsInicial - totalUdsActual) / totalUdsInicial * 100) : 0;
+  
+  return {
+    productos: productos,
+    totalCostoMerc: totalCostoMerc,
+    totalGastos: totalGastos,
+    costoTotal: costoTotal,
+    ingresoTotal: ingresoTotal,
+    ganancia: ganancia,
+    margenPct: margenPct,
+    totalUdsInicial: totalUdsInicial,
+    totalUdsActual: totalUdsActual,
+    pctVendido: pctVendido,
+    foliosVinculados: foliosVinculados,
+    ingresosFolios: ingresosFolios
+  };
+}
+
 function _renderCntCard(c) {
   var estados = ['preparando', 'reservado', 'en_puerto', 'en_transito', 'en_aduana', 'recibido', 'cerrado'];
   var estadoLabels = {preparando:'Preparando',reservado:'Reservado',en_puerto:'En Puerto',en_transito:'En Tránsito',en_aduana:'En Aduana',recibido:'Recibido',cerrado:'Cerrado'};
@@ -12005,6 +12092,73 @@ function _renderCntCard(c) {
     h += '<div style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:0 12px;margin-bottom:12px;background:var(--color-background-primary)">' + htmlGastos + '</div>';
   } else {
     h += '<div style="font-size:11px;color:var(--color-text-tertiary);text-align:center;padding:12px 0">No hay gastos registrados para este contenedor.</div>';
+  }
+  
+  // ── RENTABILIDAD / ANALYTICS ──────────────────────────────────
+  var rent = _calcCntRentabilidad(c);
+  if (rent && rent.productos.length > 0) {
+    var ganColor = rent.ganancia >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+    
+    h += '<div style="border:1px solid var(--color-border-tertiary);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--color-background-primary)">'
+      + '<div style="font-size:12px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px">📊 Rentabilidad del Contenedor</div>';
+    
+    // KPI cards row
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin-bottom:12px">'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">Costo Merc.</div><div style="font-size:13px;font-weight:700">$'+fN(rent.totalCostoMerc,2)+'</div></div>'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">Gastos</div><div style="font-size:13px;font-weight:700">$'+fN(rent.totalGastos,2)+'</div></div>'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">Ingresos</div><div style="font-size:13px;font-weight:700;color:var(--color-text-info)">$'+fN(rent.ingresoTotal,2)+'</div></div>'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">Ganancia</div><div style="font-size:13px;font-weight:700;color:'+ganColor+'">$'+fN(rent.ganancia,2)+'</div></div>'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">Margen</div><div style="font-size:13px;font-weight:700;color:'+ganColor+'">'+fN(rent.margenPct,1)+'%</div></div>'
+      + '<div style="background:var(--color-background-secondary);border-radius:6px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase">% Vendido</div><div style="font-size:13px;font-weight:700">'+fN(rent.pctVendido,1)+'%</div></div>'
+      + '</div>';
+    
+    // Progress bar of sold %
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);min-width:50px">Vendido</div>'
+      + '<div style="flex:1;background:var(--color-background-secondary);border-radius:4px;height:8px">'
+      + '<div style="background:var(--color-primary);height:8px;border-radius:4px;width:'+Math.min(100,rent.pctVendido)+'%;transition:width .4s"></div></div>'
+      + '<div style="font-size:10px;font-weight:600;min-width:80px;text-align:right">'+(rent.totalUdsInicial-rent.totalUdsActual)+' / '+rent.totalUdsInicial+' uds</div>'
+      + '</div>';
+    
+    // Products table (collapsible)
+    h += '<details style="margin-bottom:8px"><summary style="font-size:11px;font-weight:600;cursor:pointer;color:var(--color-text-secondary);padding:4px 0">📦 Productos del contenedor ('+rent.productos.length+')</summary>'
+      + '<table style="width:100%;font-size:10px;border-collapse:collapse;margin-top:6px"><thead><tr style="border-bottom:1px solid var(--color-border-tertiary)">'
+      + '<th style="text-align:left;padding:4px;color:var(--color-text-tertiary)">Producto</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">Inicial</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">Vendido</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">Quedan</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">Costo</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">PV</th>'
+      + '<th style="text-align:right;padding:4px;color:var(--color-text-tertiary)">Ingreso</th>'
+      + '</tr></thead><tbody>';
+    rent.productos.sort(function(a,b){return b.vendido - a.vendido;}).forEach(function(pr){
+      var pctP = pr.cantInicial > 0 ? Math.round((pr.vendido/pr.cantInicial)*100) : 0;
+      h += '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">'
+        + '<td style="padding:4px;font-weight:500">'+pr.nombre+'</td>'
+        + '<td style="text-align:right;padding:4px">'+fN(pr.cantInicial,0)+'</td>'
+        + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pr.vendido,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pctP+'%)</span></td>'
+        + '<td style="text-align:right;padding:4px;color:'+(pr.cantActual===0?'var(--color-text-tertiary)':'var(--color-text-primary)')+'">'+fN(pr.cantActual,0)+'</td>'
+        + '<td style="text-align:right;padding:4px;color:var(--color-text-tertiary)">$'+fN(pr.costoUnit,2)+'</td>'
+        + '<td style="text-align:right;padding:4px">$'+fN(pr.precioUnit,2)+'</td>'
+        + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pr.ingresoVendido,2)+'</td>'
+        + '</tr>';
+    });
+    h += '</tbody></table></details>';
+    
+    // Folios vinculados (if any)
+    if (rent.foliosVinculados.length > 0) {
+      h += '<details style="margin-bottom:4px"><summary style="font-size:11px;font-weight:600;cursor:pointer;color:var(--color-text-secondary);padding:4px 0">📋 Folios vinculados ('+rent.foliosVinculados.length+') — $'+fN(rent.ingresosFolios,2)+' USD</summary>'
+        + '<div style="margin-top:6px">';
+      rent.foliosVinculados.forEach(function(fv){
+        h += '<div style="font-size:10px;padding:3px 0;display:flex;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,.04)">'
+          + '<span>└ '+fv.clienteNombre+' — Folio '+fv.folioId+'</span>'
+          + '<span style="font-weight:600">$'+fN(fv.total,2)+'</span>'
+          + '</div>';
+      });
+      h += '</div></details>';
+    }
+    
+    h += '</div>';
   }
   
   // Footer actions
