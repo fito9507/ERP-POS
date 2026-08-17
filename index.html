@@ -13876,8 +13876,9 @@ function _renderCntCard(c) {
   }
   
   // Footer actions
-  h += '<div style="display:flex;gap:8px;border-top:1px solid var(--color-border-tertiary);padding-top:12px">'
+  h += '<div style="display:flex;gap:8px;border-top:1px solid var(--color-border-tertiary);padding-top:12px;flex-wrap:wrap">'
     + '<button onclick="agregarGastoCnt(\''+c.id+'\')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;font-weight:600">+ Añadir gasto</button>'
+    + '<button onclick="precargarGastosFijosCnt(\''+c.id+'\')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--color-border-tertiary);background:var(--color-background-primary);color:var(--color-text-secondary);cursor:pointer;font-weight:600">⚡ Pre-cargar Gastos Fijos</button>'
     + '<div style="flex:1"></div>'
     + '<button onclick="showEditContenedor(\''+c.id+'\')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--color-border-tertiary);background:transparent;color:var(--color-text-tertiary);cursor:pointer">✏️ Editar</button>'
     + '<button onclick="eliminarContenedor(\''+c.id+'\')" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid rgba(220,50,47,.2);background:transparent;color:var(--color-text-danger);cursor:pointer">🗑</button>'
@@ -14417,6 +14418,53 @@ function eliminarContenedor(id) {
   CONTENEDORES = CONTENEDORES.filter(function(x){return x.id!==id;});
   saveContenedor(null, id);
   showToast('Contenedor eliminado');
+}
+
+function precargarGastosFijosCnt(cId) {
+  var c = CONTENEDORES.find(function(x){return x.id===cId;});
+  if(!c) return;
+  if(c.gastos && c.gastos.length > 0) {
+    if(!confirm('Este contenedor ya tiene gastos registrados. ¿Estás seguro de que quieres añadir la lista de gastos fijos estándar a la lista actual?')) return;
+  }
+  if(!c.gastos) c.gastos = [];
+  
+  var lista = [
+    'Flete marítimo',
+    'Seguro',
+    'Margen Importadora',
+    'Aranceles',
+    'Comisión importación',
+    'Transporte',
+    'Estibadores',
+    'Comisiones de venta',
+    'Gastos de repatriación 6%',
+    'Gastos Bancarios 1%'
+  ];
+  
+  var added = 0;
+  lista.forEach(function(concepto) {
+    var exists = c.gastos.some(function(g) { return g.concepto === concepto; });
+    if (!exists) {
+      c.gastos.push({
+        id: 'cg-' + Date.now() + '-' + Math.floor(Math.random()*1000),
+        concepto: concepto,
+        acreedor: '',
+        monto: 0,
+        moneda: 'USD',
+        vencimiento: '',
+        pagos: []
+      });
+      added++;
+    }
+  });
+  
+  if (added > 0) {
+    saveContenedor(c);
+    if(typeof showToast==='function') showToast(added + ' gastos fijos pre-cargados');
+    if(typeof renderFichaLotes==='function') renderFichaLotes();
+  } else {
+    if(typeof showToast==='function') showToast('Todos esos gastos fijos ya existen en la lista');
+  }
 }
 
 // ── MODAL: GASTO ───────────────────────────────────────────────
