@@ -8395,7 +8395,7 @@ async function transferirA(cid, fid, aid) {
     fOrig.abonos = fOrig.abonos.filter(a=>a.id!==aid);
     
     abono.folio_id = fDest.id; 
-    abono.notas = (abono.notas||'') + ' (Transferido desde folio ' + fid + ')';
+    abono.desc = (abono.desc||'') + ' (Transferido desde folio ' + fid + ')';
     if(!fDest.abonos) fDest.abonos = [];
     fDest.abonos.push(abono);
     
@@ -8403,7 +8403,7 @@ async function transferirA(cid, fid, aid) {
     
     // Update in Supabase
     if(_supaOnline&&typeof supaReq!=='undefined') {
-      supaReq('PATCH','abonos?id=eq.'+encodeURIComponent(aid), { folio_id: fDest.id, notas: abono.notas }).catch(function(e){console.warn('patch abono:',e);});
+      supaReq('PATCH','abonos?id=eq.'+encodeURIComponent(aid), { folio_id: fDest.id, descripcion: abono.desc }).catch(function(e){console.warn('patch abono:',e);});
     }
     
     renderFichaFolios(c);
