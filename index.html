@@ -7625,13 +7625,28 @@ function executeExportarContenedorPDF() {
       // Add product lines
       var hasLineas = f.lineas && f.lineas.length > 0;
       if (hasLineas) {
-        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px 12px 16px">';
+        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px '+(f.abonos&&f.abonos.length?'4px':'12px')+' 16px">';
         html += '<div style="font-weight:bold;margin-bottom:2px">Productos:</div>';
         html += '<ul style="margin:0 0 4px 0;padding-left:20px">';
         f.lineas.forEach(function(l) {
           var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
           var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
           html += '<li>' + l.q + 'x ' + pname + ' ($' + (typeof fN === 'function' ? fN(pprice) : pprice) + ')</li>';
+        });
+        html += '</ul>';
+        html += '</td></tr>';
+      }
+      
+      // Add abonos
+      var hasAbonos = f.abonos && f.abonos.length > 0;
+      if (hasAbonos) {
+        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px 12px 16px;background:#f0fdf4">';
+        html += '<div style="font-weight:bold;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
+        html += '<ul style="margin:0 0 4px 0;padding-left:20px;color:#16a34a">';
+        f.abonos.forEach(function(a) {
+          var eq = a.mon!=='USD' ? ' (≈ $'+(typeof fN === 'function' ? fN(a.equivUSD) : a.equivUSD)+')' : '';
+          var date = typeof fD === 'function' ? fD(a.fecha) : a.fecha;
+          html += '<li>' + (date||'') + ' - ' + (a.desc||a.concepto||'') + ': <b>' + (typeof fN === 'function' ? fN(a.monto) : a.monto) + ' ' + (a.mon||'USD') + eq + '</b></li>';
         });
         html += '</ul>';
         html += '</td></tr>';
