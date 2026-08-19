@@ -379,6 +379,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #mod-ig .tag-com {background:var(--color-background-info);color:var(--color-text-info)}
 #mod-ig /* mov row */
 .mov-row {display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
+.mov-day {position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 10px;margin:10px 0 2px;background:var(--color-background-secondary);border-radius:8px;font-size:11px;font-weight:600;color:var(--color-text-secondary);text-transform:capitalize}
+.mov-day .mov-day-net {font-weight:600;font-variant-numeric:tabular-nums}
 #mod-ig .mov-row:last-child {border-bottom:none}
 #mod-ig .mov-icon {width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 #mod-ig .mov-main {flex:1;min-width:0}
@@ -5900,17 +5902,46 @@ function renderLibro(){
     </tr>`;
   }).join('')||'<tr><td colspan="5" style="color:var(--color-text-tertiary);text-align:center;padding:10px">Sin movimientos</td></tr>';
 
-  // movimientos
+  // movimientos — agrupados por día
   document.getElementById('l-count').textContent=data.length+' registros';
   const meta=TIPO_META;
+  // neto por día (ingresos − gastos en USD equiv.)
+  const _dayNet={};
+  data.forEach(function(m){
+    var d=m.fecha; if(!_dayNet[d])_dayNet[d]={ing:0,gas:0,n:0};
+    var _g=m.sentido==='gasto'||(m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0);
+    if(_g)_dayNet[d].gas+=m.equivUSD||0; else _dayNet[d].ing+=m.equivUSD||0;
+    _dayNet[d].n++;
+  });
+  function _labelDia(f){
+    try{
+      var hoy=(typeof today==='function'?today():new Date().toISOString().slice(0,10));
+      var ayer=new Date(Date.now()-864e5).toISOString().slice(0,10);
+      if(f===hoy) return 'Hoy';
+      if(f===ayer) return 'Ayer';
+      var dt=new Date(f+'T00:00:00');
+      if(isNaN(dt.getTime())) return f;
+      return dt.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'short'});
+    }catch(e){return f;}
+  }
+  var _curDay='';
   document.getElementById('l-movs').innerHTML=data.length?data.map(m=>{
+    var _hdr='';
+    if(m.fecha!==_curDay){
+      _curDay=m.fecha;
+      var _dn=_dayNet[m.fecha]||{ing:0,gas:0,n:0};
+      var _net=_dn.ing-_dn.gas;
+      _hdr='<div class="mov-day"><span>'+_labelDia(m.fecha)+'</span>'
+         +'<span class="mov-day-net" style="color:'+(_net>=0?'var(--color-text-success)':'var(--color-text-danger)')+'">'
+         +(_net>=0?'+':'')+fN(_net)+' USD · '+_dn.n+' mov</span></div>';
+    }
     const tm=meta[m.tipo]||{icon:'•',cls:'bb'};
     var isGasto=m.sentido==='gasto';
     var isTransferSalida=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0;
     var isTransferEntrada=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(entrada)')>=0;
     if(isTransferSalida) isGasto=true;
     var timeStr = m.ts && !isNaN(new Date(m.ts).getTime()) ? new Date(m.ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '';
-    return `<div class="mov-row">
+    return _hdr+`<div class="mov-row">
       <div class="mov-icon" style="background:var(--color-background-secondary)">${tm.icon}</div>
       <div class="mov-main">
         <div class="mov-desc">
