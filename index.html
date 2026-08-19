@@ -402,6 +402,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #ia-assistant .ia-btn-send {background:var(--color-text-primary);color:var(--color-background-primary)}
 #ia-assistant .ia-btn-attach {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
 #ia-assistant .ia-btn-attach:hover {background:var(--color-background-primary)}
+#ia-assistant .ia-btn-mic.recording {background:var(--color-background-danger);color:var(--color-text-danger);animation:ia-pulse 1.5s infinite}
+@keyframes ia-pulse { 0% {transform:scale(1)} 50% {transform:scale(1.1)} 100% {transform:scale(1)} }
 #ia-assistant .ia-attachments {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 #ia-assistant .ia-att-chip {display:inline-flex;align-items:center;gap:4px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:4px 10px;font-size:11px}
 #ia-assistant .ia-att-chip button {background:none;border:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);padding:0 2px}
@@ -15502,6 +15504,7 @@ function renderIAAssistant() {
     + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
     + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
     + '<div class="ia-input-bar">'
+    + '<button class="ia-btn-attach ia-btn-mic" id="ia-mic-btn" onclick="iaToggleMic()" title="Grabar audio con el micrófono">🎙️</button>'
     + '<button class="ia-btn-attach" onclick="document.getElementById(\'ia-file-input\').click()" title="Adjuntar archivo (imagen, PDF, CSV, audio)">📎</button>'
     + '<textarea id="ia-input" placeholder="Describe qué pasó con el dinero, pega un chat de WhatsApp, o sube un comprobante..." '
     + 'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();iaEnviar()}"></textarea>'
@@ -15603,6 +15606,58 @@ function iaOnFileSelect(event) {
 function iaRemoveAttach(idx) {
   _iaAttachments.splice(idx, 1);
   renderIAAssistant();
+}
+
+// ── MICROPHONE RECORDING ──────────────────────────────────────
+var _iaMediaRecorder = null;
+var _iaAudioChunks = [];
+
+async function iaToggleMic() {
+  var btn = document.getElementById('ia-mic-btn');
+  var input = document.getElementById('ia-input');
+  
+  if (_iaMediaRecorder && _iaMediaRecorder.state === 'recording') {
+    // Stop recording
+    _iaMediaRecorder.stop();
+    if (btn) btn.classList.remove('recording');
+    if (input) input.placeholder = "Describe qué pasó con el dinero...";
+    return;
+  }
+
+  // Start recording
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _iaMediaRecorder = new MediaRecorder(stream);
+    _iaAudioChunks = [];
+
+    _iaMediaRecorder.ondataavailable = function(e) {
+      if (e.data.size > 0) _iaAudioChunks.push(e.data);
+    };
+
+    _iaMediaRecorder.onstop = function() {
+      var blob = new Blob(_iaAudioChunks, { type: 'audio/webm' });
+      var file = new File([blob], 'Dictado_' + new Date().getTime() + '.webm', { type: 'audio/webm' });
+      
+      _iaAttachments.push({
+        name: file.name,
+        type: 'audio',
+        base64: '', // We don't strictly need base64 since we use rawFile for Whisper
+        mimeType: 'audio/webm',
+        rawFile: file
+      });
+      renderIAAssistant();
+      
+      // Stop all tracks to release mic icon in browser
+      stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+
+    _iaMediaRecorder.start();
+    if (btn) btn.classList.add('recording');
+    if (input) input.placeholder = "Grabando audio... (toca el 🎙️ de nuevo para detener)";
+  } catch (err) {
+    console.error('Error accessing microphone:', err);
+    alert('No se pudo acceder al micrófono. Verifica los permisos de tu navegador.');
+  }
 }
 
 // ── BUILD CONTEXT ─────────────────────────────────────────────
