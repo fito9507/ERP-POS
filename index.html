@@ -11225,8 +11225,19 @@ window.updCajasHistFiltro = function(val) {
   if(el) el.innerHTML = _getHistorialListHtml();
 };
 
+var _cajasHistCajaSel = '';
+
 function _renderHistorialMovCajas() {
-  var filtroHtml = '<div style="margin-bottom:12px"><input type="text" class="adm-inp" placeholder="🔍 Buscar por concepto, fecha, caja, moneda o usuario..." value="'+_cajasHistFiltro+'" oninput="updCajasHistFiltro(this.value)" style="width:100%;background:var(--color-background-primary)"></div>';
+  var selCaja = '<select class="adm-inp" style="width:100%;margin-bottom:8px" onchange="_cajasHistCajaSel=this.value;renderAdminCajas()">';
+  selCaja += '<option value="">Todas las cajas</option>';
+  _cajasData.forEach(function(c) {
+    selCaja += '<option value="'+c.nombre+'"'+(_cajasHistCajaSel===c.nombre?' selected':'')+'>'+c.nombre+' ('+c.moneda+')</option>';
+  });
+  selCaja += '</select>';
+
+  var filtroHtml = '<div style="margin-bottom:12px">'
+    + selCaja
+    + '<input type="text" class="adm-inp" placeholder="🔍 Buscar por concepto, fecha o usuario..." value="'+_cajasHistFiltro+'" oninput="updCajasHistFiltro(this.value)" style="width:100%;background:var(--color-background-primary)"></div>';
   return filtroHtml + '<div id="cajas-hist-list">' + _getHistorialListHtml() + '</div>';
 }
 
@@ -11234,19 +11245,79 @@ function _getHistorialListHtml() {
   var tipoIcon  = {transferencia:'🔄',cambio:'💱',deposito:'📥',retiro:'📤'};
   var tipoColor = {transferencia:'var(--color-text-info)',cambio:'var(--color-text-warning)',deposito:'var(--color-text-success)',retiro:'var(--color-text-danger)'};
   
-  var arr = _cajasMovs;
+  var arr = _cajasMovs.slice().reverse(); // start from oldest to calculate running balance
+  var runningBalance = 0;
+  var selCajaObj = null;
+
+  if (_cajasHistCajaSel) {
+    selCajaObj = _cajasData.find(function(c) { return c.nombre === _cajasHistCajaSel; });
+    if (selCajaObj) runningBalance = parseFloat(selCajaObj.saldo_inicial || 0);
+  }
+
+  var processedMovs = [];
+
+  arr.forEach(function(m) {
+    // Determine if it affects selected caja
+    var isOrigen = _cajasHistCajaSel && m.caja_origen === _cajasHistCajaSel;
+    var isDestino = _cajasHistCajaSel && m.caja_destino === _cajasHistCajaSel;
+    
+    var impactsSelected = (!_cajasHistCajaSel) || isOrigen || isDestino;
+    if (!impactsSelected) return;
+
+    var amt = 0;
+    var isPositive = false;
+
+    if (_cajasHistCajaSel) {
+      if (m.tipo === 'deposito' || (m.tipo === 'transferencia' && isDestino) || (m.tipo === 'cambio' && isDestino)) {
+        amt = parseFloat(m.monto_destino || 0);
+        runningBalance += amt;
+        isPositive = true;
+      } else if (m.tipo === 'retiro' || (m.tipo === 'transferencia' && isOrigen) || (m.tipo === 'cambio' && isOrigen)) {
+        amt = parseFloat(m.monto_origen || 0);
+        runningBalance -= amt;
+        isPositive = false;
+      }
+    }
+
+    processedMovs.push(Object.assign({}, m, {
+      _saldo: runningBalance,
+      _amt: amt,
+      _isPos: isPositive
+    }));
+  });
+
+  // Re-reverse back to newest first
+  processedMovs.reverse();
+
+  // Text filter
   if(_cajasHistFiltro.trim()){
     var q = _cajasHistFiltro.toLowerCase();
-    arr = arr.filter(function(m){
+    processedMovs = processedMovs.filter(function(m){
       var txt = (m.tipo+' '+(m.caja_origen||'')+' '+(m.caja_destino||'')+' '+(m.notas||'')+' '+(m.fecha||'')+' '+(m.usuario||'')).toLowerCase();
       return txt.indexOf(q)>=0;
     });
   }
 
-  if (!arr.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos que coincidan</div>';
+  if (!processedMovs.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos que coincidan</div>';
   
   return '<div style="display:flex;flex-direction:column;gap:8px">'
-    + arr.slice(0,100).map(function(m){
+    + processedMovs.slice(0,100).map(function(m){
+        var rightCol = '';
+        if (_cajasHistCajaSel) {
+          rightCol = '<div style="text-align:right">'
+            + '<div style="font-size:15px;font-weight:800;color:'+(m._isPos?'var(--color-text-success)':'var(--color-text-danger)')+'">'
+            + (m._isPos?'+':'-') + fN(m._amt,2) + '</div>'
+            + '<div style="font-size:11px;color:var(--color-text-secondary);font-weight:600">Saldo: '+fN(m._saldo,2)+'</div>'
+            + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+(m.fecha||'')+' · '+(m.usuario||'')+'</div>'
+            + '</div>';
+        } else {
+          rightCol = '<div style="text-align:right">'
+            + '<div style="font-size:15px;font-weight:700">'+fN(m.monto_origen,2)+(m.tipo==='cambio'?' → '+fN(m.monto_destino,2):'')+'</div>'
+            + (m.tasa_usada?'<div style="font-size:10px;color:var(--color-text-tertiary)">tasa: '+m.tasa_usada+'</div>':'')
+            + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+(m.fecha||'')+' · '+(m.usuario||'')+'</div>'
+            + '</div>';
+        }
+
         return '<div class="card" style="padding:10px 14px">'
           + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
           + '<div style="display:flex;align-items:center;gap:8px">'
@@ -11256,11 +11327,8 @@ function _getHistorialListHtml() {
           + '<div style="font-size:11px;color:var(--color-text-secondary)">'+(m.caja_origen||'—')+(m.caja_destino?' → '+m.caja_destino:'')+'</div>'
           + (m.notas?'<div style="font-size:11px;color:var(--color-text-tertiary)">'+m.notas+'</div>':'')
           + '</div></div>'
-          + '<div style="text-align:right">'
-          + '<div style="font-size:15px;font-weight:700">'+fN(m.monto_origen,2)+(m.tipo==='cambio'?' → '+fN(m.monto_destino,2):'')+'</div>'
-          + (m.tasa_usada?'<div style="font-size:10px;color:var(--color-text-tertiary)">tasa: '+m.tasa_usada+'</div>':'')
-          + '<div style="font-size:10px;color:var(--color-text-tertiary)">'+(m.fecha||'')+' · '+(m.usuario||'')+'</div>'
-          + '</div></div></div>';
+          + rightCol
+          + '</div></div>';
       }).join('')
     + '</div>';
 }
