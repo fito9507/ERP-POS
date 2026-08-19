@@ -25,6 +25,60 @@ function limpiarId(v: unknown): string {
   return String(v ?? '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').replace(/[^A-Za-z0-9_-]/g, '');
 }
 
+// ── Firma de peticiones (PSD2, sección "Cifrado de Peticiones") ──
+// Cada petición a la API lleva Date, Digest (SHA-256 del body, vacío en
+// GET), Request-Target, X-Request-ID y Signature (RSA-SHA256 sobre esas
+// cabeceras), más el certificado en TPP-Signature-Certificate.
+let _clavePriv: CryptoKey | null = null;
+async function clavePrivada(): Promise<CryptoKey | null> {
+  if (_clavePriv) return _clavePriv;
+  const pem = Deno.env.get('ABANCA_SIGN_KEY');
+  if (!pem) return null;
+  const b64 = pem.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const der = Uint8Array.from(atob(b64), (ch) => ch.charCodeAt(0));
+  _clavePriv = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  return _clavePriv;
+}
+
+function aB64(buf: ArrayBuffer): string {
+  let s = '';
+  const b = new Uint8Array(buf);
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s);
+}
+
+async function cabescerasFirma(metodo: string, urlStr: string, body: string): Promise<Record<string, string>> {
+  const clave = await clavePrivada();
+  if (!clave) return {};
+  const u = new URL(urlStr);
+  const target = `${metodo.toLowerCase()} ${u.pathname}${u.search}`;
+  const fecha = new Date().toUTCString();
+  const reqId = crypto.randomUUID();
+  const digest = 'SHA-256=' + aB64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body || '')));
+  const cadena = `request-target: ${target}
+date: ${fecha}
+digest: ${digest}
+x-request-id: ${reqId}`;
+  const sig = aB64(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', clave, new TextEncoder().encode(cadena)));
+  const serial = (Deno.env.get('ABANCA_SIGN_SERIAL') || '').toLowerCase();
+  const cert = (Deno.env.get('ABANCA_SIGN_CERT') || '').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const h: Record<string, string> = {
+    'Date': fecha,
+    'Digest': digest,
+    'Request-Target': target,
+    'X-Request-ID': reqId,
+    'Signature': `keyId="SN=${serial}",algorithm="rsa-sha256",headers="request-target date digest x-request-id",signature="${sig}"`,
+  };
+  if (cert) h['TPP-Signature-Certificate'] = cert;
+  return h;
+}
+
+// fetch firmado para la API PSD2
+async function fetchFirmado(urlStr: string, auth: Record<string, string>) {
+  const extra = await cabescerasFirma('GET', urlStr, '');
+  return fetch(urlStr, { headers: { ...auth, ...extra } });
+}
+
 // El importe puede venir como número firmado, string, u objeto {amount}.
 // Si hay indicador de sentido se respeta; si no, PSD2 firma el número.
 function importeFirmado(t: any): { importe: number; conocido: boolean } {
@@ -92,6 +146,8 @@ serve(async (req) => {
     const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const transactions: any[] = [];
     const balances: any[] = [];
+    const avisos: string[] = [];
+    const warn = (...a: unknown[]) => { const m = a.map(String).join(' '); console.warn(m); avisos.push(m.slice(0, 300)); };
     const ibansVistos = new Set<string>();
 
     for (const contrato of contratos) {
@@ -102,9 +158,9 @@ serve(async (req) => {
       if (contrato) auth['x-clienteContratoId'] = contrato;
 
       // 2. Cuentas (a la vista y de crédito)
-      const accRes = await fetch(`${apiBase}/me/accounts`, { headers: auth });
+      const accRes = await fetchFirmado(`${apiBase}/me/accounts`, auth);
       if (!accRes.ok) {
-        console.warn('accounts', contrato, accRes.status, await accRes.text());
+        warn('accounts', contrato, accRes.status, await accRes.text());
         continue;
       }
       const accData = await accRes.json();
@@ -122,7 +178,7 @@ serve(async (req) => {
 
         // 2a. Saldo real
         try {
-          const balRes = await fetch(`${apiBase}/me/accounts/${encodeURIComponent(accountId)}/balance`, { headers: auth });
+          const balRes = await fetchFirmado(`${apiBase}/me/accounts/${encodeURIComponent(accountId)}/balance`, auth);
           if (balRes.ok) {
             const bal = await balRes.json();
             let bv: unknown = bal?.amount ?? bal?.balance ?? bal?.balanceAmount?.amount ?? bal?.saldo;
@@ -132,15 +188,15 @@ serve(async (req) => {
               balances.push({ iban, alias, currency: bal?.currency ?? (monedaCta || 'EUR'), amount: bn, contrato });
             }
           } else {
-            console.warn('balance', iban, balRes.status, await balRes.text());
+            warn('balance', iban, balRes.status, await balRes.text());
           }
-        } catch (e) { console.warn('balance', iban, e); }
+        } catch (e) { warn('balance', iban, e); }
 
         // 2b. Movimientos (concept es obligatorio; vacío = todos)
         try {
           const txUrl = `${apiBase}/me/accounts/${encodeURIComponent(accountId)}/transactions?concept=&dateFrom=${desde}`;
-          const txRes = await fetch(txUrl, { headers: auth });
-          if (!txRes.ok) { console.warn('transactions', iban, txRes.status, await txRes.text()); continue; }
+          const txRes = await fetchFirmado(txUrl, auth);
+          if (!txRes.ok) { warn('transactions', iban, txRes.status, await txRes.text()); continue; }
           const txData = await txRes.json();
           const movs: any[] = Array.isArray(txData) ? txData
             : txData?.transactions ?? txData?.transactionList ?? txData?.data ?? [];
@@ -164,11 +220,11 @@ serve(async (req) => {
               cuenta_alias: alias,
             });
           }
-        } catch (e) { console.warn('transactions', iban, e); }
+        } catch (e) { warn('transactions', iban, e); }
       }
     }
 
-    return new Response(JSON.stringify({ transactions, balances }), {
+    return new Response(JSON.stringify({ transactions, balances, avisos, contratos }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
