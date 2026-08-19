@@ -1621,6 +1621,10 @@ function fromUSD(u,mon,alm){
   }
   return u*(RATES[mon]||1);
 }
+function _getStk(p, alm) {
+  if (alm && p.stk_alm && Object.keys(p.stk_alm).length > 0) return p.stk_alm[alm] || 0;
+  return p.stk || 0;
+}
 function fN(n,d=2){if(n==null||isNaN(n))return'—';var v=parseFloat(n);var maxD=d;if(d>0&&d<4){var rounded=Math.round(v*10000)/10000;var str=rounded.toString();if(str.includes('.')){var decs=str.split('.')[1].length;if(decs>d&&decs<=4)maxD=decs;}}return v.toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:maxD});}
 function dFor(m){return m==='CUP'||m==='CUPT'?0:2;}
 
@@ -2543,7 +2547,7 @@ async function syncSaveProducto(p) {
           await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', {producto_id:p.supaId, almacen:alm, lote:l.lote, cantidad:l.cantidad});
         }
       } else {
-        var stk = (p.stk_alm&&p.stk_alm[alm]!=null) ? p.stk_alm[alm] : 0;
+        var stk = _getStk(p, alm);
         await syncStockAlmacen(p.supaId, alm, stk);
       }
     }
@@ -3084,8 +3088,9 @@ async function syncLoadClientes(){
             monto:parseFloat(a.monto||0),mon:a.moneda,equivUSD:parseFloat(a.equiv_usd||0),
             enCaja:a.en_caja,caja:a.caja,cajaTipo:a.caja_tipo};
         });
+        var tipo_res = (f.descripcion && (f.descripcion.toLowerCase().includes('preventa') || f.descripcion.toLowerCase().includes('prereserva'))) ? 'prereserva' : undefined;
         return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
-          desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||''};
+          desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||'',tipo_reserva:tipo_res};
       });
       CLIENTES.push({
         id:row.id, nombre:row.nombre, tel:row.telefono||'',
@@ -3521,7 +3526,7 @@ function stkDisp(p){
   // Subtract POS session reservations
   var allRes = typeof RESERVAS_GLOBAL !== 'undefined' ? RESERVAS_GLOBAL : S.reservas;
   const resSession = (allRes||[]).filter(r=>r.activa).reduce((a,r)=>{const l=(r.lineas||[]).find(l=>l.n===p.n);return a+(l?l.q:0);},0);
-  const base = S.alm && p.stk_alm && p.stk_alm[S.alm] != null ? p.stk_alm[S.alm] : (p.stk||0);
+  const base = _getStk(p, S.alm);
   return Math.max(0, base - resSession);
 }
 
@@ -3816,7 +3821,7 @@ function ventaCreditoPOS() {
         stockWarn = (stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+transQty+' libres en tránsito para '+alm+'. ¿Prereservar '+l.q+' igualmente?';
       }
     } else {
-      var fisico=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+      var fisico=_getStk(p, alm);
       var resFolios=0;
       if(typeof CLIENTES!=='undefined'){
         CLIENTES.forEach(function(cc){
@@ -7764,7 +7769,7 @@ function _getProdNames(alm){
     if(p.activo===false) return false;
     if(!alm) return true;
     // Include if has stock in this almacen
-    var stk = p.stk_alm&&p.stk_alm[alm]!=null ? p.stk_alm[alm] : (p.stk||0);
+    var stk = _getStk(p, alm);
     // Include if in transit for this almacen
     var inTransit = p.enTransito&&p.enTransito[alm];
     return stk > 0 || inTransit;
@@ -8241,7 +8246,7 @@ function renderPL(c,f){
   PRODS.forEach(function(p){
     if(p.activo===false) return;
     if(f.alm){
-       var stk = p.stk_alm&&p.stk_alm[f.alm]!=null ? p.stk_alm[f.alm] : (p.stk||0);
+       var stk = _getStk(p, f.alm);
        var inTransit = p.enTransito&&p.enTransito[f.alm];
        if (!(stk > 0 || inTransit)) return;
     }
@@ -9026,7 +9031,7 @@ function crearFolioCli(cid){
   lineas.forEach(function(l){
     var p=PRODS.find(function(x){return x.n===l.prod;});
     if(!p){stockError='Producto no encontrado: '+l.prod;return;}
-    var disponible=(p.stk_alm&&p.stk_alm[alm]!=null)?p.stk_alm[alm]:(p.stk||0);
+    var disponible=_getStk(p, alm);
     if(l.q>disponible) stockError='Stock insuficiente: '+l.prod+' (disponible: '+disponible+', pedido: '+l.q+')';
   });
   if(stockError){alert(stockError);return;}
@@ -12490,7 +12495,7 @@ async function syncTodosProductos() {
         if (pid) {
           p.supaId = pid;
           for (var alm of ['Habana','Placetas','Xportprise']) {
-            var qty = (p.stk_alm && p.stk_alm[alm] != null) ? p.stk_alm[alm] : 0;
+            var qty = _getStk(p, alm);
             await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
               { producto_id: pid, almacen: alm, lote: 'SIN LOTE', cantidad: qty });
           }
@@ -14290,7 +14295,7 @@ function renderStock(){
       +'<td style="font-size:12px">'+p.n+(bajo?' ⚠':'')+'</td>'
       +'<td style="font-size:11px;color:var(--color-text-tertiary)">'+(p.cat||'—')+'</td>';
     visAlms.forEach(function(a){
-      var v=(p.stk_alm&&p.stk_alm[a]!=null)?p.stk_alm[a]:0;
+      var v=_getStk(p, a);
       h+='<td style="text-align:right;font-weight:'+(a===userAlm?'700':'400')+';color:'+(v===0?'var(--color-text-tertiary)':v<=(p.stk_min||10)?'var(--color-text-warning)':'var(--color-text-primary)')+'">'+fN(v,0)+'</td>';
     });
     
@@ -14602,7 +14607,7 @@ function exportStockCSV() {
   var rows=[headers];
   prods.forEach(function(p){
     var row=['"'+p.n.replace(/"/g,'""')+'"','"'+(p.cat||'').replace(/"/g,'""')+'"'];
-    visAlms.forEach(function(a){row.push((p.stk_alm&&p.stk_alm[a]!=null)?p.stk_alm[a]:0);});
+    visAlms.forEach(function(a){row.push(_getStk(p, a));});
     row.push(p.stk||0);
     if(contF){var d=_getLoteDisp(p.n,contF);row.push(Math.max(0,d||0));}
     var prMin=p.min!=null?p.min:(p.escala&&p.escala.length?p.escala[0].precio:'');
