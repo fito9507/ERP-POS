@@ -72,3 +72,19 @@ WHERE m.notas ~ '(REV_ID|WISE_ID):'
     WHERE c.notas LIKE '%' || substring(m.notas from '(?:REV_ID|WISE_ID):[A-Za-z0-9_-]+') || '%'
   )
 ORDER BY m.fecha DESC;
+
+-- ───────────────────────────────────────────────────────────────
+-- 5. Limpieza de las filas de prueba (19-08-2026)
+--    El paso 4 sacó dos apuntes con id de Revolut inventado, creados a
+--    mano mientras se montaba la integración: 101 USD de "Gasto
+--    operativo" en la caja USD REVOLUT que nunca movieron ningún saldo,
+--    pero que sí suman en los informes de IG.
+--    Revisar que siguen siendo estos dos y borrarlos.
+-- ───────────────────────────────────────────────────────────────
+
+SELECT id, fecha, tipo, descripcion, monto, moneda, cuenta, notas
+FROM movimientos_ig
+WHERE notas IN ('REV_ID:test', 'REV_ID:test2');
+
+DELETE FROM movimientos_ig
+WHERE notas IN ('REV_ID:test', 'REV_ID:test2');

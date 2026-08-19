@@ -13029,8 +13029,6 @@ _loadRatesCache();
 
 // Auto-refresh: fetch on load + every 30 minutes
 // ── elToque API ──────────────────────────────────────────────
-// TOKEN actualizado 2026-05-20 — renovar en Edge Function update-tasas también
-var _TOQUE_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc3OTIwNzc2OSwianRpIjoiMmRiMDRkNzMtZDcwMi00NGU1LWE3M2ItN2EzMjIxMjU0YjU2IiwidHlwZSI6ImFjY2VzcyIsInN1YiI6IjY5ZmNjM2U4ZDA3NmQ2OGM0NmFmNzg4ZCIsIm5iZiI6MTc3OTIwNzc2OSwiZXhwIjoxODEwNzQzNzY5fQ.lhPhEgDuYXn0S37SvnIphr9qYx828kRwfncjQOQnlro';
 
 async function fetchElToqueAndSave(){
   showToast('🔄 Actualizando elToque...');

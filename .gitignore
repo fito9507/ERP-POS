@@ -17,3 +17,11 @@ node_modules/
 supabase/.temp/
 .vscode/
 all.js
+
+# ── Archivos de trabajo de sesiones de Claude en la raíz ──────
+/test_*.js
+/patch*.js
+/script.js
+/git_log*.txt
+/all_git.txt
+/all.js

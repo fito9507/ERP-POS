@@ -9,3 +9,23 @@ entrypoint = "./functions/wise-sync/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/wise-sync/*.html" ]
+
+# Las cuatro funciones con código en el repo. Hay dos más desplegadas
+# (update-tasas y tg-send) cuyo código vive solo en la nube — si se editan,
+# descargarlas antes: supabase functions download <nombre>
+
+[functions.revolut-sync]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/revolut-sync/index.ts"
+
+# cierre-diario y backup-diario los dispara un cron, no el navegador.
+# OJO al redesplegar: comprobar antes cómo se autentica el cron, porque
+# verify_jwt = true rechazaría llamadas sin JWT.
+[functions.cierre-diario]
+enabled = true
+entrypoint = "./functions/cierre-diario/index.ts"
+
+[functions.backup-diario]
+enabled = true
+entrypoint = "./functions/backup-diario/index.ts"
