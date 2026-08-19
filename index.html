@@ -8271,10 +8271,63 @@ function renderPL(c,f){
       </span>
     </div>`).join('');
 }
-function updLQ(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
+function updLQ(cid,fid,i,v){
+  const c=CLIENTES.find(x=>x.id===cid);
+  const f=c?.folios.find(x=>x.id===fid);
+  if(!f)return;
+  const newQ=parseFloat(v)||0;
+  const oldQ=f.lineas[i].q;
+  const delta=oldQ-newQ; // > 0 means restoring to stock
+  f.lineas[i].q=newQ;
+  if(delta!==0){
+    const prod=PRODS.find(p=>p.n===f.lineas[i].prod||p.n===f.lineas[i].n);
+    if(prod){
+      prod.stk=Math.max(0, (prod.stk||0)+delta);
+      if(f.alm){
+        if(!prod.stk_alm)prod.stk_alm={};
+        prod.stk_alm[f.alm]=Math.max(0,(prod.stk_alm[f.alm]||0)+delta);
+        if(typeof adjustStockByDelta==='function'&&prod.supaId){
+          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE');
+        }
+      }
+    }
+    if(typeof renderProds==='function')renderProds();
+  }
+  if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  const pl=document.getElementById(`pl-${cid}-${fid}`);
+  if(pl)pl.innerHTML=renderPL(c,f);
+  renderFichaFolios(c);
+}
 function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
-function restL(cid,fid,i){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].q=f.lineas[i].qO;f.lineas[i].precio=f.lineas[i].pO;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function restL(cid,fid,i){
+  const c=CLIENTES.find(x=>x.id===cid);
+  const f=c?.folios.find(x=>x.id===fid);
+  if(!f)return;
+  const newQ=f.lineas[i].qO;
+  const oldQ=f.lineas[i].q;
+  const delta=oldQ-newQ; // > 0 means restoring to stock
+  f.lineas[i].q=newQ;
+  f.lineas[i].precio=f.lineas[i].pO;
+  if(delta!==0){
+    const prod=PRODS.find(p=>p.n===f.lineas[i].prod||p.n===f.lineas[i].n);
+    if(prod){
+      prod.stk=Math.max(0, (prod.stk||0)+delta);
+      if(f.alm){
+        if(!prod.stk_alm)prod.stk_alm={};
+        prod.stk_alm[f.alm]=Math.max(0,(prod.stk_alm[f.alm]||0)+delta);
+        if(typeof adjustStockByDelta==='function'&&prod.supaId){
+          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE');
+        }
+      }
+    }
+    if(typeof renderProds==='function')renderProds();
+  }
+  if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  renderFichaFolios(c);
+}
 function elimL(cid,fid,i){
   const c=CLIENTES.find(x=>x.id===cid);
   const f=c?.folios.find(x=>x.id===fid);
@@ -8288,7 +8341,7 @@ function elimL(cid,fid,i){
       if(!prod.stk_alm)prod.stk_alm={};
       prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
       if(typeof adjustStockByDelta==='function'&&prod.supaId){
-        adjustStockByDelta(prod,f.alm,l.q);
+        adjustStockByDelta(prod,f.alm,l.q,f.contenedor||'SIN LOTE');
       }
     }
   }
