@@ -11639,18 +11639,57 @@ async function syncRevolutApi() {
     
     var data = await r.json();
     if (data.transactions && data.transactions.length > 0) {
-      // Filtrar movimientos que ya existan para no duplicar (por ref_revolut, si se puede)
-      showToast('✅ Descargadas ' + data.transactions.length + ' transacciones');
-      // Próximo paso: Insertar los movimientos en MOVS. Por ahora, los mostramos en consola.
-      console.log('Transacciones Revolut:', data.transactions);
-      
-      // Pasar a la IA para parsearlos rápidamente o proponerlos?
-      if (typeof _iaRegistrarMov === 'function') {
-         // Opcional: proponer el lote entero a la IA
-         alert('Se han descargado ' + data.transactions.length + ' transacciones. Revisa la consola para verlas. Próximamente se integrarán directo a la caja REVOLUT.');
+      var nuevas = 0;
+      var _rates = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+      var syncPromises = [];
+
+      for (var i = 0; i < data.transactions.length; i++) {
+        var t = data.transactions[i];
+        if (t.state !== 'completed') continue;
+        var leg = t.legs && t.legs[0];
+        if (!leg) continue;
+        
+        var mon = leg.currency;
+        var cObj = typeof _cajasData !== 'undefined' ? _cajasData.find(function(c) { 
+          return c.moneda === mon && c.nombre.toLowerCase().includes('revolut'); 
+        }) : null;
+        if (!cObj) continue; 
+        
+        var cajaName = cObj.nombre;
+        var revId = t.id;
+        
+        var exists = typeof MOVS !== 'undefined' && MOVS.find(function(m) { return m.notas && m.notas.includes('REV_ID:'+revId); });
+        if (exists) continue;
+        
+        var isIngreso = leg.amount > 0;
+        var amt = Math.abs(leg.amount);
+        var reqData = {
+          fecha: t.created_at,
+          tipo: isIngreso ? 'Ingreso no-venta' : 'Gasto operativo',
+          descripcion: (t.reference || leg.description || 'Revolut Sync') + (isIngreso?'':' - '+leg.description),
+          monto: amt,
+          moneda: mon,
+          equiv_usd: parseFloat((amt * (_rates[mon] || 1)).toFixed(4)),
+          cuenta: cajaName,
+          vendedor: 'Sistema',
+          almacen: cObj.almacen || 'General',
+          notas: 'REV_ID:' + revId
+        };
+        
+        syncPromises.push(supaReq('POST', 'movimientos_ig', reqData));
+      }
+
+      if (syncPromises.length > 0) {
+        showToast('🔄 Insertando ' + syncPromises.length + ' transacciones bancarias...');
+        Promise.all(syncPromises).then(function() {
+          showToast('✅ ' + syncPromises.length + ' transacciones sincronizadas con éxito');
+          if (typeof _initApp === 'function') setTimeout(function(){ _initApp(true); }, 1000);
+        });
+      } else {
+        showToast('✅ Todo al día. No hay transacciones bancarias nuevas.');
       }
     } else {
-      showToast('✅ No hay transacciones nuevas');
+      showToast('✅ No hay transacciones en los últimos días');
     }
   } catch (e) {
     console.error('Revolut Sync', e);
@@ -16383,5 +16422,6 @@ function _iaEscapeHtml(str) {
 </script>
 </body>
 </html>
+
 
 
