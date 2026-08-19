@@ -4641,7 +4641,7 @@ function renderVentas(){
       </td>
       <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
       <td style="font-size:11px">${v.alm}</td>
-      <td style="font-size:11px;color:var(--color-text-secondary);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.cli}</td>
+      <td style="font-size:11px;color:var(--color-text-secondary);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${v.cli} ${(CLIENTES.find(c=>c.nombre===v.cli)||{}).tel||''}">${v.cli}<br><span style="font-size:9px;color:var(--color-text-tertiary)">${(CLIENTES.find(c=>c.nombre===v.cli)||{}).tel||''}</span></td>
       <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo==='Mayorista'?'May':'Min'}</span></td>
       <td style="font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.prods.replace(/ @ \$[\d.,]+/g,'')}</td>
       <td style="font-weight:600;text-align:right;white-space:nowrap">${fN(v.totalUSD)}</td>
@@ -7687,7 +7687,7 @@ function executeExportarContenedorPDF() {
       if (t === 0) bg = '#fdf6e3';
       
       html += '<tr style="background:'+bg+';font-weight:600">';
-      html += '<td>' + c.nombre + ' - #' + f.id + (f.desc ? ' (' + f.desc + ')' : '') + '</td>';
+      html += '<td>' + c.nombre + (c.tel ? ' 📞 ' + c.tel : '') + ' - #' + f.id + (f.desc ? ' (' + f.desc + ')' : '') + '</td>';
       var ffecha = typeof fD === 'function' ? fD(f.fecha) : f.fecha;
       html += '<td>' + (ffecha || '') + '</td>';
       var festado = (typeof EL !== 'undefined' && EL[typeof estF === 'function' ? estF(f) : '']) ? EL[estF(f)] : (typeof estF === 'function' ? estF(f) : '');
@@ -7957,7 +7957,7 @@ function exportarReservasPDF(clienteId) {
   clis.forEach(function(c) {
     var folios = c.folios || [];
     if (!folios.length) return;
-    html += '<h2>Cliente: ' + c.nombre + '</h2>';
+    html += '<h2>Cliente: ' + c.nombre + (c.tel ? ' 📞 ' + c.tel : '') + '</h2>';
     html += '<table><thead><tr><th>Folio / Productos</th><th>Fecha</th><th>Estado</th><th>Lote</th><th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Pdte</th></tr></thead><tbody>';
     
     var cTot = 0, cPag = 0, cPdt = 0;
@@ -13863,7 +13863,9 @@ function buildReceiptHtml(v){
   vueltos.forEach(function(vt){cajaMap[vt.caja]=cajaMap[vt.caja]||[];cajaMap[vt.caja].push('-'+fN(vt.m,dFor(vt.mon))+' '+vt.mon);});
   var ck=Object.keys(cajaMap);
   var h='';
-  h+='<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+v.vend+' &middot; '+v.alm+' &middot; '+(v.cli||'Walk-in')+'</div>';
+  var cliObj = CLIENTES.find(c => c.nombre === v.cli);
+  var cliPhone = cliObj && cliObj.tel ? ' &middot; 📞 ' + cliObj.tel : '';
+  h+='<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px">'+v.vend+' &middot; '+v.alm+' &middot; '+(v.cli||'Walk-in')+cliPhone+'</div>';
   h+='<div class="res-line"><span>Productos</span><span style="text-align:right;font-size:12px;line-height:1.7">'
     +v.prods.split(', ').map(function(p){var _at=p.indexOf(' @ ');return _at>0?p.slice(0,_at):p;}).join('<br>')
     +'</span></div>';
