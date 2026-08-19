@@ -1439,6 +1439,27 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   </div>
 </div>
 
+<!-- ══ CAJAS ══ -->
+<div class="page" id="cajas">
+  <div id="cajas-grid" style="margin-bottom:12px"></div>
+  <div class="card" style="margin-top:8px">
+    <h3 style="margin-bottom:10px">Detalle por cuenta</h3>
+    <div style="overflow-x:auto">
+    <table class="adm-table">
+      <thead><tr>
+        <th>Cuenta</th>
+        <th style="color:var(--color-text-success)">Ventas POS</th>
+        <th style="color:var(--color-text-info)">Otros ingresos</th>
+        <th style="color:var(--color-text-danger)">Salidas</th>
+        <th>Saldo</th>
+        <th>Equiv. USD</th>
+      </tr></thead>
+      <tbody id="cajas-table"></tbody>
+      <tfoot id="cajas-foot"></tfoot>
+    </table>
+    </div>
+  </div>
+</div>
 
 <!-- ══ DEUDAS ══ -->
 <div class="page" id="deuda">
@@ -5715,7 +5736,7 @@ function navTo_ig(pg,btn){
     }
     renderLibro();
   }
-  }
+  if(pg==='cajas'){document.getElementById('cajas-grid').innerHTML='<div style="padding:20px;text-align:center;color:var(--color-text-tertiary)">⏳ Cargando...</div>';renderCajas();}
   if(pg==='cajas-mgmt'){if(typeof renderGestionCajas==='function')renderGestionCajas();}
   if(pg==='deuda')renderDeudas();
   if(pg==='contenedores'&&typeof renderContenedores==='function')renderContenedores();
