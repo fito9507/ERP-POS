@@ -61,7 +61,16 @@ digest: ${digest}
 x-request-id: ${reqId}`;
   const sig = aB64(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', clave, new TextEncoder().encode(cadena)));
   const serial = (Deno.env.get('ABANCA_SIGN_SERIAL') || '').toLowerCase();
-  const cert = (Deno.env.get('ABANCA_SIGN_CERT') || '').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const certPem = (Deno.env.get('ABANCA_SIGN_CERT') || '').trim();
+  const fmt = (Deno.env.get('ABANCA_CERT_FORMAT') || 'pem-b64').toLowerCase();
+  let cert = '';
+  if (certPem) {
+    const sinPem = certPem.split(String.fromCharCode(92)).join('').replace(/-----[^-]+-----/g, '').replace(/[^A-Za-z0-9+/=]/g, '');
+    if (fmt === 'der-b64') cert = sinPem;
+    else if (fmt === 'pem-1line') cert = certPem.split(String.fromCharCode(10)).join(String.fromCharCode(92) + 'n');
+    else if (fmt === 'pem-raw') cert = certPem;
+    else cert = btoa(certPem); // pem-b64: base64 del PEM completo
+  }
   const h: Record<string, string> = {
     'Date': fecha,
     'Digest': digest,
@@ -69,7 +78,12 @@ x-request-id: ${reqId}`;
     'X-Request-ID': reqId,
     'Signature': `keyId="SN=${serial}",algorithm="rsa-sha256",headers="request-target date digest x-request-id",signature="${sig}"`,
   };
-  if (cert) h['TPP-Signature-Certificate'] = cert;
+  // El cert va en cabecera solo si se pide expresamente; por defecto se
+  // confía en el certificado registrado en el portal (Abanca lo localiza
+  // por el número de serie del keyId), que es la vía recomendada.
+  if (cert && (Deno.env.get('ABANCA_SEND_CERT') || '').toLowerCase() === 'true') {
+    h['TPP-Signature-Certificate'] = cert;
+  }
   return h;
 }
 
