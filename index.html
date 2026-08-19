@@ -3737,7 +3737,10 @@ function renderCart(){
   el.innerHTML=S.cart.map((c,i)=>{
     const subUSD=c.precioUSD*c.q;totUSD+=subUSD;
     const subMon=fromUSD(subUSD,m,S.alm);
-    const precMon=fromUSD(c.precioUSD,m,S.alm);
+    // En CUP/CUPT fromUSD redondea a entero: convertir la unidad por su lado
+    // daba P.u. 75 con subtotal 74.802 (75x1000 != 74.802). El P.u. mostrado
+    // sale del propio subtotal para que P.u. x cant = total exacto.
+    const precMon=((m==='CUP'||m==='CUPT')&&c.q>0)?subMon/c.q:fromUSD(c.precioUSD,m,S.alm);
     const altMon=m==='USD'?'CUP':'USD';
     const altVal=m==='USD'?fromUSD(subUSD,'CUP',S.alm):subUSD;
     const stk=stkDisp(PRODS.find(x=>x.n===c.n)||{stk:9999});
@@ -3750,8 +3753,8 @@ function renderCart(){
         <div class="ci-pu-row">
           <span class="ci-pu-lbl">P.u.</span>
           <input type="number" class="ci-pu"
-            value="${(function(val, mon){ if(mon==='CUP'||mon==='CUPT') return val.toFixed(0); var rounded=Math.round(val*10000)/10000; var str=rounded.toString(); if(str.indexOf('.')>=0){ var decs=str.split('.')[1].length; return rounded.toFixed(Math.max(2,decs)); } return rounded.toFixed(2); })(precMon, m)}"
-            step="${m==='CUP'||m==='CUPT'?'1':'0.0001'}"
+            value="${(function(val, mon){ var rounded=Math.round(val*10000)/10000; if(mon==='CUP'||mon==='CUPT') return rounded.toString(); var str=rounded.toString(); if(str.indexOf('.')>=0){ var decs=str.split('.')[1].length; return rounded.toFixed(Math.max(2,decs)); } return rounded.toFixed(2); })(precMon, m)}"
+            step="any"
             onchange="editPriceMon(${i},this.value,'${m}')"
             onfocus="this.select()" title="Precio unitario — editable">
           <span class="ci-pu-lbl">${m}</span>
