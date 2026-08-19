@@ -1856,7 +1856,7 @@ try { _cierreEnviado = localStorage.getItem('erp_cierre_enviado')||''; } catch(e
 
 async function enviarCierreDiario(fecha, isAuto) {
   if (!fecha) fecha = new Date().toISOString().slice(0,10);
-  var alms = ['Habana','Placetas'];
+  var alms = ['Habana','Placetas','Xportprise'];
   for (var i=0; i<alms.length; i++) {
     var alm = alms[i];
     var ventasAlm = (typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
