@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conectar Abanca — ERP</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:620px;margin:40px auto;line-height:1.55;padding:0 16px;background:#0b2530;color:#e8e6d9}
+  h2{color:#fff}
+  button,a.btn{display:inline-block;background:#0055a4;color:#fff;border:none;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:600;font-size:15px;cursor:pointer}
+  pre{background:#08303d;border:1px solid #1c4553;padding:14px;border-radius:8px;word-break:break-all;white-space:pre-wrap;color:#b5e853}
+  .mut{color:#7fa0ab;font-size:12px}
+  .err{color:#ff6b6b}
+  select{padding:10px;border-radius:8px;font-size:15px;margin:8px 0}
+</style>
+</head>
+<body>
+<h2 id="titulo">Conectar Abanca con el ERP</h2>
+<div id="contenido">Cargando…</div>
+
+<script>
+// Enable Banking (agregador con licencia eIDAS). La página llama a la edge
+// function enablebanking-auth. El login del usuario ocurre en el banco.
+var FUNC = 'https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/enablebanking-auth';
+var REDIRECT = 'https://fito9507.github.io/ERP-POS/enablebanking.html';
+// clave anon de Supabase (pública) para poder invocar la function
+var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
+
+var qs = new URLSearchParams(location.search);
+var cont = document.getElementById('contenido');
+var titulo = document.getElementById('titulo');
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+function call(payload){
+  return fetch(FUNC, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+ANON, 'apikey':ANON },
+    body: JSON.stringify(payload)
+  }).then(function(r){ return r.json(); });
+}
+
+if (qs.get('error')) {
+  titulo.textContent = 'Autorización rechazada';
+  cont.innerHTML = '<p class="err">'+esc(qs.get('error'))+' '+esc(qs.get('error_description')||'')+'</p>'
+    + '<p><a class="btn" href="enablebanking.html">Reintentar</a></p>';
+} else if (qs.get('code')) {
+  // Vuelta del banco → canjear el code por la sesión
+  titulo.textContent = 'Completando conexión…';
+  cont.innerHTML = '<p>Un momento…</p>';
+  call({ action:'finish', code: qs.get('code') }).then(function(res){
+    if (res.session_id) {
+      var cuentas = (res.accounts||[]).map(function(a){ return '• '+(a.iban||a.uid)+' '+(a.currency||''); }).join('<br>');
+      titulo.textContent = '✅ Conexión completada';
+      cont.innerHTML = '<p>Copia este <b>session_id</b> y pásaselo a Claude (lo guarda en Supabase como '
+        + '<code>EB_SESSION_ID</code>):</p><pre>'+esc(res.session_id)+'</pre>'
+        + '<p class="mut">Cuentas conectadas:<br>'+cuentas+'</p>';
+      history.replaceState(null,'','enablebanking.html');
+    } else {
+      titulo.textContent = 'Error al completar';
+      cont.innerHTML = '<pre class="err">'+esc(JSON.stringify(res.error||res, null, 2)).slice(0,900)+'</pre>'
+        + '<p><a class="btn" href="enablebanking.html">Reintentar</a></p>';
+    }
+  }).catch(function(e){ cont.innerHTML = '<pre class="err">'+esc(e.message)+'</pre>'; });
+} else {
+  // Inicio → arrancar la autorización con Abanca
+  titulo.textContent = 'Conectar Abanca con el ERP';
+  cont.innerHTML = '<p>Vas a autorizar al ERP a leer tus cuentas y movimientos de Abanca.'
+    + ' El login ocurre en la web de Abanca (vía Enable Banking).</p>'
+    + '<p>Tipo de banca: <select id="psu"><option value="business">Empresa</option><option value="personal">Particular</option></select></p>'
+    + '<p><button id="go">Conectar con Abanca →</button></p>'
+    + '<p class="mut">Tus credenciales se validan en el banco, no aquí.</p>';
+  document.getElementById('go').onclick = function(){
+    this.disabled = true; this.textContent = 'Conectando…';
+    call({ action:'start', aspsp_name:'Abanca', country:'ES',
+           psu_type: document.getElementById('psu').value, redirect_url: REDIRECT })
+      .then(function(res){
+        if (res.url) { location.href = res.url; }
+        else { cont.innerHTML = '<pre class="err">'+esc(JSON.stringify(res.error||res,null,2)).slice(0,900)+'</pre>'
+                 + '<p><a class="btn" href="enablebanking.html">Reintentar</a></p>'; }
+      }).catch(function(e){ cont.innerHTML = '<pre class="err">'+esc(e.message)+'</pre>'; });
+  };
+}
+</script>
+</body>
+</html>
