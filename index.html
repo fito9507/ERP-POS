@@ -15491,6 +15491,10 @@ function renderAdminAnalytics() {
         // to maintain consistency with the PDF, ignoring physical stock discrepancies
         var qCurrentDisplay = Math.max(0, qOriginal - qSold);
         
+        var currentP = 0;
+        if(p.escala && p.escala.length > 0) currentP = parseFloat(p.escala[0].precio);
+        if(!currentP) currentP = parseFloat(p.min) || parseFloat(p.maj) || 0;
+        var expectedRevExtra = qCurrentDisplay * currentP;
         var pCost = qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
         productCost += pCost;
         
@@ -15508,6 +15512,11 @@ function renderAdminAnalytics() {
     var totalCostCnt = costLogistics + productCost;
     var margin = revenue - totalCostCnt;
     var marginP = revenue > 0 ? (margin / revenue * 100) : 0;
+    
+    var expectedRevenue = revenue;
+    prodsDetail.forEach(function(pd) { expectedRevenue += (pd.pExpectedExtra || 0); });
+    var expectedMargin = expectedRevenue - totalCostCnt;
+    var expectedMarginP = expectedRevenue > 0 ? (expectedMargin / expectedRevenue * 100) : 0;
     var soldPct = totalUnits > 0 ? Math.min(100, (unitsSold / totalUnits * 100)) : 0;
 
     return {
