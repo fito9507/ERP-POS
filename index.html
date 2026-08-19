@@ -3850,7 +3850,20 @@ function ventaCreditoPOS() {
       }
     }
   });
-  if(stockError){alert(stockError);return;}
+  if(stockError){
+    var isAdm = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'admin';
+    if(isAdm) {
+      if(!confirm(stockError + '\n\nComo administrador, ¿deseas FORZAR esta venta y poner el stock en negativo?')) return;
+    } else {
+      var adminUser = Object.values(USERS).find(function(u){return u.rol==='admin';});
+      var adminPin = adminUser ? adminUser.pin : '0000';
+      var pin = prompt(stockError + '\n\nEsta venta dejará el inventario en negativo.\nIngrese PIN de Administrador para autorizar:');
+      if(pin !== adminPin) {
+         alert('Autorización denegada.');
+         return;
+      }
+    }
+  }
   if(stockWarn&&!confirm(stockWarn)) return;
   
   var newFolio;
@@ -9109,7 +9122,20 @@ function crearFolioCli(cid){
     var disponible=_getStk(p, alm);
     if(l.q>disponible) stockError='Stock insuficiente: '+l.prod+' (disponible: '+disponible+', pedido: '+l.q+')';
   });
-  if(stockError){alert(stockError);return;}
+  if(stockError){
+    var isAdm = typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'admin';
+    if(isAdm) {
+      if(!confirm(stockError + '\n\nComo administrador, ¿deseas FORZAR esta venta y poner el stock en negativo?')) return;
+    } else {
+      var adminUser = Object.values(USERS).find(function(u){return u.rol==='admin';});
+      var adminPin = adminUser ? adminUser.pin : '0000';
+      var pin = prompt(stockError + '\n\nEsta venta dejará el inventario en negativo.\nIngrese PIN de Administrador para autorizar:');
+      if(pin !== adminPin) {
+         alert('Autorización denegada.');
+         return;
+      }
+    }
+  }
 
   var newFolio={id:fid,fecha,alm,mon,desc,contenedor:cnt,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
   c.folios.push(newFolio);
