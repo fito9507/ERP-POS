@@ -40,7 +40,7 @@ serve(async (req) => {
     if (!clientId || !clientSecret) {
       return html('Faltan secrets', 'Configura primero ABANCA_CLIENT_ID y ABANCA_CLIENT_SECRET en Supabase Secrets.');
     }
-    const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://apis.abanca.com').replace(/\/$/, '');
+    const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
     const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
     const redirectUri = `${url.origin}${url.pathname}`;
 

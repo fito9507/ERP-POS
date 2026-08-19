@@ -31,18 +31,17 @@ Dashboard → Edge Functions → Secrets:
 |---|---|
 | `ABANCA_CLIENT_ID` | el de la APP |
 | `ABANCA_CLIENT_SECRET` | el de la APP |
-| `ABANCA_BASE_URL` | solo si la Documentación del portal indica un host distinto de `https://apis.abanca.com` |
-| `ABANCA_TOKEN_URL` | solo si el endpoint de token no es `{BASE}/oauth2/token` |
-
-> Las URLs exactas de autorización y token están en la sección
-> **Documentación** del portal (varían entre sandbox y producción).
+| `ABANCA_BASE_URL` | normalmente no hace falta: el default `https://api.abanca.com` está **verificado** (los endpoints responden 401 sin credenciales) |
+| `ABANCA_TOKEN_URL` | normalmente no hace falta: `https://api.abanca.com/oauth2/token` verificado |
 
 ### 3. Autorizar el acceso (SCA)
 
-Abrir en el navegador la URL de autorización que indique la Documentación,
-del estilo:
+Abrir en el navegador (sustituyendo TU_CLIENT_ID):
 
-    {AUTH_URL}?response_type=code&client_id={CLIENT_ID}&redirect_uri=https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback
+    https://api.abanca.com/oauth2/authorize?response_type=code&client_id=TU_CLIENT_ID&redirect_uri=https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback
+
+(endpoint verificado; si el portal indicara otro en su Documentación,
+usar ese)
 
 Iniciar sesión con la banca electrónica de Abanca. Al terminar, Abanca
 redirige a `abanca-callback`, que canjea el código y **muestra el

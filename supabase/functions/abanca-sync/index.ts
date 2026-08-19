@@ -6,7 +6,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 //   ABANCA_CLIENT_SECRET  — idem
 //   ABANCA_REFRESH_TOKEN  — se obtiene UNA vez autorizando con abanca-callback
 // Opcionales (los valores exactos están en Documentación del portal):
-//   ABANCA_BASE_URL   — por defecto https://apis.abanca.com
+//   ABANCA_BASE_URL   — por defecto https://api.abanca.com (verificado: /psd2/me/accounts y /oauth2/token responden 401 sin credenciales)
 //   ABANCA_TOKEN_URL  — por defecto {BASE}/oauth2/token
 //
 // Devuelve el mismo contrato que wise-sync: { transactions, balances }.
@@ -55,7 +55,7 @@ serve(async (req) => {
       throw new Error('Faltan credenciales de Abanca en Supabase Secrets (ABANCA_CLIENT_ID / ABANCA_CLIENT_SECRET / ABANCA_REFRESH_TOKEN). Ver docs/Abanca.md');
     }
 
-    const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://apis.abanca.com').replace(/\/$/, '');
+    const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
     const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
 
     // 1. refresh_token → access_token (client_secret_basic + fallback en body)
