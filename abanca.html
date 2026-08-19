@@ -26,9 +26,8 @@
 // refresh_token. El login SOLO ocurre en accounts.abanca.com.
 var FUNC = 'https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback';
 var CLIENT_ID = 'e6f32204-c13b-449a-bdd2-91c056332a0a';
-var INSTANCIA = 'Abanca'; // cambiar a 'Sandbox' para pruebas
-
 var qs = new URLSearchParams(location.search);
+var INSTANCIA = qs.get('env') === 'sandbox' ? 'Sandbox' : 'Abanca'; // ?env=sandbox para pruebas
 var cont = document.getElementById('contenido');
 var titulo = document.getElementById('titulo');
 
