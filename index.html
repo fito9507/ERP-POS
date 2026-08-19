@@ -15567,7 +15567,8 @@ function iaOnFileSelect(event) {
           name: file.name,
           type: isImage ? 'image' : isAudio ? 'audio' : 'pdf',
           base64: e.target.result.split(',')[1],
-          mimeType: file.type
+          mimeType: file.type,
+          rawFile: file
         });
         renderIAAssistant();
       };
@@ -15699,51 +15700,78 @@ async function iaEnviar() {
     userContent.push({ type: 'text', text: text });
   }
 
-  _iaAttachments.forEach(function(a) {
-    if (a.type === 'image') {
-      userContent.push({
-        type: 'image_url',
-        image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
-      });
-      displayText += '\n📷 ' + a.name;
-    } else if (a.type === 'text') {
-      userContent.push({
-        type: 'text',
-        text: '--- Contenido del archivo "' + a.name + '" ---\n' + a.textContent + '\n--- Fin del archivo ---'
-      });
-      displayText += '\n📄 ' + a.name;
-    } else if (a.type === 'pdf') {
-      userContent.push({
-        type: 'text',
-        text: '[PDF adjunto: ' + a.name + ' — Se requiere OCR para leer el contenido. Intenta describir qué contiene.]'
-      });
-      displayText += '\n📄 ' + a.name;
-    } else if (a.type === 'audio') {
-      userContent.push({
-        type: 'text',
-        text: '[Audio adjunto: ' + a.name + ' — La transcripción de audio no está soportada en este momento. Por favor describe el contenido.]'
-      });
-      displayText += '\n🎤 ' + a.name;
-    }
-  });
-
-  if (userContent.length === 1 && userContent[0].type === 'text') {
-    userContent = userContent[0].text;
-  }
-
-  _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
-  _iaAttachments = [];
-
-  if (input) input.value = '';
-  renderIAAssistant();
-
   var chatArea = document.getElementById('ia-chat-area');
   if (chatArea) {
-    chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Analizando...</div>';
+    chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Procesando...</div>';
     chatArea.scrollTop = chatArea.scrollHeight;
   }
 
   try {
+    // 1. Process audio files first via Whisper API
+    for (var i = 0; i < _iaAttachments.length; i++) {
+      var a = _iaAttachments[i];
+      if (a.type === 'audio' && a.rawFile) {
+        if (chatArea) chatArea.innerHTML = chatArea.innerHTML.replace('Procesando...', 'Transcribiendo audio (' + a.name + ')...');
+        var fd = new FormData();
+        fd.append('file', a.rawFile);
+        fd.append('model', 'whisper-1');
+        var wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey },
+          body: fd
+        });
+        if (wRes.ok) {
+          var wData = await wRes.json();
+          userContent.push({
+            type: 'text',
+            text: '--- Transcripción del audio "' + a.name + '" ---\n' + wData.text + '\n--- Fin del audio ---'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Transcrito)';
+        } else {
+          userContent.push({
+            type: 'text',
+            text: '[Error al transcribir el audio ' + a.name + ']'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Error)';
+        }
+      } else if (a.type === 'image') {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
+        });
+        displayText += '\n📷 ' + a.name;
+      } else if (a.type === 'text') {
+        userContent.push({
+          type: 'text',
+          text: '--- Contenido del archivo "' + a.name + '" ---\n' + a.textContent + '\n--- Fin del archivo ---'
+        });
+        displayText += '\n📄 ' + a.name;
+      } else if (a.type === 'pdf') {
+        userContent.push({
+          type: 'text',
+          text: '[PDF adjunto: ' + a.name + ' — Se requiere OCR para leer el contenido. Intenta describir qué contiene.]'
+        });
+        displayText += '\n📄 ' + a.name;
+      }
+    }
+
+    if (userContent.length === 1 && userContent[0].type === 'text') {
+      userContent = userContent[0].text;
+    }
+
+    _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
+    _iaAttachments = [];
+
+    if (input) input.value = '';
+    renderIAAssistant();
+
+    // Add loading indicator back for the GPT processing
+    chatArea = document.getElementById('ia-chat-area');
+    if (chatArea) {
+      chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Analizando con IA...</div>';
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
     var context = _iaBuildContext();
     var messages = [{ role: 'system', content: _iaBuildSystemPrompt(context) }];
 
