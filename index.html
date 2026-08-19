@@ -11677,6 +11677,17 @@ async function syncRevolutApi() {
         };
         
         syncPromises.push(supaReq('POST', 'movimientos_ig', reqData));
+        var movCajaReq = {
+          fecha: t.created_at,
+          tipo: isIngreso ? 'deposito' : 'retiro',
+          caja_origen: isIngreso ? null : cajaName,
+          caja_destino: isIngreso ? cajaName : null,
+          monto_origen: amt,
+          monto_destino: amt,
+          notas: (t.reference || leg.description || 'Revolut Sync') + ' (REV_ID:'+revId+')',
+          usuario: 'Sistema'
+        };
+        syncPromises.push(supaReq('POST', 'mov_cajas', movCajaReq));
       }
 
       if (syncPromises.length > 0) {
