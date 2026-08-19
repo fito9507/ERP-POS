@@ -15516,6 +15516,9 @@ function _iaSaveChat() {
       return m;
     });
     localStorage.setItem('erp_ia_chat', JSON.stringify(lightweight));
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: lightweight, memory: _iaMemory }).catch(function(){});
+    }
   } catch(e) { console.error('Error saving IA chat', e); }
 }
 var _iaProposal = null;  // parsed proposal from AI
@@ -15854,6 +15857,7 @@ function _iaBuildSystemPrompt(context) {
     + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
     + '### Tipos de movimiento disponibles:\n' + context.tipos_movimiento.join(', ') + '\n\n'
     + '### Fecha de hoy: ' + context.fecha_hoy + '\n\n'
+    + '### Memoria / Instrucciones personalizadas:\n' + (_iaMemory || '(Vacío)') + '\n\n'
     + '## INSTRUCCIONES\n'
     + '1. Analiza lo que el usuario describe o te envía (texto, imágenes, CSV, chats).\n'
     + '2. Identifica cada flujo de dinero: de dónde sale, a dónde llega, cuánto se pierde en comisiones.\n'
@@ -15871,7 +15875,9 @@ function _iaBuildSystemPrompt(context) {
     + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
     + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
     + '9. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones (fechas, montos, conceptos) y sugiere a qué cajas o folios podrían corresponder.\n'
-    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n';
+    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '11. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
+    + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
 }
 
 // ── SEND MESSAGE ──────────────────────────────────────────────
@@ -15994,6 +16000,16 @@ async function iaEnviar() {
     var aiText = data.choices[0].message.content;
 
     _iaChatHistory.push({ role: 'assistant', content: aiText });
+    
+    // Check if AI wants to update memory
+    var memMatch = aiText.match(/\{"actualizar_memoria"\s*:\s*"([\s\S]*?)"\}/);
+    if (memMatch) {
+      _iaMemory = memMatch[1].replace(/\\n/g, '\n');
+      localStorage.setItem('erp_ia_memory', _iaMemory);
+      // It will be synced to Supabase when _iaSaveChat runs below, 
+      // but wait, _iaSaveChat only syncs chat_history! Let's update _iaSaveChat.
+    }
+
     _iaSaveChat();
     _iaProposal = _iaExtractProposal(aiText);
 
@@ -16034,6 +16050,9 @@ function _iaFormatResponse(text) {
   var html = _iaEscapeHtml(text);
 
   html = html.replace(/```json\s*([\s\S]*?)```/g, function(m, code) {
+    if (code.indexOf('"actualizar_memoria"') !== -1) {
+      return '<div style="font-size:11px;color:var(--color-text-success);margin-top:8px">🧠 <i>He aprendido algo nuevo para el futuro.</i></div>';
+    }
     return '<pre style="background:var(--color-background-secondary);padding:8px;border-radius:6px;font-size:11px;overflow-x:auto;margin:8px 0">' + code + '</pre>';
   });
 
@@ -16190,7 +16209,29 @@ function _iaRegistrarTransferencia(fecha, desc, monto, mon, cajaOrigen, cajaDest
   }
 }
 
-// ── UTILITIES ─────────────────────────────────────────────────
+// ── CLOUD SYNC & MEMORY ───────────────────────────────────────
+var _iaMemory = localStorage.getItem('erp_ia_memory') || '';
+
+async function _iaSyncCloud() {
+  if (typeof supaReq !== 'function' || typeof _supaOnline === 'undefined' || !_supaOnline) return;
+  try {
+    var r = await supaReq('GET', 'ia_config?id=eq.1');
+    if (r && r.length > 0) {
+      if (r[0].memory) {
+        _iaMemory = r[0].memory;
+        localStorage.setItem('erp_ia_memory', _iaMemory);
+      }
+      if (r[0].chat_history && Array.isArray(r[0].chat_history)) {
+        _iaChatHistory = r[0].chat_history;
+        localStorage.setItem('erp_ia_chat', JSON.stringify(_iaChatHistory));
+        renderIAAssistant();
+      }
+    }
+  } catch(e) {}
+}
+
+setTimeout(_iaSyncCloud, 3500);
+
 function _iaEscapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
