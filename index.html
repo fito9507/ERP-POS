@@ -11845,6 +11845,8 @@ async function _bancoInsertar(mov, movCaja) {
 }
 
 // cfg: { nombre, prefijo, endpoint, cajaClave, normalizar, cajaPara?, alFinal? }
+// normalizar(bruta) puede devolver un objeto, un ARRAY de objetos (cambios
+// de divisa: una entrada por pata) o null para descartar.
 // normalizar(bruta) devuelve {id, idLegacy, fecha, moneda, importe, concepto}
 // o null para descartar la transacción.
 async function _bancoSync(cfg) {
@@ -11889,24 +11891,28 @@ async function _bancoSync(cfg) {
     var sinCaja = 0, descartadas = 0;
 
     for (var i = 0; i < brutas.length; i++) {
-      var t = cfg.normalizar(brutas[i]);
-      if (!t) { descartadas++; continue; }
-      if (vistos[t.id] || (t.idLegacy && vistos[t.idLegacy])) continue;
-      vistos[t.id] = true;   // también evita duplicar dentro del mismo lote
+      var norm = cfg.normalizar(brutas[i]);
+      if (!norm) { descartadas++; continue; }
+      // un cambio de divisa produce varias entradas (una por pata)
+      var lista = Array.isArray(norm) ? norm : [norm];
+      lista.forEach(function(t) {
+        if (vistos[t.id] || (t.idLegacy && vistos[t.idLegacy])) return;
+        vistos[t.id] = true;   // también evita duplicar dentro del mismo lote
 
-      var cObj = null;
-      if (cfg.cajaPara) {
-        cObj = cfg.cajaPara(t);
-      } else if (typeof _cajasData !== 'undefined') {
-        cObj = _cajasData.find(function(c) {
-          return c.moneda === t.moneda && c.nombre.toLowerCase().includes(cfg.cajaClave);
-        });
-      }
-      if (!cObj) { sinCaja++; continue; }
-      if (!_rates[t.moneda]) {
-        console.warn(cfg.nombre + ': sin tasa para ' + t.moneda + ', equiv_usd saldrá 1:1');
-      }
-      pendientes.push({ t: t, caja: cObj.nombre });
+        var cObj = null;
+        if (cfg.cajaPara) {
+          cObj = cfg.cajaPara(t);
+        } else if (typeof _cajasData !== 'undefined') {
+          cObj = _cajasData.find(function(c) {
+            return c.moneda === t.moneda && c.nombre.toLowerCase().includes(cfg.cajaClave);
+          });
+        }
+        if (!cObj) { sinCaja++; return; }
+        if (!_rates[t.moneda]) {
+          console.warn(cfg.nombre + ': sin tasa para ' + t.moneda + ', equiv_usd saldrá 1:1');
+        }
+        pendientes.push({ t: t, caja: cObj.nombre });
+      });
     }
 
     if (!pendientes.length) {
@@ -11970,20 +11976,25 @@ function syncRevolutApi() {
     cajaClave: 'revolut',
     normalizar: function(t) {
       if (t.state !== 'completed') return null;
-      var leg = t.legs && t.legs[0];
-      if (!leg || typeof leg.amount !== 'number' || !isFinite(leg.amount) || !leg.currency) return null;
-      var id = _bancoSanearId(t.id);
-      if (!id) return null;
-      var concepto = t.reference || leg.description || 'Revolut Sync';
-      if (leg.description && leg.description !== concepto) concepto += ' - ' + leg.description;
-      return {
-        id: id,
-        idLegacy: _bancoSanearIdLegacy(t.id),
-        fecha: t.created_at,
-        moneda: leg.currency,
-        importe: leg.amount,
-        concepto: concepto
-      };
+      var baseId = _bancoSanearId(t.id);
+      if (!baseId) return null;
+      var out = [];
+      (t.legs || []).forEach(function(leg, k) {
+        if (!leg || typeof leg.amount !== 'number' || !isFinite(leg.amount) || !leg.currency || leg.amount === 0) return;
+        var concepto = t.reference || leg.description || 'Revolut Sync';
+        if (leg.description && leg.description !== concepto) concepto += ' - ' + leg.description;
+        out.push({
+          // la pata 0 conserva el id plano para no reimportar lo que ya
+          // entró con el esquema antiguo; las demás llevan sufijo -l1, -l2…
+          id: k === 0 ? baseId : baseId + '-l' + k,
+          idLegacy: k === 0 ? _bancoSanearIdLegacy(t.id) : null,
+          fecha: t.created_at,
+          moneda: leg.currency,
+          importe: leg.amount,
+          concepto: concepto
+        });
+      });
+      return out.length ? out : null;
     }
   });
 }
