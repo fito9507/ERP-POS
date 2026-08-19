@@ -1272,7 +1272,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 </div>
 
 <!-- ══ ASISTENTE IA FINANCIERO ══ -->
-<div class="page" id="ia-assistant">
+<div class="page" id="ia-assistant" ondragover="iaOnDragOver(event)" ondragleave="iaOnDragLeave(event)" ondrop="iaOnDrop(event)">
   <div id="ia-content"></div>
 </div>
 
@@ -15674,6 +15674,33 @@ function iaOnFileSelect(event) {
 function iaRemoveAttach(idx) {
   _iaAttachments.splice(idx, 1);
   renderIAAssistant();
+}
+
+function iaOnDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '0.7';
+}
+
+function iaOnDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+}
+
+function iaOnDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+
+  var files = e.dataTransfer.files;
+  if (!files || files.length === 0) return;
+
+  // Re-use the exact same file processing logic used by the attach button
+  iaOnFileSelect({target: {files: files}});
 }
 
 function iaOnPaste(e) {
