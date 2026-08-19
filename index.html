@@ -389,47 +389,58 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #mod-ig .mov-amt-sub {font-size:10px;color:var(--color-text-tertiary)}
 
 /* ══ ASISTENTE IA FINANCIERO ══ */
+/* El contenido (#ia-content.ia-scope) se mueve entre la página del módulo IG
+   y el panel flotante, así que los estilos van anclados a .ia-scope para
+   aplicar en los dos sitios (anclados a #ia-assistant dejaban el panel
+   flotante sin estilo ninguno). */
 #ia-assistant {padding:12px}
-#ia-assistant .ia-chat-area {background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:12px;min-height:200px;max-height:400px;overflow-y:auto;padding:14px;margin-bottom:12px;font-size:13px}
-#ia-assistant .ia-chat-area .ia-msg {margin-bottom:12px;padding:10px 14px;border-radius:10px;max-width:90%;line-height:1.5}
-#ia-assistant .ia-msg.user {background:var(--color-background-info);margin-left:auto;border-bottom-right-radius:4px}
-#ia-assistant .ia-msg.ai {background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-bottom-left-radius:4px}
-#ia-assistant .ia-msg.system {background:var(--color-background-warning);color:var(--color-text-warning);text-align:center;font-size:11px;margin:0 auto 12px;max-width:80%;border-radius:8px}
-#ia-assistant .ia-input-bar {display:flex;gap:8px;align-items:flex-end}
-#ia-assistant .ia-input-bar textarea {flex:1;resize:none;min-height:44px;max-height:120px;padding:10px 14px;border-radius:12px;border:1px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;font-family:inherit;line-height:1.4}
-#ia-assistant .ia-input-bar textarea:focus {border-color:var(--color-border-primary);outline:none}
-#ia-assistant .ia-input-bar button {height:44px;min-width:44px;border-radius:12px;border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center}
-#ia-assistant .ia-btn-send {background:var(--color-text-primary);color:var(--color-background-primary)}
-#ia-assistant .ia-btn-attach {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
-#ia-assistant .ia-btn-attach:hover {background:var(--color-background-primary)}
-#ia-assistant .ia-btn-mic.recording {background:red !important;color:white !important;border-color:red !important;animation:ia-pulse 1.2s infinite}
+.ia-scope .ia-toolbar {display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.ia-scope .ia-toolbar-title {font-size:14px;font-weight:600;white-space:nowrap;color:var(--color-text-primary)}
+.ia-scope .ia-toolbar-sp {flex:1}
+.ia-scope .ia-session-sel {background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:6px 8px;font-size:12px;max-width:150px;min-width:90px;cursor:pointer}
+.ia-scope .btn-sm {font-size:11px;padding:6px 10px;min-height:30px;border-radius:8px;border:1px solid var(--color-border-tertiary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;white-space:nowrap}
+.ia-scope .btn-sm:hover {background:var(--color-background-primary);color:var(--color-text-primary)}
+.ia-scope .ia-chat-area {background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:12px;min-height:200px;max-height:400px;overflow-y:auto;padding:14px;margin-bottom:10px;font-size:13px;-webkit-overflow-scrolling:touch}
+.ia-scope .ia-msg {margin-bottom:12px;padding:10px 14px;border-radius:12px;max-width:88%;line-height:1.5;overflow-wrap:break-word;word-break:break-word}
+.ia-scope .ia-msg.user {background:var(--color-background-info);margin-left:auto;border-bottom-right-radius:4px}
+.ia-scope .ia-msg.ai {background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-bottom-left-radius:4px}
+.ia-scope .ia-msg.system {background:var(--color-background-warning);color:var(--color-text-warning);text-align:center;font-size:11px;margin:0 auto 12px;max-width:80%;border-radius:8px}
+.ia-scope .ia-input-bar {display:flex;gap:6px;align-items:flex-end}
+.ia-scope .ia-input-bar textarea {flex:1;min-width:0;resize:none;min-height:44px;max-height:120px;padding:11px 14px;border-radius:12px;border:1px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-primary);font-size:13px;font-family:inherit;line-height:1.4}
+.ia-scope .ia-input-bar textarea:focus {border-color:var(--color-border-primary);outline:none}
+.ia-scope .ia-input-bar button {height:44px;min-width:44px;border-radius:12px;border:none;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ia-scope .ia-btn-send {background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff}
+.ia-scope .ia-btn-send:active {transform:scale(.95)}
+.ia-scope .ia-btn-attach {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
+.ia-scope .ia-btn-attach:hover {background:var(--color-background-primary)}
+.ia-scope .ia-btn-mic.recording {background:red !important;color:white !important;border-color:red !important;animation:ia-pulse 1.2s infinite}
 @keyframes ia-pulse { 0% {transform:scale(1)} 50% {transform:scale(1.1)} 100% {transform:scale(1)} }
-#ia-assistant .ia-attachments {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
-#ia-assistant .ia-att-chip {display:inline-flex;align-items:center;gap:4px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:4px 10px;font-size:11px}
-#ia-assistant .ia-att-chip button {background:none;border:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);padding:0 2px}
-#ia-assistant .ia-proposal {border:2px solid var(--color-border-primary);border-radius:12px;padding:16px;margin:12px 0;background:var(--color-background-primary)}
-#ia-assistant .ia-proposal h4 {font-size:14px;font-weight:600;margin-bottom:12px}
-#ia-assistant .ia-prop-row {display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border-tertiary);font-size:13px}
-#ia-assistant .ia-prop-row:last-child {border-bottom:none}
-#ia-assistant .ia-prop-icon {width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-#ia-assistant .ia-prop-icon.retiro {background:var(--color-background-danger);color:var(--color-text-danger)}
-#ia-assistant .ia-prop-icon.ingreso {background:var(--color-background-success);color:var(--color-text-success)}
-#ia-assistant .ia-prop-icon.gasto {background:var(--color-background-warning);color:var(--color-text-warning)}
-#ia-assistant .ia-prop-icon.transfer {background:var(--color-background-info);color:var(--color-text-info)}
-#ia-assistant .ia-prop-detail {flex:1}
-#ia-assistant .ia-prop-detail .desc {font-weight:500}
-#ia-assistant .ia-prop-detail .sub {font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
-#ia-assistant .ia-prop-amount {text-align:right;font-weight:600;font-size:14px;white-space:nowrap}
-#ia-assistant .ia-prop-amount input {width:90px;text-align:right;font-size:13px;font-weight:600;padding:4px 8px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary)}
-#ia-assistant .ia-prop-actions {display:flex;gap:8px;margin-top:14px}
-#ia-assistant .ia-prop-actions button {flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}
-#ia-assistant .ia-btn-confirm {background:var(--color-text-success);color:#fff}
-#ia-assistant .ia-btn-cancel {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
-#ia-assistant .ia-spinner {display:inline-block;width:18px;height:18px;border:2px solid var(--color-border-tertiary);border-top-color:var(--color-text-primary);border-radius:50%;animation:ia-spin 0.8s linear infinite;margin-right:6px;vertical-align:middle}
+.ia-scope .ia-attachments {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.ia-scope .ia-att-chip {display:inline-flex;align-items:center;gap:4px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:4px 10px;font-size:11px}
+.ia-scope .ia-att-chip button {background:none;border:none;cursor:pointer;font-size:13px;color:var(--color-text-secondary);padding:0 2px}
+.ia-scope .ia-proposal {border:2px solid var(--color-border-primary);border-radius:12px;padding:16px;margin:12px 0;background:var(--color-background-primary)}
+.ia-scope .ia-proposal h4 {font-size:14px;font-weight:600;margin-bottom:12px}
+.ia-scope .ia-prop-row {display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--color-border-tertiary);font-size:13px}
+.ia-scope .ia-prop-row:last-child {border-bottom:none}
+.ia-scope .ia-prop-icon {width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ia-scope .ia-prop-icon.retiro {background:var(--color-background-danger);color:var(--color-text-danger)}
+.ia-scope .ia-prop-icon.ingreso {background:var(--color-background-success);color:var(--color-text-success)}
+.ia-scope .ia-prop-icon.gasto {background:var(--color-background-warning);color:var(--color-text-warning)}
+.ia-scope .ia-prop-icon.transfer {background:var(--color-background-info);color:var(--color-text-info)}
+.ia-scope .ia-prop-detail {flex:1;min-width:0}
+.ia-scope .ia-prop-detail .desc {font-weight:500}
+.ia-scope .ia-prop-detail .sub {font-size:11px;color:var(--color-text-tertiary);margin-top:2px}
+.ia-scope .ia-prop-amount {text-align:right;font-weight:600;font-size:14px;white-space:nowrap}
+.ia-scope .ia-prop-amount input {width:90px;text-align:right;font-size:13px;font-weight:600;padding:4px 8px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary)}
+.ia-scope .ia-prop-actions {display:flex;gap:8px;margin-top:14px}
+.ia-scope .ia-prop-actions button {flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.ia-scope .ia-btn-confirm {background:var(--color-text-success);color:#fff}
+.ia-scope .ia-btn-cancel {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
+.ia-scope .ia-spinner {display:inline-block;width:18px;height:18px;border:2px solid var(--color-border-tertiary);border-top-color:var(--color-text-primary);border-radius:50%;animation:ia-spin 0.8s linear infinite;margin-right:6px;vertical-align:middle}
 @keyframes ia-spin {to{transform:rotate(360deg)}}
-#ia-assistant .ia-api-setup {text-align:center;padding:30px 20px}
-#ia-assistant .ia-api-setup input {width:100%;max-width:360px;padding:10px 14px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;margin:12px 0}
-#ia-assistant .ia-api-setup button {padding:10px 24px;border-radius:8px;border:none;background:var(--color-text-primary);color:var(--color-background-primary);font-size:13px;font-weight:600;cursor:pointer}
+.ia-scope .ia-api-setup {text-align:center;padding:30px 20px;overflow-y:auto}
+.ia-scope .ia-api-setup input {width:100%;max-width:360px;padding:10px 14px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;margin:12px 0}
+.ia-scope .ia-api-setup button {padding:10px 24px;border-radius:8px;border:none;background:var(--color-text-primary);color:var(--color-background-primary);font-size:13px;font-weight:600;cursor:pointer}
 
 </style>
 <style>/* CLIENTES — scoped to #mod-clientes */
@@ -1273,7 +1284,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 
 <!-- ══ ASISTENTE IA FINANCIERO ══ -->
 <div class="page" id="ia-assistant" ondragover="iaOnDragOver(event)" ondragleave="iaOnDragLeave(event)" ondrop="iaOnDrop(event)">
-  <div id="ia-content"></div>
+  <div id="ia-content" class="ia-scope"></div>
 </div>
 
 <!-- ══ LIBRO ══ -->
@@ -3451,6 +3462,7 @@ function pinKey(k){
       document.getElementById('pin-wrap').style.display='none';
       document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
       goStep('pg-alm',1);
+      if(typeof updIAFab==='function')updIAFab();
     } else {err.textContent='PIN incorrecto';pinBuf='';pendingUser='';updPinDots();
       setTimeout(function(){document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});document.getElementById('pin-wrap').style.display='none';err.textContent='';},1500);}
   }
@@ -3458,6 +3470,7 @@ function pinKey(k){
 function logout(){
   try{sessionStorage.removeItem('erp_S');}catch(e){}
   S.user='';S.alm='';S.cart=[];S.reservas=[];pinBuf='';pendingUser='';
+  if(typeof updIAFab==='function')updIAFab();
   try{localStorage.setItem('erp_reservas','[]');}catch(e){}
   document.getElementById('pin-wrap').style.display='none';
   document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
@@ -16043,20 +16056,21 @@ function renderIAAssistant() {
     });
   }
 
-  var headerSelect = '<select id="ia-session-select" onchange="iaChangeSession(this.value)" style="background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:4px;padding:4px;font-size:12px;max-width:140px;cursor:pointer;margin-left:8px">';
+  var headerSelect = '<select id="ia-session-select" class="ia-session-sel" onchange="iaChangeSession(this.value)">';
   _iaSessions.forEach(function(s) {
     var sel = (s.id == _iaCurrentSessionId) ? ' selected' : '';
     headerSelect += '<option value="' + s.id + '"' + sel + '>' + _iaEscapeHtml(s.title) + '</option>';
   });
   headerSelect += '</select>';
 
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
-    + '<div style="font-size:14px;font-weight:600;display:flex;align-items:center">🤖 Asistente Financiero ' + headerSelect + '</div>'
-    + '<div style="display:flex;gap:6px">'
-    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo Chat">➕ Nuevo</button>'
-    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️ Eliminar</button>'
+  el.innerHTML = '<div class="ia-toolbar">'
+    + '<span class="ia-toolbar-title">🤖 Asistente Financiero</span>'
+    + headerSelect
+    + '<span class="ia-toolbar-sp"></span>'
+    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo chat">➕ Nuevo</button>'
+    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️</button>'
     + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
-    + '</div></div>'
+    + '</div>'
     + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
     + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
     + '<div class="ia-input-bar" style="position:relative">'
@@ -16810,45 +16824,77 @@ function _iaEscapeHtml(str) {
 
 </script>
 
-<!-- FLOATING IA BUTTON -->
-<button id="ia-floating-btn" onclick="toggleIAPanel()" style="position:fixed; bottom:24px; right:24px; z-index:9999; background:linear-gradient(135deg, #2563eb, #3b82f6); color:white; border:none; border-radius:50%; width:64px; height:64px; font-size:32px; box-shadow:0 10px 25px rgba(37,99,235,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform 0.2s">🤖</button>
-
-<div id="ia-floating-panel" style="display:none; position:fixed; bottom:100px; right:24px; width:450px; height:650px; max-width:calc(100vw - 48px); max-height:calc(100vh - 120px); background:var(--color-background-primary); border-radius:20px; box-shadow:0 15px 50px rgba(0,0,0,.4); z-index:9998; overflow:hidden; flex-direction:column; border:1px solid var(--color-border-tertiary)">
-  <div style="background:linear-gradient(135deg, #1e293b, #0f172a); color:white; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1)">
-    <div style="font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px">🤖 Asistente IA</div>
-    <button onclick="toggleIAPanel()" style="background:none; border:none; color:white; font-size:20px; cursor:pointer; opacity:0.8">&times;</button>
+<!-- FLOATING IA BUTTON (solo visible con sesión iniciada) -->
+<style>
+#ia-floating-btn{position:fixed;bottom:24px;right:24px;z-index:9999;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;border-radius:50%;width:60px;height:60px;font-size:28px;box-shadow:0 10px 25px rgba(37,99,235,.4);cursor:pointer;display:none;align-items:center;justify-content:center;transition:transform .15s}
+#ia-floating-btn.on{display:flex}
+#ia-floating-btn:active{transform:scale(.9)}
+#ia-floating-panel{display:none;position:fixed;bottom:96px;right:24px;width:420px;height:min(640px,calc(100dvh - 120px));max-width:calc(100vw - 48px);background:var(--color-background-primary);border-radius:16px;box-shadow:0 15px 50px rgba(0,0,0,.45);z-index:9998;overflow:hidden;flex-direction:column;border:1px solid var(--color-border-tertiary)}
+#ia-floating-panel.open{display:flex}
+#ia-floating-head{background:var(--color-background-secondary);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid var(--color-border-tertiary);flex-shrink:0}
+#ia-floating-head .t{font-weight:600;font-size:14px;color:var(--color-text-primary);display:flex;align-items:center;gap:8px;min-width:0}
+#ia-floating-head .x{background:transparent;border:none;color:var(--color-text-secondary);font-size:22px;line-height:1;cursor:pointer;padding:2px 8px;border-radius:8px}
+#ia-floating-head .x:hover{background:var(--color-background-primary);color:var(--color-text-primary)}
+#ia-floating-content{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#ia-floating-content .ia-scope{display:flex;flex-direction:column;height:100%;min-height:0;padding:10px 12px;overflow:hidden;box-sizing:border-box}
+#ia-floating-content .ia-chat-area{flex:1;max-height:none;min-height:0}
+#ia-floating-content .ia-toolbar-title{display:none}
+@media(max-width:640px){
+  #ia-floating-btn{bottom:calc(14px + env(safe-area-inset-bottom,0px));right:14px;width:52px;height:52px;font-size:24px}
+  #ia-floating-panel{top:0;left:0;right:0;bottom:0;width:auto;height:auto;max-width:none;border-radius:0;border:none;padding-bottom:env(safe-area-inset-bottom,0px)}
+}
+</style>
+<button id="ia-floating-btn" onclick="toggleIAPanel()" title="Asistente IA">🤖</button>
+<div id="ia-floating-panel">
+  <div id="ia-floating-head">
+    <div class="t">🤖 Asistente IA</div>
+    <button class="x" onclick="toggleIAPanel()" title="Cerrar">&times;</button>
   </div>
-  <div id="ia-floating-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden"></div>
+  <div id="ia-floating-content"></div>
 </div>
 
 <script>
+// El botón flotante solo aparece con sesión iniciada (S.user). Se llama
+// tras el login, en el logout y al cargar (por si se restaura la sesión).
+function updIAFab() {
+  var btn = document.getElementById('ia-floating-btn');
+  if (!btn) return;
+  var logged = typeof S !== 'undefined' && !!S.user;
+  btn.classList.toggle('on', logged);
+  if (!logged) {
+    var panel = document.getElementById('ia-floating-panel');
+    if (panel && panel.classList.contains('open')) toggleIAPanel();
+  }
+}
+
 function toggleIAPanel() {
   var panel = document.getElementById('ia-floating-panel');
   var content = document.getElementById('ia-floating-content');
-  var btn = document.getElementById('ia-floating-btn');
-  
-  if (panel.style.display === 'none') {
-    panel.style.display = 'flex';
-    btn.style.transform = 'scale(0.9)';
-    var iaContent = document.getElementById('ia-content');
-    if (iaContent) {
-      iaContent.style.boxShadow = 'none';
-      iaContent.style.borderRadius = '0';
-      content.appendChild(iaContent);
+  var iaContent = document.getElementById('ia-content');
+
+  if (!panel.classList.contains('open')) {
+    if (typeof S === 'undefined' || !S.user) {
+      if (typeof showToast === 'function') showToast('Inicia sesión primero');
+      return;
     }
+    panel.classList.add('open');
+    if (iaContent) content.appendChild(iaContent);
     if (typeof renderIAAssistant === 'function') renderIAAssistant();
   } else {
-    panel.style.display = 'none';
-    btn.style.transform = 'scale(1)';
-    var iaContent = document.getElementById('ia-content');
+    panel.classList.remove('open');
     var fullPage = document.getElementById('ia-assistant');
-    if (iaContent && fullPage) {
-      iaContent.style.boxShadow = '';
-      iaContent.style.borderRadius = '';
-      fullPage.appendChild(iaContent);
-    }
+    if (iaContent && fullPage) fullPage.appendChild(iaContent);
   }
 }
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var p = document.getElementById('ia-floating-panel');
+    if (p && p.classList.contains('open')) toggleIAPanel();
+  }
+});
+
+updIAFab();
 </script>
 
 </body>
