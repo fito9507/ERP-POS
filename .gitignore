@@ -1,0 +1,19 @@
+# ── Secretos: NUNCA subir ─────────────────────────────────
+*.pem
+*.cer
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+scratch/revolut_certs/
+# scratch/ = scripts desechables; varios llevan credenciales en claro
+scratch/
+
+# ── Dependencias ──────────────────────────────────────────
+node_modules/
+
+# ── Temporales de herramientas ────────────────────────────
+supabase/.temp/
+.vscode/
+all.js
