@@ -8278,6 +8278,22 @@ function updLQ(cid,fid,i,v){
   const newQ=parseFloat(v)||0;
   const oldQ=f.lineas[i].q;
   const delta=oldQ-newQ; // > 0 means restoring to stock
+  
+  if(delta < 0) {
+    const prodName=f.lineas[i].prod||f.lineas[i].n;
+    const prod=PRODS.find(p=>p.n===prodName);
+    if(prod) {
+      const extraNeeded = -delta;
+      const disponible = typeof _getStk === 'function' ? _getStk(prod, f.alm||'Habana') : (prod.stk||0);
+      if(extraNeeded > disponible) {
+        alert('Stock insuficiente. Solo hay ' + disponible + ' unidades extra disponibles para ' + prodName + '\n(Máximo permitido: ' + (oldQ + disponible) + ').');
+        const pl=document.getElementById(`pl-${cid}-${fid}`);
+        if(pl)pl.innerHTML=renderPL(c,f);
+        return;
+      }
+    }
+  }
+
   f.lineas[i].q=newQ;
   if(delta!==0){
     const prod=PRODS.find(p=>p.n===f.lineas[i].prod||p.n===f.lineas[i].n);
@@ -8299,7 +8315,6 @@ function updLQ(cid,fid,i,v){
   if(pl)pl.innerHTML=renderPL(c,f);
   renderFichaFolios(c);
 }
-function updLP(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].precio=parseFloat(v)||0;if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
 function restL(cid,fid,i){
   const c=CLIENTES.find(x=>x.id===cid);
