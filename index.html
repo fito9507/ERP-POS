@@ -15504,7 +15504,8 @@ function renderAdminAnalytics() {
           qSold: qSold,
           qCurrent: qCurrentDisplay,
           pCost: pCost,
-          pRev: fRev
+          pRev: fRev,
+          pExpectedExtra: expectedRevExtra
         });
       });
     });
@@ -15530,6 +15531,9 @@ function renderAdminAnalytics() {
       revenue: revenue,
       margin: margin,
       marginPct: marginP,
+      expectedRevenue: expectedRevenue,
+      expectedMargin: expectedMargin,
+      expectedMarginPct: expectedMarginP,
       totalUnits: totalUnits,
       unitsSold: unitsSold,
       soldPct: soldPct,
