@@ -5858,7 +5858,10 @@ function filtrar_ig(){
 // ── RENDER LIBRO ──────────────────────────────────────────
 function renderLibro(){
   // Sort and group transfer pairs together
-  const _rawData=filtrar_ig().sort((a,b)=>(b.ts||(b.fecha+'T00:00:00Z')).localeCompare(a.ts||(a.fecha+'T00:00:00Z'))||(b.id-a.id));
+  // Ordenar por FECHA real (no por ts de insercion): los movimientos
+  // bancarios se importan hoy pero su fecha es la del banco. Dentro de
+  // cada dia, por hora/ts y luego por id.
+  const _rawData=filtrar_ig().sort((a,b)=>(b.fecha||'').localeCompare(a.fecha||'')||(b.ts||'').localeCompare(a.ts||'')||(b.id-a.id));
   // Re-group: after each transfer salida, insert its matching entrada immediately after
   const _seen=new Set();
   const data=[];
