@@ -12143,8 +12143,19 @@ function syncWiseApi() {
 // su caja por IBAN. El mapeo vive en localStorage 'erp_abanca_map' como
 // {"ES91...": "EUR ABANCA", ...} y se configura una vez con abancaMapear().
 
+// Mapeo por defecto IBAN->caja (identificado contra los saldos y movimientos
+// reales el 19-08-2026; la cuenta 9955..163656 es la poliza de credito:
+// FORMALIZACION POLIZA 180 + MOV 11820 = los 12.000 dispuestos).
+// abancaMapear() puede sobreescribirlo por navegador via localStorage.
+var _ABANCA_MAP_DEF = {
+  'ES2120805043933940202989': 'USD ABANCA',
+  'ES8720805043943040076381': 'EUR ABANCA',
+  'ES6020805043995500163656': 'EUR CRÉDITO ABANCA'
+};
 function _abancaMap() {
-  try { return JSON.parse(localStorage.getItem('erp_abanca_map') || '{}'); } catch (e) { return {}; }
+  var m = {};
+  try { m = JSON.parse(localStorage.getItem('erp_abanca_map') || '{}'); } catch (e) {}
+  return Object.assign({}, _ABANCA_MAP_DEF, m);
 }
 
 function _abancaCajaPara(t) {
@@ -12172,6 +12183,9 @@ function _abancaCompararSaldos(data, insertadas) {
       if (!nombre || typeof _cajasData === 'undefined') return;
       var cObj = _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; });
       if (!cObj) return;
+      // Cuentas de credito: el banco reporta el DISPONIBLE y la caja lleva el
+      // DISPUESTO (p.ej. disponible 0 vs caja -12.000). No comparar.
+      if (/cr[eé]dito/i.test(cObj.nombre)) return;
       var erp = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(cObj.nombre) : null;
       if (erp === null) return;
       var diff = parseFloat((b.amount - erp).toFixed(2));
@@ -12284,7 +12298,7 @@ setTimeout(function() {
     console.log('Auto-sync bancario: Revolut + Wise');
     syncRevolutApi();
     setTimeout(function() { syncWiseApi(); }, 5000);
-    if (localStorage.getItem('erp_abanca_map')) setTimeout(function() { syncAbancaApi(); }, 10000);
+    setTimeout(function() { syncAbancaApi(); }, 10000);
   } catch (e) { console.warn('autosync bancario:', e); }
 }, 8000);
 
