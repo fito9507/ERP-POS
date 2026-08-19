@@ -26,7 +26,7 @@ serve(async (req) => {
     // 1. Crear el Client Assertion (JWT firmado con la clave privada)
     const privateKey = await jose.importPKCS8(privateKeyPem.replace(/\\n/g, '\n'), 'RS256')
     const jwt = await new jose.SignJWT({
-      iss: 'developer.revolut.com',
+      iss: 'google.com',
       sub: clientId,
       aud: 'https://revolut.com'
     })
