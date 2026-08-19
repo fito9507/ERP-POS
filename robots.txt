@@ -1,0 +1,4 @@
+# ERP interno: no indexar. Solo el catalogo es contenido publico.
+User-agent: *
+Disallow: /
+Allow: /catalogo.html
