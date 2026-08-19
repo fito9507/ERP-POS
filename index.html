@@ -402,7 +402,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #ia-assistant .ia-btn-send {background:var(--color-text-primary);color:var(--color-background-primary)}
 #ia-assistant .ia-btn-attach {background:var(--color-background-secondary);color:var(--color-text-secondary);border:1px solid var(--color-border-tertiary)}
 #ia-assistant .ia-btn-attach:hover {background:var(--color-background-primary)}
-#ia-assistant .ia-btn-mic.recording {background:var(--color-background-danger);color:var(--color-text-danger);animation:ia-pulse 1.5s infinite}
+#ia-assistant .ia-btn-mic.recording {background:red !important;color:white !important;border-color:red !important;animation:ia-pulse 1.2s infinite}
 @keyframes ia-pulse { 0% {transform:scale(1)} 50% {transform:scale(1.1)} 100% {transform:scale(1)} }
 #ia-assistant .ia-attachments {display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 #ia-assistant .ia-att-chip {display:inline-flex;align-items:center;gap:4px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:4px 10px;font-size:11px}
@@ -15570,7 +15570,6 @@ function renderIAAssistant() {
     + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
     + '</div></div>'
     + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
-    + '<div id="ia-recording-overlay" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(255,0,0,0.9);color:white;padding:20px 40px;border-radius:12px;font-size:24px;font-weight:bold;z-index:10;animation:ia-pulse 1.5s infinite;pointer-events:none">🔴 Grabando audio...</div>'
     + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
     + '<div class="ia-input-bar" style="position:relative">'
     + '<button class="ia-btn-attach ia-btn-mic" id="ia-mic-btn" onclick="iaToggleMic()" title="Grabar audio con el micrófono">🎙️</button>'
@@ -15709,14 +15708,12 @@ var _iaAudioChunks = [];
 async function iaToggleMic() {
   var btn = document.getElementById('ia-mic-btn');
   var input = document.getElementById('ia-input');
-  var overlay = document.getElementById('ia-recording-overlay');
   
   if (_iaMediaRecorder && _iaMediaRecorder.state === 'recording') {
     // Stop recording
     _iaMediaRecorder.stop();
     if (btn) btn.classList.remove('recording');
     if (input) input.placeholder = "Describe qué pasó con el dinero...";
-    if (overlay) overlay.style.display = 'none';
     return;
   }
 
@@ -15749,13 +15746,8 @@ async function iaToggleMic() {
 
     _iaMediaRecorder.start();
     if (btn) btn.classList.add('recording');
-    if (input) input.placeholder = "Grabando audio... (toca el 🎙️ de nuevo para detener)";
-    if (overlay) overlay.style.display = 'block';
-    
-    // Ensure parent is relative so absolute positioning works
-    var contentEl = document.getElementById('ia-content');
-    if (contentEl) contentEl.style.position = 'relative';
-    
+    if (input) input.placeholder = "🔴 Grabando audio... (toca el botón de nuevo para detener)";
+
   } catch (err) {
     console.error('Error accessing microphone:', err);
     alert('No se pudo acceder al micrófono. Verifica los permisos de tu navegador.');
