@@ -13273,28 +13273,32 @@ function applyStockMov(mov) {
   if (!p) return false;
   if (!p.stk_alm) p.stk_alm = { Habana:0, Placetas:0, Xportprise:0 };
 
-  if (mov.tipo === 'entrada') {
-    p.stk_alm[mov.almacen] = (p.stk_alm[mov.almacen]||0) + mov.cantidad;
-  } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
-    p.stk_alm[mov.almacen] = Math.max(0, (p.stk_alm[mov.almacen]||0) - mov.cantidad);
-  } else if (mov.tipo === 'ajuste_alta') {
-    p.stk_alm[mov.almacen] = (p.stk_alm[mov.almacen]||0) + mov.cantidad;
-  } else if (mov.tipo === 'traslado') {
-    p.stk_alm[mov.almacen] = Math.max(0, (p.stk_alm[mov.almacen]||0) - mov.cantidad);
-    p.stk_alm[mov.almacenDest] = (p.stk_alm[mov.almacenDest]||0) + mov.cantidad;
-  } else if (mov.tipo === 'ajuste_abs') {
-    // Ajuste del lote específico: recalcular stk_alm sumando todos los lotes
-    // Primero actualizar el lote específico localmente
-    var loteAbs = mov.contenedor || 'SIN LOTE';
-    if (!p.lotes) p.lotes = [];
-    var loteEntry = p.lotes.find(function(x){ return x.lote===loteAbs && x.almacen===mov.almacen; });
-    if (loteEntry) {
-      loteEntry.cantidad = mov.cantidad;
-    } else {
-      p.lotes.push({producto_id:p.supaId||'', almacen:mov.almacen, lote:loteAbs, cantidad:mov.cantidad});
+  var loteName = mov.contenedor || 'SIN LOTE';
+  if (!p.lotes) p.lotes = [];
+  
+  function _updLote(alm, delta, isAbs) {
+    var le = p.lotes.find(function(x){ return x.lote===loteName && x.almacen===alm; });
+    if (!le) {
+      le = {producto_id:p.supaId||'', almacen:alm, lote:loteName, cantidad:0};
+      p.lotes.push(le);
     }
-    // Recalcular el total del almacen sumando todos sus lotes
-    p.stk_alm[mov.almacen] = (p.lotes||[]).filter(function(x){return x.almacen===mov.almacen;}).reduce(function(a,x){return a+(x.cantidad||0);},0);
+    if (isAbs) {
+      le.cantidad = delta;
+    } else {
+      le.cantidad = Math.max(0, le.cantidad + delta);
+    }
+    p.stk_alm[alm] = p.lotes.filter(function(x){return x.almacen===alm;}).reduce(function(a,x){return a+(parseFloat(x.cantidad)||0);},0);
+  }
+
+  if (mov.tipo === 'entrada' || mov.tipo === 'ajuste_alta') {
+    _updLote(mov.almacen, mov.cantidad, false);
+  } else if (mov.tipo === 'salida' || mov.tipo === 'ajuste_baja') {
+    _updLote(mov.almacen, -mov.cantidad, false);
+  } else if (mov.tipo === 'traslado') {
+    _updLote(mov.almacen, -mov.cantidad, false);
+    _updLote(mov.almacenDest, mov.cantidad, false);
+  } else if (mov.tipo === 'ajuste_abs') {
+    _updLote(mov.almacen, mov.cantidad, true);
   }
   // Recalculate total
   p.stk = Object.values(p.stk_alm).reduce(function(a,v){return a+v;},0);
