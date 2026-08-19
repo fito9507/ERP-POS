@@ -562,6 +562,10 @@ const MON_SYM = { USD:'$', EUR:'€', CUP:'₱', CUPT:'₱' };
 const MON_DEC = { USD:2, EUR:2, CUP:0, CUPT:0 };
 
 // ── UTILS ─────────────────────────────────────────────────
+function _getStk(p, alm) { 
+  if (alm && p.stk_alm && Object.keys(p.stk_alm).length > 0) return p.stk_alm[alm] || 0; 
+  return p.stk || 0; 
+}
 function fN(n, dec){ 
   if(isNaN(n)||n==null) return '—';
   var d = dec ?? 2;
@@ -819,7 +823,7 @@ function getAvailableStock(p, alm, modo) {
     return committed > 0 ? Math.max(0, 999 - committed) : 999;
   }
   
-  var base = (p.stk_alm && p.stk_alm[_alm] != null) ? p.stk_alm[_alm] : (p.stk || 0);
+  var base = _getStk(p, _alm);
   return Math.max(0, base - committed);
 }
 
@@ -981,7 +985,7 @@ function transitCardHTML(p){
     +'<div style="font-size:11px;color:#cb4b16;font-weight:600">🚢 Próximamente</div>'
     +(function(){
       if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '';
-      var ts=p.stk_alm ? (p.stk_alm[ALM] || 0) : (p.stk || 0);
+      var ts = _getStk(p, ALM);
       var avail = (typeof getAvailableStock === 'function') ? getAvailableStock(p, ALM, 'transit') : ts;
       var qr = ts - avail;
       if(ts<=0 && qr>0) ts=qr;
@@ -1058,7 +1062,7 @@ function cardHTML(p){
     +'<div class="card-stock">'+stkLabel+'</div>'
     +(function(){
       if(p.badgeTexto === 'RESERVADO' || p.reservado === true) return '';
-      var ts=p.stk_alm ? (p.stk_alm[ALM] || 0) : (p.stk || 0);
+      var ts = _getStk(p, ALM);
       var avail = (typeof getAvailableStock === 'function') ? getAvailableStock(p, ALM, 'stock') : ts;
       if(avail <= 0) return ''; // Let stkLabel handle 'Sin stock'
       
@@ -1922,7 +1926,7 @@ function updCartQty(name, val){
   var qty = Math.max(minQty, parseInt(val)||minQty);
   // Skip stock cap for import (por_encargo) products — they have no physical stock limit
   if(!isEncargo){
-    var maxStk = (p.stk_alm && p.stk_alm[ALM] != null) ? p.stk_alm[ALM] : (p.stk||0);
+    var maxStk = _getStk(p, ALM);
     if(qty > maxStk) {
       qty = Math.max(0, maxStk);
       if(typeof showToast==='function') showToast("Stock máximo alcanzado: " + maxStk);
