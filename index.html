@@ -15506,6 +15506,18 @@ function _escHtml(s) {
 
 var _iaAttachments = []; // {name, type, base64, mimeType}
 var _iaChatHistory = []; // {role:'user'|'assistant', content:...}
+try { _iaChatHistory = JSON.parse(localStorage.getItem('erp_ia_chat')||'[]'); } catch(e){}
+function _iaSaveChat() {
+  try {
+    var lightweight = _iaChatHistory.map(function(m) {
+      if (m.role === 'user' && typeof m.content !== 'string') {
+        return { role: m.role, content: m._displayText || '[Contenido adjunto]', _displayText: m._displayText };
+      }
+      return m;
+    });
+    localStorage.setItem('erp_ia_chat', JSON.stringify(lightweight));
+  } catch(e) { console.error('Error saving IA chat', e); }
+}
 var _iaProposal = null;  // parsed proposal from AI
 
 function renderIAAssistant() {
@@ -15604,6 +15616,7 @@ function iaConfigKey() {
   } else if (newKey.trim() === '') {
     localStorage.removeItem('erp_openai_key');
     _iaChatHistory = [];
+    _iaSaveChat();
     renderIAAssistant();
   } else {
     alert('La API Key debe comenzar con "sk-"');
@@ -15614,6 +15627,7 @@ function iaLimpiarChat() {
   if (_iaChatHistory.length === 0) return;
   if (!confirm('¿Limpiar toda la conversación?')) return;
   _iaChatHistory = [];
+  _iaSaveChat();
   _iaAttachments = [];
   _iaProposal = null;
   renderIAAssistant();
@@ -15936,6 +15950,7 @@ async function iaEnviar() {
     }
 
     _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
+    _iaSaveChat();
     _iaAttachments = [];
 
     if (input) input.value = '';
@@ -15979,6 +15994,7 @@ async function iaEnviar() {
     var aiText = data.choices[0].message.content;
 
     _iaChatHistory.push({ role: 'assistant', content: aiText });
+    _iaSaveChat();
     _iaProposal = _iaExtractProposal(aiText);
 
     renderIAAssistant();
@@ -15989,6 +16005,7 @@ async function iaEnviar() {
     if (loadEl) loadEl.remove();
 
     _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nVerifica que tu API Key sea correcta y que tengas saldo en tu cuenta de OpenAI.' });
+    _iaSaveChat();
     renderIAAssistant();
   }
 }
@@ -16111,6 +16128,7 @@ async function iaEjecutarPropuesta() {
     msg += '\n\n⚠️ Errores: ' + errors.join('; ');
   }
   _iaChatHistory.push({ role: 'assistant', content: msg });
+  _iaSaveChat();
 
   renderIAAssistant();
   if (typeof renderLibro === 'function') try { renderLibro(); } catch (e) {}
