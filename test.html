@@ -1,1 +1,0 @@
-<input type='text' id='ep-min' value='50'><input type='text' onblur="var v=this.value.trim();if(v.endsWith('%')){var b=parseFloat(document.getElementById('ep-min').value)||0;if(b>0){var p=parseFloat(v);if(!isNaN(p)){var s=v.startsWith('+')?1:-1;this.value=(b*(1+s*Math.abs(p)/100)).toFixed(2);}}}else if(v!==''&&!isNaN(parseFloat(v))){this.value=parseFloat(v).toFixed(2);}">

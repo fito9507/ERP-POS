@@ -1,2 +1,0 @@
-
-// renderStock defined below
