@@ -15920,6 +15920,10 @@ function _escHtml(s) {
 // ██  ASISTENTE IA FINANCIERO                                ██
 // ══════════════════════════════════════════════════════════════
 
+// AQUI PUEDES PEGAR TU CLAVE FIJA PARA QUE NO SE BORRE NUNCA MÁS:
+const HARDCODED_OPENAI_KEY = ''; // <-- Pega tu clave "sk-..." dentro de las comillas
+
+
 var _iaAttachments = []; // {name, type, base64, mimeType}
 var _iaSessions = []; // Array of { id, title, messages, updated_at }
 var _iaCurrentSessionId = null;
@@ -15989,7 +15993,7 @@ var _iaProposal = null;  // parsed proposal from AI
 function renderIAAssistant() {
   var el = document.getElementById('ia-content');
   if (!el) return;
-  var apiKey = localStorage.getItem('erp_openai_key') || '';
+  var apiKey = localStorage.getItem('erp_openai_key') || (typeof HARDCODED_OPENAI_KEY !== 'undefined' ? HARDCODED_OPENAI_KEY : '');
 
   // If no API key configured, show setup screen
   if (!apiKey) {
@@ -16379,7 +16383,7 @@ async function iaEnviar() {
   var text = (input ? input.value : '').trim();
   if (!text && _iaAttachments.length === 0) return;
 
-  var apiKey = localStorage.getItem('erp_openai_key') || '';
+  var apiKey = localStorage.getItem('erp_openai_key') || (typeof HARDCODED_OPENAI_KEY !== 'undefined' ? HARDCODED_OPENAI_KEY : '');
   if (!apiKey) { showToast('Configura tu API Key primero'); return; }
 
   var userContent = [];
