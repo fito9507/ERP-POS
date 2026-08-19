@@ -29,3 +29,15 @@ entrypoint = "./functions/cierre-diario/index.ts"
 [functions.backup-diario]
 enabled = true
 entrypoint = "./functions/backup-diario/index.ts"
+
+[functions.abanca-sync]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/abanca-sync/index.ts"
+
+# El callback lo abre el navegador redirigido desde Abanca (sin cabeceras
+# de Supabase): va SIN verificación de JWT.
+[functions.abanca-callback]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/abanca-callback/index.ts"

@@ -11723,6 +11723,7 @@ function renderBackup() {
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="syncRevolutApi()" style="background:var(--color-primary);color:#fff">🔄 Sincronizar Revolut</button>'
     + '<button class="adm-btn adm-btn-p" onclick="syncWiseApi()" style="background:#00b9ff;color:#fff;border:none">🦉 Sincronizar Wise</button>'
+    + '<button class="adm-btn adm-btn-p" onclick="syncAbancaApi()" style="background:#0055a4;color:#fff;border:none" oncontextmenu="event.preventDefault();abancaMapear()" title="Clic: sincronizar \u00b7 Clic derecho: configurar cuentas">🏦 Sincronizar Abanca</button>'
     + '</div></div>'
     + '<div class="adm-card">'
     + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Resumen de datos</div>'
@@ -11843,7 +11844,7 @@ async function _bancoInsertar(mov, movCaja) {
   return false;
 }
 
-// cfg: { nombre, prefijo, endpoint, cajaClave, normalizar }
+// cfg: { nombre, prefijo, endpoint, cajaClave, normalizar, cajaPara?, alFinal? }
 // normalizar(bruta) devuelve {id, idLegacy, fecha, moneda, importe, concepto}
 // o null para descartar la transacción.
 async function _bancoSync(cfg) {
@@ -11894,7 +11895,9 @@ async function _bancoSync(cfg) {
       vistos[t.id] = true;   // también evita duplicar dentro del mismo lote
 
       var cObj = null;
-      if (typeof _cajasData !== 'undefined') {
+      if (cfg.cajaPara) {
+        cObj = cfg.cajaPara(t);
+      } else if (typeof _cajasData !== 'undefined') {
         cObj = _cajasData.find(function(c) {
           return c.moneda === t.moneda && c.nombre.toLowerCase().includes(cfg.cajaClave);
         });
@@ -12076,6 +12079,139 @@ function syncWiseApi() {
   });
 }
 
+// ── ABANCA (Open Banking PSD2) ───────────────────────────────
+// Abanca tiene VARIAS cajas en EUR (ABANCA, ABANCA YANO, CRÉDITO ABANCA),
+// así que el matching por nombre no sirve: cada cuenta del banco se mapea a
+// su caja por IBAN. El mapeo vive en localStorage 'erp_abanca_map' como
+// {"ES91...": "EUR ABANCA", ...} y se configura una vez con abancaMapear().
+
+function _abancaMap() {
+  try { return JSON.parse(localStorage.getItem('erp_abanca_map') || '{}'); } catch (e) { return {}; }
+}
+
+function _abancaCajaPara(t) {
+  if (typeof _cajasData === 'undefined') return null;
+  var nombre = _abancaMap()[t.cuenta_iban];
+  if (nombre) {
+    return _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; }) || null;
+  }
+  // sin mapeo: solo si hay UNA única caja abanca en esa moneda (sin ambigüedad)
+  var candidatas = _cajasData.filter(function(c) {
+    return c.moneda === t.moneda && c.activa !== false && c.nombre.toLowerCase().includes('abanca');
+  });
+  return candidatas.length === 1 ? candidatas[0] : null;
+}
+
+// Compara el saldo real de cada cuenta Abanca con su caja mapeada y ofrece
+// el ajuste (mismo patrón que Wise).
+function _abancaCompararSaldos(data, insertadas) {
+  var balances = data && data.balances;
+  if (!balances || !balances.length) return;
+  var map = _abancaMap();
+  setTimeout(function() {
+    balances.forEach(function(b) {
+      var nombre = map[b.iban];
+      if (!nombre || typeof _cajasData === 'undefined') return;
+      var cObj = _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; });
+      if (!cObj) return;
+      var erp = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(cObj.nombre) : null;
+      if (erp === null) return;
+      var diff = parseFloat((b.amount - erp).toFixed(2));
+      if (Math.abs(diff) < 0.01) return;
+      if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + b.currency
+          + ' en el ERP, pero el saldo real en Abanca (' + b.iban.slice(-4) + ') es ' + b.amount + ' ' + b.currency + '.\n\n'
+          + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + b.currency + ' para cuadrarla?')) return;
+      var hoy = new Date().toISOString().slice(0, 10);
+      var esPos = diff > 0;
+      var amt = Math.abs(diff);
+      var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
+      var mov = {
+        fecha: hoy,
+        tipo: esPos ? 'Ajuste positivo' : 'Ajuste negativo',
+        descripcion: 'Cuadre con saldo real de Abanca (' + b.amount + ' ' + b.currency + ')',
+        monto: amt, moneda: b.currency,
+        equiv_usd: parseFloat((amt * (_rates[b.currency] || 1)).toFixed(4)),
+        cuenta: cObj.nombre, vendedor: 'Sistema',
+        notas: 'Ajuste cuadre Abanca ' + hoy
+      };
+      var movCaja = {
+        fecha: hoy, tipo: esPos ? 'deposito' : 'retiro',
+        caja_origen: esPos ? null : cObj.nombre,
+        caja_destino: esPos ? cObj.nombre : null,
+        monto_origen: amt, monto_destino: amt,
+        notas: mov.descripcion, usuario: 'Sistema'
+      };
+      _bancoInsertar(mov, movCaja).then(function(okIns) {
+        if (okIns) {
+          showToast('\u2705 ' + cObj.nombre + ' cuadrada a ' + b.amount + ' ' + b.currency);
+          if (typeof _initApp === 'function') _initApp(true);
+        } else {
+          showToast('\u274c No se pudo crear el ajuste de ' + cObj.nombre + ' (detalle en consola)');
+        }
+      });
+    });
+  }, insertadas > 0 ? 4500 : 600);
+}
+
+function syncAbancaApi() {
+  return _bancoSync({
+    nombre: 'Abanca',
+    prefijo: 'ABANCA_ID',
+    endpoint: 'abanca-sync',
+    cajaClave: 'abanca',
+    cajaPara: _abancaCajaPara,
+    alFinal: _abancaCompararSaldos,
+    normalizar: function(t) {
+      if (t.estado && t.estado !== 'COMPLETED') return null;
+      if (t.signo_conocido === false) return null;
+      if (typeof t.amount !== 'number' || !isFinite(t.amount) || t.amount === 0) return null;
+      if (!t.currency) return null;
+      var id = _bancoSanearId(t.id);
+      if (!id) return null;
+      return {
+        id: id,
+        idLegacy: null,
+        fecha: t.created_at || new Date().toISOString(),
+        moneda: t.currency,
+        importe: t.amount,
+        concepto: t.reference || 'Abanca',
+        cuenta_iban: t.cuenta_iban
+      };
+    }
+  });
+}
+
+// Configurar el mapeo IBAN→caja (ejecutar una vez desde la consola o tras
+// pulsar Sincronizar Abanca si avisa de cuentas sin mapear).
+async function abancaMapear() {
+  showToast('\uD83C\uDFE6 Consultando cuentas de Abanca...');
+  try {
+    var r = await fetch(SUPA_URL + '/functions/v1/abanca-sync', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + SUPA_KEY, 'apikey': SUPA_KEY, 'Content-Type': 'application/json' }
+    });
+    var data = await r.json();
+    if (!r.ok || data.error) { alert('Abanca: ' + (data.error || r.status)); return; }
+    var map = _abancaMap();
+    var cajas = (typeof _cajasData !== 'undefined' ? _cajasData : [])
+      .filter(function(c) { return c.activa !== false; })
+      .map(function(c) { return c.nombre + ' (' + c.moneda + ')'; }).join('\n  ');
+    (data.balances || []).forEach(function(b) {
+      var actual = map[b.iban] || '';
+      var resp = prompt('Cuenta Abanca ' + b.iban + (b.alias ? ' (' + b.alias + ')' : '')
+        + '\nSaldo real: ' + b.amount + ' ' + b.currency
+        + '\n\nNombre EXACTO de la caja del ERP para esta cuenta (vac\u00edo = ignorar):\n\nCajas:\n  ' + cajas, actual);
+      if (resp === null) return;
+      resp = resp.trim();
+      if (resp) map[b.iban] = resp; else delete map[b.iban];
+    });
+    localStorage.setItem('erp_abanca_map', JSON.stringify(map));
+    showToast('\u2705 Mapeo Abanca guardado (' + Object.keys(map).length + ' cuentas). Ya puedes sincronizar.');
+  } catch (e) {
+    alert('Error consultando Abanca: ' + e.message);
+  }
+}
+
 // ── Sincronización bancaria automática ───────────────────────
 // Al abrir la app se sincronizan Revolut y Wise solos (escalonados para no
 // pisarse), como mucho una vez cada 30 minutos aunque se recargue mucho.
@@ -12090,6 +12226,7 @@ setTimeout(function() {
     console.log('Auto-sync bancario: Revolut + Wise');
     syncRevolutApi();
     setTimeout(function() { syncWiseApi(); }, 5000);
+    if (localStorage.getItem('erp_abanca_map')) setTimeout(function() { syncAbancaApi(); }, 10000);
   } catch (e) { console.warn('autosync bancario:', e); }
 }, 8000);
 
