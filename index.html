@@ -11672,7 +11672,7 @@ async function syncRevolutApi() {
           equiv_usd: parseFloat((amt * (_rates[mon] || 1)).toFixed(4)),
           cuenta: cajaName,
           vendedor: 'Sistema',
-          almacen: cObj.almacen || 'General',
+          
           notas: 'REV_ID:' + revId
         };
         
@@ -16422,6 +16422,7 @@ function _iaEscapeHtml(str) {
 </script>
 </body>
 </html>
+
 
 
 
