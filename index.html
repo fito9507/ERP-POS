@@ -1856,7 +1856,7 @@ try { _cierreEnviado = localStorage.getItem('erp_cierre_enviado')||''; } catch(e
 
 async function enviarCierreDiario(fecha, isAuto) {
   if (!fecha) fecha = new Date().toISOString().slice(0,10);
-  var alms = ['Habana','Placetas','Xportprise'];
+  var alms = ['Habana','Placetas','Xportprise','General'];
   for (var i=0; i<alms.length; i++) {
     var alm = alms[i];
     var ventasAlm = (typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
@@ -1909,7 +1909,7 @@ async function enviarCierreDiario(fecha, isAuto) {
     // Saldo de cajas del almacen
     // IG movements of the day for this almacen
     var movsHoy=(typeof MOVS!=='undefined'?MOVS:[]).filter(function(m){
-      var mAlm=['Habana','Placetas','Xportprise'].find(function(a){return (m.cta||'').indexOf(a)>=0;})||m.alm||'';
+      var mAlm=['Habana','Placetas','Xportprise','General'].find(function(a){return (m.cta||'').indexOf(a)>=0;})||m.alm||'';
       return m.fecha&&m.fecha.slice(0,10)===fecha && mAlm===alm;
     });
     var igByMon={};
