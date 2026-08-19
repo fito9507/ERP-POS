@@ -1690,8 +1690,8 @@ const TG_ON = true; // Telegram habilitado (via Edge Function)
 const TG_CHAT  = '575008904';  // personal (admin)
 const TG_BACKUP = '-5277125001';  // Grupo Backups
 // Grupos por almacén
-const TG_VENTAS  = { Habana:'-1003851284058', Placetas:'-1003866260307', Xportprise:'-5577773442' };
-const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669', Xportprise:'-5577773442' };
+const TG_VENTAS  = { Habana:'-1003851284058', Placetas:'-1003866260307', Xportprise:'-5577773442', General:'-5577773442' };
+const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669', Xportprise:'-5577773442', General:'-5577773442' };
 function _tgApi(tgMethod, payload, isForm){
   var url=SUPA_URL+'/functions/v1/tg-send';
   var hdrs={'Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY};
