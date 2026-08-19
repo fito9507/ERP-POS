@@ -58,8 +58,8 @@ serve(async (req) => {
     const { access_token } = await tokenRes.json()
 
     // 3. Obtener transacciones de Revolut usando el access_token
-    // Por defecto, descargamos los últimos 5 días
-    const fromDate = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    // Ampliamos el margen a 30 días para la importación inicial
+    const fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     const txUrl = `${revUrl}/api/1.0/transactions?from=${fromDate}`
     
     const txRes = await fetch(txUrl, {
