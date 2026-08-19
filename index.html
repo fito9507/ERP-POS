@@ -2674,7 +2674,7 @@ async function supaInit() {
 
 
 
-</script>(); }
+</script>
 <script>
 
 
@@ -11619,15 +11619,107 @@ async function _buildBackupJSON() {
   window._backupJSON = snap;
   return snap;
 }
-async function syncRevolutApi() {
+// ── Sincronización bancaria (Revolut / Wise) ────────────────
+// Cada transacción importada deja un marcador "PREFIJO:id" en las notas,
+// tanto en movimientos_ig como en mov_cajas. Reglas duras, cada una salida
+// de un descuadre real:
+//
+//  1. Lo ya importado se comprueba contra la BD, nunca contra MOVS en
+//     memoria: MOVS va un ciclo por detrás (se recarga 1 s después) y dos
+//     sincronizaciones seguidas duplicaban los saldos.
+//  2. Comparación EXACTA del id. Con includes(), 'REV_ID:123' casaba dentro
+//     de 'REV_ID:1234' y se descartaban transacciones buenas.
+//  3. Primero el marcador en movimientos_ig y después el asiento en
+//     mov_cajas. Si el asiento falla se borra el marcador: así el reintento
+//     es posible y nunca se da por importado algo que no movió el saldo.
+//  4. Nada de Promise.all: supaReq devuelve el fetch crudo y no rechaza ante
+//     un 4xx, así que decía "✅ sincronizado" aunque fallaran todos los
+//     INSERT. Hay que mirar r.ok transacción a transacción.
+//
+// La red de seguridad final es el índice único de
+// supabase_sync_bancario_dedup.sql: aunque el cliente se equivoque, la BD
+// rechaza el apunte duplicado.
+
+// base64 → base64url. Es inyectivo, al contrario que borrar los caracteres
+// raros: borrando, dos ids distintos de Wise colapsaban en el mismo y la
+// segunda transacción se descartaba como si fuera duplicada.
+function _bancoSanearId(id) {
+  return String(id == null ? '' : id)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+    .replace(/[^A-Za-z0-9_-]/g, '');
+}
+
+// Forma antigua del id (se borraban los caracteres no alfanuméricos y se
+// cortaba a 50). Se sigue consultando para no reimportar lo que ya entró
+// con el esquema viejo.
+function _bancoSanearIdLegacy(id) {
+  return String(id == null ? '' : id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50);
+}
+
+// IDs ya importados, leídos de la BD. Devuelve null si la consulta falla:
+// sin esa lista no se puede deduplicar, y sincronizar a ciegas duplicaría
+// saldos, así que el llamador debe abortar.
+async function _bancoIdsImportados(prefijo) {
+  try {
+    var r = await supaReq('GET', 'movimientos_ig?select=notas&notas=like.*' +
+      encodeURIComponent(prefijo + ':') + '*&limit=10000');
+    if (!r.ok) {
+      console.error('_bancoIdsImportados ' + prefijo + ':', r.status, await r.text());
+      return null;
+    }
+    var filas = await r.json() || [];
+    var re = new RegExp(prefijo + ':([A-Za-z0-9_-]+)');
+    var vistos = {};
+    for (var i = 0; i < filas.length; i++) {
+      var m = filas[i].notas && filas[i].notas.match(re);
+      if (m) vistos[m[1]] = true;
+    }
+    return vistos;
+  } catch (e) {
+    console.error('_bancoIdsImportados ' + prefijo + ':', e);
+    return null;
+  }
+}
+
+// Graba una transacción bancaria: marcador + asiento de caja.
+// Devuelve true solo si los dos quedaron escritos.
+async function _bancoInsertar(mov, movCaja) {
+  var rMov = await supaReq('POST', 'movimientos_ig', mov);
+  if (!rMov.ok) {
+    console.error('movimientos_ig ' + mov.notas + ':', rMov.status, await rMov.text());
+    return false;
+  }
+  var creado = null;
+  try { creado = (await rMov.json() || [])[0]; } catch (e) { /* return=representation vacío */ }
+
+  var rCaja = await supaReq('POST', 'mov_cajas', movCaja);
+  if (rCaja.ok) return true;
+
+  console.error('mov_cajas ' + mov.notas + ':', rCaja.status, await rCaja.text());
+  // El saldo no se ha movido: quitar el marcador para poder reintentar.
+  if (creado && creado.id != null) {
+    var rDel = await supaReq('DELETE', 'movimientos_ig?id=eq.' + encodeURIComponent(creado.id));
+    if (!rDel.ok) {
+      console.error('¡Marcador huérfano! Borra a mano movimientos_ig id=' + creado.id +
+        ' (' + mov.notas + ') o esa transacción no volverá a importarse.');
+    }
+  }
+  return false;
+}
+
+// cfg: { nombre, prefijo, endpoint, cajaClave, normalizar }
+// normalizar(bruta) devuelve {id, idLegacy, fecha, moneda, importe, concepto}
+// o null para descartar la transacción.
+async function _bancoSync(cfg) {
   if (!_supaOnline) {
-    showToast('⚠️ Necesitas conexión a internet para sincronizar Revolut');
+    showToast('⚠️ Necesitas conexión a internet para sincronizar ' + cfg.nombre);
     return;
   }
-  
-  showToast('🔄 Conectando con Revolut...');
+  showToast('🔄 Conectando con ' + cfg.nombre + '...');
   try {
-    var r = await fetch(SUPA_URL + '/functions/v1/revolut-sync', {
+    var r = await fetch(SUPA_URL + '/functions/v1/' + cfg.endpoint, {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + SUPA_KEY,
@@ -11635,167 +11727,155 @@ async function syncRevolutApi() {
         'Content-Type': 'application/json'
       }
     });
-    
     if (!r.ok) {
       var err = await r.text();
-      showToast('❌ Error de Revolut: ' + err);
-      console.error(err);
+      console.error(cfg.nombre + ' Sync:', err);
+      showToast('❌ Error de ' + cfg.nombre + ': ' + err);
       return;
     }
-    
+
     var data = await r.json();
-    if (data.transactions && data.transactions.length > 0) {
-      var nuevas = 0;
-      var _rates = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
-      var syncPromises = [];
-
-      for (var i = 0; i < data.transactions.length; i++) {
-        var t = data.transactions[i];
-        if (t.state !== 'completed') continue;
-        var leg = t.legs && t.legs[0];
-        if (!leg) continue;
-        
-        var mon = leg.currency;
-        var cObj = typeof _cajasData !== 'undefined' ? _cajasData.find(function(c) { 
-          return c.moneda === mon && c.nombre.toLowerCase().includes('revolut'); 
-        }) : null;
-        if (!cObj) continue; 
-        
-        var cajaName = cObj.nombre;
-        var revId = t.id;
-        
-        var exists = typeof MOVS !== 'undefined' && MOVS.find(function(m) { return m.notas && m.notas.includes('REV_ID:'+revId); });
-        if (exists) continue;
-        
-        var isIngreso = leg.amount > 0;
-        var amt = Math.abs(leg.amount);
-        var reqData = {
-          fecha: t.created_at,
-          tipo: isIngreso ? 'Ingreso no-venta' : 'Gasto operativo',
-          descripcion: (t.reference || leg.description || 'Revolut Sync') + (isIngreso?'':' - '+leg.description),
-          monto: amt,
-          moneda: mon,
-          equiv_usd: parseFloat((amt * (_rates[mon] || 1)).toFixed(4)),
-          cuenta: cajaName,
-          vendedor: 'Sistema',
-          
-          notas: 'REV_ID:' + revId
-        };
-        
-        syncPromises.push(supaReq('POST', 'movimientos_ig', reqData));
-        var movCajaReq = {
-          fecha: t.created_at,
-          tipo: isIngreso ? 'deposito' : 'retiro',
-          caja_origen: isIngreso ? null : cajaName,
-          caja_destino: isIngreso ? cajaName : null,
-          monto_origen: amt,
-          monto_destino: amt,
-          notas: (t.reference || leg.description || 'Revolut Sync') + ' (REV_ID:'+revId+')',
-          usuario: 'Sistema'
-        };
-        syncPromises.push(supaReq('POST', 'mov_cajas', movCajaReq));
-      }
-
-      if (syncPromises.length > 0) {
-        showToast('🔄 Insertando ' + syncPromises.length + ' transacciones bancarias...');
-        Promise.all(syncPromises).then(function() {
-          showToast('✅ ' + syncPromises.length + ' transacciones sincronizadas con éxito');
-          if (typeof _initApp === 'function') setTimeout(function(){ _initApp(true); }, 1000);
-        });
-      } else {
-        showToast('✅ Todo al día. No hay transacciones bancarias nuevas.');
-      }
-    } else {
-      showToast('✅ No hay transacciones en los últimos días');
+    var brutas = data.transactions || [];
+    if (!brutas.length) {
+      showToast('✅ ' + cfg.nombre + ' sincronizado (sin movimientos).');
+      return;
     }
+
+    var vistos = await _bancoIdsImportados(cfg.prefijo);
+    if (!vistos) {
+      showToast('❌ No se pudo leer lo ya importado de ' + cfg.nombre +
+        '. Sincronización cancelada para no duplicar saldos.');
+      return;
+    }
+
+    var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
+    var pendientes = [];
+    var sinCaja = 0, descartadas = 0;
+
+    for (var i = 0; i < brutas.length; i++) {
+      var t = cfg.normalizar(brutas[i]);
+      if (!t) { descartadas++; continue; }
+      if (vistos[t.id] || (t.idLegacy && vistos[t.idLegacy])) continue;
+      vistos[t.id] = true;   // también evita duplicar dentro del mismo lote
+
+      var cObj = null;
+      if (typeof _cajasData !== 'undefined') {
+        cObj = _cajasData.find(function(c) {
+          return c.moneda === t.moneda && c.nombre.toLowerCase().includes(cfg.cajaClave);
+        });
+      }
+      if (!cObj) { sinCaja++; continue; }
+      if (!_rates[t.moneda]) {
+        console.warn(cfg.nombre + ': sin tasa para ' + t.moneda + ', equiv_usd saldrá 1:1');
+      }
+      pendientes.push({ t: t, caja: cObj.nombre });
+    }
+
+    if (!pendientes.length) {
+      showToast('✅ Todo al día en ' + cfg.nombre + '.' +
+        (sinCaja ? ' (' + sinCaja + ' sin caja "' + cfg.cajaClave + '" para su moneda)' : '') +
+        (descartadas ? ' (' + descartadas + ' pendientes o no interpretables)' : ''));
+      return;
+    }
+
+    showToast('🔄 Insertando ' + pendientes.length + ' transacciones de ' + cfg.nombre + '...');
+    var ok = 0, fallos = 0;
+    for (var j = 0; j < pendientes.length; j++) {
+      var p = pendientes[j], tx = p.t;
+      var marca = cfg.prefijo + ':' + tx.id;
+      var esIngreso = tx.importe > 0;
+      var amt = Math.abs(tx.importe);
+      var mov = {
+        fecha: tx.fecha,
+        tipo: esIngreso ? 'Ingreso no-venta' : 'Gasto operativo',
+        descripcion: tx.concepto,
+        monto: amt,
+        moneda: tx.moneda,
+        equiv_usd: parseFloat((amt * (_rates[tx.moneda] || 1)).toFixed(4)),
+        cuenta: p.caja,
+        vendedor: 'Sistema',
+        notas: marca
+      };
+      var movCaja = {
+        fecha: tx.fecha,
+        tipo: esIngreso ? 'deposito' : 'retiro',
+        caja_origen: esIngreso ? null : p.caja,
+        caja_destino: esIngreso ? p.caja : null,
+        monto_origen: amt,
+        monto_destino: amt,
+        notas: tx.concepto + ' (' + marca + ')',
+        usuario: 'Sistema'
+      };
+      if (await _bancoInsertar(mov, movCaja)) ok++; else fallos++;
+    }
+
+    if (fallos) {
+      showToast('⚠️ ' + cfg.nombre + ': ' + ok + ' importadas, ' + fallos +
+        ' fallidas (detalle en la consola). Las fallidas se reintentarán.');
+    } else {
+      showToast('✅ ' + ok + ' transacciones de ' + cfg.nombre + ' sincronizadas.');
+    }
+    if (ok && typeof _initApp === 'function') setTimeout(function() { _initApp(true); }, 1000);
   } catch (e) {
-    console.error('Revolut Sync', e);
+    console.error(cfg.nombre + ' Sync', e);
     showToast('❌ Error: ' + e.message);
   }
 }
 
-async function syncWiseApi() {
-  if (!_supaOnline) {
-    showToast('⚠️ Necesitas conexión a internet para sincronizar Wise');
-    return;
-  }
-  showToast('🔄 Conectando con Wise...');
-  try {
-    var r = await fetch(SUPA_URL + '/functions/v1/wise-sync', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + SUPA_KEY,
-        'apikey': SUPA_KEY,
-        'Content-Type': 'application/json'
-      }
-    });
-    if (!r.ok) {
-      var err = await r.text();
-      showToast('❌ Error de Wise: ' + err);
-      return;
+function syncRevolutApi() {
+  return _bancoSync({
+    nombre: 'Revolut',
+    prefijo: 'REV_ID',
+    endpoint: 'revolut-sync',
+    cajaClave: 'revolut',
+    normalizar: function(t) {
+      if (t.state !== 'completed') return null;
+      var leg = t.legs && t.legs[0];
+      if (!leg || typeof leg.amount !== 'number' || !isFinite(leg.amount) || !leg.currency) return null;
+      var id = _bancoSanearId(t.id);
+      if (!id) return null;
+      var concepto = t.reference || leg.description || 'Revolut Sync';
+      if (leg.description && leg.description !== concepto) concepto += ' - ' + leg.description;
+      return {
+        id: id,
+        idLegacy: _bancoSanearIdLegacy(t.id),
+        fecha: t.created_at,
+        moneda: leg.currency,
+        importe: leg.amount,
+        concepto: concepto
+      };
     }
-    var data = await r.json();
-    if (data.transactions && data.transactions.length > 0) {
-      var _rates = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
-      var syncPromises = [];
-      
-      data.transactions.forEach(function(t) {
-        var wiseId = String(t.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50);
-        var exists = typeof MOVS !== 'undefined' && MOVS.find(function(m) { return m.notas && m.notas.includes('WISE_ID:'+wiseId); });
-        if (exists) return;
-        
-        var mon = t.currency;
-        var cObj = typeof _cajasData !== 'undefined' ? _cajasData.find(function(c) { 
-          return c.moneda === mon && c.nombre.toLowerCase().includes('wise'); 
-        }) : null;
-        if (!cObj) return; 
-        
-        var cajaName = cObj.nombre;
-        var amt = Math.abs(t.amount);
-        var isIngreso = t.amount > 0;
-        
-        var reqData = {
-          fecha: t.created_at || new Date().toISOString(),
-          tipo: isIngreso ? 'Ingreso no-venta' : 'Gasto operativo',
-          descripcion: (t.reference || 'Wise Sync'),
-          monto: amt,
-          moneda: mon,
-          equiv_usd: parseFloat((amt * (_rates[mon] || 1)).toFixed(4)),
-          cuenta: cajaName,
-          vendedor: 'Sistema',
-          notas: 'WISE_ID:' + wiseId
-        };
-        
-        syncPromises.push(supaReq('POST', 'movimientos_ig', reqData));
-        var movCajaReq = {
-          fecha: reqData.fecha,
-          tipo: isIngreso ? 'deposito' : 'retiro',
-          caja_origen: isIngreso ? null : cajaName,
-          caja_destino: isIngreso ? cajaName : null,
-          monto_origen: amt,
-          monto_destino: amt,
-          notas: reqData.descripcion + ' (WISE_ID:'+wiseId+')',
-          usuario: 'Sistema'
-        };
-        syncPromises.push(supaReq('POST', 'mov_cajas', movCajaReq));
-      });
-      
-      if (syncPromises.length > 0) {
-        showToast('🔄 Insertando ' + (syncPromises.length/2) + ' transacciones Wise...');
-        Promise.all(syncPromises).then(function() {
-          showToast('✅ ' + (syncPromises.length/2) + ' transacciones Wise sincronizadas con éxito');
-          if (typeof _initApp === 'function') setTimeout(function(){ _initApp(true); }, 1000);
-        });
-      } else {
-        showToast('✅ Todo al día. No hay transacciones Wise nuevas (o no existe la caja Wise para esa moneda).');
-      }
-    } else {
-      showToast('✅ Wise está sincronizado (sin movimientos).');
+  });
+}
+
+function syncWiseApi() {
+  return _bancoSync({
+    nombre: 'Wise',
+    prefijo: 'WISE_ID',
+    endpoint: 'wise-sync',
+    cajaClave: 'wise',
+    normalizar: function(t) {
+      // Solo lo liquidado: una actividad pendiente o cancelada no ha movido
+      // dinero todavía.
+      if (t.estado && t.estado !== 'COMPLETED') return null;
+      // La edge function marca signo_conocido=false cuando no puede decidir
+      // si la actividad suma o resta. Adivinarlo metería un ingreso como
+      // gasto, así que se descarta y se avisa.
+      if (t.signo_conocido === false) return null;
+      if (typeof t.amount !== 'number' || !isFinite(t.amount) || t.amount === 0) return null;
+      if (!t.currency) return null;
+      var id = _bancoSanearId(t.id);
+      if (!id) return null;
+      return {
+        id: id,
+        idLegacy: _bancoSanearIdLegacy(t.id),
+        fecha: t.created_at || new Date().toISOString(),
+        moneda: t.currency,
+        importe: t.amount,
+        concepto: t.reference || 'Wise Sync'
+      };
     }
-  } catch(e) {
-    console.error('Wise Sync', e);
-    showToast('❌ Error: ' + e.message);
-  }
+  });
 }
 
 async function enviarBackupTelegram() {
