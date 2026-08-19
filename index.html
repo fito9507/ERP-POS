@@ -3801,7 +3801,7 @@ function ventaCreditoPOS() {
     }
   }
   
-  var lineas = S.cart.map(c => ({prod: c.n, q: c.q, precio: c.precioUSD, mon: 'USD'}));
+  var lineas = S.cart.map(c => ({prod: c.n, q: c.q, precio: c.precioUSD, mon: 'USD', lote: c.loteSeleccionado}));
   var alm = S.alm;
   var mon = 'USD';
   var fecha = today();
@@ -3821,7 +3821,14 @@ function ventaCreditoPOS() {
         stockWarn = (stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+transQty+' libres en tránsito para '+alm+'. ¿Prereservar '+l.q+' igualmente?';
       }
     } else {
-      var fisico=_getStk(p, alm);
+      var fisico = 0;
+      if (l.lote) {
+        var le = (p.lotes||[]).find(function(x){return x.lote===l.lote && x.almacen===alm;});
+        fisico = le ? (parseFloat(le.cantidad)||0) : 0;
+      } else {
+        fisico = _getStk(p, alm);
+      }
+      
       var resFolios=0;
       if(typeof CLIENTES!=='undefined'){
         CLIENTES.forEach(function(cc){
@@ -3829,6 +3836,10 @@ function ventaCreditoPOS() {
             if(typeof estF==='function'&&estF(ff)==='pagado') return;
             if(ff.tipo_reserva === 'prereserva') return; // ignore prereservas when checking physical stock
             if(ff.alm&&ff.alm!==alm) return;
+            
+            // Si la línea pide un lote específico, y este folio reservó de un lote distinto, se ignora la reserva
+            if(l.lote && ff.contenedor && ff.contenedor !== l.lote) return;
+            
             (ff.lineas||[]).forEach(function(lf){
               if(lf.prod===l.prod) resFolios+=(lf.q||0);
             });
@@ -3836,10 +3847,11 @@ function ventaCreditoPOS() {
         });
       }
       var disponible=Math.max(0,fisico-resFolios);
+      var loteStr = l.lote ? ' ('+l.lote+')' : '';
       if(l.q>fisico){
-        stockError='Stock insuficiente: '+l.prod+' (disp: '+fisico+', ped: '+l.q+')';
+        stockError='Stock insuficiente'+loteStr+': '+l.prod+' (disp: '+fisico+', ped: '+l.q+')';
       } else if(l.q>disponible){
-        stockWarn=(stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+': '+disponible+' libres de '+fisico+' en stock ('+resFolios+' comprometido en otros folios). ¿Continuar igualmente?';
+        stockWarn=(stockWarn?stockWarn+'\n':'')+'⚠️ '+l.prod+loteStr+': '+disponible+' libres de '+fisico+' en stock ('+resFolios+' comprometido en otros folios). ¿Continuar igualmente?';
       }
     }
   });
