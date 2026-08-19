@@ -15505,8 +15505,35 @@ function _escHtml(s) {
 // ══════════════════════════════════════════════════════════════
 
 var _iaAttachments = []; // {name, type, base64, mimeType}
-var _iaChatHistory = []; // {role:'user'|'assistant', content:...}
-try { _iaChatHistory = JSON.parse(localStorage.getItem('erp_ia_chat')||'[]'); } catch(e){}
+var _iaSessions = []; // Array of { id, title, messages, updated_at }
+var _iaCurrentSessionId = null;
+
+try { 
+  var stored = JSON.parse(localStorage.getItem('erp_ia_chat') || '[]');
+  if (stored.length > 0) {
+    if (stored[0].role) {
+      // Legacy migration
+      _iaSessions = [{ id: Date.now(), title: 'Chat Anterior', messages: stored, updated_at: Date.now() }];
+    } else {
+      _iaSessions = stored;
+    }
+  }
+} catch(e){}
+
+if (_iaSessions.length > 0) {
+  _iaCurrentSessionId = localStorage.getItem('erp_ia_current_session') || _iaSessions[_iaSessions.length - 1].id;
+} else {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+}
+
+var _iaChatHistory = [];
+function _iaLoadCurrentSession() {
+  var s = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+  _iaChatHistory = s ? s.messages : [];
+}
+_iaLoadCurrentSession();
+
 function _iaSaveChat() {
   try {
     var lightweight = _iaChatHistory.map(function(m) {
@@ -15515,9 +15542,29 @@ function _iaSaveChat() {
       }
       return m;
     });
-    localStorage.setItem('erp_ia_chat', JSON.stringify(lightweight));
+
+    var sess = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+    if (!sess) {
+      sess = { id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() };
+      _iaSessions.push(sess);
+    }
+    sess.messages = lightweight;
+    sess.updated_at = Date.now();
+
+    if (sess.title === 'Nueva conversación' && lightweight.length > 0) {
+      var firstUser = lightweight.find(function(m){return m.role==='user';});
+      if (firstUser) {
+        var t = firstUser.content.substring(0, 25);
+        if (firstUser.content.length > 25) t += '...';
+        sess.title = t;
+      }
+    }
+
+    localStorage.setItem('erp_ia_chat', JSON.stringify(_iaSessions));
+    localStorage.setItem('erp_ia_current_session', _iaCurrentSessionId);
+
     if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
-      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: lightweight, memory: _iaMemory }).catch(function(){});
+      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: _iaSessions, memory: _iaMemory }).catch(function(){});
     }
   } catch(e) { console.error('Error saving IA chat', e); }
 }
@@ -15578,10 +15625,18 @@ function renderIAAssistant() {
     });
   }
 
-  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
-    + '<div style="font-size:14px;font-weight:600">🤖 Asistente Financiero IA</div>'
+  var headerSelect = '<select id="ia-session-select" onchange="iaChangeSession(this.value)" style="background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:4px;padding:4px;font-size:12px;max-width:140px;cursor:pointer;margin-left:8px">';
+  _iaSessions.forEach(function(s) {
+    var sel = (s.id == _iaCurrentSessionId) ? ' selected' : '';
+    headerSelect += '<option value="' + s.id + '"' + sel + '>' + _iaEscapeHtml(s.title) + '</option>';
+  });
+  headerSelect += '</select>';
+
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div style="font-size:14px;font-weight:600;display:flex;align-items:center">🤖 Asistente Financiero ' + headerSelect + '</div>'
     + '<div style="display:flex;gap:6px">'
-    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Limpiar conversación">🗑️ Limpiar</button>'
+    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo Chat">➕ Nuevo</button>'
+    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️ Eliminar</button>'
     + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
     + '</div></div>'
     + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
@@ -15627,10 +15682,31 @@ function iaConfigKey() {
 }
 
 function iaLimpiarChat() {
-  if (_iaChatHistory.length === 0) return;
-  if (!confirm('¿Limpiar toda la conversación?')) return;
-  _iaChatHistory = [];
+  if (!confirm('¿Eliminar esta conversación por completo?')) return;
+  _iaSessions = _iaSessions.filter(function(s) { return s.id != _iaCurrentSessionId; });
+  if (_iaSessions.length === 0) {
+    iaNuevaSesion(true);
+  } else {
+    _iaCurrentSessionId = _iaSessions[_iaSessions.length - 1].id;
+    _iaLoadCurrentSession();
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+function iaNuevaSesion(skipRender) {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
   _iaSaveChat();
+  if (!skipRender) renderIAAssistant();
+}
+
+function iaChangeSession(id) {
+  _iaCurrentSessionId = parseInt(id, 10);
+  _iaLoadCurrentSession();
   _iaAttachments = [];
   _iaProposal = null;
   renderIAAssistant();
