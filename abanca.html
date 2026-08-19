@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conectar ABANCA — ERP</title>
+<style>
+  body{font-family:system-ui,sans-serif;max-width:620px;margin:40px auto;line-height:1.55;padding:0 16px;background:#0b2530;color:#e8e6d9}
+  h2{color:#fff}
+  a.btn{display:inline-block;background:#0055a4;color:#fff;text-decoration:none;padding:13px 24px;border-radius:8px;font-weight:600}
+  pre{background:#08303d;border:1px solid #1c4553;padding:14px;border-radius:8px;word-break:break-all;white-space:pre-wrap;color:#b5e853}
+  .mut{color:#7fa0ab;font-size:12px}
+  .err{color:#ff6b6b}
+</style>
+</head>
+<body>
+<h2 id="titulo">Conectar ABANCA con el ERP</h2>
+<div id="contenido">Cargando…</div>
+
+<script>
+// La UI vive aquí (GitHub Pages) porque Supabase no permite servir HTML
+// desde las edge functions (reescribe a text/plain, anti-phishing).
+// El flujo: botón → login oficial de Abanca → Abanca redirige a la edge
+// function (redirect_uri registrado) → la función redirige aquí con el
+// ?code → esta página lo canjea vía POST JSON a la función y muestra el
+// refresh_token. El login SOLO ocurre en accounts.abanca.com.
+var FUNC = 'https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback';
+var CLIENT_ID = 'e6f32204-c13b-449a-bdd2-91c056332a0a';
+var INSTANCIA = 'Abanca'; // cambiar a 'Sandbox' para pruebas
+
+var qs = new URLSearchParams(location.search);
+var cont = document.getElementById('contenido');
+var titulo = document.getElementById('titulo');
+
+function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+
+if (qs.get('error')) {
+  titulo.textContent = 'Autorización rechazada';
+  cont.innerHTML = '<p class="err">Abanca devolvió: <code>' + esc(qs.get('error')) + '</code> '
+    + esc(qs.get('error_description') || '') + '</p><p><a class="btn" href="abanca.html">Reintentar</a></p>';
+} else if (qs.get('code')) {
+  titulo.textContent = 'Canjeando el código…';
+  cont.innerHTML = '<p>Un momento…</p>';
+  fetch(FUNC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: qs.get('code') })
+  }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+    .then(function(res){
+      var t = res.j || {};
+      if (res.ok && t.refresh_token) {
+        titulo.textContent = '✅ Autorización completada';
+        cont.innerHTML = '<p>Copia este <b>refresh_token</b> y pásaselo a Claude (o guárdalo en Supabase → '
+          + 'Edge Functions → Secrets como <code>ABANCA_REFRESH_TOKEN</code>):</p>'
+          + '<pre>' + esc(t.refresh_token) + '</pre>'
+          + (t.contracts ? '<p class="mut">Contratos de empresa: <code>' + esc(JSON.stringify(t.contracts)) + '</code> — el sync los recorre solo.</p>' : '')
+          + '<p class="mut">Usuario: ' + esc(t.username || t.displayName || '') + '</p>';
+        // limpiar el code de la URL (es de un solo uso)
+        history.replaceState(null, '', 'abanca.html');
+      } else {
+        titulo.textContent = 'Error canjeando el código';
+        cont.innerHTML = '<p class="err">Respuesta del banco:</p><pre>' + esc(JSON.stringify(t, null, 2)).slice(0, 900) + '</pre>'
+          + '<p><a class="btn" href="abanca.html">Reintentar</a></p>';
+      }
+    })
+    .catch(function(e){
+      titulo.textContent = 'Error';
+      cont.innerHTML = '<pre>' + esc(e.message) + '</pre>';
+    });
+} else {
+  var authUrl = 'https://api.abanca.com/oauth/' + CLIENT_ID + '/' + INSTANCIA
+    + '?response_type=code&redirect_uri=' + encodeURIComponent(FUNC)
+    + '&state=erp' + Math.floor(Date.now() / 1000);
+  cont.innerHTML = '<p>Vas a autorizar al ERP a leer tus cuentas y movimientos de Abanca '
+    + '(entorno <b>' + INSTANCIA + '</b>). Se abrirá el login oficial de Abanca.</p>'
+    + '<p><a class="btn" href="' + authUrl + '">Entrar en Abanca →</a></p>'
+    + '<p class="mut">Tus credenciales se validan en accounts.abanca.com, nunca en esta página.</p>';
+}
+</script>
+</body>
+</html>
