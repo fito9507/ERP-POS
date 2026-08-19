@@ -6882,7 +6882,7 @@ function abrirPagoModal(prestamoId, sugMonto, tipoPago){
     +'<input type="hidden" id="pm-tipo" value="'+tipoPago+'">'
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:4px">'
     +'<div><label class="lbl">Monto *</label><input class="adm-inp" type="number" id="pm-monto" data-target="'+sugerMonto+'" value="'+(sugerMonto>0?sugerMonto.toFixed(2):'')+'" placeholder="0.00" step="0.01" min="0.01" oninput="updPmEquiv(\''+prestamoId+'\')"></div>'
-    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\', false, true)">'
+    +'<div><label class="lbl">Moneda</label><select class="adm-inp" id="prod-${c.id}-${f.id}-${i}" id="pm-mon" onchange="updPmEquiv(\''+prestamoId+'\', false, true)">'
     +['USD','EUR','CUP','CUPT'].map(function(m){return '<option'+(m===p.moneda?' selected':'')+'>'+m+'</option>';}).join('')+'</select></div>'
     +'</div>'
     +'<div id="pm-tasa-wrap" style="display:none;margin-bottom:4px"><label class="lbl">Tasa aplicada (<span id="pm-tasa-hint"></span>)</label><input class="adm-inp" type="number" id="pm-tasa" step="0.0001" oninput="updPmEquiv(\''+prestamoId+'\', true)"></div>'
@@ -8285,13 +8285,13 @@ function renderPL(c,f){
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
       <span style="font-size:11px;min-width:0">
-        <select class="adm-inp" style="width:100%;max-width:100%;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer;text-overflow:ellipsis" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
+        <select class="adm-inp" id="prod-${c.id}-${f.id}-${i}" style="width:100%;max-width:100%;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer;text-overflow:ellipsis" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
           <option value="${l.prod.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)" selected>${l.prod}${optsMap[l.prod]||''}</option>
           ${opts}
         </select>
       </span>
-      <span><input type="number" class="qi" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
-      <span><input type="number" class="pi" value="${l.precio}" step="0.0001" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="qi" id="qi-${c.id}-${f.id}-${i}" value="${l.q}" min="0" step="1" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLQ('${c.id}','${f.id}',${i},this.value)"></span>
+      <span><input type="number" class="pi" id="pi-${c.id}-${f.id}-${i}" value="${l.precio}" step="0.0001" onclick="event.stopPropagation()" onchange="event.stopPropagation();updLP('${c.id}','${f.id}',${i},this.value)"></span>
       <span style="font-size:11px">${l.mon}</span>
       <span style="text-align:right;font-weight:500">${fN(parseFloat(toUSD(l.q*l.precio,l.mon).toFixed(2)))}</span>
       <span>${l.q!==l.qO||l.precio!==l.pO?`<span class="badge ba" style="font-size:9px;cursor:pointer" onclick="restL('${c.id}','${f.id}',${i})">mod</span>`:''}
@@ -8338,12 +8338,25 @@ function updLQ(cid,fid,i,v){
     if(typeof renderProds==='function')renderProds();
   }
   if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  
   if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  const activeId = document.activeElement ? document.activeElement.id : null;
   const pl=document.getElementById(`pl-${cid}-${fid}`);
   if(pl)pl.innerHTML=renderPL(c,f);
   renderFichaFolios(c);
+  if(activeId) {
+    setTimeout(function() {
+      const el = document.getElementById(activeId);
+      if(el) el.focus();
+    }, 10);
+  }
+
 }
-function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();document.getElementById(`pl-${cid}-${fid}`).innerHTML=renderPL(c,f);renderFichaFolios(c);}
+function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();const activeId = document.activeElement ? document.activeElement.id : null;
+   const plEl = document.getElementById(`pl-${cid}-${fid}`);
+   if(plEl) plEl.innerHTML = renderPL(c,f);
+   renderFichaFolios(c);
+   if(activeId) { setTimeout(() => { const el = document.getElementById(activeId); if(el) el.focus(); }, 10); }}
 function restL(cid,fid,i){
   const c=CLIENTES.find(x=>x.id===cid);
   const f=c?.folios.find(x=>x.id===fid);
@@ -8369,7 +8382,9 @@ function restL(cid,fid,i){
   }
   if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
   if(typeof offlineSaveClientes==='function')offlineSaveClientes();
-  renderFichaFolios(c);
+   const activeId = document.activeElement ? document.activeElement.id : null;
+   renderFichaFolios(c);
+   if(activeId) { setTimeout(() => { const el = document.getElementById(activeId); if(el) el.focus(); }, 10); }
 }
 function elimL(cid,fid,i){
   const c=CLIENTES.find(x=>x.id===cid);
@@ -8411,7 +8426,10 @@ function elimL(cid,fid,i){
   if(typeof renderProds==='function') renderProds();
   renderFichaFolios(c);
 }
-function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();renderFichaFolios(c);}
+function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+   const activeId = document.activeElement ? document.activeElement.id : null;
+   renderFichaFolios(c);
+   if(activeId) { setTimeout(() => { const el = document.getElementById(activeId); if(el) el.focus(); }, 10); }}
 function _asignarCntFolio(cid,fid){
   var c=CLIENTES.find(function(x){return x.id===cid;});if(!c)return;
   var f=c.folios.find(function(x){return x.id===fid;});if(!f)return;
@@ -8433,7 +8451,9 @@ function _asignarCntFolio(cid,fid){
   }
   if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
   if(typeof offlineSaveClientes==='function')offlineSaveClientes();
-  renderFichaFolios(c);
+   const activeId = document.activeElement ? document.activeElement.id : null;
+   renderFichaFolios(c);
+   if(activeId) { setTimeout(() => { const el = document.getElementById(activeId); if(el) el.focus(); }, 10); }
   showToast(f.contenedor?'✓ Contenedor '+f.contenedor+' asignado al Folio '+fid:'Contenedor removido del Folio '+fid);
 }
 function elimFolioCli(cid,fid){
@@ -11334,7 +11354,7 @@ window.updCajasHistFiltro = function(val) {
 var _cajasHistCajaSel = '';
 
 function _renderHistorialMovCajas() {
-  var selCaja = '<select class="adm-inp" style="width:100%;margin-bottom:8px" onchange="_cajasHistCajaSel=this.value;renderAdminCajas()">';
+  var selCaja = '<select class="adm-inp" id="prod-${c.id}-${f.id}-${i}" style="width:100%;margin-bottom:8px" onchange="_cajasHistCajaSel=this.value;renderAdminCajas()">';
   selCaja += '<option value="">Todas las cajas</option>';
   _cajasData.forEach(function(c) {
     selCaja += '<option value="'+c.nombre+'"'+(_cajasHistCajaSel===c.nombre?' selected':'')+'>'+c.nombre+' ('+c.moneda+')</option>';
