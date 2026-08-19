@@ -73,18 +73,23 @@ Deno.serve(async (req) => {
     // 1. Cuentas de la sesión
     const ses = await ebGet(`/sessions/${encodeURIComponent(sessionId)}`, token);
     if (!ses.ok) throw new Error(`Sesión Enable Banking: ${ses.status} ${ses.txt.slice(0, 200)} — puede haber caducado; re-autoriza en enablebanking.html`);
-    const cuentas: any[] = ses.json?.accounts || [];
+    // accounts es un array de UIDs (strings); los detalles (IBAN) se piden
+    // aparte porque Enable Banking no los expone directos en la sesión.
+    const uids: string[] = (ses.json?.accounts || []).map((a: any) => typeof a === 'string' ? a : (a?.uid ?? a?.account_id?.iban)).filter(Boolean);
 
     const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const transactions: any[] = [];
     const balances: any[] = [];
 
-    for (const acc of cuentas) {
-      const uid = acc?.uid ?? acc?.account_id?.iban ?? acc?.resource_id;
-      if (!uid) continue;
-      const iban = acc?.account_id?.iban ?? acc?.iban ?? String(uid);
-      const alias = acc?.name ?? acc?.product ?? acc?.details ?? '';
-      const monedaCta = acc?.currency ?? '';
+    for (const uid of uids) {
+      // 1. Detalles → IBAN y moneda
+      let iban = String(uid), alias = '', monedaCta = '';
+      const det = await ebGet(`/accounts/${encodeURIComponent(uid)}/details`, token);
+      if (det.ok) {
+        iban = det.json?.account_id?.iban ?? det.json?.iban ?? String(uid);
+        alias = det.json?.name ?? det.json?.product ?? '';
+        monedaCta = det.json?.currency && det.json.currency !== 'XXX' ? det.json.currency : '';
+      } else { avisos.push(`details ${uid}: ${det.status}`); }
 
       // 2. Saldo
       const bal = await ebGet(`/accounts/${encodeURIComponent(uid)}/balances`, token);
@@ -124,7 +129,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return J({ transactions, balances, avisos, cuentas: cuentas.length });
+    return J({ transactions, balances, avisos, cuentas: uids.length });
   } catch (e: any) {
     return J({ error: e.message }, 400);
   }

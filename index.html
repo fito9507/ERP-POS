@@ -12181,7 +12181,7 @@ function syncAbancaApi() {
   return _bancoSync({
     nombre: 'Abanca',
     prefijo: 'ABANCA_ID',
-    endpoint: 'abanca-sync',
+    endpoint: 'enablebanking-sync',
     cajaClave: 'abanca',
     cajaPara: _abancaCajaPara,
     alFinal: _abancaCompararSaldos,
@@ -12210,7 +12210,7 @@ function syncAbancaApi() {
 async function abancaMapear() {
   showToast('\uD83C\uDFE6 Consultando cuentas de Abanca...');
   try {
-    var r = await fetch(SUPA_URL + '/functions/v1/abanca-sync', {
+    var r = await fetch(SUPA_URL + '/functions/v1/enablebanking-sync', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + SUPA_KEY, 'apikey': SUPA_KEY, 'Content-Type': 'application/json' }
     });
