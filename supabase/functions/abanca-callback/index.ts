@@ -33,7 +33,11 @@ serve(async (req) => {
   const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
   const instancia = Deno.env.get('ABANCA_INSTANCE') || 'Abanca'; // Abanca | Sandbox
   const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
-  const aqui = `${url.origin}${url.pathname}`;
+  // OJO: dentro del runtime la URL vista es interna (http:// y sin el
+  // prefijo /functions/v1), así que el redirect_uri se reconstruye para que
+  // coincida EXACTAMENTE con el registrado en el portal de Abanca.
+  const ruta = url.pathname.startsWith('/functions/') ? url.pathname : `/functions/v1${url.pathname}`;
+  const aqui = Deno.env.get('ABANCA_REDIRECT_URI') || `https://${url.host}${ruta}`;
 
   if (!clientId || !apiKey) {
     return html('Faltan secrets', '<p>Configura ABANCA_CLIENT_ID y ABANCA_API_KEY en Supabase Secrets.</p>');
