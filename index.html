@@ -6598,51 +6598,7 @@ function exportarDeudasDeudorPDF(nombre) {
   html += '<div style="font-size:16px;">Balance Neto Pendiente: <b style="color:'+(totalPendienteUSD>=0?'#16a34a':'#dc2626')+'">' + fN(totalPendienteUSD) + ' USD</b></div>';
   html += '</div>';
   
-  html += '
-<!-- FLOATING IA BUTTON -->
-<button id="ia-floating-btn" onclick="toggleIAPanel()" style="position:fixed; bottom:24px; right:24px; z-index:9999; background:linear-gradient(135deg, #2563eb, #3b82f6); color:white; border:none; border-radius:50%; width:64px; height:64px; font-size:32px; box-shadow:0 10px 25px rgba(37,99,235,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform 0.2s">🤖</button>
-
-<div id="ia-floating-panel" style="display:none; position:fixed; bottom:100px; right:24px; width:450px; height:650px; max-width:calc(100vw - 48px); max-height:calc(100vh - 120px); background:var(--color-background-primary); border-radius:20px; box-shadow:0 15px 50px rgba(0,0,0,.4); z-index:9998; overflow:hidden; flex-direction:column; border:1px solid var(--color-border-tertiary)">
-  <div style="background:linear-gradient(135deg, #1e293b, #0f172a); color:white; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1)">
-    <div style="font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px">🤖 Asistente IA</div>
-    <button onclick="toggleIAPanel()" style="background:none; border:none; color:white; font-size:20px; cursor:pointer; opacity:0.8">&times;</button>
-  </div>
-  <div id="ia-floating-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden"></div>
-</div>
-
-<script>
-function toggleIAPanel() {
-  var panel = document.getElementById('ia-floating-panel');
-  var content = document.getElementById('ia-floating-content');
-  var btn = document.getElementById('ia-floating-btn');
-  
-  if (panel.style.display === 'none') {
-    panel.style.display = 'flex';
-    btn.style.transform = 'scale(0.9)';
-    // Move ia-content here
-    var iaContent = document.getElementById('ia-content');
-    if (iaContent) {
-      iaContent.style.boxShadow = 'none';
-      iaContent.style.borderRadius = '0';
-      content.appendChild(iaContent);
-    }
-    if (typeof renderIAAssistant === 'function') renderIAAssistant();
-  } else {
-    panel.style.display = 'none';
-    btn.style.transform = 'scale(1)';
-    // Move it back just in case they navigate to the full page
-    var iaContent = document.getElementById('ia-content');
-    var fullPage = document.getElementById('ia-assistant');
-    if (iaContent && fullPage) {
-      iaContent.style.boxShadow = '';
-      iaContent.style.borderRadius = '';
-      fullPage.appendChild(iaContent);
-    }
-  }
-}
-</script>
-
-</body></html>';
+  html += '</body></html>';
 
   var w = window.open('', '_blank');
   w.document.write(html);
