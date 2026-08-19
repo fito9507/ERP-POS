@@ -15870,7 +15870,8 @@ function _iaBuildSystemPrompt(context) {
     + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
     + '  {"accion": "ingreso", "caja": "nombre_caja", "monto": 4700, "moneda": "USD", "descripcion": "Zelle de Marta", "tipo": "Ingreso no-venta", "fecha": "2026-08-19"},\n'
     + '  {"accion": "transferencia", "caja_origen": "caja_a", "caja_destino": "caja_b", "monto": 2000, "moneda": "USD", "descripcion": "Transferencia a España", "tipo": "Transferencia entre cuentas", "fecha": "2026-08-19"},\n'
-    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"}\n'
+    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"}\n'
     + ']}\n```\n\n'
     + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
     + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
@@ -16079,6 +16080,10 @@ function _iaRenderProposal(proposal) {
     else if (p.accion === 'gasto') { iconClass = 'gasto'; icon = '💸'; label = 'Gasto — ' + (p.tipo || ''); }
     else if (p.accion === 'transferencia') { iconClass = 'transfer'; icon = '🔄'; label = (p.caja_origen || '') + ' → ' + (p.caja_destino || ''); }
     else if (p.accion === 'abono_folio') { iconClass = 'ingreso'; icon = '✅'; label = 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || ''); }
+    else if (p.accion === 'actualizar_saldo') { 
+      iconClass = 'transfer'; icon = '⚖️'; label = 'Ajuste de saldo: ' + (p.caja || '');
+      if (typeof p.nuevo_saldo !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nuevo_saldo;
+    }
 
     h += '<div class="ia-prop-row">'
       + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
@@ -16120,7 +16125,18 @@ async function iaEjecutarPropuesta() {
     if (inputEl) p.monto = parseFloat(inputEl.value) || p.monto;
 
     try {
-      if (p.accion === 'retiro' || p.accion === 'gasto') {
+      if (p.accion === 'actualizar_saldo') {
+        var currentSaldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(p.caja) : 0;
+        var diff = p.monto - currentSaldo;
+        if (Math.abs(diff) > 0.01) {
+          if (diff > 0) {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste positivo', p.descripcion || 'Actualización de saldo', diff, p.moneda || 'USD', p.caja, 'ingreso');
+          } else {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste negativo', p.descripcion || 'Actualización de saldo', Math.abs(diff), p.moneda || 'USD', p.caja, 'gasto');
+          }
+          success++;
+        }
+      } else if (p.accion === 'retiro' || p.accion === 'gasto') {
         _iaRegistrarMov(p.fecha || today(), p.tipo || 'Gasto operativo', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'gasto');
         success++;
       } else if (p.accion === 'ingreso') {
