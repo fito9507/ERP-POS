@@ -90,45 +90,10 @@ DELETE FROM movimientos_ig
 WHERE notas IN ('REV_ID:test', 'REV_ID:test2');
 
 -- ───────────────────────────────────────────────────────────────
--- 6. Corrección Wise (19-08-2026): conversiones con signo invertido
---    La primera importación usó la edge function vieja, que registró
---    las conversiones entre saldos propios ("To USD - Moved", tipo
---    INTERBALANCE) como retiros cuando son dinero que ENTRA al saldo
---    USD. Por eso USD WISE daba -1.466,77 (imposible en Wise).
---    Verificado contra la API: saldo real USD 26,55 / EUR 0.
+-- 6. Corrección Wise — ✅ YA APLICADA el 19-08-2026, NO EJECUTAR.
+--    Se corrigieron por API: movimientos_ig 233/238 (Gasto→Ingreso),
+--    mov_cajas 806/811 (retiro→deposito a USD WISE), y el usuario creó
+--    desde la app los ajustes de cuadre (+1001,48 USD / −150 EUR).
+--    Resultado verificado: USD WISE 26,55 y EUR WISE 0,00 = saldo real.
+--    (Los pasos 1-4 de este archivo siguen pendientes de ejecutar.)
 -- ───────────────────────────────────────────────────────────────
-
--- 6a. Los dos apuntes con signo invertido (170 y 75,92 USD):
-UPDATE movimientos_ig SET tipo = 'Ingreso no-venta'
-WHERE id IN (233, 238) AND tipo = 'Gasto operativo';
-
-UPDATE mov_cajas
-SET tipo = 'deposito', caja_origen = NULL, caja_destino = 'USD WISE'
-WHERE id IN (806, 811) AND tipo = 'retiro';
-
--- 6b. La pata EUR que /activities no muestra: el 25-06 se recibieron
---     150 EUR y se convirtieron a los 170 USD del apunte anterior.
---     El saldo real EUR de Wise es 0, así que esos 150 salieron.
-INSERT INTO mov_cajas (fecha, tipo, caja_origen, caja_destino, monto_origen, monto_destino, notas, usuario)
-SELECT '2026-06-25', 'retiro', 'EUR WISE', NULL, 150, 150,
-       'Conversión EUR→USD 25/06 — pata EUR (corrección sync Wise)', 'Sistema'
-WHERE NOT EXISTS (
-  SELECT 1 FROM mov_cajas WHERE notas LIKE '%pata EUR (corrección sync Wise)%'
-);
-
-INSERT INTO movimientos_ig (fecha, tipo, descripcion, monto, moneda, equiv_usd, cuenta, vendedor, notas)
-SELECT '2026-06-25', 'Gasto operativo', 'Conversión EUR→USD 25/06 — pata EUR', 150, 'EUR', 170, 'EUR WISE', 'Sistema',
-       'Corrección sync Wise: pata EUR de la conversión'
-WHERE NOT EXISTS (
-  SELECT 1 FROM movimientos_ig WHERE notas = 'Corrección sync Wise: pata EUR de la conversión'
-);
-
--- 6c. Verificar: EUR WISE debe quedar en 0 y USD WISE en -483,09.
---     El resto hasta los 26,55 reales es saldo anterior a la ventana de
---     actividades que da la API (~509,64 USD previos al 02-05); el botón
---     "Sincronizar Wise" del ERP ahora ofrece crear ese ajuste solo.
-SELECT caja, sum(delta) AS saldo_erp FROM (
-  SELECT caja_destino AS caja, monto_destino AS delta FROM mov_cajas WHERE caja_destino ILIKE '%wise%'
-  UNION ALL
-  SELECT caja_origen, -monto_origen FROM mov_cajas WHERE caja_origen ILIKE '%wise%'
-) t GROUP BY caja;

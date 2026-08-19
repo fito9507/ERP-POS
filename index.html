@@ -12076,6 +12076,23 @@ function syncWiseApi() {
   });
 }
 
+// ── Sincronización bancaria automática ───────────────────────
+// Al abrir la app se sincronizan Revolut y Wise solos (escalonados para no
+// pisarse), como mucho una vez cada 30 minutos aunque se recargue mucho.
+// Los botones manuales siguen funcionando igual. La marca de tiempo vive en
+// localStorage para compartirla entre pestañas.
+setTimeout(function() {
+  try {
+    if (typeof _supaOnline === 'undefined' || !_supaOnline) return;
+    var last = parseInt(localStorage.getItem('erp_banco_autosync') || '0', 10) || 0;
+    if (Date.now() - last < 30 * 60 * 1000) return;
+    localStorage.setItem('erp_banco_autosync', String(Date.now()));
+    console.log('Auto-sync bancario: Revolut + Wise');
+    syncRevolutApi();
+    setTimeout(function() { syncWiseApi(); }, 5000);
+  } catch (e) { console.warn('autosync bancario:', e); }
+}, 8000);
+
 async function enviarBackupTelegram() {
   if(!_supaOnline){ console.warn('Sin conexion para backup'); return; }
   if((!TG_ON&&!TG_TOKEN) || !TG_BACKUP){ return; }
