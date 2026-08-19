@@ -6598,7 +6598,51 @@ function exportarDeudasDeudorPDF(nombre) {
   html += '<div style="font-size:16px;">Balance Neto Pendiente: <b style="color:'+(totalPendienteUSD>=0?'#16a34a':'#dc2626')+'">' + fN(totalPendienteUSD) + ' USD</b></div>';
   html += '</div>';
   
-  html += '</body></html>';
+  html += '
+<!-- FLOATING IA BUTTON -->
+<button id="ia-floating-btn" onclick="toggleIAPanel()" style="position:fixed; bottom:24px; right:24px; z-index:9999; background:linear-gradient(135deg, #2563eb, #3b82f6); color:white; border:none; border-radius:50%; width:64px; height:64px; font-size:32px; box-shadow:0 10px 25px rgba(37,99,235,.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:transform 0.2s">🤖</button>
+
+<div id="ia-floating-panel" style="display:none; position:fixed; bottom:100px; right:24px; width:450px; height:650px; max-width:calc(100vw - 48px); max-height:calc(100vh - 120px); background:var(--color-background-primary); border-radius:20px; box-shadow:0 15px 50px rgba(0,0,0,.4); z-index:9998; overflow:hidden; flex-direction:column; border:1px solid var(--color-border-tertiary)">
+  <div style="background:linear-gradient(135deg, #1e293b, #0f172a); color:white; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1)">
+    <div style="font-weight:600; font-size:15px; display:flex; align-items:center; gap:8px">🤖 Asistente IA</div>
+    <button onclick="toggleIAPanel()" style="background:none; border:none; color:white; font-size:20px; cursor:pointer; opacity:0.8">&times;</button>
+  </div>
+  <div id="ia-floating-content" style="flex:1; display:flex; flex-direction:column; overflow:hidden"></div>
+</div>
+
+<script>
+function toggleIAPanel() {
+  var panel = document.getElementById('ia-floating-panel');
+  var content = document.getElementById('ia-floating-content');
+  var btn = document.getElementById('ia-floating-btn');
+  
+  if (panel.style.display === 'none') {
+    panel.style.display = 'flex';
+    btn.style.transform = 'scale(0.9)';
+    // Move ia-content here
+    var iaContent = document.getElementById('ia-content');
+    if (iaContent) {
+      iaContent.style.boxShadow = 'none';
+      iaContent.style.borderRadius = '0';
+      content.appendChild(iaContent);
+    }
+    if (typeof renderIAAssistant === 'function') renderIAAssistant();
+  } else {
+    panel.style.display = 'none';
+    btn.style.transform = 'scale(1)';
+    // Move it back just in case they navigate to the full page
+    var iaContent = document.getElementById('ia-content');
+    var fullPage = document.getElementById('ia-assistant');
+    if (iaContent && fullPage) {
+      iaContent.style.boxShadow = '';
+      iaContent.style.borderRadius = '';
+      fullPage.appendChild(iaContent);
+    }
+  }
+}
+</script>
+
+</body></html>';
 
   var w = window.open('', '_blank');
   w.document.write(html);
@@ -16335,13 +16379,31 @@ function _iaBuildContext() {
     });
   }
 
+  
+  var catalogo = [];
+  if (typeof PRODS !== 'undefined') {
+    PRODS.filter(function(p){ return p.activo !== false; }).forEach(function(p) {
+      catalogo.push({ prod: p.n, precio: p.precio_venta || p.min || 0, stock: p.stk || 0 });
+    });
+  }
+
+  var listaClientes = [];
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(c) {
+      listaClientes.push({ id: c.id, nombre: c.nombre, tel: c.tel || '' });
+    });
+  }
+
   return {
     cajas: cajas,
     folios_pendientes: foliosPendientes.slice(0, 30),
     tasas: tasas,
     tipos_movimiento: tiposDisponibles,
+    catalogo: catalogo,
+    clientes: listaClientes,
     fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
   };
+
 }
 
 function _iaBuildSystemPrompt(context) {
@@ -16644,7 +16706,50 @@ async function iaEjecutarPropuesta() {
       } else if (p.accion === 'abono_folio') {
         _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja || '', 'ingreso');
         success++;
+
+      } else if (p.accion === 'crear_cliente') {
+        var newId = 'cli-' + Date.now();
+        CLIENTES.push({
+          id: newId,
+          nombre: p.nombre,
+          tel: p.telefono || '',
+          alm: 'Habana',
+          folios: []
+        });
+        success++;
+      } else if (p.accion === 'crear_folio') {
+        var cli = CLIENTES.find(c => c.id === p.cliente_id || c.nombre === p.cliente_id);
+        if (!cli) throw new Error('Cliente no encontrado: ' + p.cliente_id);
+        var f = {
+          id: venNextId++,
+          fecha: p.fecha ? (typeof dFor === 'function' ? dFor(new Date(p.fecha)) : p.fecha) : (typeof dFor === 'function' ? dFor(new Date()) : today()),
+          estado: 'pendiente',
+          desc: p.descripcion || 'Venta desde IA',
+          alm: p.almacen || 'Habana',
+          lineas: [],
+          abonos: []
+        };
+        (p.productos||[]).forEach(function(x) {
+          f.lineas.push({ prod: x.prod || x.producto, q: x.q || x.cantidad || 1, qO: x.q || x.cantidad || 1, precio: x.precio || 0, pO: x.precio || 0, mon: 'USD' });
+        });
+        cli.folios.unshift(f);
+        if (typeof syncSaveFolio === 'function') syncSaveFolio(cli.id, f);
+        
+        // Deduct stock
+        f.lineas.forEach(function(l) {
+          var pr = PRODS.find(x => x.n === l.prod);
+          if (pr) {
+            pr.stk = Math.max(0, (pr.stk || 0) - l.q);
+            if (!pr.stk_alm) pr.stk_alm = {};
+            pr.stk_alm[f.alm] = Math.max(0, (pr.stk_alm[f.alm] || 0) - l.q);
+            if (typeof adjustStockByDelta === 'function' && pr.supaId) {
+              adjustStockByDelta(pr, f.alm, -l.q, 'SIN LOTE', { strictLote: true });
+            }
+          }
+        });
+        success++;
       }
+
     } catch (e) {
       errors.push(p.descripcion + ': ' + e.message);
     }
