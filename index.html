@@ -15682,7 +15682,2800 @@ function renderAdminAnalytics() {
       h += '<div class="ana-cycle-stat">Revenue: <b>$' + fN(cd.revenue) + '</b></div>';
       h += '<div class="ana-cycle-stat">Costo: <b>$' + fN(cd.totalCost) + '</b></div>';
       var mClass = cd.margin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
-      h += '<div class="ana-cycle-stat" style="' + mClass + '">Margen: <b>$' + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
+      h += '<div class="ana-cycle-stat" style="' + mClass + '">Margen: <b>
+      h += '</div>';
+      h += '</summary>';
+      
+      if (cd.prodsDetail && cd.prodsDetail.length > 0) {
+        h += '<div style="margin-top:12px;padding:8px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
+        h += '<table style="width:100%;font-size:10px;border-collapse:collapse">';
+        h += '<thead><tr style="border-bottom:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary)">'
+          + '<th style="text-align:left;padding:4px">Producto</th>'
+          + '<th style="text-align:right;padding:4px">Inicial</th>'
+          + '<th style="text-align:right;padding:4px">Vendido</th>'
+          + '<th style="text-align:right;padding:4px">Quedan</th>'
+          + '<th style="text-align:right;padding:4px">Ingreso</th>'
+          + '</tr></thead><tbody>';
+          
+        cd.prodsDetail.sort(function(a,b){return b.qSold - a.qSold;}).forEach(function(pd) {
+          var pct = pd.qOriginal > 0 ? Math.round((pd.qSold/pd.qOriginal)*100) : 0;
+          h += '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">'
+            + '<td style="padding:4px;font-weight:500">'+pd.n+'</td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qOriginal,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pd.qSold,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pct+'%)</span></td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pd.pRev,2)+'</td>'
+            + '</tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      
+      h += '</details>'; // .ana-cycle
+    });
+
+    h += '</div>'; // .ana-cycles
+  }
+
+  // ── Empty states ──────────────────────────────────────────
+  if (filteredVentas.length === 0) {
+    h += '<div class="ana-empty"><div class="ana-empty-icon">📭</div>No hay ventas en el período seleccionado</div>';
+  }
+
+  h += '</div>'; // .ana-wrap
+  el.innerHTML = h;
+}
+
+// ── Helper: rank card builder ──────────────────────────────
+function _anaRankCard(title, items, valueFn, nameKey) {
+  var h = '<div class="ana-rank-card">';
+  h += '<div class="ana-rank-title">' + title + '</div>';
+  if (items.length === 0) {
+    h += '<div style="font-size:11px;color:var(--color-text-tertiary);padding:8px 0">Sin datos</div>';
+  } else {
+    items.forEach(function(item, i) {
+      var posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      h += '<div class="ana-rank-item">';
+      h += '<div class="ana-rank-pos ' + posClass + '">' + (i + 1) + '</div>';
+      h += '<div class="ana-rank-name">' + _escHtml(item[nameKey]) + '</div>';
+      h += '<div class="ana-rank-val">' + valueFn(item) + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+// ── Helper: estado badge ───────────────────────────────────
+function _anaEstadoBadge(estado) {
+  var colors = {
+    preparando: 'var(--color-text-tertiary)',
+    reservado: 'var(--color-text-warning)',
+    en_puerto: 'var(--color-text-info)',
+    en_transito: 'var(--color-text-info)',
+    en_aduana: 'var(--color-text-warning)',
+    recibido: 'var(--color-text-success)',
+    cerrado: 'var(--color-text-tertiary)'
+  };
+  var labels = {
+    preparando: 'Preparando',
+    reservado: 'Reservado',
+    en_puerto: 'En puerto',
+    en_transito: 'En tránsito',
+    en_aduana: 'En aduana',
+    recibido: 'Recibido',
+    cerrado: 'Cerrado'
+  };
+  var col = colors[estado] || 'var(--color-text-tertiary)';
+  var lbl = labels[estado] || estado;
+  return '<span class="cnt-estado-badge" style="color:' + col + ';border:1px solid ' + col + '">' + lbl + '</span>';
+}
+
+// ── Helper: escape HTML ────────────────────────────────────
+function _escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ██  ASISTENTE IA FINANCIERO                                ██
+// ══════════════════════════════════════════════════════════════
+
+var _iaAttachments = []; // {name, type, base64, mimeType}
+var _iaSessions = []; // Array of { id, title, messages, updated_at }
+var _iaCurrentSessionId = null;
+
+try { 
+  var stored = JSON.parse(localStorage.getItem('erp_ia_chat') || '[]');
+  if (stored.length > 0) {
+    if (stored[0].role) {
+      // Legacy migration
+      _iaSessions = [{ id: Date.now(), title: 'Chat Anterior', messages: stored, updated_at: Date.now() }];
+    } else {
+      _iaSessions = stored;
+    }
+  }
+} catch(e){}
+
+if (_iaSessions.length > 0) {
+  _iaCurrentSessionId = localStorage.getItem('erp_ia_current_session') || _iaSessions[_iaSessions.length - 1].id;
+} else {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+}
+
+var _iaChatHistory = [];
+function _iaLoadCurrentSession() {
+  var s = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+  _iaChatHistory = s ? s.messages : [];
+}
+_iaLoadCurrentSession();
+
+function _iaSaveChat() {
+  try {
+    var lightweight = _iaChatHistory.map(function(m) {
+      if (m.role === 'user' && typeof m.content !== 'string') {
+        return { role: m.role, content: m._displayText || '[Contenido adjunto]', _displayText: m._displayText };
+      }
+      return m;
+    });
+
+    var sess = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+    if (!sess) {
+      sess = { id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() };
+      _iaSessions.push(sess);
+    }
+    sess.messages = lightweight;
+    sess.updated_at = Date.now();
+
+    if (sess.title === 'Nueva conversación' && lightweight.length > 0) {
+      var firstUser = lightweight.find(function(m){return m.role==='user';});
+      if (firstUser) {
+        var t = firstUser.content.substring(0, 25);
+        if (firstUser.content.length > 25) t += '...';
+        sess.title = t;
+      }
+    }
+
+    localStorage.setItem('erp_ia_chat', JSON.stringify(_iaSessions));
+    localStorage.setItem('erp_ia_current_session', _iaCurrentSessionId);
+
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: _iaSessions, memory: _iaMemory }).catch(function(){});
+    }
+  } catch(e) { console.error('Error saving IA chat', e); }
+}
+var _iaProposal = null;  // parsed proposal from AI
+
+function renderIAAssistant() {
+  var el = document.getElementById('ia-content');
+  if (!el) return;
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+
+  // If no API key configured, show setup screen
+  if (!apiKey) {
+    el.innerHTML = '<div class="ia-api-setup">'
+      + '<div style="font-size:40px;margin-bottom:12px">🤖</div>'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto">'
+      + 'Analiza comprobantes bancarios, chats de WhatsApp, fotos de recibos y más. '
+      + 'La IA interpreta tus flujos de dinero y te propone los movimientos contables exactos para aprobar con un clic.</div>'
+      + '<div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:8px">Introduce tu API Key de OpenAI para empezar:</div>'
+      + '<input type="password" id="ia-api-key-input" placeholder="sk-..." autocomplete="off">'
+      + '<br><button onclick="iaGuardarKey()">Guardar y empezar</button>'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:12px">Tu clave se guarda solo en este navegador (localStorage). Nadie más tiene acceso.</div>'
+      + '</div>';
+    return;
+  }
+
+  // Render the chat interface
+  var chatHtml = '';
+  if (_iaChatHistory.length === 0) {
+    chatHtml = '<div style="text-align:center;color:var(--color-text-tertiary);padding:40px 20px">'
+      + '<div style="font-size:32px;margin-bottom:8px">🤖</div>'
+      + '<div style="font-size:13px;font-weight:500;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:11px;line-height:1.5">Pégame un chat de WhatsApp, sube un comprobante bancario, '
+      + 'una foto de un recibo, un CSV del banco, o simplemente escríbeme qué pasó con el dinero.<br><br>'
+      + '<strong>Ejemplos:</strong><br>'
+      + '• "Le di $5,000 a Marta en La Habana, me puso $4,700 por Zelle, cobró 300 de comisión"<br>'
+      + '• "Este CSV es de Abanca, los ingresos son de ventas de Cuba"<br>'
+      + '• [Pegar chat de WhatsApp con remesista]</div>'
+      + '</div>';
+  } else {
+    _iaChatHistory.forEach(function(m) {
+      if (m.role === 'user') {
+        var userContent = typeof m.content === 'string' ? m.content : (m._displayText || '');
+        chatHtml += '<div class="ia-msg user">' + _iaEscapeHtml(userContent) + '</div>';
+      } else if (m.role === 'assistant') {
+        chatHtml += '<div class="ia-msg ai">' + _iaFormatResponse(m.content) + '</div>';
+      }
+    });
+  }
+
+  // Attachments chips
+  var attHtml = '';
+  if (_iaAttachments.length > 0) {
+    _iaAttachments.forEach(function(a, i) {
+      var icon = a.type === 'image' ? '📷' : a.type === 'audio' ? '🎤' : '📄';
+      attHtml += '<div class="ia-att-chip">' + icon + ' ' + _iaEscapeHtml(a.name)
+        + ' <button onclick="iaRemoveAttach(' + i + ')">✕</button></div>';
+    });
+  }
+
+  var headerSelect = '<select id="ia-session-select" onchange="iaChangeSession(this.value)" style="background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:4px;padding:4px;font-size:12px;max-width:140px;cursor:pointer;margin-left:8px">';
+  _iaSessions.forEach(function(s) {
+    var sel = (s.id == _iaCurrentSessionId) ? ' selected' : '';
+    headerSelect += '<option value="' + s.id + '"' + sel + '>' + _iaEscapeHtml(s.title) + '</option>';
+  });
+  headerSelect += '</select>';
+
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div style="font-size:14px;font-weight:600;display:flex;align-items:center">🤖 Asistente Financiero ' + headerSelect + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo Chat">➕ Nuevo</button>'
+    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️ Eliminar</button>'
+    + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
+    + '</div></div>'
+    + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
+    + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
+    + '<div class="ia-input-bar" style="position:relative">'
+    + '<button class="ia-btn-attach ia-btn-mic" id="ia-mic-btn" onclick="iaToggleMic()" title="Grabar audio con el micrófono">🎙️</button>'
+    + '<button class="ia-btn-attach" onclick="document.getElementById(\'ia-file-input\').click()" title="Adjuntar archivo (imagen, PDF, CSV, audio)">📎</button>'
+    + '<textarea id="ia-input" placeholder="Describe qué pasó con el dinero, pega un chat de WhatsApp, o sube un comprobante..." '
+    + 'onpaste="iaOnPaste(event)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();iaEnviar()}"></textarea>'
+    + '<button class="ia-btn-send" onclick="iaEnviar()" title="Enviar">➤</button>'
+    + '</div>'
+    + '<input type="file" id="ia-file-input" style="display:none" multiple '
+    + 'accept="image/*,audio/*,.pdf,.csv,.xlsx,.xls,.txt" onchange="iaOnFileSelect(event)">';
+
+  // Scroll to bottom
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function iaGuardarKey() {
+  var key = (document.getElementById('ia-api-key-input') || {}).value || '';
+  key = key.trim();
+  if (!key || !key.startsWith('sk-')) { alert('La API Key debe comenzar con "sk-"'); return; }
+  localStorage.setItem('erp_openai_key', key);
+  showToast('API Key guardada correctamente ✓');
+  renderIAAssistant();
+}
+
+function iaConfigKey() {
+  var newKey = prompt('Introduce tu nueva OpenAI API Key (sk-...):', '');
+  if (newKey === null) return;
+  if (newKey.trim() && newKey.trim().startsWith('sk-')) {
+    localStorage.setItem('erp_openai_key', newKey.trim());
+    showToast('API Key actualizada ✓');
+  } else if (newKey.trim() === '') {
+    localStorage.removeItem('erp_openai_key');
+    _iaChatHistory = [];
+    _iaSaveChat();
+    renderIAAssistant();
+  } else {
+    alert('La API Key debe comenzar con "sk-"');
+  }
+}
+
+function iaLimpiarChat() {
+  if (!confirm('¿Eliminar esta conversación por completo?')) return;
+  _iaSessions = _iaSessions.filter(function(s) { return s.id != _iaCurrentSessionId; });
+  if (_iaSessions.length === 0) {
+    iaNuevaSesion(true);
+  } else {
+    _iaCurrentSessionId = _iaSessions[_iaSessions.length - 1].id;
+    _iaLoadCurrentSession();
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+function iaNuevaSesion(skipRender) {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  _iaSaveChat();
+  if (!skipRender) renderIAAssistant();
+}
+
+function iaChangeSession(id) {
+  _iaCurrentSessionId = parseInt(id, 10);
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  renderIAAssistant();
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────
+function iaOnFileSelect(event) {
+  var files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  Array.from(files).forEach(function(file) {
+    var reader = new FileReader();
+    var isImage = file.type.startsWith('image/');
+    var isAudio = file.type.startsWith('audio/');
+    var isPDF = file.type === 'application/pdf';
+    var isCSV = file.name.endsWith('.csv') || file.name.endsWith('.txt');
+    var isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isImage || isPDF || isAudio) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: isImage ? 'image' : isAudio ? 'audio' : 'pdf',
+          base64: e.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    } else if (isCSV || file.name.endsWith('.txt')) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: e.target.result,
+          mimeType: 'text/plain'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsText(file);
+    } else if (isExcel) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: '[Archivo Excel: ' + file.name + ' — No se puede leer directamente. Por favor exporta como CSV para mejor análisis.]',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  });
+  event.target.value = '';
+}
+
+function iaRemoveAttach(idx) {
+  _iaAttachments.splice(idx, 1);
+  renderIAAssistant();
+}
+
+function iaOnDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '0.7';
+}
+
+function iaOnDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+}
+
+function iaOnDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+
+  var files = e.dataTransfer.files;
+  if (!files || files.length === 0) return;
+
+  // Re-use the exact same file processing logic used by the attach button
+  iaOnFileSelect({target: {files: files}});
+}
+
+function iaOnPaste(e) {
+  var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  var foundImage = false;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image/') === 0) {
+      foundImage = true;
+      var file = items[i].getAsFile();
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        _iaAttachments.push({
+          name: 'Imagen_pegada_' + new Date().getTime() + '.png',
+          type: 'image',
+          base64: evt.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+  // Prevent default only if an image was pasted, to allow normal text pasting
+  if (foundImage) e.preventDefault();
+}
+
+// ── MICROPHONE RECORDING ──────────────────────────────────────
+var _iaMediaRecorder = null;
+var _iaAudioChunks = [];
+
+async function iaToggleMic() {
+  var btn = document.getElementById('ia-mic-btn');
+  var input = document.getElementById('ia-input');
+  
+  if (_iaMediaRecorder && _iaMediaRecorder.state === 'recording') {
+    // Stop recording
+    _iaMediaRecorder.stop();
+    if (btn) btn.classList.remove('recording');
+    if (input) input.placeholder = "Describe qué pasó con el dinero...";
+    return;
+  }
+
+  // Start recording
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _iaMediaRecorder = new MediaRecorder(stream);
+    _iaAudioChunks = [];
+
+    _iaMediaRecorder.ondataavailable = function(e) {
+      if (e.data.size > 0) _iaAudioChunks.push(e.data);
+    };
+
+    _iaMediaRecorder.onstop = function() {
+      var blob = new Blob(_iaAudioChunks, { type: 'audio/webm' });
+      var file = new File([blob], 'Dictado_' + new Date().getTime() + '.webm', { type: 'audio/webm' });
+      
+      _iaAttachments.push({
+        name: file.name,
+        type: 'audio',
+        base64: '', // We don't strictly need base64 since we use rawFile for Whisper
+        mimeType: 'audio/webm',
+        rawFile: file
+      });
+      renderIAAssistant();
+      
+      // Stop all tracks to release mic icon in browser
+      stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+
+    _iaMediaRecorder.start();
+    if (btn) btn.classList.add('recording');
+    if (input) input.placeholder = "🔴 Grabando audio... (toca el botón de nuevo para detener)";
+
+  } catch (err) {
+    console.error('Error accessing microphone:', err);
+    alert('No se pudo acceder al micrófono. Verifica los permisos de tu navegador.');
+  }
+}
+
+// ── BUILD CONTEXT ─────────────────────────────────────────────
+function _iaBuildContext() {
+  var cajas = [];
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    _cajasData.filter(function(c) { return c.activa !== false; }).forEach(function(c) {
+      var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial || 0);
+      cajas.push({ nombre: c.nombre, moneda: c.moneda || 'USD', saldo: Math.round(saldo * 100) / 100, almacen: c.almacen || '' });
+    });
+  }
+
+  var foliosPendientes = [];
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(cli) {
+      if (!cli.folios) return;
+      cli.folios.forEach(function(f) {
+        if (f.estado === 'abierto' || f.estado === 'parcial') {
+          var totalF = 0;
+          (f.prods || []).forEach(function(p) { totalF += (p.qty || 0) * (p.price || 0); });
+          var abonosF = 0;
+          (f.abonos || []).forEach(function(a) { abonosF += parseFloat(a.monto || 0); });
+          var pendiente = totalF - abonosF;
+          if (pendiente > 0.5) {
+            foliosPendientes.push({ cliente: cli.nombre, folio: f.nota || f.id, pendiente: Math.round(pendiente * 100) / 100, moneda: f.moneda || 'USD' });
+          }
+        }
+      });
+    });
+  }
+
+  var tasas = {};
+  if (typeof RATES !== 'undefined') {
+    ['EUR', 'CUP', 'CUPT'].forEach(function(m) { if (RATES[m]) tasas[m + '_per_USD'] = RATES[m]; });
+  }
+
+  var tiposDisponibles = [];
+  if (typeof TIPO_META !== 'undefined') {
+    Object.keys(TIPO_META).forEach(function(k) {
+      tiposDisponibles.push(k + ' (' + TIPO_META[k].sentido + ')');
+    });
+  }
+
+  return {
+    cajas: cajas,
+    folios_pendientes: foliosPendientes.slice(0, 30),
+    tasas: tasas,
+    tipos_movimiento: tiposDisponibles,
+    fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
+  };
+}
+
+function _iaBuildSystemPrompt(context) {
+  return 'Eres el contable experto del ERP de Xportprise. Tu trabajo es interpretar flujos de dinero descritos por el usuario '
+    + '(en lenguaje natural, chats de WhatsApp, comprobantes bancarios, fotos de recibos) y proponer las operaciones contables exactas.\n\n'
+    + '## ESTADO ACTUAL DEL ERP\n'
+    + '### Cajas activas:\n' + JSON.stringify(context.cajas, null, 1) + '\n\n'
+    + '### Folios pendientes de cobro:\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
+    + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
+    + '### Tipos de movimiento disponibles:\n' + context.tipos_movimiento.join(', ') + '\n\n'
+    + '### Fecha de hoy: ' + context.fecha_hoy + '\n\n'
+    + '### Memoria / Instrucciones personalizadas:\n' + (_iaMemory || '(Vacío)') + '\n\n'
+    + '## INSTRUCCIONES\n'
+    + '1. Analiza lo que el usuario describe o te envía (texto, imágenes, CSV, chats).\n'
+    + '2. Identifica cada flujo de dinero: de dónde sale, a dónde llega, cuánto se pierde en comisiones.\n'
+    + '3. Las comisiones/pérdidas de intermediarios SIEMPRE se registran como un "Gasto operativo" explícito en el sistema con descripción "Comisión repatriación" o similar.\n'
+    + '4. Si identificas que un ingreso podría corresponder a un folio pendiente, sugiérelo.\n'
+    + '5. Responde SIEMPRE en español.\n'
+    + '6. Cuando tengas movimientos claros que proponer, incluye un bloque JSON con este formato exacto:\n\n'
+    + '```json\n{"propuesta": [\n'
+    + '  {"accion": "retiro", "caja": "nombre_caja", "monto": 5000, "moneda": "USD", "descripcion": "Entrega efectivo a Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "ingreso", "caja": "nombre_caja", "monto": 4700, "moneda": "USD", "descripcion": "Zelle de Marta", "tipo": "Ingreso no-venta", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "transferencia", "caja_origen": "caja_a", "caja_destino": "caja_b", "monto": 2000, "moneda": "USD", "descripcion": "Transferencia a España", "tipo": "Transferencia entre cuentas", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"}\n'
+    + ']}\n```\n\n'
+    + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
+    + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
+    + '9. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones (fechas, montos, conceptos) y sugiere a qué cajas o folios podrían corresponder.\n'
+    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '11. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
+    + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
+}
+
+// ── SEND MESSAGE ──────────────────────────────────────────────
+async function iaEnviar() {
+  var input = document.getElementById('ia-input');
+  var text = (input ? input.value : '').trim();
+  if (!text && _iaAttachments.length === 0) return;
+
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+  if (!apiKey) { showToast('Configura tu API Key primero'); return; }
+
+  var userContent = [];
+  var displayText = text || '';
+
+  if (text) {
+    userContent.push({ type: 'text', text: text });
+  }
+
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) {
+    chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Procesando...</div>';
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  try {
+    // 1. Process audio files first via Whisper API
+    for (var i = 0; i < _iaAttachments.length; i++) {
+      var a = _iaAttachments[i];
+      if (a.type === 'audio' && a.rawFile) {
+        if (chatArea) chatArea.innerHTML = chatArea.innerHTML.replace('Procesando...', 'Transcribiendo audio (' + a.name + ')...');
+        var fd = new FormData();
+        fd.append('file', a.rawFile);
+        fd.append('model', 'whisper-1');
+        var wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey },
+          body: fd
+        });
+        if (wRes.ok) {
+          var wData = await wRes.json();
+          userContent.push({
+            type: 'text',
+            text: '--- Transcripción del audio "' + a.name + '" ---\n' + wData.text + '\n--- Fin del audio ---'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Transcrito)';
+        } else {
+          userContent.push({
+            type: 'text',
+            text: '[Error al transcribir el audio ' + a.name + ']'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Error)';
+        }
+      } else if (a.type === 'image') {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
+        });
+        displayText += '\n📷 ' + a.name;
+      } else if (a.type === 'text') {
+        userContent.push({
+          type: 'text',
+          text: '--- Contenido del archivo "' + a.name + '" ---\n' + a.textContent + '\n--- Fin del archivo ---'
+        });
+        displayText += '\n📄 ' + a.name;
+      } else if (a.type === 'pdf') {
+        userContent.push({
+          type: 'text',
+          text: '[PDF adjunto: ' + a.name + ' — Se requiere OCR para leer el contenido. Intenta describir qué contiene.]'
+        });
+        displayText += '\n📄 ' + a.name;
+      }
+    }
+
+    if (userContent.length === 1 && userContent[0].type === 'text') {
+      userContent = userContent[0].text;
+    }
+
+    _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
+    _iaSaveChat();
+    _iaAttachments = [];
+
+    if (input) input.value = '';
+    renderIAAssistant();
+
+    // Add loading indicator back for the GPT processing
+    chatArea = document.getElementById('ia-chat-area');
+    if (chatArea) {
+      chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Analizando con IA...</div>';
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    var context = _iaBuildContext();
+    var messages = [{ role: 'system', content: _iaBuildSystemPrompt(context) }];
+
+    var histSlice = _iaChatHistory.slice(-10);
+    histSlice.forEach(function(m) {
+      messages.push({ role: m.role, content: m.content });
+    });
+
+    var response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 4096,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      var errBody = await response.text();
+      throw new Error('API error ' + response.status + ': ' + errBody.slice(0, 200));
+    }
+
+    var data = await response.json();
+    var aiText = data.choices[0].message.content;
+
+    _iaChatHistory.push({ role: 'assistant', content: aiText });
+    
+    // Check if AI wants to update memory
+    var memMatch = aiText.match(/\{"actualizar_memoria"\s*:\s*"([\s\S]*?)"\}/);
+    if (memMatch) {
+      _iaMemory = memMatch[1].replace(/\\n/g, '\n');
+      localStorage.setItem('erp_ia_memory', _iaMemory);
+      // It will be synced to Supabase when _iaSaveChat runs below, 
+      // but wait, _iaSaveChat only syncs chat_history! Let's update _iaSaveChat.
+    }
+
+    _iaSaveChat();
+    _iaProposal = _iaExtractProposal(aiText);
+
+    renderIAAssistant();
+
+  } catch (err) {
+    console.error('IA Error:', err);
+    var loadEl = document.getElementById('ia-loading');
+    if (loadEl) loadEl.remove();
+
+    _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nVerifica que tu API Key sea correcta y que tengas saldo en tu cuenta de OpenAI.' });
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+// ── PARSE AI RESPONSE ─────────────────────────────────────────
+function _iaExtractProposal(text) {
+  var jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (!jsonMatch) {
+    jsonMatch = text.match(/\{"propuesta"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    if (jsonMatch) jsonMatch = [null, jsonMatch[0]];
+  }
+  if (!jsonMatch) return null;
+
+  try {
+    var parsed = JSON.parse(jsonMatch[1]);
+    if (parsed.propuesta && Array.isArray(parsed.propuesta) && parsed.propuesta.length > 0) {
+      return parsed.propuesta;
+    }
+  } catch (e) {
+    console.warn('Could not parse IA proposal JSON:', e);
+  }
+  return null;
+}
+
+function _iaFormatResponse(text) {
+  var html = _iaEscapeHtml(text);
+
+  html = html.replace(/```json\s*([\s\S]*?)```/g, function(m, code) {
+    if (code.indexOf('"actualizar_memoria"') !== -1) {
+      return '<div style="font-size:11px;color:var(--color-text-success);margin-top:8px">🧠 <i>He aprendido algo nuevo para el futuro.</i></div>';
+    }
+    return '<pre style="background:var(--color-background-secondary);padding:8px;border-radius:6px;font-size:11px;overflow-x:auto;margin:8px 0">' + code + '</pre>';
+  });
+
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\n/g, '<br>');
+
+  if (_iaProposal && _iaChatHistory.length > 0 && _iaChatHistory[_iaChatHistory.length - 1].role === 'assistant' && _iaChatHistory[_iaChatHistory.length - 1].content === text) {
+    html += _iaRenderProposal(_iaProposal);
+  }
+
+  return html;
+}
+
+function _iaRenderProposal(proposal) {
+  var h = '<div class="ia-proposal"><h4>📋 Propuesta de Movimientos</h4>';
+
+  proposal.forEach(function(p, i) {
+    var iconClass = 'retiro';
+    var icon = '📉';
+    var label = '';
+
+    if (p.accion === 'retiro') { iconClass = 'retiro'; icon = '📉'; label = 'Retiro de ' + (p.caja || ''); }
+    else if (p.accion === 'ingreso') { iconClass = 'ingreso'; icon = '📈'; label = 'Ingreso a ' + (p.caja || ''); }
+    else if (p.accion === 'gasto') { iconClass = 'gasto'; icon = '💸'; label = 'Gasto — ' + (p.tipo || ''); }
+    else if (p.accion === 'transferencia') { iconClass = 'transfer'; icon = '🔄'; label = (p.caja_origen || '') + ' → ' + (p.caja_destino || ''); }
+    else if (p.accion === 'abono_folio') { iconClass = 'ingreso'; icon = '✅'; label = 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || ''); }
+    else if (p.accion === 'actualizar_saldo') { 
+      iconClass = 'transfer'; icon = '⚖️'; label = 'Ajuste de saldo: ' + (p.caja || '');
+      if (typeof p.nuevo_saldo !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nuevo_saldo;
+    }
+
+    h += '<div class="ia-prop-row">'
+      + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
+      + '<div class="ia-prop-detail">'
+      + '<div class="desc">' + _iaEscapeHtml(p.descripcion || '') + '</div>'
+      + '<div class="sub">' + _iaEscapeHtml(label) + ' • ' + (p.fecha || '') + '</div>'
+      + '</div>'
+      + '<div class="ia-prop-amount">'
+      + '<input type="number" id="ia-prop-monto-' + i + '" value="' + (p.monto || 0) + '" step="0.01"> '
+      + '<span style="font-size:11px;color:var(--color-text-secondary)">' + (p.moneda || 'USD') + '</span>'
+      + '</div></div>';
+  });
+
+  h += '<div class="ia-prop-actions">'
+    + '<button class="ia-btn-cancel" onclick="iaDescartarPropuesta()">Descartar</button>'
+    + '<button class="ia-btn-confirm" onclick="iaEjecutarPropuesta()">✅ Confirmar y Ejecutar</button>'
+    + '</div></div>';
+
+  return h;
+}
+
+function iaDescartarPropuesta() {
+  _iaProposal = null;
+  renderIAAssistant();
+  showToast('Propuesta descartada');
+}
+
+// ── EXECUTE PROPOSAL ──────────────────────────────────────────
+async function iaEjecutarPropuesta() {
+  if (!_iaProposal || _iaProposal.length === 0) return;
+  if (!confirm('¿Ejecutar los ' + _iaProposal.length + ' movimientos propuestos?')) return;
+
+  var errors = [];
+  var success = 0;
+
+  for (var i = 0; i < _iaProposal.length; i++) {
+    var p = _iaProposal[i];
+    var inputEl = document.getElementById('ia-prop-monto-' + i);
+    if (inputEl) p.monto = parseFloat(inputEl.value) || p.monto;
+
+    try {
+      if (p.accion === 'actualizar_saldo') {
+        var currentSaldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(p.caja) : 0;
+        var diff = p.monto - currentSaldo;
+        if (Math.abs(diff) > 0.01) {
+          if (diff > 0) {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste positivo', p.descripcion || 'Actualización de saldo', diff, p.moneda || 'USD', p.caja, 'ingreso');
+          } else {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste negativo', p.descripcion || 'Actualización de saldo', Math.abs(diff), p.moneda || 'USD', p.caja, 'gasto');
+          }
+          success++;
+        }
+      } else if (p.accion === 'retiro' || p.accion === 'gasto') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Gasto operativo', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'gasto');
+        success++;
+      } else if (p.accion === 'ingreso') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Ingreso no-venta', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'ingreso');
+        success++;
+      } else if (p.accion === 'transferencia') {
+        _iaRegistrarTransferencia(p.fecha || today(), p.descripcion, p.monto, p.moneda || 'USD', p.caja_origen, p.caja_destino);
+        success++;
+      } else if (p.accion === 'abono_folio') {
+        _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja || '', 'ingreso');
+        success++;
+      }
+    } catch (e) {
+      errors.push(p.descripcion + ': ' + e.message);
+    }
+  }
+
+  try { localStorage.setItem('erp_movs', JSON.stringify(MOVS.slice(0, 500))); } catch (e) {}
+
+  _iaProposal = null;
+
+  var msg = '✅ **' + success + ' movimiento(s) ejecutado(s) correctamente.**';
+  if (errors.length > 0) {
+    msg += '\n\n⚠️ Errores: ' + errors.join('; ');
+  }
+  _iaChatHistory.push({ role: 'assistant', content: msg });
+  _iaSaveChat();
+
+  renderIAAssistant();
+  if (typeof renderLibro === 'function') try { renderLibro(); } catch (e) {}
+  if (typeof renderCajas === 'function') try { renderCajas(); } catch (e) {}
+  showToast(success + ' movimiento(s) registrado(s) ✓');
+}
+
+function _iaRegistrarMov(fecha, tipo, desc, monto, mon, cta, sentido) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+  var mov = { id: igNextId++, fecha: fecha, tipo: tipo, desc: desc, monto: monto, mon: mon, equivUSD: equivUSD, cta: cta, sentido: sentido, notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(mov);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', {
+      fecha: mov.fecha, tipo: mov.tipo, descripcion: mov.desc,
+      monto: parseFloat(parseFloat(mov.monto).toFixed(4)),
+      moneda: mov.mon, equiv_usd: parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
+      cuenta: mov.cta, vendedor: '', notas: mov.notas || ''
+    });
+
+    var mcRow;
+    if (sentido === 'gasto') {
+      mcRow = { tipo: 'retiro', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: mov.cta, caja_destino: null,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    } else {
+      mcRow = { tipo: 'deposito', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: null, caja_destino: mov.cta,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    }
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcRow);
+    _supaWrite('POST', 'mov_cajas', mcRow);
+  }
+}
+
+function _iaRegistrarTransferencia(fecha, desc, monto, mon, cajaOrigen, cajaDestino) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+
+  var movOut = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (salida)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaOrigen, sentido: 'gasto', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movOut);
+
+  var movIn = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (entrada)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaDestino, sentido: 'ingreso', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movIn);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', { fecha: movOut.fecha, tipo: movOut.tipo, descripcion: movOut.desc, monto: parseFloat(parseFloat(movOut.monto).toFixed(4)), moneda: movOut.mon, equiv_usd: parseFloat(parseFloat(movOut.equivUSD).toFixed(4)), cuenta: movOut.cta, vendedor: '', notas: movOut.notas || '' });
+    _supaWrite('POST', 'movimientos_ig', { fecha: movIn.fecha, tipo: movIn.tipo, descripcion: movIn.desc, monto: parseFloat(parseFloat(movIn.monto).toFixed(4)), moneda: movIn.mon, equiv_usd: parseFloat(parseFloat(movIn.equivUSD).toFixed(4)), cuenta: movIn.cta, vendedor: '', notas: movIn.notas || '' });
+
+    var mcTrans = { tipo: 'transferencia', fecha: movOut.fecha,
+      notas: desc, usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+      caja_origen: cajaOrigen, caja_destino: cajaDestino,
+      monto_origen: monto, monto_destino: monto, tasa_usada: 1 };
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcTrans);
+    _supaWrite('POST', 'mov_cajas', mcTrans);
+  }
+}
+
+// ── CLOUD SYNC & MEMORY ───────────────────────────────────────
+var _iaMemory = localStorage.getItem('erp_ia_memory') || '';
+
+async function _iaSyncCloud() {
+  if (typeof supaReq !== 'function' || typeof _supaOnline === 'undefined' || !_supaOnline) return;
+  try {
+    var r = await supaReq('GET', 'ia_config?id=eq.1');
+    if (r && r.length > 0) {
+      if (r[0].memory) {
+        _iaMemory = r[0].memory;
+        localStorage.setItem('erp_ia_memory', _iaMemory);
+      }
+      if (r[0].chat_history && Array.isArray(r[0].chat_history)) {
+        _iaChatHistory = r[0].chat_history;
+        localStorage.setItem('erp_ia_chat', JSON.stringify(_iaChatHistory));
+        renderIAAssistant();
+      }
+    }
+  } catch(e) {}
+}
+
+setTimeout(_iaSyncCloud, 3500);
+
+function _iaEscapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+</script>
+</body>
+</html>
+
+
+
+
+ + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
+      h += '<div class="ana-cycle-stat" style="border-left:1px solid rgba(255,255,255,0.1);padding-left:10px;margin-left:6px;color:var(--color-text-info)">Venta esp: <b>
+      h += '</div>';
+      h += '</summary>';
+      
+      if (cd.prodsDetail && cd.prodsDetail.length > 0) {
+        h += '<div style="margin-top:12px;padding:8px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
+        h += '<table style="width:100%;font-size:10px;border-collapse:collapse">';
+        h += '<thead><tr style="border-bottom:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary)">'
+          + '<th style="text-align:left;padding:4px">Producto</th>'
+          + '<th style="text-align:right;padding:4px">Inicial</th>'
+          + '<th style="text-align:right;padding:4px">Vendido</th>'
+          + '<th style="text-align:right;padding:4px">Quedan</th>'
+          + '<th style="text-align:right;padding:4px">Ingreso</th>'
+          + '</tr></thead><tbody>';
+          
+        cd.prodsDetail.sort(function(a,b){return b.qSold - a.qSold;}).forEach(function(pd) {
+          var pct = pd.qOriginal > 0 ? Math.round((pd.qSold/pd.qOriginal)*100) : 0;
+          h += '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">'
+            + '<td style="padding:4px;font-weight:500">'+pd.n+'</td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qOriginal,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pd.qSold,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pct+'%)</span></td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pd.pRev,2)+'</td>'
+            + '</tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      
+      h += '</details>'; // .ana-cycle
+    });
+
+    h += '</div>'; // .ana-cycles
+  }
+
+  // ── Empty states ──────────────────────────────────────────
+  if (filteredVentas.length === 0) {
+    h += '<div class="ana-empty"><div class="ana-empty-icon">📭</div>No hay ventas en el período seleccionado</div>';
+  }
+
+  h += '</div>'; // .ana-wrap
+  el.innerHTML = h;
+}
+
+// ── Helper: rank card builder ──────────────────────────────
+function _anaRankCard(title, items, valueFn, nameKey) {
+  var h = '<div class="ana-rank-card">';
+  h += '<div class="ana-rank-title">' + title + '</div>';
+  if (items.length === 0) {
+    h += '<div style="font-size:11px;color:var(--color-text-tertiary);padding:8px 0">Sin datos</div>';
+  } else {
+    items.forEach(function(item, i) {
+      var posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      h += '<div class="ana-rank-item">';
+      h += '<div class="ana-rank-pos ' + posClass + '">' + (i + 1) + '</div>';
+      h += '<div class="ana-rank-name">' + _escHtml(item[nameKey]) + '</div>';
+      h += '<div class="ana-rank-val">' + valueFn(item) + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+// ── Helper: estado badge ───────────────────────────────────
+function _anaEstadoBadge(estado) {
+  var colors = {
+    preparando: 'var(--color-text-tertiary)',
+    reservado: 'var(--color-text-warning)',
+    en_puerto: 'var(--color-text-info)',
+    en_transito: 'var(--color-text-info)',
+    en_aduana: 'var(--color-text-warning)',
+    recibido: 'var(--color-text-success)',
+    cerrado: 'var(--color-text-tertiary)'
+  };
+  var labels = {
+    preparando: 'Preparando',
+    reservado: 'Reservado',
+    en_puerto: 'En puerto',
+    en_transito: 'En tránsito',
+    en_aduana: 'En aduana',
+    recibido: 'Recibido',
+    cerrado: 'Cerrado'
+  };
+  var col = colors[estado] || 'var(--color-text-tertiary)';
+  var lbl = labels[estado] || estado;
+  return '<span class="cnt-estado-badge" style="color:' + col + ';border:1px solid ' + col + '">' + lbl + '</span>';
+}
+
+// ── Helper: escape HTML ────────────────────────────────────
+function _escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ██  ASISTENTE IA FINANCIERO                                ██
+// ══════════════════════════════════════════════════════════════
+
+var _iaAttachments = []; // {name, type, base64, mimeType}
+var _iaSessions = []; // Array of { id, title, messages, updated_at }
+var _iaCurrentSessionId = null;
+
+try { 
+  var stored = JSON.parse(localStorage.getItem('erp_ia_chat') || '[]');
+  if (stored.length > 0) {
+    if (stored[0].role) {
+      // Legacy migration
+      _iaSessions = [{ id: Date.now(), title: 'Chat Anterior', messages: stored, updated_at: Date.now() }];
+    } else {
+      _iaSessions = stored;
+    }
+  }
+} catch(e){}
+
+if (_iaSessions.length > 0) {
+  _iaCurrentSessionId = localStorage.getItem('erp_ia_current_session') || _iaSessions[_iaSessions.length - 1].id;
+} else {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+}
+
+var _iaChatHistory = [];
+function _iaLoadCurrentSession() {
+  var s = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+  _iaChatHistory = s ? s.messages : [];
+}
+_iaLoadCurrentSession();
+
+function _iaSaveChat() {
+  try {
+    var lightweight = _iaChatHistory.map(function(m) {
+      if (m.role === 'user' && typeof m.content !== 'string') {
+        return { role: m.role, content: m._displayText || '[Contenido adjunto]', _displayText: m._displayText };
+      }
+      return m;
+    });
+
+    var sess = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+    if (!sess) {
+      sess = { id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() };
+      _iaSessions.push(sess);
+    }
+    sess.messages = lightweight;
+    sess.updated_at = Date.now();
+
+    if (sess.title === 'Nueva conversación' && lightweight.length > 0) {
+      var firstUser = lightweight.find(function(m){return m.role==='user';});
+      if (firstUser) {
+        var t = firstUser.content.substring(0, 25);
+        if (firstUser.content.length > 25) t += '...';
+        sess.title = t;
+      }
+    }
+
+    localStorage.setItem('erp_ia_chat', JSON.stringify(_iaSessions));
+    localStorage.setItem('erp_ia_current_session', _iaCurrentSessionId);
+
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: _iaSessions, memory: _iaMemory }).catch(function(){});
+    }
+  } catch(e) { console.error('Error saving IA chat', e); }
+}
+var _iaProposal = null;  // parsed proposal from AI
+
+function renderIAAssistant() {
+  var el = document.getElementById('ia-content');
+  if (!el) return;
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+
+  // If no API key configured, show setup screen
+  if (!apiKey) {
+    el.innerHTML = '<div class="ia-api-setup">'
+      + '<div style="font-size:40px;margin-bottom:12px">🤖</div>'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto">'
+      + 'Analiza comprobantes bancarios, chats de WhatsApp, fotos de recibos y más. '
+      + 'La IA interpreta tus flujos de dinero y te propone los movimientos contables exactos para aprobar con un clic.</div>'
+      + '<div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:8px">Introduce tu API Key de OpenAI para empezar:</div>'
+      + '<input type="password" id="ia-api-key-input" placeholder="sk-..." autocomplete="off">'
+      + '<br><button onclick="iaGuardarKey()">Guardar y empezar</button>'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:12px">Tu clave se guarda solo en este navegador (localStorage). Nadie más tiene acceso.</div>'
+      + '</div>';
+    return;
+  }
+
+  // Render the chat interface
+  var chatHtml = '';
+  if (_iaChatHistory.length === 0) {
+    chatHtml = '<div style="text-align:center;color:var(--color-text-tertiary);padding:40px 20px">'
+      + '<div style="font-size:32px;margin-bottom:8px">🤖</div>'
+      + '<div style="font-size:13px;font-weight:500;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:11px;line-height:1.5">Pégame un chat de WhatsApp, sube un comprobante bancario, '
+      + 'una foto de un recibo, un CSV del banco, o simplemente escríbeme qué pasó con el dinero.<br><br>'
+      + '<strong>Ejemplos:</strong><br>'
+      + '• "Le di $5,000 a Marta en La Habana, me puso $4,700 por Zelle, cobró 300 de comisión"<br>'
+      + '• "Este CSV es de Abanca, los ingresos son de ventas de Cuba"<br>'
+      + '• [Pegar chat de WhatsApp con remesista]</div>'
+      + '</div>';
+  } else {
+    _iaChatHistory.forEach(function(m) {
+      if (m.role === 'user') {
+        var userContent = typeof m.content === 'string' ? m.content : (m._displayText || '');
+        chatHtml += '<div class="ia-msg user">' + _iaEscapeHtml(userContent) + '</div>';
+      } else if (m.role === 'assistant') {
+        chatHtml += '<div class="ia-msg ai">' + _iaFormatResponse(m.content) + '</div>';
+      }
+    });
+  }
+
+  // Attachments chips
+  var attHtml = '';
+  if (_iaAttachments.length > 0) {
+    _iaAttachments.forEach(function(a, i) {
+      var icon = a.type === 'image' ? '📷' : a.type === 'audio' ? '🎤' : '📄';
+      attHtml += '<div class="ia-att-chip">' + icon + ' ' + _iaEscapeHtml(a.name)
+        + ' <button onclick="iaRemoveAttach(' + i + ')">✕</button></div>';
+    });
+  }
+
+  var headerSelect = '<select id="ia-session-select" onchange="iaChangeSession(this.value)" style="background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:4px;padding:4px;font-size:12px;max-width:140px;cursor:pointer;margin-left:8px">';
+  _iaSessions.forEach(function(s) {
+    var sel = (s.id == _iaCurrentSessionId) ? ' selected' : '';
+    headerSelect += '<option value="' + s.id + '"' + sel + '>' + _iaEscapeHtml(s.title) + '</option>';
+  });
+  headerSelect += '</select>';
+
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div style="font-size:14px;font-weight:600;display:flex;align-items:center">🤖 Asistente Financiero ' + headerSelect + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo Chat">➕ Nuevo</button>'
+    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️ Eliminar</button>'
+    + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
+    + '</div></div>'
+    + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
+    + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
+    + '<div class="ia-input-bar" style="position:relative">'
+    + '<button class="ia-btn-attach ia-btn-mic" id="ia-mic-btn" onclick="iaToggleMic()" title="Grabar audio con el micrófono">🎙️</button>'
+    + '<button class="ia-btn-attach" onclick="document.getElementById(\'ia-file-input\').click()" title="Adjuntar archivo (imagen, PDF, CSV, audio)">📎</button>'
+    + '<textarea id="ia-input" placeholder="Describe qué pasó con el dinero, pega un chat de WhatsApp, o sube un comprobante..." '
+    + 'onpaste="iaOnPaste(event)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();iaEnviar()}"></textarea>'
+    + '<button class="ia-btn-send" onclick="iaEnviar()" title="Enviar">➤</button>'
+    + '</div>'
+    + '<input type="file" id="ia-file-input" style="display:none" multiple '
+    + 'accept="image/*,audio/*,.pdf,.csv,.xlsx,.xls,.txt" onchange="iaOnFileSelect(event)">';
+
+  // Scroll to bottom
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function iaGuardarKey() {
+  var key = (document.getElementById('ia-api-key-input') || {}).value || '';
+  key = key.trim();
+  if (!key || !key.startsWith('sk-')) { alert('La API Key debe comenzar con "sk-"'); return; }
+  localStorage.setItem('erp_openai_key', key);
+  showToast('API Key guardada correctamente ✓');
+  renderIAAssistant();
+}
+
+function iaConfigKey() {
+  var newKey = prompt('Introduce tu nueva OpenAI API Key (sk-...):', '');
+  if (newKey === null) return;
+  if (newKey.trim() && newKey.trim().startsWith('sk-')) {
+    localStorage.setItem('erp_openai_key', newKey.trim());
+    showToast('API Key actualizada ✓');
+  } else if (newKey.trim() === '') {
+    localStorage.removeItem('erp_openai_key');
+    _iaChatHistory = [];
+    _iaSaveChat();
+    renderIAAssistant();
+  } else {
+    alert('La API Key debe comenzar con "sk-"');
+  }
+}
+
+function iaLimpiarChat() {
+  if (!confirm('¿Eliminar esta conversación por completo?')) return;
+  _iaSessions = _iaSessions.filter(function(s) { return s.id != _iaCurrentSessionId; });
+  if (_iaSessions.length === 0) {
+    iaNuevaSesion(true);
+  } else {
+    _iaCurrentSessionId = _iaSessions[_iaSessions.length - 1].id;
+    _iaLoadCurrentSession();
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+function iaNuevaSesion(skipRender) {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  _iaSaveChat();
+  if (!skipRender) renderIAAssistant();
+}
+
+function iaChangeSession(id) {
+  _iaCurrentSessionId = parseInt(id, 10);
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  renderIAAssistant();
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────
+function iaOnFileSelect(event) {
+  var files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  Array.from(files).forEach(function(file) {
+    var reader = new FileReader();
+    var isImage = file.type.startsWith('image/');
+    var isAudio = file.type.startsWith('audio/');
+    var isPDF = file.type === 'application/pdf';
+    var isCSV = file.name.endsWith('.csv') || file.name.endsWith('.txt');
+    var isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isImage || isPDF || isAudio) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: isImage ? 'image' : isAudio ? 'audio' : 'pdf',
+          base64: e.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    } else if (isCSV || file.name.endsWith('.txt')) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: e.target.result,
+          mimeType: 'text/plain'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsText(file);
+    } else if (isExcel) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: '[Archivo Excel: ' + file.name + ' — No se puede leer directamente. Por favor exporta como CSV para mejor análisis.]',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  });
+  event.target.value = '';
+}
+
+function iaRemoveAttach(idx) {
+  _iaAttachments.splice(idx, 1);
+  renderIAAssistant();
+}
+
+function iaOnDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '0.7';
+}
+
+function iaOnDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+}
+
+function iaOnDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+
+  var files = e.dataTransfer.files;
+  if (!files || files.length === 0) return;
+
+  // Re-use the exact same file processing logic used by the attach button
+  iaOnFileSelect({target: {files: files}});
+}
+
+function iaOnPaste(e) {
+  var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  var foundImage = false;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image/') === 0) {
+      foundImage = true;
+      var file = items[i].getAsFile();
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        _iaAttachments.push({
+          name: 'Imagen_pegada_' + new Date().getTime() + '.png',
+          type: 'image',
+          base64: evt.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+  // Prevent default only if an image was pasted, to allow normal text pasting
+  if (foundImage) e.preventDefault();
+}
+
+// ── MICROPHONE RECORDING ──────────────────────────────────────
+var _iaMediaRecorder = null;
+var _iaAudioChunks = [];
+
+async function iaToggleMic() {
+  var btn = document.getElementById('ia-mic-btn');
+  var input = document.getElementById('ia-input');
+  
+  if (_iaMediaRecorder && _iaMediaRecorder.state === 'recording') {
+    // Stop recording
+    _iaMediaRecorder.stop();
+    if (btn) btn.classList.remove('recording');
+    if (input) input.placeholder = "Describe qué pasó con el dinero...";
+    return;
+  }
+
+  // Start recording
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _iaMediaRecorder = new MediaRecorder(stream);
+    _iaAudioChunks = [];
+
+    _iaMediaRecorder.ondataavailable = function(e) {
+      if (e.data.size > 0) _iaAudioChunks.push(e.data);
+    };
+
+    _iaMediaRecorder.onstop = function() {
+      var blob = new Blob(_iaAudioChunks, { type: 'audio/webm' });
+      var file = new File([blob], 'Dictado_' + new Date().getTime() + '.webm', { type: 'audio/webm' });
+      
+      _iaAttachments.push({
+        name: file.name,
+        type: 'audio',
+        base64: '', // We don't strictly need base64 since we use rawFile for Whisper
+        mimeType: 'audio/webm',
+        rawFile: file
+      });
+      renderIAAssistant();
+      
+      // Stop all tracks to release mic icon in browser
+      stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+
+    _iaMediaRecorder.start();
+    if (btn) btn.classList.add('recording');
+    if (input) input.placeholder = "🔴 Grabando audio... (toca el botón de nuevo para detener)";
+
+  } catch (err) {
+    console.error('Error accessing microphone:', err);
+    alert('No se pudo acceder al micrófono. Verifica los permisos de tu navegador.');
+  }
+}
+
+// ── BUILD CONTEXT ─────────────────────────────────────────────
+function _iaBuildContext() {
+  var cajas = [];
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    _cajasData.filter(function(c) { return c.activa !== false; }).forEach(function(c) {
+      var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial || 0);
+      cajas.push({ nombre: c.nombre, moneda: c.moneda || 'USD', saldo: Math.round(saldo * 100) / 100, almacen: c.almacen || '' });
+    });
+  }
+
+  var foliosPendientes = [];
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(cli) {
+      if (!cli.folios) return;
+      cli.folios.forEach(function(f) {
+        if (f.estado === 'abierto' || f.estado === 'parcial') {
+          var totalF = 0;
+          (f.prods || []).forEach(function(p) { totalF += (p.qty || 0) * (p.price || 0); });
+          var abonosF = 0;
+          (f.abonos || []).forEach(function(a) { abonosF += parseFloat(a.monto || 0); });
+          var pendiente = totalF - abonosF;
+          if (pendiente > 0.5) {
+            foliosPendientes.push({ cliente: cli.nombre, folio: f.nota || f.id, pendiente: Math.round(pendiente * 100) / 100, moneda: f.moneda || 'USD' });
+          }
+        }
+      });
+    });
+  }
+
+  var tasas = {};
+  if (typeof RATES !== 'undefined') {
+    ['EUR', 'CUP', 'CUPT'].forEach(function(m) { if (RATES[m]) tasas[m + '_per_USD'] = RATES[m]; });
+  }
+
+  var tiposDisponibles = [];
+  if (typeof TIPO_META !== 'undefined') {
+    Object.keys(TIPO_META).forEach(function(k) {
+      tiposDisponibles.push(k + ' (' + TIPO_META[k].sentido + ')');
+    });
+  }
+
+  return {
+    cajas: cajas,
+    folios_pendientes: foliosPendientes.slice(0, 30),
+    tasas: tasas,
+    tipos_movimiento: tiposDisponibles,
+    fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
+  };
+}
+
+function _iaBuildSystemPrompt(context) {
+  return 'Eres el contable experto del ERP de Xportprise. Tu trabajo es interpretar flujos de dinero descritos por el usuario '
+    + '(en lenguaje natural, chats de WhatsApp, comprobantes bancarios, fotos de recibos) y proponer las operaciones contables exactas.\n\n'
+    + '## ESTADO ACTUAL DEL ERP\n'
+    + '### Cajas activas:\n' + JSON.stringify(context.cajas, null, 1) + '\n\n'
+    + '### Folios pendientes de cobro:\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
+    + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
+    + '### Tipos de movimiento disponibles:\n' + context.tipos_movimiento.join(', ') + '\n\n'
+    + '### Fecha de hoy: ' + context.fecha_hoy + '\n\n'
+    + '### Memoria / Instrucciones personalizadas:\n' + (_iaMemory || '(Vacío)') + '\n\n'
+    + '## INSTRUCCIONES\n'
+    + '1. Analiza lo que el usuario describe o te envía (texto, imágenes, CSV, chats).\n'
+    + '2. Identifica cada flujo de dinero: de dónde sale, a dónde llega, cuánto se pierde en comisiones.\n'
+    + '3. Las comisiones/pérdidas de intermediarios SIEMPRE se registran como un "Gasto operativo" explícito en el sistema con descripción "Comisión repatriación" o similar.\n'
+    + '4. Si identificas que un ingreso podría corresponder a un folio pendiente, sugiérelo.\n'
+    + '5. Responde SIEMPRE en español.\n'
+    + '6. Cuando tengas movimientos claros que proponer, incluye un bloque JSON con este formato exacto:\n\n'
+    + '```json\n{"propuesta": [\n'
+    + '  {"accion": "retiro", "caja": "nombre_caja", "monto": 5000, "moneda": "USD", "descripcion": "Entrega efectivo a Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "ingreso", "caja": "nombre_caja", "monto": 4700, "moneda": "USD", "descripcion": "Zelle de Marta", "tipo": "Ingreso no-venta", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "transferencia", "caja_origen": "caja_a", "caja_destino": "caja_b", "monto": 2000, "moneda": "USD", "descripcion": "Transferencia a España", "tipo": "Transferencia entre cuentas", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"}\n'
+    + ']}\n```\n\n'
+    + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
+    + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
+    + '9. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones (fechas, montos, conceptos) y sugiere a qué cajas o folios podrían corresponder.\n'
+    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '11. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
+    + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
+}
+
+// ── SEND MESSAGE ──────────────────────────────────────────────
+async function iaEnviar() {
+  var input = document.getElementById('ia-input');
+  var text = (input ? input.value : '').trim();
+  if (!text && _iaAttachments.length === 0) return;
+
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+  if (!apiKey) { showToast('Configura tu API Key primero'); return; }
+
+  var userContent = [];
+  var displayText = text || '';
+
+  if (text) {
+    userContent.push({ type: 'text', text: text });
+  }
+
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) {
+    chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Procesando...</div>';
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  try {
+    // 1. Process audio files first via Whisper API
+    for (var i = 0; i < _iaAttachments.length; i++) {
+      var a = _iaAttachments[i];
+      if (a.type === 'audio' && a.rawFile) {
+        if (chatArea) chatArea.innerHTML = chatArea.innerHTML.replace('Procesando...', 'Transcribiendo audio (' + a.name + ')...');
+        var fd = new FormData();
+        fd.append('file', a.rawFile);
+        fd.append('model', 'whisper-1');
+        var wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey },
+          body: fd
+        });
+        if (wRes.ok) {
+          var wData = await wRes.json();
+          userContent.push({
+            type: 'text',
+            text: '--- Transcripción del audio "' + a.name + '" ---\n' + wData.text + '\n--- Fin del audio ---'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Transcrito)';
+        } else {
+          userContent.push({
+            type: 'text',
+            text: '[Error al transcribir el audio ' + a.name + ']'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Error)';
+        }
+      } else if (a.type === 'image') {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
+        });
+        displayText += '\n📷 ' + a.name;
+      } else if (a.type === 'text') {
+        userContent.push({
+          type: 'text',
+          text: '--- Contenido del archivo "' + a.name + '" ---\n' + a.textContent + '\n--- Fin del archivo ---'
+        });
+        displayText += '\n📄 ' + a.name;
+      } else if (a.type === 'pdf') {
+        userContent.push({
+          type: 'text',
+          text: '[PDF adjunto: ' + a.name + ' — Se requiere OCR para leer el contenido. Intenta describir qué contiene.]'
+        });
+        displayText += '\n📄 ' + a.name;
+      }
+    }
+
+    if (userContent.length === 1 && userContent[0].type === 'text') {
+      userContent = userContent[0].text;
+    }
+
+    _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
+    _iaSaveChat();
+    _iaAttachments = [];
+
+    if (input) input.value = '';
+    renderIAAssistant();
+
+    // Add loading indicator back for the GPT processing
+    chatArea = document.getElementById('ia-chat-area');
+    if (chatArea) {
+      chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Analizando con IA...</div>';
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    var context = _iaBuildContext();
+    var messages = [{ role: 'system', content: _iaBuildSystemPrompt(context) }];
+
+    var histSlice = _iaChatHistory.slice(-10);
+    histSlice.forEach(function(m) {
+      messages.push({ role: m.role, content: m.content });
+    });
+
+    var response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 4096,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      var errBody = await response.text();
+      throw new Error('API error ' + response.status + ': ' + errBody.slice(0, 200));
+    }
+
+    var data = await response.json();
+    var aiText = data.choices[0].message.content;
+
+    _iaChatHistory.push({ role: 'assistant', content: aiText });
+    
+    // Check if AI wants to update memory
+    var memMatch = aiText.match(/\{"actualizar_memoria"\s*:\s*"([\s\S]*?)"\}/);
+    if (memMatch) {
+      _iaMemory = memMatch[1].replace(/\\n/g, '\n');
+      localStorage.setItem('erp_ia_memory', _iaMemory);
+      // It will be synced to Supabase when _iaSaveChat runs below, 
+      // but wait, _iaSaveChat only syncs chat_history! Let's update _iaSaveChat.
+    }
+
+    _iaSaveChat();
+    _iaProposal = _iaExtractProposal(aiText);
+
+    renderIAAssistant();
+
+  } catch (err) {
+    console.error('IA Error:', err);
+    var loadEl = document.getElementById('ia-loading');
+    if (loadEl) loadEl.remove();
+
+    _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nVerifica que tu API Key sea correcta y que tengas saldo en tu cuenta de OpenAI.' });
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+// ── PARSE AI RESPONSE ─────────────────────────────────────────
+function _iaExtractProposal(text) {
+  var jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (!jsonMatch) {
+    jsonMatch = text.match(/\{"propuesta"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    if (jsonMatch) jsonMatch = [null, jsonMatch[0]];
+  }
+  if (!jsonMatch) return null;
+
+  try {
+    var parsed = JSON.parse(jsonMatch[1]);
+    if (parsed.propuesta && Array.isArray(parsed.propuesta) && parsed.propuesta.length > 0) {
+      return parsed.propuesta;
+    }
+  } catch (e) {
+    console.warn('Could not parse IA proposal JSON:', e);
+  }
+  return null;
+}
+
+function _iaFormatResponse(text) {
+  var html = _iaEscapeHtml(text);
+
+  html = html.replace(/```json\s*([\s\S]*?)```/g, function(m, code) {
+    if (code.indexOf('"actualizar_memoria"') !== -1) {
+      return '<div style="font-size:11px;color:var(--color-text-success);margin-top:8px">🧠 <i>He aprendido algo nuevo para el futuro.</i></div>';
+    }
+    return '<pre style="background:var(--color-background-secondary);padding:8px;border-radius:6px;font-size:11px;overflow-x:auto;margin:8px 0">' + code + '</pre>';
+  });
+
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\n/g, '<br>');
+
+  if (_iaProposal && _iaChatHistory.length > 0 && _iaChatHistory[_iaChatHistory.length - 1].role === 'assistant' && _iaChatHistory[_iaChatHistory.length - 1].content === text) {
+    html += _iaRenderProposal(_iaProposal);
+  }
+
+  return html;
+}
+
+function _iaRenderProposal(proposal) {
+  var h = '<div class="ia-proposal"><h4>📋 Propuesta de Movimientos</h4>';
+
+  proposal.forEach(function(p, i) {
+    var iconClass = 'retiro';
+    var icon = '📉';
+    var label = '';
+
+    if (p.accion === 'retiro') { iconClass = 'retiro'; icon = '📉'; label = 'Retiro de ' + (p.caja || ''); }
+    else if (p.accion === 'ingreso') { iconClass = 'ingreso'; icon = '📈'; label = 'Ingreso a ' + (p.caja || ''); }
+    else if (p.accion === 'gasto') { iconClass = 'gasto'; icon = '💸'; label = 'Gasto — ' + (p.tipo || ''); }
+    else if (p.accion === 'transferencia') { iconClass = 'transfer'; icon = '🔄'; label = (p.caja_origen || '') + ' → ' + (p.caja_destino || ''); }
+    else if (p.accion === 'abono_folio') { iconClass = 'ingreso'; icon = '✅'; label = 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || ''); }
+    else if (p.accion === 'actualizar_saldo') { 
+      iconClass = 'transfer'; icon = '⚖️'; label = 'Ajuste de saldo: ' + (p.caja || '');
+      if (typeof p.nuevo_saldo !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nuevo_saldo;
+    }
+
+    h += '<div class="ia-prop-row">'
+      + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
+      + '<div class="ia-prop-detail">'
+      + '<div class="desc">' + _iaEscapeHtml(p.descripcion || '') + '</div>'
+      + '<div class="sub">' + _iaEscapeHtml(label) + ' • ' + (p.fecha || '') + '</div>'
+      + '</div>'
+      + '<div class="ia-prop-amount">'
+      + '<input type="number" id="ia-prop-monto-' + i + '" value="' + (p.monto || 0) + '" step="0.01"> '
+      + '<span style="font-size:11px;color:var(--color-text-secondary)">' + (p.moneda || 'USD') + '</span>'
+      + '</div></div>';
+  });
+
+  h += '<div class="ia-prop-actions">'
+    + '<button class="ia-btn-cancel" onclick="iaDescartarPropuesta()">Descartar</button>'
+    + '<button class="ia-btn-confirm" onclick="iaEjecutarPropuesta()">✅ Confirmar y Ejecutar</button>'
+    + '</div></div>';
+
+  return h;
+}
+
+function iaDescartarPropuesta() {
+  _iaProposal = null;
+  renderIAAssistant();
+  showToast('Propuesta descartada');
+}
+
+// ── EXECUTE PROPOSAL ──────────────────────────────────────────
+async function iaEjecutarPropuesta() {
+  if (!_iaProposal || _iaProposal.length === 0) return;
+  if (!confirm('¿Ejecutar los ' + _iaProposal.length + ' movimientos propuestos?')) return;
+
+  var errors = [];
+  var success = 0;
+
+  for (var i = 0; i < _iaProposal.length; i++) {
+    var p = _iaProposal[i];
+    var inputEl = document.getElementById('ia-prop-monto-' + i);
+    if (inputEl) p.monto = parseFloat(inputEl.value) || p.monto;
+
+    try {
+      if (p.accion === 'actualizar_saldo') {
+        var currentSaldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(p.caja) : 0;
+        var diff = p.monto - currentSaldo;
+        if (Math.abs(diff) > 0.01) {
+          if (diff > 0) {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste positivo', p.descripcion || 'Actualización de saldo', diff, p.moneda || 'USD', p.caja, 'ingreso');
+          } else {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste negativo', p.descripcion || 'Actualización de saldo', Math.abs(diff), p.moneda || 'USD', p.caja, 'gasto');
+          }
+          success++;
+        }
+      } else if (p.accion === 'retiro' || p.accion === 'gasto') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Gasto operativo', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'gasto');
+        success++;
+      } else if (p.accion === 'ingreso') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Ingreso no-venta', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'ingreso');
+        success++;
+      } else if (p.accion === 'transferencia') {
+        _iaRegistrarTransferencia(p.fecha || today(), p.descripcion, p.monto, p.moneda || 'USD', p.caja_origen, p.caja_destino);
+        success++;
+      } else if (p.accion === 'abono_folio') {
+        _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja || '', 'ingreso');
+        success++;
+      }
+    } catch (e) {
+      errors.push(p.descripcion + ': ' + e.message);
+    }
+  }
+
+  try { localStorage.setItem('erp_movs', JSON.stringify(MOVS.slice(0, 500))); } catch (e) {}
+
+  _iaProposal = null;
+
+  var msg = '✅ **' + success + ' movimiento(s) ejecutado(s) correctamente.**';
+  if (errors.length > 0) {
+    msg += '\n\n⚠️ Errores: ' + errors.join('; ');
+  }
+  _iaChatHistory.push({ role: 'assistant', content: msg });
+  _iaSaveChat();
+
+  renderIAAssistant();
+  if (typeof renderLibro === 'function') try { renderLibro(); } catch (e) {}
+  if (typeof renderCajas === 'function') try { renderCajas(); } catch (e) {}
+  showToast(success + ' movimiento(s) registrado(s) ✓');
+}
+
+function _iaRegistrarMov(fecha, tipo, desc, monto, mon, cta, sentido) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+  var mov = { id: igNextId++, fecha: fecha, tipo: tipo, desc: desc, monto: monto, mon: mon, equivUSD: equivUSD, cta: cta, sentido: sentido, notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(mov);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', {
+      fecha: mov.fecha, tipo: mov.tipo, descripcion: mov.desc,
+      monto: parseFloat(parseFloat(mov.monto).toFixed(4)),
+      moneda: mov.mon, equiv_usd: parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
+      cuenta: mov.cta, vendedor: '', notas: mov.notas || ''
+    });
+
+    var mcRow;
+    if (sentido === 'gasto') {
+      mcRow = { tipo: 'retiro', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: mov.cta, caja_destino: null,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    } else {
+      mcRow = { tipo: 'deposito', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: null, caja_destino: mov.cta,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    }
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcRow);
+    _supaWrite('POST', 'mov_cajas', mcRow);
+  }
+}
+
+function _iaRegistrarTransferencia(fecha, desc, monto, mon, cajaOrigen, cajaDestino) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+
+  var movOut = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (salida)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaOrigen, sentido: 'gasto', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movOut);
+
+  var movIn = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (entrada)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaDestino, sentido: 'ingreso', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movIn);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', { fecha: movOut.fecha, tipo: movOut.tipo, descripcion: movOut.desc, monto: parseFloat(parseFloat(movOut.monto).toFixed(4)), moneda: movOut.mon, equiv_usd: parseFloat(parseFloat(movOut.equivUSD).toFixed(4)), cuenta: movOut.cta, vendedor: '', notas: movOut.notas || '' });
+    _supaWrite('POST', 'movimientos_ig', { fecha: movIn.fecha, tipo: movIn.tipo, descripcion: movIn.desc, monto: parseFloat(parseFloat(movIn.monto).toFixed(4)), moneda: movIn.mon, equiv_usd: parseFloat(parseFloat(movIn.equivUSD).toFixed(4)), cuenta: movIn.cta, vendedor: '', notas: movIn.notas || '' });
+
+    var mcTrans = { tipo: 'transferencia', fecha: movOut.fecha,
+      notas: desc, usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+      caja_origen: cajaOrigen, caja_destino: cajaDestino,
+      monto_origen: monto, monto_destino: monto, tasa_usada: 1 };
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcTrans);
+    _supaWrite('POST', 'mov_cajas', mcTrans);
+  }
+}
+
+// ── CLOUD SYNC & MEMORY ───────────────────────────────────────
+var _iaMemory = localStorage.getItem('erp_ia_memory') || '';
+
+async function _iaSyncCloud() {
+  if (typeof supaReq !== 'function' || typeof _supaOnline === 'undefined' || !_supaOnline) return;
+  try {
+    var r = await supaReq('GET', 'ia_config?id=eq.1');
+    if (r && r.length > 0) {
+      if (r[0].memory) {
+        _iaMemory = r[0].memory;
+        localStorage.setItem('erp_ia_memory', _iaMemory);
+      }
+      if (r[0].chat_history && Array.isArray(r[0].chat_history)) {
+        _iaChatHistory = r[0].chat_history;
+        localStorage.setItem('erp_ia_chat', JSON.stringify(_iaChatHistory));
+        renderIAAssistant();
+      }
+    }
+  } catch(e) {}
+}
+
+setTimeout(_iaSyncCloud, 3500);
+
+function _iaEscapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+</script>
+</body>
+</html>
+
+
+
+
+ + fN(cd.expectedRevenue) + '</b></div>';
+      var emClass = cd.expectedMargin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
+      h += '<div class="ana-cycle-stat" style="' + emClass + '">Margen esp: <b>
+      h += '</div>';
+      h += '</summary>';
+      
+      if (cd.prodsDetail && cd.prodsDetail.length > 0) {
+        h += '<div style="margin-top:12px;padding:8px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
+        h += '<table style="width:100%;font-size:10px;border-collapse:collapse">';
+        h += '<thead><tr style="border-bottom:1px solid var(--color-border-tertiary);color:var(--color-text-tertiary)">'
+          + '<th style="text-align:left;padding:4px">Producto</th>'
+          + '<th style="text-align:right;padding:4px">Inicial</th>'
+          + '<th style="text-align:right;padding:4px">Vendido</th>'
+          + '<th style="text-align:right;padding:4px">Quedan</th>'
+          + '<th style="text-align:right;padding:4px">Ingreso</th>'
+          + '</tr></thead><tbody>';
+          
+        cd.prodsDetail.sort(function(a,b){return b.qSold - a.qSold;}).forEach(function(pd) {
+          var pct = pd.qOriginal > 0 ? Math.round((pd.qSold/pd.qOriginal)*100) : 0;
+          h += '<tr style="border-bottom:1px solid rgba(255,255,255,.03)">'
+            + '<td style="padding:4px;font-weight:500">'+pd.n+'</td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qOriginal,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pd.qSold,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pct+'%)</span></td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)+'</td>'
+            + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pd.pRev,2)+'</td>'
+            + '</tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      
+      h += '</details>'; // .ana-cycle
+    });
+
+    h += '</div>'; // .ana-cycles
+  }
+
+  // ── Empty states ──────────────────────────────────────────
+  if (filteredVentas.length === 0) {
+    h += '<div class="ana-empty"><div class="ana-empty-icon">📭</div>No hay ventas en el período seleccionado</div>';
+  }
+
+  h += '</div>'; // .ana-wrap
+  el.innerHTML = h;
+}
+
+// ── Helper: rank card builder ──────────────────────────────
+function _anaRankCard(title, items, valueFn, nameKey) {
+  var h = '<div class="ana-rank-card">';
+  h += '<div class="ana-rank-title">' + title + '</div>';
+  if (items.length === 0) {
+    h += '<div style="font-size:11px;color:var(--color-text-tertiary);padding:8px 0">Sin datos</div>';
+  } else {
+    items.forEach(function(item, i) {
+      var posClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      h += '<div class="ana-rank-item">';
+      h += '<div class="ana-rank-pos ' + posClass + '">' + (i + 1) + '</div>';
+      h += '<div class="ana-rank-name">' + _escHtml(item[nameKey]) + '</div>';
+      h += '<div class="ana-rank-val">' + valueFn(item) + '</div>';
+      h += '</div>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+// ── Helper: estado badge ───────────────────────────────────
+function _anaEstadoBadge(estado) {
+  var colors = {
+    preparando: 'var(--color-text-tertiary)',
+    reservado: 'var(--color-text-warning)',
+    en_puerto: 'var(--color-text-info)',
+    en_transito: 'var(--color-text-info)',
+    en_aduana: 'var(--color-text-warning)',
+    recibido: 'var(--color-text-success)',
+    cerrado: 'var(--color-text-tertiary)'
+  };
+  var labels = {
+    preparando: 'Preparando',
+    reservado: 'Reservado',
+    en_puerto: 'En puerto',
+    en_transito: 'En tránsito',
+    en_aduana: 'En aduana',
+    recibido: 'Recibido',
+    cerrado: 'Cerrado'
+  };
+  var col = colors[estado] || 'var(--color-text-tertiary)';
+  var lbl = labels[estado] || estado;
+  return '<span class="cnt-estado-badge" style="color:' + col + ';border:1px solid ' + col + '">' + lbl + '</span>';
+}
+
+// ── Helper: escape HTML ────────────────────────────────────
+function _escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ══════════════════════════════════════════════════════════════
+// ██  ASISTENTE IA FINANCIERO                                ██
+// ══════════════════════════════════════════════════════════════
+
+var _iaAttachments = []; // {name, type, base64, mimeType}
+var _iaSessions = []; // Array of { id, title, messages, updated_at }
+var _iaCurrentSessionId = null;
+
+try { 
+  var stored = JSON.parse(localStorage.getItem('erp_ia_chat') || '[]');
+  if (stored.length > 0) {
+    if (stored[0].role) {
+      // Legacy migration
+      _iaSessions = [{ id: Date.now(), title: 'Chat Anterior', messages: stored, updated_at: Date.now() }];
+    } else {
+      _iaSessions = stored;
+    }
+  }
+} catch(e){}
+
+if (_iaSessions.length > 0) {
+  _iaCurrentSessionId = localStorage.getItem('erp_ia_current_session') || _iaSessions[_iaSessions.length - 1].id;
+} else {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+}
+
+var _iaChatHistory = [];
+function _iaLoadCurrentSession() {
+  var s = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+  _iaChatHistory = s ? s.messages : [];
+}
+_iaLoadCurrentSession();
+
+function _iaSaveChat() {
+  try {
+    var lightweight = _iaChatHistory.map(function(m) {
+      if (m.role === 'user' && typeof m.content !== 'string') {
+        return { role: m.role, content: m._displayText || '[Contenido adjunto]', _displayText: m._displayText };
+      }
+      return m;
+    });
+
+    var sess = _iaSessions.find(function(x) { return x.id == _iaCurrentSessionId; });
+    if (!sess) {
+      sess = { id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() };
+      _iaSessions.push(sess);
+    }
+    sess.messages = lightweight;
+    sess.updated_at = Date.now();
+
+    if (sess.title === 'Nueva conversación' && lightweight.length > 0) {
+      var firstUser = lightweight.find(function(m){return m.role==='user';});
+      if (firstUser) {
+        var t = firstUser.content.substring(0, 25);
+        if (firstUser.content.length > 25) t += '...';
+        sess.title = t;
+      }
+    }
+
+    localStorage.setItem('erp_ia_chat', JSON.stringify(_iaSessions));
+    localStorage.setItem('erp_ia_current_session', _iaCurrentSessionId);
+
+    if (typeof supaReq === 'function' && typeof _supaOnline !== 'undefined' && _supaOnline) {
+      supaReq('PATCH', 'ia_config?id=eq.1', { chat_history: _iaSessions, memory: _iaMemory }).catch(function(){});
+    }
+  } catch(e) { console.error('Error saving IA chat', e); }
+}
+var _iaProposal = null;  // parsed proposal from AI
+
+function renderIAAssistant() {
+  var el = document.getElementById('ia-content');
+  if (!el) return;
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+
+  // If no API key configured, show setup screen
+  if (!apiKey) {
+    el.innerHTML = '<div class="ia-api-setup">'
+      + '<div style="font-size:40px;margin-bottom:12px">🤖</div>'
+      + '<div style="font-size:16px;font-weight:600;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto">'
+      + 'Analiza comprobantes bancarios, chats de WhatsApp, fotos de recibos y más. '
+      + 'La IA interpreta tus flujos de dinero y te propone los movimientos contables exactos para aprobar con un clic.</div>'
+      + '<div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:8px">Introduce tu API Key de OpenAI para empezar:</div>'
+      + '<input type="password" id="ia-api-key-input" placeholder="sk-..." autocomplete="off">'
+      + '<br><button onclick="iaGuardarKey()">Guardar y empezar</button>'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:12px">Tu clave se guarda solo en este navegador (localStorage). Nadie más tiene acceso.</div>'
+      + '</div>';
+    return;
+  }
+
+  // Render the chat interface
+  var chatHtml = '';
+  if (_iaChatHistory.length === 0) {
+    chatHtml = '<div style="text-align:center;color:var(--color-text-tertiary);padding:40px 20px">'
+      + '<div style="font-size:32px;margin-bottom:8px">🤖</div>'
+      + '<div style="font-size:13px;font-weight:500;margin-bottom:6px">Asistente Financiero IA</div>'
+      + '<div style="font-size:11px;line-height:1.5">Pégame un chat de WhatsApp, sube un comprobante bancario, '
+      + 'una foto de un recibo, un CSV del banco, o simplemente escríbeme qué pasó con el dinero.<br><br>'
+      + '<strong>Ejemplos:</strong><br>'
+      + '• "Le di $5,000 a Marta en La Habana, me puso $4,700 por Zelle, cobró 300 de comisión"<br>'
+      + '• "Este CSV es de Abanca, los ingresos son de ventas de Cuba"<br>'
+      + '• [Pegar chat de WhatsApp con remesista]</div>'
+      + '</div>';
+  } else {
+    _iaChatHistory.forEach(function(m) {
+      if (m.role === 'user') {
+        var userContent = typeof m.content === 'string' ? m.content : (m._displayText || '');
+        chatHtml += '<div class="ia-msg user">' + _iaEscapeHtml(userContent) + '</div>';
+      } else if (m.role === 'assistant') {
+        chatHtml += '<div class="ia-msg ai">' + _iaFormatResponse(m.content) + '</div>';
+      }
+    });
+  }
+
+  // Attachments chips
+  var attHtml = '';
+  if (_iaAttachments.length > 0) {
+    _iaAttachments.forEach(function(a, i) {
+      var icon = a.type === 'image' ? '📷' : a.type === 'audio' ? '🎤' : '📄';
+      attHtml += '<div class="ia-att-chip">' + icon + ' ' + _iaEscapeHtml(a.name)
+        + ' <button onclick="iaRemoveAttach(' + i + ')">✕</button></div>';
+    });
+  }
+
+  var headerSelect = '<select id="ia-session-select" onchange="iaChangeSession(this.value)" style="background:var(--color-background-secondary);color:var(--color-text-primary);border:1px solid var(--color-border-tertiary);border-radius:4px;padding:4px;font-size:12px;max-width:140px;cursor:pointer;margin-left:8px">';
+  _iaSessions.forEach(function(s) {
+    var sel = (s.id == _iaCurrentSessionId) ? ' selected' : '';
+    headerSelect += '<option value="' + s.id + '"' + sel + '>' + _iaEscapeHtml(s.title) + '</option>';
+  });
+  headerSelect += '</select>';
+
+  el.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div style="font-size:14px;font-weight:600;display:flex;align-items:center">🤖 Asistente Financiero ' + headerSelect + '</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<button class="btn-sm" onclick="iaNuevaSesion()" title="Nuevo Chat">➕ Nuevo</button>'
+    + '<button class="btn-sm" onclick="iaLimpiarChat()" title="Eliminar conversación actual">🗑️ Eliminar</button>'
+    + '<button class="btn-sm" onclick="iaConfigKey()" title="Cambiar API Key">⚙️</button>'
+    + '</div></div>'
+    + '<div class="ia-chat-area" id="ia-chat-area">' + chatHtml + '</div>'
+    + '<div class="ia-attachments" id="ia-attachments">' + attHtml + '</div>'
+    + '<div class="ia-input-bar" style="position:relative">'
+    + '<button class="ia-btn-attach ia-btn-mic" id="ia-mic-btn" onclick="iaToggleMic()" title="Grabar audio con el micrófono">🎙️</button>'
+    + '<button class="ia-btn-attach" onclick="document.getElementById(\'ia-file-input\').click()" title="Adjuntar archivo (imagen, PDF, CSV, audio)">📎</button>'
+    + '<textarea id="ia-input" placeholder="Describe qué pasó con el dinero, pega un chat de WhatsApp, o sube un comprobante..." '
+    + 'onpaste="iaOnPaste(event)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();iaEnviar()}"></textarea>'
+    + '<button class="ia-btn-send" onclick="iaEnviar()" title="Enviar">➤</button>'
+    + '</div>'
+    + '<input type="file" id="ia-file-input" style="display:none" multiple '
+    + 'accept="image/*,audio/*,.pdf,.csv,.xlsx,.xls,.txt" onchange="iaOnFileSelect(event)">';
+
+  // Scroll to bottom
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function iaGuardarKey() {
+  var key = (document.getElementById('ia-api-key-input') || {}).value || '';
+  key = key.trim();
+  if (!key || !key.startsWith('sk-')) { alert('La API Key debe comenzar con "sk-"'); return; }
+  localStorage.setItem('erp_openai_key', key);
+  showToast('API Key guardada correctamente ✓');
+  renderIAAssistant();
+}
+
+function iaConfigKey() {
+  var newKey = prompt('Introduce tu nueva OpenAI API Key (sk-...):', '');
+  if (newKey === null) return;
+  if (newKey.trim() && newKey.trim().startsWith('sk-')) {
+    localStorage.setItem('erp_openai_key', newKey.trim());
+    showToast('API Key actualizada ✓');
+  } else if (newKey.trim() === '') {
+    localStorage.removeItem('erp_openai_key');
+    _iaChatHistory = [];
+    _iaSaveChat();
+    renderIAAssistant();
+  } else {
+    alert('La API Key debe comenzar con "sk-"');
+  }
+}
+
+function iaLimpiarChat() {
+  if (!confirm('¿Eliminar esta conversación por completo?')) return;
+  _iaSessions = _iaSessions.filter(function(s) { return s.id != _iaCurrentSessionId; });
+  if (_iaSessions.length === 0) {
+    iaNuevaSesion(true);
+  } else {
+    _iaCurrentSessionId = _iaSessions[_iaSessions.length - 1].id;
+    _iaLoadCurrentSession();
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+function iaNuevaSesion(skipRender) {
+  _iaCurrentSessionId = Date.now();
+  _iaSessions.push({ id: _iaCurrentSessionId, title: 'Nueva conversación', messages: [], updated_at: Date.now() });
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  _iaSaveChat();
+  if (!skipRender) renderIAAssistant();
+}
+
+function iaChangeSession(id) {
+  _iaCurrentSessionId = parseInt(id, 10);
+  _iaLoadCurrentSession();
+  _iaAttachments = [];
+  _iaProposal = null;
+  renderIAAssistant();
+}
+
+// ── FILE HANDLING ─────────────────────────────────────────────
+function iaOnFileSelect(event) {
+  var files = event.target.files;
+  if (!files || files.length === 0) return;
+
+  Array.from(files).forEach(function(file) {
+    var reader = new FileReader();
+    var isImage = file.type.startsWith('image/');
+    var isAudio = file.type.startsWith('audio/');
+    var isPDF = file.type === 'application/pdf';
+    var isCSV = file.name.endsWith('.csv') || file.name.endsWith('.txt');
+    var isExcel = file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+
+    if (isImage || isPDF || isAudio) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: isImage ? 'image' : isAudio ? 'audio' : 'pdf',
+          base64: e.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    } else if (isCSV || file.name.endsWith('.txt')) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: e.target.result,
+          mimeType: 'text/plain'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsText(file);
+    } else if (isExcel) {
+      reader.onload = function(e) {
+        _iaAttachments.push({
+          name: file.name,
+          type: 'text',
+          textContent: '[Archivo Excel: ' + file.name + ' — No se puede leer directamente. Por favor exporta como CSV para mejor análisis.]',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        renderIAAssistant();
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  });
+  event.target.value = '';
+}
+
+function iaRemoveAttach(idx) {
+  _iaAttachments.splice(idx, 1);
+  renderIAAssistant();
+}
+
+function iaOnDragOver(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '0.7';
+}
+
+function iaOnDragLeave(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+}
+
+function iaOnDrop(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  var el = document.getElementById('ia-assistant');
+  if (el) el.style.opacity = '1';
+
+  var files = e.dataTransfer.files;
+  if (!files || files.length === 0) return;
+
+  // Re-use the exact same file processing logic used by the attach button
+  iaOnFileSelect({target: {files: files}});
+}
+
+function iaOnPaste(e) {
+  var items = (e.clipboardData || e.originalEvent.clipboardData).items;
+  var foundImage = false;
+  for (var i = 0; i < items.length; i++) {
+    if (items[i].type.indexOf('image/') === 0) {
+      foundImage = true;
+      var file = items[i].getAsFile();
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        _iaAttachments.push({
+          name: 'Imagen_pegada_' + new Date().getTime() + '.png',
+          type: 'image',
+          base64: evt.target.result.split(',')[1],
+          mimeType: file.type,
+          rawFile: file
+        });
+        renderIAAssistant();
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+  // Prevent default only if an image was pasted, to allow normal text pasting
+  if (foundImage) e.preventDefault();
+}
+
+// ── MICROPHONE RECORDING ──────────────────────────────────────
+var _iaMediaRecorder = null;
+var _iaAudioChunks = [];
+
+async function iaToggleMic() {
+  var btn = document.getElementById('ia-mic-btn');
+  var input = document.getElementById('ia-input');
+  
+  if (_iaMediaRecorder && _iaMediaRecorder.state === 'recording') {
+    // Stop recording
+    _iaMediaRecorder.stop();
+    if (btn) btn.classList.remove('recording');
+    if (input) input.placeholder = "Describe qué pasó con el dinero...";
+    return;
+  }
+
+  // Start recording
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    _iaMediaRecorder = new MediaRecorder(stream);
+    _iaAudioChunks = [];
+
+    _iaMediaRecorder.ondataavailable = function(e) {
+      if (e.data.size > 0) _iaAudioChunks.push(e.data);
+    };
+
+    _iaMediaRecorder.onstop = function() {
+      var blob = new Blob(_iaAudioChunks, { type: 'audio/webm' });
+      var file = new File([blob], 'Dictado_' + new Date().getTime() + '.webm', { type: 'audio/webm' });
+      
+      _iaAttachments.push({
+        name: file.name,
+        type: 'audio',
+        base64: '', // We don't strictly need base64 since we use rawFile for Whisper
+        mimeType: 'audio/webm',
+        rawFile: file
+      });
+      renderIAAssistant();
+      
+      // Stop all tracks to release mic icon in browser
+      stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+
+    _iaMediaRecorder.start();
+    if (btn) btn.classList.add('recording');
+    if (input) input.placeholder = "🔴 Grabando audio... (toca el botón de nuevo para detener)";
+
+  } catch (err) {
+    console.error('Error accessing microphone:', err);
+    alert('No se pudo acceder al micrófono. Verifica los permisos de tu navegador.');
+  }
+}
+
+// ── BUILD CONTEXT ─────────────────────────────────────────────
+function _iaBuildContext() {
+  var cajas = [];
+  if (typeof _cajasData !== 'undefined' && _cajasData.length) {
+    _cajasData.filter(function(c) { return c.activa !== false; }).forEach(function(c) {
+      var saldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(c.nombre) : parseFloat(c.saldo_inicial || 0);
+      cajas.push({ nombre: c.nombre, moneda: c.moneda || 'USD', saldo: Math.round(saldo * 100) / 100, almacen: c.almacen || '' });
+    });
+  }
+
+  var foliosPendientes = [];
+  if (typeof CLIENTES !== 'undefined') {
+    CLIENTES.forEach(function(cli) {
+      if (!cli.folios) return;
+      cli.folios.forEach(function(f) {
+        if (f.estado === 'abierto' || f.estado === 'parcial') {
+          var totalF = 0;
+          (f.prods || []).forEach(function(p) { totalF += (p.qty || 0) * (p.price || 0); });
+          var abonosF = 0;
+          (f.abonos || []).forEach(function(a) { abonosF += parseFloat(a.monto || 0); });
+          var pendiente = totalF - abonosF;
+          if (pendiente > 0.5) {
+            foliosPendientes.push({ cliente: cli.nombre, folio: f.nota || f.id, pendiente: Math.round(pendiente * 100) / 100, moneda: f.moneda || 'USD' });
+          }
+        }
+      });
+    });
+  }
+
+  var tasas = {};
+  if (typeof RATES !== 'undefined') {
+    ['EUR', 'CUP', 'CUPT'].forEach(function(m) { if (RATES[m]) tasas[m + '_per_USD'] = RATES[m]; });
+  }
+
+  var tiposDisponibles = [];
+  if (typeof TIPO_META !== 'undefined') {
+    Object.keys(TIPO_META).forEach(function(k) {
+      tiposDisponibles.push(k + ' (' + TIPO_META[k].sentido + ')');
+    });
+  }
+
+  return {
+    cajas: cajas,
+    folios_pendientes: foliosPendientes.slice(0, 30),
+    tasas: tasas,
+    tipos_movimiento: tiposDisponibles,
+    fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
+  };
+}
+
+function _iaBuildSystemPrompt(context) {
+  return 'Eres el contable experto del ERP de Xportprise. Tu trabajo es interpretar flujos de dinero descritos por el usuario '
+    + '(en lenguaje natural, chats de WhatsApp, comprobantes bancarios, fotos de recibos) y proponer las operaciones contables exactas.\n\n'
+    + '## ESTADO ACTUAL DEL ERP\n'
+    + '### Cajas activas:\n' + JSON.stringify(context.cajas, null, 1) + '\n\n'
+    + '### Folios pendientes de cobro:\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
+    + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
+    + '### Tipos de movimiento disponibles:\n' + context.tipos_movimiento.join(', ') + '\n\n'
+    + '### Fecha de hoy: ' + context.fecha_hoy + '\n\n'
+    + '### Memoria / Instrucciones personalizadas:\n' + (_iaMemory || '(Vacío)') + '\n\n'
+    + '## INSTRUCCIONES\n'
+    + '1. Analiza lo que el usuario describe o te envía (texto, imágenes, CSV, chats).\n'
+    + '2. Identifica cada flujo de dinero: de dónde sale, a dónde llega, cuánto se pierde en comisiones.\n'
+    + '3. Las comisiones/pérdidas de intermediarios SIEMPRE se registran como un "Gasto operativo" explícito en el sistema con descripción "Comisión repatriación" o similar.\n'
+    + '4. Si identificas que un ingreso podría corresponder a un folio pendiente, sugiérelo.\n'
+    + '5. Responde SIEMPRE en español.\n'
+    + '6. Cuando tengas movimientos claros que proponer, incluye un bloque JSON con este formato exacto:\n\n'
+    + '```json\n{"propuesta": [\n'
+    + '  {"accion": "retiro", "caja": "nombre_caja", "monto": 5000, "moneda": "USD", "descripcion": "Entrega efectivo a Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "ingreso", "caja": "nombre_caja", "monto": 4700, "moneda": "USD", "descripcion": "Zelle de Marta", "tipo": "Ingreso no-venta", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "transferencia", "caja_origen": "caja_a", "caja_destino": "caja_b", "monto": 2000, "moneda": "USD", "descripcion": "Transferencia a España", "tipo": "Transferencia entre cuentas", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"}\n'
+    + ']}\n```\n\n'
+    + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
+    + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
+    + '9. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones (fechas, montos, conceptos) y sugiere a qué cajas o folios podrían corresponder.\n'
+    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '11. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
+    + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
+}
+
+// ── SEND MESSAGE ──────────────────────────────────────────────
+async function iaEnviar() {
+  var input = document.getElementById('ia-input');
+  var text = (input ? input.value : '').trim();
+  if (!text && _iaAttachments.length === 0) return;
+
+  var apiKey = localStorage.getItem('erp_openai_key') || '';
+  if (!apiKey) { showToast('Configura tu API Key primero'); return; }
+
+  var userContent = [];
+  var displayText = text || '';
+
+  if (text) {
+    userContent.push({ type: 'text', text: text });
+  }
+
+  var chatArea = document.getElementById('ia-chat-area');
+  if (chatArea) {
+    chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Procesando...</div>';
+    chatArea.scrollTop = chatArea.scrollHeight;
+  }
+
+  try {
+    // 1. Process audio files first via Whisper API
+    for (var i = 0; i < _iaAttachments.length; i++) {
+      var a = _iaAttachments[i];
+      if (a.type === 'audio' && a.rawFile) {
+        if (chatArea) chatArea.innerHTML = chatArea.innerHTML.replace('Procesando...', 'Transcribiendo audio (' + a.name + ')...');
+        var fd = new FormData();
+        fd.append('file', a.rawFile);
+        fd.append('model', 'whisper-1');
+        var wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey },
+          body: fd
+        });
+        if (wRes.ok) {
+          var wData = await wRes.json();
+          userContent.push({
+            type: 'text',
+            text: '--- Transcripción del audio "' + a.name + '" ---\n' + wData.text + '\n--- Fin del audio ---'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Transcrito)';
+        } else {
+          userContent.push({
+            type: 'text',
+            text: '[Error al transcribir el audio ' + a.name + ']'
+          });
+          displayText += '\n🎤 ' + a.name + ' (Error)';
+        }
+      } else if (a.type === 'image') {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
+        });
+        displayText += '\n📷 ' + a.name;
+      } else if (a.type === 'text') {
+        userContent.push({
+          type: 'text',
+          text: '--- Contenido del archivo "' + a.name + '" ---\n' + a.textContent + '\n--- Fin del archivo ---'
+        });
+        displayText += '\n📄 ' + a.name;
+      } else if (a.type === 'pdf') {
+        userContent.push({
+          type: 'text',
+          text: '[PDF adjunto: ' + a.name + ' — Se requiere OCR para leer el contenido. Intenta describir qué contiene.]'
+        });
+        displayText += '\n📄 ' + a.name;
+      }
+    }
+
+    if (userContent.length === 1 && userContent[0].type === 'text') {
+      userContent = userContent[0].text;
+    }
+
+    _iaChatHistory.push({ role: 'user', content: userContent, _displayText: displayText });
+    _iaSaveChat();
+    _iaAttachments = [];
+
+    if (input) input.value = '';
+    renderIAAssistant();
+
+    // Add loading indicator back for the GPT processing
+    chatArea = document.getElementById('ia-chat-area');
+    if (chatArea) {
+      chatArea.innerHTML += '<div class="ia-msg ai" id="ia-loading"><span class="ia-spinner"></span> Analizando con IA...</div>';
+      chatArea.scrollTop = chatArea.scrollHeight;
+    }
+
+    var context = _iaBuildContext();
+    var messages = [{ role: 'system', content: _iaBuildSystemPrompt(context) }];
+
+    var histSlice = _iaChatHistory.slice(-10);
+    histSlice.forEach(function(m) {
+      messages.push({ role: m.role, content: m.content });
+    });
+
+    var response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 4096,
+        temperature: 0.3
+      })
+    });
+
+    if (!response.ok) {
+      var errBody = await response.text();
+      throw new Error('API error ' + response.status + ': ' + errBody.slice(0, 200));
+    }
+
+    var data = await response.json();
+    var aiText = data.choices[0].message.content;
+
+    _iaChatHistory.push({ role: 'assistant', content: aiText });
+    
+    // Check if AI wants to update memory
+    var memMatch = aiText.match(/\{"actualizar_memoria"\s*:\s*"([\s\S]*?)"\}/);
+    if (memMatch) {
+      _iaMemory = memMatch[1].replace(/\\n/g, '\n');
+      localStorage.setItem('erp_ia_memory', _iaMemory);
+      // It will be synced to Supabase when _iaSaveChat runs below, 
+      // but wait, _iaSaveChat only syncs chat_history! Let's update _iaSaveChat.
+    }
+
+    _iaSaveChat();
+    _iaProposal = _iaExtractProposal(aiText);
+
+    renderIAAssistant();
+
+  } catch (err) {
+    console.error('IA Error:', err);
+    var loadEl = document.getElementById('ia-loading');
+    if (loadEl) loadEl.remove();
+
+    _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nVerifica que tu API Key sea correcta y que tengas saldo en tu cuenta de OpenAI.' });
+    _iaSaveChat();
+    renderIAAssistant();
+  }
+}
+
+// ── PARSE AI RESPONSE ─────────────────────────────────────────
+function _iaExtractProposal(text) {
+  var jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
+  if (!jsonMatch) {
+    jsonMatch = text.match(/\{"propuesta"\s*:\s*\[[\s\S]*?\]\s*\}/);
+    if (jsonMatch) jsonMatch = [null, jsonMatch[0]];
+  }
+  if (!jsonMatch) return null;
+
+  try {
+    var parsed = JSON.parse(jsonMatch[1]);
+    if (parsed.propuesta && Array.isArray(parsed.propuesta) && parsed.propuesta.length > 0) {
+      return parsed.propuesta;
+    }
+  } catch (e) {
+    console.warn('Could not parse IA proposal JSON:', e);
+  }
+  return null;
+}
+
+function _iaFormatResponse(text) {
+  var html = _iaEscapeHtml(text);
+
+  html = html.replace(/```json\s*([\s\S]*?)```/g, function(m, code) {
+    if (code.indexOf('"actualizar_memoria"') !== -1) {
+      return '<div style="font-size:11px;color:var(--color-text-success);margin-top:8px">🧠 <i>He aprendido algo nuevo para el futuro.</i></div>';
+    }
+    return '<pre style="background:var(--color-background-secondary);padding:8px;border-radius:6px;font-size:11px;overflow-x:auto;margin:8px 0">' + code + '</pre>';
+  });
+
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\n/g, '<br>');
+
+  if (_iaProposal && _iaChatHistory.length > 0 && _iaChatHistory[_iaChatHistory.length - 1].role === 'assistant' && _iaChatHistory[_iaChatHistory.length - 1].content === text) {
+    html += _iaRenderProposal(_iaProposal);
+  }
+
+  return html;
+}
+
+function _iaRenderProposal(proposal) {
+  var h = '<div class="ia-proposal"><h4>📋 Propuesta de Movimientos</h4>';
+
+  proposal.forEach(function(p, i) {
+    var iconClass = 'retiro';
+    var icon = '📉';
+    var label = '';
+
+    if (p.accion === 'retiro') { iconClass = 'retiro'; icon = '📉'; label = 'Retiro de ' + (p.caja || ''); }
+    else if (p.accion === 'ingreso') { iconClass = 'ingreso'; icon = '📈'; label = 'Ingreso a ' + (p.caja || ''); }
+    else if (p.accion === 'gasto') { iconClass = 'gasto'; icon = '💸'; label = 'Gasto — ' + (p.tipo || ''); }
+    else if (p.accion === 'transferencia') { iconClass = 'transfer'; icon = '🔄'; label = (p.caja_origen || '') + ' → ' + (p.caja_destino || ''); }
+    else if (p.accion === 'abono_folio') { iconClass = 'ingreso'; icon = '✅'; label = 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || ''); }
+    else if (p.accion === 'actualizar_saldo') { 
+      iconClass = 'transfer'; icon = '⚖️'; label = 'Ajuste de saldo: ' + (p.caja || '');
+      if (typeof p.nuevo_saldo !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nuevo_saldo;
+    }
+
+    h += '<div class="ia-prop-row">'
+      + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
+      + '<div class="ia-prop-detail">'
+      + '<div class="desc">' + _iaEscapeHtml(p.descripcion || '') + '</div>'
+      + '<div class="sub">' + _iaEscapeHtml(label) + ' • ' + (p.fecha || '') + '</div>'
+      + '</div>'
+      + '<div class="ia-prop-amount">'
+      + '<input type="number" id="ia-prop-monto-' + i + '" value="' + (p.monto || 0) + '" step="0.01"> '
+      + '<span style="font-size:11px;color:var(--color-text-secondary)">' + (p.moneda || 'USD') + '</span>'
+      + '</div></div>';
+  });
+
+  h += '<div class="ia-prop-actions">'
+    + '<button class="ia-btn-cancel" onclick="iaDescartarPropuesta()">Descartar</button>'
+    + '<button class="ia-btn-confirm" onclick="iaEjecutarPropuesta()">✅ Confirmar y Ejecutar</button>'
+    + '</div></div>';
+
+  return h;
+}
+
+function iaDescartarPropuesta() {
+  _iaProposal = null;
+  renderIAAssistant();
+  showToast('Propuesta descartada');
+}
+
+// ── EXECUTE PROPOSAL ──────────────────────────────────────────
+async function iaEjecutarPropuesta() {
+  if (!_iaProposal || _iaProposal.length === 0) return;
+  if (!confirm('¿Ejecutar los ' + _iaProposal.length + ' movimientos propuestos?')) return;
+
+  var errors = [];
+  var success = 0;
+
+  for (var i = 0; i < _iaProposal.length; i++) {
+    var p = _iaProposal[i];
+    var inputEl = document.getElementById('ia-prop-monto-' + i);
+    if (inputEl) p.monto = parseFloat(inputEl.value) || p.monto;
+
+    try {
+      if (p.accion === 'actualizar_saldo') {
+        var currentSaldo = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(p.caja) : 0;
+        var diff = p.monto - currentSaldo;
+        if (Math.abs(diff) > 0.01) {
+          if (diff > 0) {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste positivo', p.descripcion || 'Actualización de saldo', diff, p.moneda || 'USD', p.caja, 'ingreso');
+          } else {
+            _iaRegistrarMov(p.fecha || today(), 'Ajuste negativo', p.descripcion || 'Actualización de saldo', Math.abs(diff), p.moneda || 'USD', p.caja, 'gasto');
+          }
+          success++;
+        }
+      } else if (p.accion === 'retiro' || p.accion === 'gasto') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Gasto operativo', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'gasto');
+        success++;
+      } else if (p.accion === 'ingreso') {
+        _iaRegistrarMov(p.fecha || today(), p.tipo || 'Ingreso no-venta', p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'ingreso');
+        success++;
+      } else if (p.accion === 'transferencia') {
+        _iaRegistrarTransferencia(p.fecha || today(), p.descripcion, p.monto, p.moneda || 'USD', p.caja_origen, p.caja_destino);
+        success++;
+      } else if (p.accion === 'abono_folio') {
+        _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja || '', 'ingreso');
+        success++;
+      }
+    } catch (e) {
+      errors.push(p.descripcion + ': ' + e.message);
+    }
+  }
+
+  try { localStorage.setItem('erp_movs', JSON.stringify(MOVS.slice(0, 500))); } catch (e) {}
+
+  _iaProposal = null;
+
+  var msg = '✅ **' + success + ' movimiento(s) ejecutado(s) correctamente.**';
+  if (errors.length > 0) {
+    msg += '\n\n⚠️ Errores: ' + errors.join('; ');
+  }
+  _iaChatHistory.push({ role: 'assistant', content: msg });
+  _iaSaveChat();
+
+  renderIAAssistant();
+  if (typeof renderLibro === 'function') try { renderLibro(); } catch (e) {}
+  if (typeof renderCajas === 'function') try { renderCajas(); } catch (e) {}
+  showToast(success + ' movimiento(s) registrado(s) ✓');
+}
+
+function _iaRegistrarMov(fecha, tipo, desc, monto, mon, cta, sentido) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+  var mov = { id: igNextId++, fecha: fecha, tipo: tipo, desc: desc, monto: monto, mon: mon, equivUSD: equivUSD, cta: cta, sentido: sentido, notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(mov);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', {
+      fecha: mov.fecha, tipo: mov.tipo, descripcion: mov.desc,
+      monto: parseFloat(parseFloat(mov.monto).toFixed(4)),
+      moneda: mov.mon, equiv_usd: parseFloat(parseFloat(mov.equivUSD).toFixed(4)),
+      cuenta: mov.cta, vendedor: '', notas: mov.notas || ''
+    });
+
+    var mcRow;
+    if (sentido === 'gasto') {
+      mcRow = { tipo: 'retiro', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: mov.cta, caja_destino: null,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    } else {
+      mcRow = { tipo: 'deposito', fecha: mov.fecha, notas: mov.tipo + ' — ' + mov.desc,
+        usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+        caja_origen: null, caja_destino: mov.cta,
+        monto_origen: mov.monto, monto_destino: mov.monto, tasa_usada: null };
+    }
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcRow);
+    _supaWrite('POST', 'mov_cajas', mcRow);
+  }
+}
+
+function _iaRegistrarTransferencia(fecha, desc, monto, mon, cajaOrigen, cajaDestino) {
+  if (typeof igNextId === 'undefined') window.igNextId = Date.now();
+  var equivUSD = typeof toUSD === 'function' ? parseFloat(toUSD(monto, mon).toFixed(2)) : monto;
+
+  var movOut = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (salida)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaOrigen, sentido: 'gasto', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movOut);
+
+  var movIn = { id: igNextId++, fecha: fecha, tipo: 'Transferencia entre cuentas', desc: desc + ' (entrada)', monto: monto, mon: mon, equivUSD: equivUSD, cta: cajaDestino, sentido: 'ingreso', notas: 'Generado por Asistente IA', ts: new Date().toISOString() };
+  MOVS.unshift(movIn);
+
+  if (typeof _supaWrite === 'function') {
+    _supaWrite('POST', 'movimientos_ig', { fecha: movOut.fecha, tipo: movOut.tipo, descripcion: movOut.desc, monto: parseFloat(parseFloat(movOut.monto).toFixed(4)), moneda: movOut.mon, equiv_usd: parseFloat(parseFloat(movOut.equivUSD).toFixed(4)), cuenta: movOut.cta, vendedor: '', notas: movOut.notas || '' });
+    _supaWrite('POST', 'movimientos_ig', { fecha: movIn.fecha, tipo: movIn.tipo, descripcion: movIn.desc, monto: parseFloat(parseFloat(movIn.monto).toFixed(4)), moneda: movIn.mon, equiv_usd: parseFloat(parseFloat(movIn.equivUSD).toFixed(4)), cuenta: movIn.cta, vendedor: '', notas: movIn.notas || '' });
+
+    var mcTrans = { tipo: 'transferencia', fecha: movOut.fecha,
+      notas: desc, usuario: (typeof S !== 'undefined' && S.user) || 'Admin',
+      caja_origen: cajaOrigen, caja_destino: cajaDestino,
+      monto_origen: monto, monto_destino: monto, tasa_usada: 1 };
+    if (typeof _cajasMovs !== 'undefined') _cajasMovs.unshift(mcTrans);
+    _supaWrite('POST', 'mov_cajas', mcTrans);
+  }
+}
+
+// ── CLOUD SYNC & MEMORY ───────────────────────────────────────
+var _iaMemory = localStorage.getItem('erp_ia_memory') || '';
+
+async function _iaSyncCloud() {
+  if (typeof supaReq !== 'function' || typeof _supaOnline === 'undefined' || !_supaOnline) return;
+  try {
+    var r = await supaReq('GET', 'ia_config?id=eq.1');
+    if (r && r.length > 0) {
+      if (r[0].memory) {
+        _iaMemory = r[0].memory;
+        localStorage.setItem('erp_ia_memory', _iaMemory);
+      }
+      if (r[0].chat_history && Array.isArray(r[0].chat_history)) {
+        _iaChatHistory = r[0].chat_history;
+        localStorage.setItem('erp_ia_chat', JSON.stringify(_iaChatHistory));
+        renderIAAssistant();
+      }
+    }
+  } catch(e) {}
+}
+
+setTimeout(_iaSyncCloud, 3500);
+
+function _iaEscapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+</script>
+</body>
+</html>
+
+
+
+
+ + fN(cd.expectedMargin) + ' (' + fN(cd.expectedMarginPct, 1) + '%)</b></div>';
       h += '</div>';
       h += '</summary>';
       
