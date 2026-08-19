@@ -2447,6 +2447,21 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
   } else {
     // Descontar de un lote específico si se indica
     var toDeduct = Math.abs(delta);
+    if(opts.strictLote && (preferredLote || opts.loteEspecifico) && (preferredLote || opts.loteEspecifico) !== 'SIN LOTE') {
+      var lName = preferredLote || opts.loteEspecifico;
+      var tgt = lotes.find(function(l){return l.lote === lName;});
+      if(tgt) {
+        tgt.cantidad -= toDeduct;
+        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+          {producto_id:prod.supaId, almacen:almacen, lote:tgt.lote, cantidad:tgt.cantidad});
+      } else {
+        prod.lotes = prod.lotes || [];
+        prod.lotes.push({producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:-toDeduct, costo:0, precio_venta:0, fecha_entrada:new Date().toISOString()});
+        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+          {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:-toDeduct});
+      }
+      return true;
+    }
     if(opts.loteEspecifico) {
       var tgt = lotes.find(function(l){return l.lote === opts.loteEspecifico;});
       if(tgt) {
@@ -3898,7 +3913,7 @@ function ventaCreditoPOS() {
     if(p&&alm){
       p.stk=Math.max(0,(p.stk||0)-l.q);
       if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
-      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q}],alm);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cnt}],alm);
     }
   });
   
@@ -8303,7 +8318,7 @@ function updLQ(cid,fid,i,v){
         if(!prod.stk_alm)prod.stk_alm={};
         prod.stk_alm[f.alm]=Math.max(0,(prod.stk_alm[f.alm]||0)+delta);
         if(typeof adjustStockByDelta==='function'&&prod.supaId){
-          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE');
+          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE',{strictLote:true});
         }
       }
     }
@@ -8333,7 +8348,7 @@ function restL(cid,fid,i){
         if(!prod.stk_alm)prod.stk_alm={};
         prod.stk_alm[f.alm]=Math.max(0,(prod.stk_alm[f.alm]||0)+delta);
         if(typeof adjustStockByDelta==='function'&&prod.supaId){
-          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE');
+          adjustStockByDelta(prod,f.alm,delta,f.contenedor||'SIN LOTE',{strictLote:true});
         }
       }
     }
@@ -8356,7 +8371,7 @@ function elimL(cid,fid,i){
       if(!prod.stk_alm)prod.stk_alm={};
       prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
       if(typeof adjustStockByDelta==='function'&&prod.supaId){
-        adjustStockByDelta(prod,f.alm,l.q,f.contenedor||'SIN LOTE');
+        adjustStockByDelta(prod,f.alm,l.q,f.contenedor||'SIN LOTE',{strictLote:true});
       }
     }
   }
@@ -8427,7 +8442,7 @@ function elimFolioCli(cid,fid){
             if(!prod.stk_alm)prod.stk_alm={};
             prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
             if(typeof adjustStockByDelta==='function'&&prod.supaId){
-              adjustStockByDelta(prod,f.alm,l.q, f.contenedor || 'SIN LOTE');
+              adjustStockByDelta(prod,f.alm,l.q, f.contenedor || 'SIN LOTE',{strictLote:true});
             }
           }
         }
@@ -9104,7 +9119,7 @@ function crearFolioCli(cid){
     if(p&&alm){
       p.stk=Math.max(0,(p.stk||0)-l.q);
       if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
-      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q}],alm);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cnt}],alm);
     }
   });
   window['nfl_'+cid]=[];
@@ -12552,7 +12567,7 @@ async function syncStockUpdate(cart, alm) {
     if (!p.supaId) continue;
     // Descontar usando el motor de lotes (FIFO) en lugar de parchear destructivamente todos los lotes a la vez
     try {
-      await adjustStockByDelta(p, alm, -c.q);
+      await adjustStockByDelta(p, alm, -c.q, c.lote, {strictLote: true});
     } catch(e) { console.warn('syncStockUpdate delta error:', e); }
   }
   if (typeof _dRecalcReservas === 'function') _dRecalcReservas();
