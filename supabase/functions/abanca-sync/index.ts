@@ -1,17 +1,20 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// ── ABANCA Open Banking (PSD2) ────────────────────────────────
-// Secrets necesarios en Supabase (Edge Functions → Secrets):
-//   ABANCA_CLIENT_ID      — de la APP creada en el portal Open Banking (Claves)
-//   ABANCA_CLIENT_SECRET  — idem
-//   ABANCA_REFRESH_TOKEN  — se obtiene UNA vez autorizando con abanca-callback
-// Opcionales (los valores exactos están en Documentación del portal):
-//   ABANCA_BASE_URL   — por defecto https://api.abanca.com (verificado: /psd2/me/accounts y /oauth2/token responden 401 sin credenciales)
-//   ABANCA_TOKEN_URL  — por defecto {BASE}/oauth2/token
+// ── ABANCA Open Banking ───────────────────────────────────────
+// Flujo según la Documentación oficial del portal:
+//  - Token:  POST {base}/oauth2/token  con cabecera AuthKey y body
+//            grant_type=refresh_token&APLICACION={id}&refresh_token={rt}
+//            (la app se identifica con AuthKey, no hay client_secret)
+//  - API V2: {base}/v2/psd2 (producción) · {base}/sandbox/v2/psd2 (sandbox)
+//  - Toda petición lleva AuthKey + Authorization: Bearer.
+//  - Cuentas de EMPRESA: el ticket trae "contracts"; cada contrato se
+//    consulta con la cabecera x-clienteContratoId.
 //
-// Devuelve el mismo contrato que wise-sync: { transactions, balances }.
-// Cada transacción lleva cuenta_iban para que el ERP la mapee a su caja
-// (hay varias cajas ABANCA en EUR: el mapeo IBAN→caja vive en el cliente).
+// Secrets: ABANCA_CLIENT_ID, ABANCA_API_KEY, ABANCA_REFRESH_TOKEN.
+// Opcionales: ABANCA_INSTANCE (Abanca|Sandbox), ABANCA_BASE_URL.
+//
+// Devuelve el contrato común: { transactions, balances }, cada transacción
+// con cuenta_iban para que el ERP la mapee a su caja por IBAN.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,9 +25,8 @@ function limpiarId(v: unknown): string {
   return String(v ?? '').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').replace(/[^A-Za-z0-9_-]/g, '');
 }
 
-// El importe puede venir como número firmado, como string, o como objeto
-// {amount, currency} según la versión. Se intenta en ese orden y, si además
-// hay un campo de sentido (creditDebitIndicator / type), se respeta.
+// El importe puede venir como número firmado, string, u objeto {amount}.
+// Si hay indicador de sentido se respeta; si no, PSD2 firma el número.
 function importeFirmado(t: any): { importe: number; conocido: boolean } {
   let v: unknown = t?.amount ?? t?.importe ?? t?.transactionAmount?.amount ?? t?.transactionAmount;
   if (v && typeof v === 'object') v = (v as any).amount ?? (v as any).value;
@@ -38,7 +40,6 @@ function importeFirmado(t: any): { importe: number; conocido: boolean } {
   if (ind.includes('DBIT') || ind.includes('DEBIT') || ind.includes('CARGO') || ind.includes('DEBE')) {
     return { importe: -Math.abs(n), conocido: true };
   }
-  // Sin indicador: PSD2 suele firmar el número directamente.
   return { importe: n, conocido: true };
 }
 
@@ -49,110 +50,122 @@ serve(async (req) => {
 
   try {
     const clientId = Deno.env.get('ABANCA_CLIENT_ID');
-    const clientSecret = Deno.env.get('ABANCA_CLIENT_SECRET');
+    const apiKey = Deno.env.get('ABANCA_API_KEY') || Deno.env.get('ABANCA_CLIENT_SECRET');
     const refreshToken = Deno.env.get('ABANCA_REFRESH_TOKEN');
-    if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error('Faltan credenciales de Abanca en Supabase Secrets (ABANCA_CLIENT_ID / ABANCA_CLIENT_SECRET / ABANCA_REFRESH_TOKEN). Ver docs/Abanca.md');
-    }
+    if (!clientId || !apiKey) throw new Error('Faltan ABANCA_CLIENT_ID / ABANCA_API_KEY en Supabase Secrets.');
+    if (!refreshToken) throw new Error('Falta ABANCA_REFRESH_TOKEN: autoriza primero desde /functions/v1/abanca-callback');
 
     const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
+    const instancia = Deno.env.get('ABANCA_INSTANCE') || 'Abanca';
+    const apiBase = Deno.env.get('ABANCA_API_BASE') ||
+      (instancia.toLowerCase() === 'sandbox' ? `${base}/sandbox/v2/psd2` : `${base}/v2/psd2`);
     const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
-    // El gateway de Abanca (Volterra) exige la API key de la APP en la
-    // cabecera AuthKey en TODAS las llamadas (verificado: sin ella responde
-    // 401 "Failed to find key field: AuthKey").
-    const apiKey = Deno.env.get('ABANCA_API_KEY') || clientSecret;
 
-    // 1. refresh_token → access_token (client_secret_basic + fallback en body)
-    const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
-    let tokenRes = await fetch(tokenUrl, {
+    // 1. refresh_token → access_token (formato exacto de la Documentación)
+    const tokenRes = await fetch(tokenUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`),
-        'AuthKey': apiKey,
-      },
-      body: body.toString(),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        APLICACION: clientId,
+        refresh_token: refreshToken,
+      }).toString(),
     });
     if (!tokenRes.ok) {
-      const body2 = new URLSearchParams({
-        grant_type: 'refresh_token', refresh_token: refreshToken,
-        client_id: clientId, client_secret: clientSecret,
-      });
-      tokenRes = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
-        body: body2.toString(),
-      });
-    }
-    if (!tokenRes.ok) {
-      throw new Error(`Token Abanca (${tokenUrl}): ${tokenRes.status} ${await tokenRes.text()}`);
+      throw new Error(`Token Abanca: ${tokenRes.status} ${await tokenRes.text()} — si el refresh token caducó, re-autoriza en /functions/v1/abanca-callback`);
     }
     const tok = await tokenRes.json();
-    const auth = { 'Authorization': `Bearer ${tok.access_token}`, 'AuthKey': apiKey };
 
-    // 2. Cuentas del cliente
-    const accRes = await fetch(`${base}/psd2/me/accounts`, { headers: auth });
-    if (!accRes.ok) throw new Error(`Abanca /accounts: ${accRes.status} ${await accRes.text()}`);
-    const accData = await accRes.json();
-    const cuentas: any[] = Array.isArray(accData) ? accData
-      : accData?.accounts ?? accData?.accountList ?? accData?.data ?? [];
+    // Contratos de empresa: cada uno se consulta con x-clienteContratoId.
+    // Sin contratos (particular) se hace una única pasada sin cabecera.
+    let contratos: (string | null)[] = [null];
+    const rawC = tok?.contracts;
+    if (Array.isArray(rawC) && rawC.length) {
+      contratos = rawC.map((c: any) => String(c?.identifier ?? c?.id ?? c)).filter(Boolean);
+    } else if (rawC && typeof rawC === 'object') {
+      contratos = Object.values(rawC).map((c: any) => String(c?.identifier ?? c?.id ?? c)).filter(Boolean);
+    } else if (typeof rawC === 'string' && rawC) {
+      contratos = [rawC];
+    }
+    if (!contratos.length) contratos = [null];
 
     const desde = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const transactions: any[] = [];
     const balances: any[] = [];
+    const ibansVistos = new Set<string>();
 
-    for (const acc of cuentas) {
-      const accountId = acc?.accountId ?? acc?.id ?? acc?.resourceId;
-      if (!accountId) continue;
-      const iban = acc?.iban ?? acc?.IBAN ?? acc?.accountNumber ?? String(accountId);
-      const alias = acc?.alias ?? acc?.name ?? acc?.product ?? '';
-      const monedaCta = acc?.currency ?? acc?.divisa ?? '';
+    for (const contrato of contratos) {
+      const auth: Record<string, string> = {
+        'Authorization': `Bearer ${tok.access_token}`,
+        'AuthKey': apiKey,
+      };
+      if (contrato) auth['x-clienteContratoId'] = contrato;
 
-      // 2a. Saldo real de la cuenta
-      try {
-        const balRes = await fetch(`${base}/psd2/me/accounts/${encodeURIComponent(accountId)}/balance`, { headers: auth });
-        if (balRes.ok) {
-          const bal = await balRes.json();
-          let bv: unknown = bal?.amount ?? bal?.balance ?? bal?.balanceAmount?.amount ?? bal?.saldo;
-          if (bv && typeof bv === 'object') bv = (bv as any).amount ?? (bv as any).value;
-          const bn = typeof bv === 'number' ? bv : parseFloat(String(bv ?? '').replace(',', '.'));
-          if (isFinite(bn)) {
-            balances.push({ iban, alias, currency: bal?.currency ?? (monedaCta || 'EUR'), amount: bn });
+      // 2. Cuentas (a la vista y de crédito)
+      const accRes = await fetch(`${apiBase}/me/accounts`, { headers: auth });
+      if (!accRes.ok) {
+        console.warn('accounts', contrato, accRes.status, await accRes.text());
+        continue;
+      }
+      const accData = await accRes.json();
+      const cuentas: any[] = Array.isArray(accData) ? accData
+        : accData?.accounts ?? accData?.accountList ?? accData?.data ?? [];
+
+      for (const acc of cuentas) {
+        const accountId = acc?.accountId ?? acc?.id ?? acc?.resourceId;
+        if (!accountId) continue;
+        const iban = String(acc?.iban ?? acc?.IBAN ?? acc?.accountNumber ?? accountId);
+        if (ibansVistos.has(iban)) continue; // misma cuenta visible en 2 contratos
+        ibansVistos.add(iban);
+        const alias = acc?.alias ?? acc?.name ?? acc?.product ?? '';
+        const monedaCta = acc?.currency ?? acc?.divisa ?? '';
+
+        // 2a. Saldo real
+        try {
+          const balRes = await fetch(`${apiBase}/me/accounts/${encodeURIComponent(accountId)}/balance`, { headers: auth });
+          if (balRes.ok) {
+            const bal = await balRes.json();
+            let bv: unknown = bal?.amount ?? bal?.balance ?? bal?.balanceAmount?.amount ?? bal?.saldo;
+            if (bv && typeof bv === 'object') bv = (bv as any).amount ?? (bv as any).value;
+            const bn = typeof bv === 'number' ? bv : parseFloat(String(bv ?? '').replace(',', '.'));
+            if (isFinite(bn)) {
+              balances.push({ iban, alias, currency: bal?.currency ?? (monedaCta || 'EUR'), amount: bn, contrato });
+            }
+          } else {
+            console.warn('balance', iban, balRes.status, await balRes.text());
           }
-        } else {
-          console.warn('balance', iban, balRes.status, await balRes.text());
-        }
-      } catch (e) { console.warn('balance', iban, e); }
+        } catch (e) { console.warn('balance', iban, e); }
 
-      // 2b. Movimientos (concept es obligatorio según la referencia: vacío = todos)
-      try {
-        const txUrl = `${base}/psd2/me/accounts/${encodeURIComponent(accountId)}/transactions?concept=&dateFrom=${desde}`;
-        const txRes = await fetch(txUrl, { headers: auth });
-        if (!txRes.ok) { console.warn('transactions', iban, txRes.status, await txRes.text()); continue; }
-        const txData = await txRes.json();
-        const movs: any[] = Array.isArray(txData) ? txData
-          : txData?.transactions ?? txData?.transactionList ?? txData?.data ?? [];
+        // 2b. Movimientos (concept es obligatorio; vacío = todos)
+        try {
+          const txUrl = `${apiBase}/me/accounts/${encodeURIComponent(accountId)}/transactions?concept=&dateFrom=${desde}`;
+          const txRes = await fetch(txUrl, { headers: auth });
+          if (!txRes.ok) { console.warn('transactions', iban, txRes.status, await txRes.text()); continue; }
+          const txData = await txRes.json();
+          const movs: any[] = Array.isArray(txData) ? txData
+            : txData?.transactions ?? txData?.transactionList ?? txData?.data ?? [];
 
-        for (const t of movs) {
-          const { importe, conocido } = importeFirmado(t);
-          const rawId = t?.transactionId ?? t?.id ?? t?.reference ?? '';
-          const estado = String(t?.status ?? t?.bookingStatus ?? 'BOOKED').toUpperCase();
-          transactions.push({
-            // el id de PSD2 es por cuenta: se prefija con el IBAN para que no
-            // colisione entre cuentas
-            id: limpiarId(iban) + '-' + limpiarId(rawId || (t?.bookingDate ?? '') + '-' + importe),
-            created_at: t?.bookingDate ?? t?.valueDate ?? t?.date ?? t?.fecha ?? null,
-            estado: (estado.includes('PDNG') || estado.includes('PENDING')) ? 'PENDING' : 'COMPLETED',
-            currency: t?.currency ?? t?.divisa ?? t?.transactionAmount?.currency ?? (monedaCta || 'EUR'),
-            amount: importe,
-            signo_conocido: conocido,
-            reference: String(t?.concept ?? t?.concepto ?? t?.description ?? t?.remittanceInformation ?? '').trim() || 'Abanca',
-            type: 'ABANCA',
-            cuenta_iban: iban,
-            cuenta_alias: alias,
-          });
-        }
-      } catch (e) { console.warn('transactions', iban, e); }
+          for (const t of movs) {
+            const { importe, conocido } = importeFirmado(t);
+            const rawId = t?.transactionId ?? t?.id ?? t?.reference ?? '';
+            const estado = String(t?.status ?? t?.bookingStatus ?? 'BOOKED').toUpperCase();
+            transactions.push({
+              // el id de PSD2 es por cuenta: se prefija con el IBAN para no
+              // colisionar entre cuentas
+              id: limpiarId(iban) + '-' + limpiarId(rawId || (t?.bookingDate ?? '') + '-' + importe),
+              created_at: t?.bookingDate ?? t?.valueDate ?? t?.date ?? t?.fecha ?? null,
+              estado: (estado.includes('PDNG') || estado.includes('PENDING')) ? 'PENDING' : 'COMPLETED',
+              currency: t?.currency ?? t?.divisa ?? t?.transactionAmount?.currency ?? (monedaCta || 'EUR'),
+              amount: importe,
+              signo_conocido: conocido,
+              reference: String(t?.concept ?? t?.concepto ?? t?.description ?? t?.remittanceInformation ?? '').trim() || 'Abanca',
+              type: 'ABANCA',
+              cuenta_iban: iban,
+              cuenta_alias: alias,
+            });
+          }
+        } catch (e) { console.warn('transactions', iban, e); }
+      }
     }
 
     return new Response(JSON.stringify({ transactions, balances }), {

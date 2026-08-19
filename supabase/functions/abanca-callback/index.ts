@@ -1,81 +1,87 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-// ── Callback OAuth2 de ABANCA (se usa UNA vez) ────────────────
-// 1. En el portal Open Banking de Abanca, al crear la APP, poner como
-//    Redirect URI la URL de esta función:
-//    https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback
-// 2. Abrir en el navegador la URL de autorización que indica su
-//    Documentación (authorize?response_type=code&client_id=...&redirect_uri=...)
-//    e iniciar sesión con la banca electrónica (SCA).
-// 3. Abanca redirige aquí con ?code=... — esta función lo canjea y MUESTRA
-//    el refresh_token para copiarlo en Supabase Secrets como
-//    ABANCA_REFRESH_TOKEN. No se guarda en ningún sitio.
+// ── Autorización OAuth de ABANCA (flujo authorization_code) ───
+// Según la Documentación del portal:
+//  - Authorize (redirección en el navegador):
+//      GET {base}/oauth/{APLICACION}/{instancia}?response_type=code
+//          &redirect_uri={callback}&state={state}
+//    instancia = Abanca (producción) | Sandbox (pruebas).
+//  - Token: POST {base}/oauth2/token con cabecera AuthKey y body
+//      grant_type=authorization_code&APLICACION={id}&code={code}
+//    (SIN client_secret; la app se identifica con AuthKey).
 //
-// NOTA: en el dashboard de Supabase, desactivar "Verify JWT" para esta
-// función (el navegador de Abanca no envía cabeceras de Supabase).
+// Esta función hace las dos cosas:
+//  · Abierta sin ?code  → muestra un botón que lleva al login de Abanca.
+//  · Vuelta con ?code   → canjea el código y muestra el refresh_token.
+// Desplegar con --no-verify-jwt.
+
+const html = (titulo: string, cuerpo: string) =>
+  new Response(
+    `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
+    `<title>${titulo}</title>` +
+    `<body style="font-family:system-ui;max-width:600px;margin:36px auto;line-height:1.55;padding:0 16px">` +
+    `<h2>${titulo}</h2>${cuerpo}</body>`,
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+  );
+
+const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 serve(async (req) => {
   const url = new URL(req.url);
-  const code = url.searchParams.get('code');
+  const clientId = Deno.env.get('ABANCA_CLIENT_ID');
+  const apiKey = Deno.env.get('ABANCA_API_KEY') || Deno.env.get('ABANCA_CLIENT_SECRET') || '';
+  const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
+  const instancia = Deno.env.get('ABANCA_INSTANCE') || 'Abanca'; // Abanca | Sandbox
+  const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
+  const aqui = `${url.origin}${url.pathname}`;
+
+  if (!clientId || !apiKey) {
+    return html('Faltan secrets', '<p>Configura ABANCA_CLIENT_ID y ABANCA_API_KEY en Supabase Secrets.</p>');
+  }
+
   const error = url.searchParams.get('error');
-
-  const html = (titulo: string, cuerpo: string, extra = '') =>
-    new Response(
-      `<!doctype html><meta charset="utf-8"><title>${titulo}</title>` +
-      `<body style="font-family:system-ui;max-width:640px;margin:40px auto;line-height:1.5">` +
-      `<h2>${titulo}</h2><p>${cuerpo}</p>${extra}</body>`,
-      { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
-    );
-
   if (error) {
-    return html('Autorización rechazada', `Abanca devolvió: <code>${error}</code> — ${url.searchParams.get('error_description') ?? ''}`);
+    return html('Autorización rechazada',
+      `<p>Abanca devolvió: <code>${esc(error)}</code> ${esc(url.searchParams.get('error_description') ?? '')}</p>`);
   }
+
+  const code = url.searchParams.get('code');
   if (!code) {
-    return html('Falta el código', 'Esta URL debe abrirse desde la redirección de Abanca (con <code>?code=...</code>).');
+    // Punto de partida: enlace al login de Abanca.
+    const authUrl = `${base}/oauth/${encodeURIComponent(clientId)}/${encodeURIComponent(instancia)}`
+      + `?response_type=code&redirect_uri=${encodeURIComponent(aqui)}&state=erp${Math.floor(Date.now() / 1000)}`;
+    return html('Conectar ABANCA con el ERP',
+      `<p>Vas a autorizar al ERP a leer tus cuentas y movimientos de Abanca
+       (entorno <b>${esc(instancia)}</b>). Se abrirá el login oficial de Abanca.</p>
+       <p><a href="${authUrl}" style="display:inline-block;background:#0055a4;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Entrar en Abanca →</a></p>
+       <p style="color:#888;font-size:12px">Tus credenciales se validan en la web de Abanca, no aquí.</p>`);
   }
 
+  // Vuelta con ?code → canjear por tokens.
   try {
-    const clientId = Deno.env.get('ABANCA_CLIENT_ID');
-    const clientSecret = Deno.env.get('ABANCA_CLIENT_SECRET');
-    if (!clientId || !clientSecret) {
-      return html('Faltan secrets', 'Configura primero ABANCA_CLIENT_ID y ABANCA_CLIENT_SECRET en Supabase Secrets.');
-    }
-    const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
-    const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
-    const apiKey = Deno.env.get('ABANCA_API_KEY') || clientSecret;
-    const redirectUri = `${url.origin}${url.pathname}`;
-
-    const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
-    let r = await fetch(tokenUrl, {
+    const body = new URLSearchParams({ grant_type: 'authorization_code', APLICACION: clientId, code });
+    const r = await fetch(tokenUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`),
-        'AuthKey': apiKey,
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
       body: body.toString(),
     });
-    if (!r.ok) {
-      const body2 = new URLSearchParams({
-        grant_type: 'authorization_code', code, redirect_uri: redirectUri,
-        client_id: clientId, client_secret: clientSecret,
-      });
-      r = await fetch(tokenUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
-        body: body2.toString(),
-      });
+    const texto = await r.text();
+    let tok: any = null;
+    try { tok = JSON.parse(texto); } catch { /* respuesta no-JSON */ }
+
+    if (r.ok && tok && tok.refresh_token) {
+      const contratos = tok.contracts ? `<p style="font-size:13px">Contratos de empresa detectados: <code>${esc(JSON.stringify(tok.contracts))}</code> — el sync los usa solo.</p>` : '';
+      return html('✅ Autorización completada',
+        `<p>Copia este <b>refresh_token</b> en Supabase → Edge Functions → Secrets como
+         <code>ABANCA_REFRESH_TOKEN</code> (o pásaselo a Claude) y cierra esta pestaña:</p>
+         <pre style="background:#f4f4f4;padding:12px;border-radius:8px;word-break:break-all;white-space:pre-wrap">${esc(tok.refresh_token)}</pre>
+         ${contratos}
+         <p style="color:#888;font-size:13px">Usuario: ${esc(tok.username ?? tok.displayName ?? '')}</p>`);
     }
-    if (!r.ok) {
-      return html('Error canjeando el código', `<code>${tokenUrl}</code> devolvió ${r.status}:<pre>${(await r.text()).slice(0, 500)}</pre>` +
-        'Si la URL del token no es esa, configura ABANCA_TOKEN_URL en Secrets con la que indique la Documentación del portal.');
-    }
-    const tok = await r.json();
-    return html('✅ Autorización completada',
-      'Copia este <b>refresh_token</b> en Supabase → Edge Functions → Secrets como <code>ABANCA_REFRESH_TOKEN</code> y luego cierra esta pestaña:',
-      `<pre style="background:#f4f4f4;padding:12px;border-radius:8px;word-break:break-all;white-space:pre-wrap">${tok.refresh_token ?? '(no vino refresh_token: ' + JSON.stringify(tok).slice(0, 300) + ')'}</pre>` +
-      `<p style="color:#888;font-size:13px">access_token de prueba (caduca pronto, no hace falta guardarlo): ${(tok.access_token ?? '').slice(0, 12)}…</p>`);
+    return html('Error canjeando el código',
+      `<p>El endpoint de token (${esc(tokenUrl)}) devolvió HTTP ${r.status}:</p>
+       <pre style="background:#f4f4f4;padding:12px;border-radius:8px;white-space:pre-wrap;word-break:break-all">${esc(texto.slice(0, 700))}</pre>`);
   } catch (e: any) {
-    return html('Error', `<pre>${e.message}</pre>`);
+    return html('Error', `<pre>${esc(e.message)}</pre>`);
   }
 });

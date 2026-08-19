@@ -36,17 +36,22 @@ Dashboard → Edge Functions → Secrets:
 
 ### 3. Autorizar el acceso (SCA)
 
-Abrir en el navegador (sustituyendo TU_CLIENT_ID):
+Abrir en el navegador:
 
-    https://api.abanca.com/oauth2/authorize?response_type=code&client_id=TU_CLIENT_ID&redirect_uri=https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback
+    https://gpkslaqfqfdeoleiayng.supabase.co/functions/v1/abanca-callback
 
-(endpoint verificado; si el portal indicara otro en su Documentación,
-usar ese)
+y pulsar «Entrar en Abanca →»: lleva al login oficial
+(`accounts.abanca.com`, verificado, scopes Accounts+Transactions). Al
+terminar, Abanca redirige de vuelta al callback, que canjea el código
+(`POST /oauth2/token` con `grant_type=authorization_code&APLICACION=...`
+y cabecera `AuthKey`) y **muestra el refresh_token en pantalla**.
+Copiarlo en Secrets como `ABANCA_REFRESH_TOKEN`.
 
-Iniciar sesión con la banca electrónica de Abanca. Al terminar, Abanca
-redirige a `abanca-callback`, que canjea el código y **muestra el
-refresh_token en pantalla**. Copiarlo en Secrets como
-`ABANCA_REFRESH_TOKEN`.
+Rutas de la API (de la Documentación oficial): producción
+`https://api.abanca.com/v2/psd2` · sandbox `.../sandbox/v2/psd2`
+(secret `ABANCA_INSTANCE=Sandbox` para probar; usuarios de prueba 1/12345,
+2/abcde, 3/67890). Las cuentas de EMPRESA vienen como `contracts` en el
+ticket y el sync las recorre solo con la cabecera `x-clienteContratoId`.
 
 > PSD2 obliga a renovar el consentimiento cada ~90 días: cuando el sync
 > empiece a fallar con error de token, repetir solo este paso 3.
