@@ -57,6 +57,10 @@ serve(async (req) => {
 
     const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
     const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
+    // El gateway de Abanca (Volterra) exige la API key de la APP en la
+    // cabecera AuthKey en TODAS las llamadas (verificado: sin ella responde
+    // 401 "Failed to find key field: AuthKey").
+    const apiKey = Deno.env.get('ABANCA_API_KEY') || clientSecret;
 
     // 1. refresh_token → access_token (client_secret_basic + fallback en body)
     const body = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken });
@@ -65,6 +69,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`),
+        'AuthKey': apiKey,
       },
       body: body.toString(),
     });
@@ -75,7 +80,7 @@ serve(async (req) => {
       });
       tokenRes = await fetch(tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
         body: body2.toString(),
       });
     }
@@ -83,7 +88,7 @@ serve(async (req) => {
       throw new Error(`Token Abanca (${tokenUrl}): ${tokenRes.status} ${await tokenRes.text()}`);
     }
     const tok = await tokenRes.json();
-    const auth = { 'Authorization': `Bearer ${tok.access_token}` };
+    const auth = { 'Authorization': `Bearer ${tok.access_token}`, 'AuthKey': apiKey };
 
     // 2. Cuentas del cliente
     const accRes = await fetch(`${base}/psd2/me/accounts`, { headers: auth });

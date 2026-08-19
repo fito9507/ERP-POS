@@ -42,6 +42,7 @@ serve(async (req) => {
     }
     const base = (Deno.env.get('ABANCA_BASE_URL') || 'https://api.abanca.com').replace(/\/$/, '');
     const tokenUrl = Deno.env.get('ABANCA_TOKEN_URL') || `${base}/oauth2/token`;
+    const apiKey = Deno.env.get('ABANCA_API_KEY') || clientSecret;
     const redirectUri = `${url.origin}${url.pathname}`;
 
     const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
@@ -50,6 +51,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ' + btoa(`${clientId}:${clientSecret}`),
+        'AuthKey': apiKey,
       },
       body: body.toString(),
     });
@@ -60,7 +62,7 @@ serve(async (req) => {
       });
       r = await fetch(tokenUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'AuthKey': apiKey },
         body: body2.toString(),
       });
     }
