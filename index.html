@@ -16415,7 +16415,33 @@ function _iaBuildContext() {
   var catalogo = [];
   if (typeof PRODS !== 'undefined') {
     PRODS.filter(function(p){ return p.activo !== false; }).forEach(function(p) {
-      catalogo.push({ prod: p.n, precio: p.precio_venta || p.min || 0, stock: p.stk || 0 });
+      var ent = { prod: p.n, precio: p.precio_venta || p.min || 0, stock: p.stk || 0 };
+      if (p.stk_alm && Object.keys(p.stk_alm).length) ent.stock_alm = p.stk_alm;
+      catalogo.push(ent);
+    });
+  }
+
+  var almacenes = typeof RATES_ALM !== 'undefined' ? Object.keys(RATES_ALM) : [];
+
+  var ventasRecientes = [];
+  if (typeof VENTAS !== 'undefined') {
+    VENTAS.slice(0, 12).forEach(function(v) {
+      ventasRecientes.push({
+        fecha: v.fecha, hora: v.hora || '', vendedor: v.vend || '', almacen: v.alm || '',
+        cliente: v.cli || 'Walk-in', total_usd: v.totalUSD || 0,
+        productos: typeof v.prods === 'string' ? v.prods : '', ticket: v.ticket || ''
+      });
+    });
+  }
+
+  var reservasActivas = [];
+  if (typeof S !== 'undefined' && S.reservas) {
+    S.reservas.filter(function(r) { return r.activa !== false; }).forEach(function(r) {
+      reservasActivas.push({
+        cliente: r.cli || 'Walk-in', almacen: r.alm || '', vendedor: r.user || '',
+        nota: r.nota || '', contenedor: r.contenedor || '', total_usd: r.totalUSD || 0,
+        productos: (r.lineas || []).map(function(l) { return l.q + 'x ' + l.n; }).join(', ')
+      });
     });
   }
 
@@ -16432,6 +16458,9 @@ function _iaBuildContext() {
     tasas: tasas,
     tipos_movimiento: tiposDisponibles,
     catalogo: catalogo,
+    almacenes: almacenes,
+    ventas_recientes: ventasRecientes,
+    reservas_activas: reservasActivas,
     clientes: listaClientes,
     fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
   };
@@ -16439,35 +16468,51 @@ function _iaBuildContext() {
 }
 
 function _iaBuildSystemPrompt(context) {
-  return 'Eres el contable experto del ERP de Xportprise. Tu trabajo es interpretar flujos de dinero descritos por el usuario '
-    + '(en lenguaje natural, chats de WhatsApp, comprobantes bancarios, fotos de recibos) y proponer las operaciones contables exactas.\n\n'
+  return 'Eres el asistente operativo del ERP de Xportprise: contabilidad, inventario, ventas, folios (ventas a crédito) y reservas. '
+    + 'Interpretas lo que el usuario describe (lenguaje natural, chats de WhatsApp, comprobantes, fotos, CSV) y propones las operaciones exactas, '
+    + 'o respondes consultas directamente con los datos del contexto.\n\n'
     + '## ESTADO ACTUAL DEL ERP\n'
-    + '### Cajas activas:\n' + JSON.stringify(context.cajas, null, 1) + '\n\n'
-    + '### Folios pendientes de cobro:\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
+    + '### Cajas activas (dinero):\n' + JSON.stringify(context.cajas, null, 1) + '\n\n'
+    + '### Catálogo e inventario (stock total y por almacén):\n' + JSON.stringify(context.catalogo, null, 1) + '\n\n'
+    + '### Almacenes: ' + context.almacenes.join(', ') + '\n\n'
+    + '### Últimas ventas:\n' + JSON.stringify(context.ventas_recientes, null, 1) + '\n\n'
+    + '### Reservas activas (stock apartado, pendiente de cobrar):\n' + JSON.stringify(context.reservas_activas, null, 1) + '\n\n'
+    + '### Folios pendientes de cobro (ventas a crédito):\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
+    + '### Clientes:\n' + JSON.stringify(context.clientes, null, 1) + '\n\n'
     + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
     + '### Tipos de movimiento disponibles:\n' + context.tipos_movimiento.join(', ') + '\n\n'
     + '### Fecha de hoy: ' + context.fecha_hoy + '\n\n'
     + '### Memoria / Instrucciones personalizadas:\n' + (_iaMemory || '(Vacío)') + '\n\n'
     + '## INSTRUCCIONES\n'
-    + '1. Analiza lo que el usuario describe o te envía (texto, imágenes, CSV, chats).\n'
-    + '2. Identifica cada flujo de dinero: de dónde sale, a dónde llega, cuánto se pierde en comisiones.\n'
-    + '3. Las comisiones/pérdidas de intermediarios SIEMPRE se registran como un "Gasto operativo" explícito en el sistema con descripción "Comisión repatriación" o similar.\n'
-    + '4. Si identificas que un ingreso podría corresponder a un folio pendiente, sugiérelo.\n'
-    + '5. Responde SIEMPRE en español.\n'
-    + '6. Cuando tengas movimientos claros que proponer, incluye un bloque JSON con este formato exacto:\n\n'
+    + '1. CONSULTAS (¿cuánto stock queda de X? ¿qué vendió Keiler? ¿cuánto debe tal cliente? ¿qué reservas hay?): '
+    + 'responde directamente con los datos del contexto, en español, SIN bloque de propuesta. Si el dato no está en el contexto, dilo.\n'
+    + '2. OPERACIONES: analiza lo que el usuario describe, identifica cada flujo (dinero, mercancía o ambos) y propón las acciones exactas.\n'
+    + '3. Las comisiones/pérdidas de intermediarios SIEMPRE se registran como "Gasto operativo" explícito (descripción "Comisión repatriación" o similar).\n'
+    + '4. Si un ingreso puede corresponder a un folio pendiente, sugiérelo como abono_folio con su cliente y folio.\n'
+    + '5. Al proponer folios, reservas o ajustes de stock usa los nombres EXACTOS de producto, cliente y almacén del contexto. '
+    + 'No propongas vender/reservar más stock del disponible en ese almacén: avisa si no alcanza.\n'
+    + '6. Responde SIEMPRE en español.\n'
+    + '7. Cuando tengas operaciones claras, incluye un bloque JSON con este formato exacto (solo las acciones necesarias):\n\n'
     + '```json\n{"propuesta": [\n'
     + '  {"accion": "retiro", "caja": "nombre_caja", "monto": 5000, "moneda": "USD", "descripcion": "Entrega efectivo a Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
-    + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación Marta", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "gasto", "caja": "nombre_caja", "monto": 300, "moneda": "USD", "descripcion": "Comisión repatriación", "tipo": "Gasto operativo", "fecha": "2026-08-19"},\n'
     + '  {"accion": "ingreso", "caja": "nombre_caja", "monto": 4700, "moneda": "USD", "descripcion": "Zelle de Marta", "tipo": "Ingreso no-venta", "fecha": "2026-08-19"},\n'
     + '  {"accion": "transferencia", "caja_origen": "caja_a", "caja_destino": "caja_b", "monto": 2000, "moneda": "USD", "descripcion": "Transferencia a España", "tipo": "Transferencia entre cuentas", "fecha": "2026-08-19"},\n'
-    + '  {"accion": "abono_folio", "cliente": "nombre", "folio": "nota_folio", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial folio", "fecha": "2026-08-19"},\n'
-    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"}\n'
+    + '  {"accion": "abono_folio", "cliente": "nombre_exacto", "folio": "nota_o_id_del_folio", "caja": "caja_donde_entra_el_dinero", "monto": 1000, "moneda": "USD", "descripcion": "Pago parcial", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "actualizar_saldo", "caja": "nombre_caja", "nuevo_saldo": 1500.50, "moneda": "USD", "descripcion": "Ajuste por cuadre según CSV", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "crear_cliente", "nombre": "Nombre Nuevo", "telefono": "+53...", "descripcion": "Alta de cliente"},\n'
+    + '  {"accion": "crear_folio", "cliente_id": "nombre_o_id_exacto", "almacen": "Habana", "productos": [{"prod": "nombre_exacto_producto", "q": 2, "precio": 150}], "descripcion": "Venta a crédito", "fecha": "2026-08-19"},\n'
+    + '  {"accion": "crear_reserva", "cliente": "nombre_o_walkin", "almacen": "Habana", "productos": [{"prod": "nombre_exacto_producto", "q": 3, "precio": 80}], "descripcion": "Aparta hasta el viernes"},\n'
+    + '  {"accion": "ajustar_stock", "producto": "nombre_exacto_producto", "almacen": "Habana", "nueva_cantidad": 25, "descripcion": "Conteo físico: había 25, no 30"}\n'
     + ']}\n```\n\n'
-    + '7. Si necesitas más información para completar la propuesta, PREGUNTA al usuario antes de proponer.\n'
-    + '8. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
-    + '9. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones (fechas, montos, conceptos) y sugiere a qué cajas o folios podrían corresponder.\n'
-    + '10. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
-    + '11. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
+    + '8. Sobre las acciones: abono_folio necesita la caja donde entra el dinero (pregunta si no la sabes); '
+    + 'crear_folio descuenta stock del almacén y deja la deuda en el folio; crear_reserva aparta stock sin cobrar; '
+    + 'ajustar_stock fija la cantidad ABSOLUTA que queda en ese almacén (no un delta).\n'
+    + '9. Si necesitas más información para completar la propuesta, PREGUNTA antes de proponer.\n'
+    + '10. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
+    + '11. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones y sugiere a qué cajas o folios corresponden.\n'
+    + '12. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '13. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
     + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
 }
 
@@ -16674,6 +16719,20 @@ function _iaRenderProposal(proposal) {
       iconClass = 'transfer'; icon = '⚖️'; label = 'Ajuste de saldo: ' + (p.caja || '');
       if (typeof p.nuevo_saldo !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nuevo_saldo;
     }
+    else if (p.accion === 'crear_cliente') { iconClass = 'ingreso'; icon = '\uD83D\uDC64'; label = 'Nuevo cliente: ' + (p.nombre || ''); }
+    else if (p.accion === 'crear_folio') {
+      iconClass = 'transfer'; icon = '\uD83E\uDDFE'; label = 'Folio para ' + (p.cliente_id || '') + ' \u00b7 ' + ((p.productos || []).length) + ' producto(s)';
+      if (typeof p.monto === 'undefined') p.monto = (p.productos || []).reduce(function(a, x) { return a + (x.q || x.cantidad || 1) * (x.precio || 0); }, 0);
+    }
+    else if (p.accion === 'crear_reserva') {
+      iconClass = 'transfer'; icon = '\uD83D\uDCCB'; label = 'Reserva ' + (p.cliente || 'Walk-in') + ' \u00b7 ' + (p.almacen || '') + ' \u00b7 ' + ((p.productos || []).length) + ' producto(s)';
+      if (typeof p.monto === 'undefined') p.monto = (p.productos || []).reduce(function(a, x) { return a + (x.q || x.cantidad || 1) * (x.precio || 0); }, 0);
+    }
+    else if (p.accion === 'ajustar_stock') {
+      iconClass = 'gasto'; icon = '\uD83D\uDCE6'; label = 'Stock de "' + (p.producto || '') + '" en ' + (p.almacen || '') + ' (cantidad final)';
+      if (typeof p.nueva_cantidad !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nueva_cantidad;
+      p.moneda = 'uds';
+    }
 
     h += '<div class="ia-prop-row">'
       + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
@@ -16736,7 +16795,28 @@ async function iaEjecutarPropuesta() {
         _iaRegistrarTransferencia(p.fecha || today(), p.descripcion, p.monto, p.moneda || 'USD', p.caja_origen, p.caja_destino);
         success++;
       } else if (p.accion === 'abono_folio') {
-        _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja || '', 'ingreso');
+        // 1) el dinero entra en caja (solo si la IA indicó caja)
+        if (p.caja) {
+          _iaRegistrarMov(p.fecha || today(), 'Ingreso no-venta', 'Abono folio ' + (p.folio || '') + ' — ' + (p.cliente || '') + ': ' + p.descripcion, p.monto, p.moneda || 'USD', p.caja, 'ingreso');
+        }
+        // 2) y se descuenta del folio del cliente (antes esto no pasaba y el
+        //    folio seguía debiendo lo mismo aunque el dinero ya estuviera)
+        var cliAb = typeof CLIENTES !== 'undefined' ? CLIENTES.find(function(cc) { return cc.nombre === p.cliente || cc.id === p.cliente; }) : null;
+        if (cliAb && cliAb.folios && cliAb.folios.length) {
+          var fAb = cliAb.folios.find(function(f) { return (f.nota || '') == p.folio || f.id == p.folio || (f.ref || '') == p.folio; })
+                 || cliAb.folios.find(function(f) { return typeof estF === 'function' ? estF(f) !== 'pagado' : true; });
+          if (fAb) {
+            if (typeof nextAid === 'undefined') window.nextAid = 1;
+            var eqAb = typeof toUSD === 'function' ? parseFloat(toUSD(p.monto, p.moneda || 'USD').toFixed(4)) : p.monto;
+            (fAb.abonos = fAb.abonos || []).push({
+              id: 'a' + (nextAid++), fecha: p.fecha || today(), concepto: 'efectivo',
+              desc: (p.descripcion || 'Abono') + ' (Asistente IA)', monto: p.monto, mon: p.moneda || 'USD',
+              tasa: null, equivUSD: eqAb, enCaja: !!p.caja, caja: p.caja || null, cajaTipo: null
+            });
+            if (typeof syncSaveFolio === 'function') syncSaveFolio(cliAb.id, fAb);
+            if (typeof offlineSaveClientes === 'function') offlineSaveClientes();
+          }
+        }
         success++;
 
       } else if (p.accion === 'crear_cliente') {
@@ -16780,6 +16860,44 @@ async function iaEjecutarPropuesta() {
           }
         });
         success++;
+      } else if (p.accion === 'ajustar_stock') {
+        var prAj = typeof PRODS !== 'undefined' ? PRODS.find(function(x) { return x.n === p.producto; }) : null;
+        if (!prAj) throw new Error('Producto no encontrado: ' + p.producto);
+        var almAj = p.almacen || 'Habana';
+        // p.monto llega del input editable de la propuesta (cantidad ABSOLUTA)
+        var nuevaCant = (typeof p.monto === 'number' && !isNaN(p.monto)) ? p.monto : (p.nueva_cantidad || 0);
+        if (!prAj.stk_alm) prAj.stk_alm = {};
+        var deltaAj = nuevaCant - (prAj.stk_alm[almAj] || 0);
+        prAj.stk_alm[almAj] = Math.max(0, nuevaCant);
+        prAj.stk = Math.max(0, (prAj.stk || 0) + deltaAj);
+        if (typeof adjustStockByDelta === 'function' && prAj.supaId) {
+          adjustStockByDelta(prAj, almAj, deltaAj, 'SIN LOTE', { strictLote: false });
+        }
+        success++;
+      } else if (p.accion === 'crear_reserva') {
+        var lineasR = [];
+        (p.productos || []).forEach(function(x) {
+          var nomR = x.prod || x.producto;
+          var prR = typeof PRODS !== 'undefined' ? PRODS.find(function(pp) { return pp.n === nomR; }) : null;
+          lineasR.push({ n: nomR, q: x.q || x.cantidad || 1,
+            precioUSD: x.precio || (prR ? (prR.precio_venta || prR.min || 0) : 0),
+            tipo: 'Minorista', modified: false, loteSeleccionado: null });
+        });
+        if (!lineasR.length) throw new Error('Reserva sin productos');
+        S.reservas.push({
+          id: Date.now() + i, activa: true,
+          user: (typeof S !== 'undefined' && S.user) || 'Admin',
+          alm: p.almacen || (typeof S !== 'undefined' && S.alm) || 'Habana',
+          cli: p.cliente || 'Walk-in',
+          nota: p.descripcion || 'Reserva creada por Asistente IA',
+          contenedor: p.contenedor || '',
+          lineas: lineasR,
+          totalUSD: lineasR.reduce(function(a, l) { return a + l.precioUSD * l.q; }, 0),
+          fecha: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
+        });
+        if (typeof _saveReservas === 'function') _saveReservas();
+        if (typeof updResBadge === 'function') updResBadge();
+        success++;
       }
 
     } catch (e) {
@@ -16801,6 +16919,8 @@ async function iaEjecutarPropuesta() {
   renderIAAssistant();
   if (typeof renderLibro === 'function') try { renderLibro(); } catch (e) {}
   if (typeof renderCajas === 'function') try { renderCajas(); } catch (e) {}
+  if (typeof renderStock === 'function') try { renderStock(); } catch (e) {}
+  if (typeof renderProds === 'function') try { renderProds(); } catch (e) {}
   showToast(success + ' movimiento(s) registrado(s) ✓');
 }
 
