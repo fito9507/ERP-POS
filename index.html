@@ -2371,6 +2371,16 @@ async function syncLoadProductos() {
       var existing = PRODS.find(function(p){return p.n===row.nombre;});
       if (existing) Object.assign(existing, prod); else PRODS.push(prod);
     });
+    // Purgar fantasmas de la caché local: productos con supaId que ya no existen
+    // en Supabase (borrados) o cuya copia vieja quedó con otro nombre (renombrados
+    // desde otro dispositivo). Los creados offline (sin supaId) se conservan.
+    var srvNombrePorId = {};
+    rows.forEach(function(row){ if(row.id!=null) srvNombrePorId[row.id]=row.nombre; });
+    for (var _i=PRODS.length-1; _i>=0; _i--) {
+      var _lp = PRODS[_i];
+      if (_lp.supaId==null) continue;
+      if (!(_lp.supaId in srvNombrePorId) || srvNombrePorId[_lp.supaId]!==_lp.n) PRODS.splice(_i,1);
+    }
     if (typeof renderStock === 'function') { try { renderStock(); } catch(e) {} }
     if (typeof offlineSaveProds === 'function') offlineSaveProds();
     return true;
