@@ -10,7 +10,7 @@ const corsHeaders = {
 // resuelto y, cuando no se puede resolver, `signo_conocido: false` — el ERP
 // descarta esas actividades en vez de adivinar, porque adivinar mal registra
 // un ingreso como gasto.
-function parsearImporte(primaryAmount: unknown, tipo: string) {
+function parsearImporte(primaryAmount: unknown, tipo: string, titulo: string) {
   if (typeof primaryAmount !== 'string' || !primaryAmount.trim()) {
     return { importe: 0, moneda: '', signoConocido: false };
   }
@@ -32,9 +32,18 @@ function parsearImporte(primaryAmount: unknown, tipo: string) {
   // que es la convención de la API. Antes se miraba además si la descripción
   // contenía "received", y eso invertía el signo de pagos salientes cuyo
   // texto mencionaba un cobro.
+  //
+  // Caso especial: las conversiones entre saldos propios (type INTERBALANCE,
+  // título "To USD", "To EUR"...) vienen expresadas en la moneda DESTINO,
+  // así que son dinero que ENTRA a ese saldo. La heurística vieja las
+  // registraba como retiro y dejó el USD WISE en negativo. Ojo: la pata de
+  // salida (el saldo origen de la conversión) no aparece en /activities;
+  // el descuadre residual lo absorbe la comparación contra `balances`.
+  const esConversionEntrante = (tipo === 'INTERBALANCE' || tipo === 'BALANCE_TRANSACTION') && /^To\s/i.test(titulo);
   const esEntrada = primaryAmount.includes('<positive>') ||
                     limpio.startsWith('+') ||
-                    tipo === 'DEPOSIT';
+                    tipo === 'DEPOSIT' ||
+                    esConversionEntrante;
 
   return { importe: esEntrada ? valor : -valor, moneda, signoConocido: true };
 }
@@ -49,10 +58,16 @@ serve(async (req) => {
     if (!wiseToken) throw new Error("Missing WISE_API_TOKEN");
 
     const profileId = Deno.env.get('WISE_PROFILE_ID') || '65594311';
+    const auth = { 'Authorization': `Bearer ${wiseToken}` };
 
-    const actRes = await fetch(`https://api.transferwise.com/v1/profiles/${profileId}/activities?limit=50`, {
-      headers: { 'Authorization': `Bearer ${wiseToken}` }
-    });
+    // Actividades y saldos reales en paralelo. Los saldos (/v4/balances) son
+    // la verdad contable: el ERP los compara con sus cajas WISE y ofrece el
+    // ajuste, porque /activities solo cubre una ventana y no da las dos patas
+    // de las conversiones.
+    const [actRes, balRes] = await Promise.all([
+      fetch(`https://api.transferwise.com/v1/profiles/${profileId}/activities?limit=50`, { headers: auth }),
+      fetch(`https://api.transferwise.com/v4/profiles/${profileId}/balances?types=STANDARD`, { headers: auth }),
+    ]);
 
     if (!actRes.ok) {
       throw new Error("Wise API Error: " + await actRes.text());
@@ -61,12 +76,24 @@ serve(async (req) => {
     const actData = await actRes.json();
     const activities = Array.isArray(actData?.activities) ? actData.activities : [];
 
+    let balances: { currency: string; amount: number }[] = [];
+    if (balRes.ok) {
+      const balData = await balRes.json();
+      if (Array.isArray(balData)) {
+        balances = balData.map((b: any) => ({
+          currency: b?.currency ?? '',
+          amount: typeof b?.amount?.value === 'number' ? b.amount.value : parseFloat(b?.amount?.value ?? '0'),
+        })).filter((b) => b.currency);
+      }
+    } else {
+      console.warn('Wise balances:', balRes.status, await balRes.text());
+    }
+
     const parsedTransactions = activities.map((a: any) => {
       const tipo = a?.type ?? '';
-      const { importe, moneda, signoConocido } = parsearImporte(a?.primaryAmount, tipo);
-
       const titleStr = typeof a?.title === 'string' ? a.title.replace(/<[^>]*>?/gm, '').trim() : '';
       const descStr = typeof a?.description === 'string' ? a.description.replace(/<[^>]*>?/gm, '').trim() : '';
+      const { importe, moneda, signoConocido } = parsearImporte(a?.primaryAmount, tipo, titleStr);
 
       return {
         id: a?.id,
@@ -82,7 +109,7 @@ serve(async (req) => {
       };
     });
 
-    return new Response(JSON.stringify({ transactions: parsedTransactions }), {
+    return new Response(JSON.stringify({ transactions: parsedTransactions, balances }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

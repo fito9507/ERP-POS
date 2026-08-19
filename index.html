@@ -11872,6 +11872,7 @@ async function _bancoSync(cfg) {
     var brutas = data.transactions || [];
     if (!brutas.length) {
       showToast('✅ ' + cfg.nombre + ' sincronizado (sin movimientos).');
+      if (cfg.alFinal) try { cfg.alFinal(data, 0); } catch (e) { console.warn(e); }
       return;
     }
 
@@ -11909,6 +11910,7 @@ async function _bancoSync(cfg) {
       showToast('✅ Todo al día en ' + cfg.nombre + '.' +
         (sinCaja ? ' (' + sinCaja + ' sin caja "' + cfg.cajaClave + '" para su moneda)' : '') +
         (descartadas ? ' (' + descartadas + ' pendientes o no interpretables)' : ''));
+      if (cfg.alFinal) try { cfg.alFinal(data, 0); } catch (e) { console.warn(e); }
       return;
     }
 
@@ -11950,6 +11952,7 @@ async function _bancoSync(cfg) {
       showToast('✅ ' + ok + ' transacciones de ' + cfg.nombre + ' sincronizadas.');
     }
     if (ok && typeof _initApp === 'function') setTimeout(function() { _initApp(true); }, 1000);
+    if (cfg.alFinal) try { cfg.alFinal(data, ok); } catch (e) { console.warn(e); }
   } catch (e) {
     console.error(cfg.nombre + ' Sync', e);
     showToast('❌ Error: ' + e.message);
@@ -11982,12 +11985,73 @@ function syncRevolutApi() {
   });
 }
 
+// La edge function wise-sync devuelve tambien `balances`: el saldo REAL de
+// cada moneda segun Wise (/v4/balances). Aqui se compara con la caja WISE
+// correspondiente del ERP y, si no cuadran, se ofrece crear el ajuste.
+// Esto absorbe lo que /activities no puede dar: el historial anterior a su
+// ventana y la pata de origen de las conversiones entre saldos propios.
+function _wiseCompararSaldos(data, insertadas) {
+  var balances = data && data.balances;
+  if (!balances || !balances.length) return;
+  // si se insertaron movimientos, esperar a que _initApp recargue las cajas
+  setTimeout(function() {
+    balances.forEach(function(b) {
+      if (typeof _cajasData === 'undefined' || !b.currency) return;
+      var cObj = _cajasData.find(function(c) {
+        return c.moneda === b.currency && c.activa !== false && c.nombre.toLowerCase().includes('wise');
+      });
+      if (!cObj) return;
+      var erp = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(cObj.nombre) : null;
+      if (erp === null) return;
+      var diff = parseFloat((b.amount - erp).toFixed(2));
+      if (Math.abs(diff) < 0.01) return;
+      if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + b.currency
+          + ' en el ERP, pero el saldo real en Wise es ' + b.amount + ' ' + b.currency + '.\n\n'
+          + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + b.currency + ' para cuadrarla?')) return;
+      var hoy = new Date().toISOString().slice(0, 10);
+      var esPos = diff > 0;
+      var amt = Math.abs(diff);
+      var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
+      var mov = {
+        fecha: hoy,
+        tipo: esPos ? 'Ajuste positivo' : 'Ajuste negativo',
+        descripcion: 'Cuadre con saldo real de Wise (' + b.amount + ' ' + b.currency + ')',
+        monto: amt,
+        moneda: b.currency,
+        equiv_usd: parseFloat((amt * (_rates[b.currency] || 1)).toFixed(4)),
+        cuenta: cObj.nombre,
+        vendedor: 'Sistema',
+        notas: 'Ajuste cuadre Wise ' + hoy
+      };
+      var movCaja = {
+        fecha: hoy,
+        tipo: esPos ? 'deposito' : 'retiro',
+        caja_origen: esPos ? null : cObj.nombre,
+        caja_destino: esPos ? cObj.nombre : null,
+        monto_origen: amt,
+        monto_destino: amt,
+        notas: mov.descripcion,
+        usuario: 'Sistema'
+      };
+      _bancoInsertar(mov, movCaja).then(function(okIns) {
+        if (okIns) {
+          showToast('\u2705 ' + cObj.nombre + ' cuadrada a ' + b.amount + ' ' + b.currency);
+          if (typeof _initApp === 'function') _initApp(true);
+        } else {
+          showToast('\u274c No se pudo crear el ajuste de ' + cObj.nombre + ' (detalle en consola)');
+        }
+      });
+    });
+  }, insertadas > 0 ? 4500 : 600);
+}
+
 function syncWiseApi() {
   return _bancoSync({
     nombre: 'Wise',
     prefijo: 'WISE_ID',
     endpoint: 'wise-sync',
     cajaClave: 'wise',
+    alFinal: _wiseCompararSaldos,
     normalizar: function(t) {
       // Solo lo liquidado: una actividad pendiente o cancelada no ha movido
       // dinero todavía.
