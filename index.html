@@ -11583,6 +11583,7 @@ function renderBackup() {
     + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Sincroniza el saldo y descarga movimientos automáticamente desde la API de Revolut Business.</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
     + '<button class="adm-btn adm-btn-p" onclick="syncRevolutApi()" style="background:var(--color-primary);color:#fff">🔄 Sincronizar Revolut</button>'
+    + '<button class="adm-btn adm-btn-p" onclick="syncWiseApi()" style="background:#00b9ff;color:#fff;border:none">🦉 Sincronizar Wise</button>'
     + '</div></div>'
     + '<div class="adm-card">'
     + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Resumen de datos</div>'
@@ -11704,6 +11705,90 @@ async function syncRevolutApi() {
     }
   } catch (e) {
     console.error('Revolut Sync', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
+async function syncWiseApi() {
+  if (!_supaOnline) {
+    showToast('⚠️ Necesitas conexión a internet para sincronizar Wise');
+    return;
+  }
+  showToast('🔄 Conectando con Wise...');
+  try {
+    var r = await fetch(SUPA_URL + '/functions/v1/wise-sync', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'apikey': SUPA_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+    if (!r.ok) {
+      var err = await r.text();
+      showToast('❌ Error de Wise: ' + err);
+      return;
+    }
+    var data = await r.json();
+    if (data.transactions && data.transactions.length > 0) {
+      var _rates = {USD:1, EUR:1/RATES.EUR, CUP:1/RATES.CUP, CUPT:1/RATES.CUPT};
+      var syncPromises = [];
+      
+      data.transactions.forEach(function(t) {
+        var wiseId = String(t.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 50);
+        var exists = typeof MOVS !== 'undefined' && MOVS.find(function(m) { return m.notas && m.notas.includes('WISE_ID:'+wiseId); });
+        if (exists) return;
+        
+        var mon = t.currency;
+        var cObj = typeof _cajasData !== 'undefined' ? _cajasData.find(function(c) { 
+          return c.moneda === mon && c.nombre.toLowerCase().includes('wise'); 
+        }) : null;
+        if (!cObj) return; 
+        
+        var cajaName = cObj.nombre;
+        var amt = Math.abs(t.amount);
+        var isIngreso = t.amount > 0;
+        
+        var reqData = {
+          fecha: t.created_at || new Date().toISOString(),
+          tipo: isIngreso ? 'Ingreso no-venta' : 'Gasto operativo',
+          descripcion: (t.reference || 'Wise Sync'),
+          monto: amt,
+          moneda: mon,
+          equiv_usd: parseFloat((amt * (_rates[mon] || 1)).toFixed(4)),
+          cuenta: cajaName,
+          vendedor: 'Sistema',
+          notas: 'WISE_ID:' + wiseId
+        };
+        
+        syncPromises.push(supaReq('POST', 'movimientos_ig', reqData));
+        var movCajaReq = {
+          fecha: reqData.fecha,
+          tipo: isIngreso ? 'deposito' : 'retiro',
+          caja_origen: isIngreso ? null : cajaName,
+          caja_destino: isIngreso ? cajaName : null,
+          monto_origen: amt,
+          monto_destino: amt,
+          notas: reqData.descripcion + ' (WISE_ID:'+wiseId+')',
+          usuario: 'Sistema'
+        };
+        syncPromises.push(supaReq('POST', 'mov_cajas', movCajaReq));
+      });
+      
+      if (syncPromises.length > 0) {
+        showToast('🔄 Insertando ' + (syncPromises.length/2) + ' transacciones Wise...');
+        Promise.all(syncPromises).then(function() {
+          showToast('✅ ' + (syncPromises.length/2) + ' transacciones Wise sincronizadas con éxito');
+          if (typeof _initApp === 'function') setTimeout(function(){ _initApp(true); }, 1000);
+        });
+      } else {
+        showToast('✅ Todo al día. No hay transacciones Wise nuevas (o no existe la caja Wise para esa moneda).');
+      }
+    } else {
+      showToast('✅ Wise está sincronizado (sin movimientos).');
+    }
+  } catch(e) {
+    console.error('Wise Sync', e);
     showToast('❌ Error: ' + e.message);
   }
 }
