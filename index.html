@@ -11578,6 +11578,12 @@ function renderBackup() {
     + '<button class="adm-btn adm-btn-p" onclick="exportExcel()">⬇ Descargar Excel</button>'
     + '</div>'
 
+    + '<div class="adm-card" style="margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:600;margin-bottom:4px">🌍 Integraciones Bancarias</div>'
+    + '<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:12px">Sincroniza el saldo y descarga movimientos automáticamente desde la API de Revolut Business.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    + '<button class="adm-btn adm-btn-p" onclick="syncRevolutApi()" style="background:var(--color-primary);color:#fff">🔄 Sincronizar Revolut</button>'
+    + '</div></div>'
     + '<div class="adm-card">'
     + '<div style="font-size:13px;font-weight:600;margin-bottom:8px">📈 Resumen de datos</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">'
@@ -11607,6 +11613,51 @@ async function _buildBackupJSON() {
   window._backupJSON = snap;
   return snap;
 }
+async function syncRevolutApi() {
+  if (!_supaOnline) {
+    showToast('⚠️ Necesitas conexión a internet para sincronizar Revolut');
+    return;
+  }
+  
+  showToast('🔄 Conectando con Revolut...');
+  try {
+    var r = await fetch(SUPA_URL + '/functions/v1/revolut-sync', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'apikey': SUPA_KEY,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!r.ok) {
+      var err = await r.text();
+      showToast('❌ Error de Revolut: ' + err);
+      console.error(err);
+      return;
+    }
+    
+    var data = await r.json();
+    if (data.transactions && data.transactions.length > 0) {
+      // Filtrar movimientos que ya existan para no duplicar (por ref_revolut, si se puede)
+      showToast('✅ Descargadas ' + data.transactions.length + ' transacciones');
+      // Próximo paso: Insertar los movimientos en MOVS. Por ahora, los mostramos en consola.
+      console.log('Transacciones Revolut:', data.transactions);
+      
+      // Pasar a la IA para parsearlos rápidamente o proponerlos?
+      if (typeof _iaRegistrarMov === 'function') {
+         // Opcional: proponer el lote entero a la IA
+         alert('Se han descargado ' + data.transactions.length + ' transacciones. Revisa la consola para verlas. Próximamente se integrarán directo a la caja REVOLUT.');
+      }
+    } else {
+      showToast('✅ No hay transacciones nuevas');
+    }
+  } catch (e) {
+    console.error('Revolut Sync', e);
+    showToast('❌ Error: ' + e.message);
+  }
+}
+
 async function enviarBackupTelegram() {
   if(!_supaOnline){ console.warn('Sin conexion para backup'); return; }
   if((!TG_ON&&!TG_TOKEN) || !TG_BACKUP){ return; }
