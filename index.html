@@ -2705,10 +2705,14 @@ async function supaInit() {
     }
   }catch(e){}
   try{
-    var rTasas=await supaReq('GET','tasas?select=moneda,valor&moneda=in.(USDEUR,WA_PLACETAS,DTO_PREVENTA)');
+    var rTasas=await supaReq('GET','tasas?select=moneda,valor&moneda=in.(USD,USDEUR,WA_PLACETAS,DTO_PREVENTA)');
     if(rTasas.ok){
       var dTasas=await rTasas.json();
       (dTasas||[]).forEach(function(t){
+        // La BD es la autoridad de la tasa CUP (igual que catalogo.html):
+        // sin esto, un dispositivo sin cache se quedaba con el valor
+        // hardcodeado de marzo y los precios en CUP salian viejos.
+        if(t.moneda==='USD'&&parseFloat(t.valor)>10) RATES.CUP=parseFloat(t.valor);
         if(t.moneda==='USDEUR') RATES_EURUSD=parseFloat(t.valor);
         if(t.moneda==='WA_PLACETAS') RATES.WA_PLACETAS=String(Math.round(parseFloat(t.valor)*1000000));
         if(t.moneda==='DTO_PREVENTA') RATES.DTO_PREVENTA=parseFloat(t.valor)||0;
@@ -2716,6 +2720,7 @@ async function supaInit() {
       // Persist to localStorage so admin panel loads correctly even before network
       try{
         var _rc=JSON.parse(localStorage.getItem('erp_rates')||'{}');
+        _rc.CUP=RATES.CUP;
         _rc.DTO_PREVENTA=RATES.DTO_PREVENTA;
         _rc.WA_PLACETAS=RATES.WA_PLACETAS;
         localStorage.setItem('erp_rates',JSON.stringify(_rc));
@@ -15300,10 +15305,11 @@ function shareStockWhatsApp() {
 function shareStockQtyWhatsApp(conCUP) {
   var q=(window._stockQ||'').toLowerCase(), catF=window._stockCat||'', almF=window._stockAlm||'', contF=window._stockCont||'';
   // precio en texto: USD y, si conCUP, su equivalente a la tasa vigente
+  var _almCUP=almF||'Habana'; // sin filtro: ajuste de Habana (igual que el catalogo)
   var _pv=function(v){
     var n=parseFloat(v); if(!isFinite(n)) return fN(v)+" USD";
     var t=fN(n)+" USD";
-    if(conCUP) t+=" = "+fN(fromUSD(n,'CUP',almF),0)+" CUP";
+    if(conCUP) t+=" = "+fN(fromUSD(n,'CUP',_almCUP),0)+" CUP";
     return t;
   };
   var activos=PRODS.filter(function(p){return p.activo!==false && p.enStock!==false;});
@@ -15334,7 +15340,7 @@ function shareStockQtyWhatsApp(conCUP) {
   var text = "📦 *STOCK + PRECIOS" + (conCUP ? " (USD/CUP)" : "") + (almF ? " — " + almF.toUpperCase() : "") + (catF ? " — " + catF.toUpperCase() : "") + (contF ? " — " + contF : "") + "* 📦\n";
   text += "📅 " + fecha + "\n";
   if(conCUP){
-    var _adjT = almF&&RATES_ALM[almF]&&RATES_ALM[almF]['USD']?RATES_ALM[almF]['USD']:0;
+    var _adjT = RATES_ALM[_almCUP]&&RATES_ALM[_almCUP]['USD']?RATES_ALM[_almCUP]['USD']:0;
     text += "💱 Tasa: 1 USD = " + fN(Math.round((RATES.CUP+_adjT)*100)/100,0) + " CUP\n";
   }
   text += "\n";
