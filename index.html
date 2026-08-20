@@ -15960,11 +15960,19 @@ function renderAdminAnalytics() {
 
   // ── Container profitability ──────────────────────────────
   var contData = conts.map(function(c) {
-    // Total logistics cost from gastos array
+    // Gastos del contenedor: separar las FACTURAS DE MERCANCIA (el costo
+    // real pagado al proveedor) del resto (flete, aranceles, estiba...).
+    // Antes se sumaba todo como "logistica" y ADEMAS la mercancia otra vez
+    // por unidades x DDP (que ya incluye flete): doble conteo que inflaba
+    // el costo (contenedor 13: 92.135 mostrados vs 41.061 reales).
     var costLogistics = 0;
+    var costMercFacturas = 0;
     if (c.gastos && Array.isArray(c.gastos)) {
       c.gastos.forEach(function(g) {
-        costLogistics += parseFloat(g.monto) || 0;
+        var m = parseFloat(g.monto) || 0;
+        var txt = String(g.concepto || g.desc || '');
+        if (/mercanc/i.test(txt)) costMercFacturas += m;
+        else costLogistics += m;
       });
     }
 
@@ -16052,14 +16060,20 @@ function renderAdminAnalytics() {
       });
     });
 
-    var totalCostCnt = costLogistics + productCost;
-    // Margen REAL de lo vendido: ingresos vs costo proporcional de las
-    // unidades vendidas (producto vendido + logistica prorrateada por
-    // fraccion vendida). Restar el costo del contenedor ENTERO a lo
-    // ingresado por una parte daba "margenes" de -68% enganosos.
+    // Costo total REAL: si hay facturas de mercancia en los gastos, esas
+    // mandan (es lo realmente pagado); la valoracion por unidades x DDP se
+    // usa solo de respaldo cuando no hay facturas. El DDP unitario ya
+    // incluye flete/margenes, por eso sumarlo a las facturas duplicaba.
+    var usaFacturas = costMercFacturas > 0;
+    var mercCost = usaFacturas ? costMercFacturas : productCost;
+    var totalCostCnt = costLogistics + mercCost;
+    // Margen REAL de lo vendido: costo proporcional de las unidades
+    // vendidas. Si el costo real viene de facturas, el reparto por
+    // producto (unidades x DDP) se reescala a ese total real.
+    var escala = (usaFacturas && productCost > 0) ? (costMercFacturas / productCost) : 1;
     var soldCogs = 0;
     prodsDetail.forEach(function(pd) {
-      if (pd.qOriginal > 0) soldCogs += pd.pCost * (pd.qSold / pd.qOriginal);
+      if (pd.qOriginal > 0) soldCogs += pd.pCost * escala * (pd.qSold / pd.qOriginal);
     });
     var _totU = prodsDetail.reduce(function(a, pd) { return a + pd.qOriginal; }, 0);
     var _soldU = prodsDetail.reduce(function(a, pd) { return a + pd.qSold; }, 0);
