@@ -17370,7 +17370,17 @@ updIAFab();
 // version publicada; sin internet, abre la copia cacheada. Cuando una
 // version nueva queda lista mientras la app esta abierta, se avisa con
 // un toast (no se recarga sola para no cortar una venta a medias).
-if ('serviceWorker' in navigator && location.protocol === 'https:') {
+// Recuperacion de emergencia: abrir la app con ?reset limpia el service
+// worker y todas las caches y recarga limpio (por si un despliegue a
+// medias dejo un estado corrupto en algun dispositivo).
+if (location.search.indexOf('reset') >= 0 && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations()
+    .then(function(rs) { return Promise.all(rs.map(function(r) { return r.unregister(); })); })
+    .then(function() { return caches.keys(); })
+    .then(function(ks) { return Promise.all(ks.map(function(k) { return caches.delete(k); })); })
+    .catch(function() {})
+    .then(function() { location.replace(location.pathname); });
+} else if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').then(function(reg) {
     // comprobar actualizaciones al abrir y cada 30 minutos
     try { reg.update(); } catch (e) {}
