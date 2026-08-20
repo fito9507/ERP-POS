@@ -689,19 +689,35 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #ficha-nav button{white-space:nowrap;min-height:36px!important;font-size:11px!important}
   /* Folio header: wrap */
   .folio-hdr{flex-wrap:wrap!important;gap:6px!important;padding:10px!important}
-  /* Prod-row en folio: simplificar a 4 cols */
+  /* Prod-row en folio: DOS LINEAS — producto a todo lo ancho arriba,
+     cant x precio = total debajo. Antes el nombre quedaba en ~45px y se
+     leia "KI...". La accion (x borrar) vuelve a ser visible. */
   #mod-clientes .prod-row{
-    grid-template-columns: 1fr 50px 75px 80px;
-    gap:4px;
-    font-size:11px!important;
+    grid-template-columns: 76px 92px 1fr 30px;
+    gap:4px 6px;
+    font-size:12px!important;
+    padding:8px 0!important;
   }
-  #mod-clientes .prod-row .qi{width:46px!important}
-  #mod-clientes .prod-row .pi{width:70px!important}
-  /* Ocultar columna moneda y acción en mobile (menos críticas) */
-  #mod-clientes .prod-row span:nth-child(4),
-  #mod-clientes .prod-row span:nth-child(6){display:none!important}
+  #mod-clientes .prod-row > span:nth-child(1){grid-column:1/-1;min-width:0}
+  #mod-clientes .prod-row > span:nth-child(1) select{
+    font-size:13px!important;padding:6px 8px!important;
+    background:var(--color-background-primary)!important;
+    border:1px solid var(--color-border-tertiary)!important;
+    border-radius:8px!important;width:100%!important;
+  }
+  #mod-clientes .prod-row .qi,#mod-clientes .prod-row .pi{width:100%!important;min-height:36px}
+  #mod-clientes .prod-row > span:nth-child(5){text-align:right;align-self:center;font-weight:600}
+  #mod-clientes .prod-row > span:nth-child(6){display:flex;align-items:center;justify-content:flex-end}
+  /* Moneda oculta (implícita en el total) */
+  #mod-clientes .prod-row span:nth-child(4){display:none!important}
+  /* Cabecera: solo etiquetas de la fila 2 */
+  #mod-clientes .prod-row.hdr{padding:2px 0!important}
+  #mod-clientes .prod-row.hdr span:nth-child(1),
   #mod-clientes .prod-row.hdr span:nth-child(4),
   #mod-clientes .prod-row.hdr span:nth-child(6){display:none!important}
+  #mod-clientes .prod-row.hdr span:nth-child(2){grid-column:1;text-align:left!important}
+  #mod-clientes .prod-row.hdr span:nth-child(3){grid-column:2;text-align:left!important}
+  #mod-clientes .prod-row.hdr span:nth-child(5){grid-column:3/5}
   /* Abono form */
   #mod-clientes .g2{grid-template-columns:1fr!important}
   #mod-clientes .g3{grid-template-columns:1fr!important}
