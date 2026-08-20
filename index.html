@@ -2483,6 +2483,25 @@ window.getLotesOrdenados = function(prod, almacen) {
 
 // adjustStockByDelta: Acepta opciones de costo y precio_venta para lotes nuevos
 // opts = { costo, precio_venta, loteEspecifico }
+// Upsert de stock VERIFICADO: comprueba r.ok y, si no hay red o el
+// servidor falla, ENCOLA la escritura en la cola offline para reintentar
+// al reconectar. Antes los ajustes eran fire-and-forget: un borrado de
+// folio sin red devolvia el stock solo en el dispositivo y la BD quedaba
+// descuadrada para siempre (caso folio 15 del 20-08).
+async function _stockUpsert(body) {
+  var path = 'stock_almacen?on_conflict=producto_id,almacen,lote';
+  try {
+    if (typeof _supaOnline !== 'undefined' && !_supaOnline) throw new Error('offline');
+    var r = await supaReq('POST', path, body);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return true;
+  } catch (e) {
+    console.warn('stock upsert -> cola offline:', e && e.message, body);
+    try { if (typeof enqueue === 'function') enqueue({ method: 'POST', path: path, body: body }); } catch (e2) {}
+    return false;
+  }
+}
+
 window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, opts) {
   if(!prod || !prod.supaId || delta === 0) return true;
   opts = opts || {};
@@ -2508,7 +2527,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
     var body = {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:nQty,
       costo:loteCosto, precio_venta:lotePrecio};
     if (!exist) body.cantidad_inicial = nQty; // solo enviamos inicial si es nuevo lote
-    await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote', body);
+    await _stockUpsert( body);
     return true;
   } else {
     // Descontar de un lote específico si se indica
@@ -2518,12 +2537,12 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
       var tgt = lotes.find(function(l){return l.lote === lName;});
       if(tgt) {
         tgt.cantidad -= toDeduct;
-        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+        await _stockUpsert(
           {producto_id:prod.supaId, almacen:almacen, lote:tgt.lote, cantidad:tgt.cantidad});
       } else {
         prod.lotes = prod.lotes || [];
         prod.lotes.push({producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:-toDeduct, costo:0, precio_venta:0, fecha_entrada:new Date().toISOString()});
-        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+        await _stockUpsert(
           {producto_id:prod.supaId, almacen:almacen, lote:lName, cantidad:-toDeduct});
       }
       return true;
@@ -2534,7 +2553,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
         var take = Math.min(tgt.cantidad, toDeduct);
         tgt.cantidad -= take;
         toDeduct -= take;
-        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+        await _stockUpsert(
           {producto_id:prod.supaId, almacen:almacen, lote:tgt.lote, cantidad:tgt.cantidad});
         if(toDeduct <= 0) return true;
       }
@@ -2547,7 +2566,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
         var qtyToTake = Math.min(l.cantidad, toDeduct);
         l.cantidad -= qtyToTake;
         toDeduct -= qtyToTake;
-        await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+        await _stockUpsert(
           {producto_id:prod.supaId, almacen:almacen, lote:l.lote, cantidad:l.cantidad});
         if(toDeduct <= 0) break;
       }
@@ -2557,7 +2576,7 @@ window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, 
       var lDef = lotes.find(function(l){return l.lote === 'SIN LOTE';});
       var nQtyDef = (lDef ? lDef.cantidad : 0) - toDeduct;
       if(lDef) lDef.cantidad = nQtyDef; else { prod.lotes = prod.lotes || []; prod.lotes.push({producto_id:prod.supaId, almacen:almacen, lote:'SIN LOTE', cantidad:nQtyDef, costo:0, precio_venta:0, fecha_entrada:new Date().toISOString()}); }
-      await supaReq('POST', 'stock_almacen?on_conflict=producto_id,almacen,lote',
+      await _stockUpsert(
         {producto_id:prod.supaId, almacen:almacen, lote:'SIN LOTE', cantidad:nQtyDef});
     }
     return true;
@@ -8512,7 +8531,33 @@ function updLQ(cid,fid,i,v){
   }
 
 }
-function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();const activeId = document.activeElement ? document.activeElement.id : null;
+function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;
+  const oldName=f.lineas[i].prod||f.lineas[i].n;
+  const q=parseFloat(f.lineas[i].q)||0;
+  if(oldName!==v&&q>0){
+    // Cambiar el producto de la linea MUEVE el stock: devuelve el del
+    // producto viejo y descuenta el nuevo (antes no tocaba ninguno).
+    const prNew=PRODS.find(p=>p.n===v);
+    if(prNew){
+      const disp=typeof _getStk==='function'?_getStk(prNew,f.alm||'Habana'):(prNew.stk||0);
+      if(q>disp&&!confirm('Stock insuficiente de "'+v+'" ('+disp+' disponibles, la línea pide '+q+'). ¿Continuar igualmente y dejarlo en negativo?')){
+        const plR=document.getElementById(`pl-${cid}-${fid}`);
+        if(plR)plR.innerHTML=renderPL(c,f);
+        return;
+      }
+      const prOld=PRODS.find(p=>p.n===oldName);
+      if(prOld){
+        prOld.stk=(prOld.stk||0)+q;
+        if(f.alm){if(!prOld.stk_alm)prOld.stk_alm={};prOld.stk_alm[f.alm]=(prOld.stk_alm[f.alm]||0)+q;
+          if(typeof adjustStockByDelta==='function'&&prOld.supaId)adjustStockByDelta(prOld,f.alm,q,f.contenedor||'SIN LOTE',{strictLote:true});}
+      }
+      prNew.stk=Math.max(0,(prNew.stk||0)-q);
+      if(f.alm){if(!prNew.stk_alm)prNew.stk_alm={};prNew.stk_alm[f.alm]=Math.max(0,(prNew.stk_alm[f.alm]||0)-q);
+        if(typeof adjustStockByDelta==='function'&&prNew.supaId)adjustStockByDelta(prNew,f.alm,-q,f.contenedor||'SIN LOTE',{strictLote:true});}
+      if(typeof renderProds==='function')renderProds();
+    }
+  }
+  f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();const activeId = document.activeElement ? document.activeElement.id : null;
    const plEl = document.getElementById(`pl-${cid}-${fid}`);
    if(plEl) plEl.innerHTML = renderPL(c,f);
    renderFichaFolios(c);
