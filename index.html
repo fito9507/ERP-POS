@@ -854,6 +854,15 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   .ana-cycle-stats{display:flex;gap:16px;font-size:11px;color:var(--color-text-secondary);flex-wrap:wrap}
   .ana-cycle-stat b{color:var(--color-text-primary);font-weight:600}
 
+  /* Grafico de barras (ventas por dia) */
+  .ana-chart{display:flex;align-items:flex-end;gap:4px;height:130px;background:var(--color-background-primary);border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:12px 10px 6px;margin-bottom:22px;overflow-x:auto}
+  .ana-chart-col{flex:1;min-width:26px;display:flex;flex-direction:column;align-items:center;height:100%}
+  .ana-chart-val{font-size:9px;color:var(--color-text-tertiary);white-space:nowrap;height:12px}
+  .ana-chart-barwrap{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center}
+  .ana-chart-bar{width:70%;max-width:26px;background:linear-gradient(180deg,#268bd2,#1a6091);border-radius:3px 3px 0 0;transition:height .3s ease;min-height:0}
+  .ana-chart-col:hover .ana-chart-bar{background:linear-gradient(180deg,#2aa198,#1d7a72)}
+  .ana-chart-lbl{font-size:9px;color:var(--color-text-tertiary);margin-top:3px}
+
   /* No data state */
   .ana-empty{text-align:center;padding:32px 16px;color:var(--color-text-tertiary);font-size:13px}
   .ana-empty-icon{font-size:32px;margin-bottom:8px;opacity:.6}
@@ -16095,6 +16104,7 @@ function renderAdminAnalytics() {
       estado: c.estado || 'preparando',
       costLogistics: costLogistics,
       productCost: productCost,
+      mercCost: mercCost,
       totalCost: totalCostCnt,
       revenue: revenue,
       margin: margin,
@@ -16133,6 +16143,75 @@ function renderAdminAnalytics() {
   });
   clientArr.sort(function(a, b) { return b.total - a.total; });
   var topClients = clientArr.slice(0, 5);
+
+  // ── KPIs de negocio adicionales ───────────────────────────
+  var ticketMedio = filteredVentas.length ? (totalRevenue / filteredVentas.length) : 0;
+  var unidadesVendidas = 0;
+  Object.keys(prodSales).forEach(function(k) { unidadesVendidas += prodSales[k].qty; });
+
+  // Deuda viva: pendiente de cobro en folios (global, no filtra periodo)
+  var deudaViva = 0, foliosConDeuda = 0;
+  clientes.forEach(function(cli) {
+    (cli.folios || []).forEach(function(f) {
+      if (typeof pdtF === 'function') {
+        var pd = pdtF(f);
+        if (pd > 0.5) { deudaViva += pd; foliosConDeuda++; }
+      }
+    });
+  });
+
+  // Capital inmovilizado: stock actual valorado a costo DDP
+  var stockCosto = 0, stockProds = 0;
+  prods.forEach(function(p) {
+    if (p.activo === false) return;
+    var st = parseFloat(p.stk) || 0;
+    var cu = parseFloat(p.ddp) || parseFloat(p.cif) || 0;
+    if (st > 0 && cu > 0) { stockCosto += st * cu; stockProds++; }
+  });
+
+  // Ventas por dia: ultimos 14 dias (siempre) + delta vs los 14 previos
+  var hoyStr = new Date();
+  var dias = [];
+  for (var di = 13; di >= 0; di--) {
+    var dd = new Date(hoyStr - di * 86400000);
+    dias.push({ f: dd.toISOString().slice(0, 10), lbl: dd.getDate(), rev: 0, n: 0 });
+  }
+  var diasIdx = {};
+  dias.forEach(function(d) { diasIdx[d.f] = d; });
+  var revActual14 = 0, revPrevio14 = 0;
+  var iniActual = new Date(hoyStr - 13 * 86400000).toISOString().slice(0, 10);
+  var iniPrevio = new Date(hoyStr - 27 * 86400000).toISOString().slice(0, 10);
+  ventas.forEach(function(v) {
+    var f = String(v.fecha || '').slice(0, 10);
+    if (diasIdx[f]) { diasIdx[f].rev += (v.totalUSD || 0); diasIdx[f].n++; }
+    if (f >= iniActual) revActual14 += (v.totalUSD || 0);
+    else if (f >= iniPrevio) revPrevio14 += (v.totalUSD || 0);
+  });
+  var deltaPct = revPrevio14 > 0 ? ((revActual14 - revPrevio14) / revPrevio14 * 100) : null;
+  var maxDia = Math.max.apply(null, dias.map(function(d) { return d.rev; }).concat([1]));
+
+  // Por vendedor y por almacen (del periodo filtrado)
+  var porVend = {}, porAlm = {};
+  filteredVentas.forEach(function(v) {
+    var vd = v.vend || '?'; var al = v.alm || '?';
+    if (!porVend[vd]) porVend[vd] = { name: vd, total: 0, ops: 0 };
+    porVend[vd].total += (v.totalUSD || 0); porVend[vd].ops++;
+    if (!porAlm[al]) porAlm[al] = { name: al, total: 0, ops: 0 };
+    porAlm[al].total += (v.totalUSD || 0); porAlm[al].ops++;
+  });
+  var rankVend = Object.values(porVend).sort(function(a, b) { return b.total - a.total; }).slice(0, 5);
+  var rankAlm = Object.values(porAlm).sort(function(a, b) { return b.total - a.total; }).slice(0, 5);
+
+  // Sin rotacion: stock valioso con CERO ventas en el periodo
+  var sinRotacion = prods.filter(function(p) {
+    if (p.activo === false) return false;
+    var st = parseFloat(p.stk) || 0;
+    if (st <= 0) return false;
+    var ps = prodSales[p.n];
+    return !ps || ps.qty === 0;
+  }).map(function(p) {
+    return { name: p.n, valor: (parseFloat(p.stk) || 0) * (parseFloat(p.ddp) || parseFloat(p.cif) || 0), stk: parseFloat(p.stk) || 0 };
+  }).sort(function(a, b) { return b.valor - a.valor; }).slice(0, 5);
 
   // ── BUILD HTML ───────────────────────────────────────────
   var h = '<div class="ana-wrap">';
@@ -16192,6 +16271,50 @@ function renderAdminAnalytics() {
 
   h += '</div>'; // .ana-kpis
 
+  // ── Segunda fila de KPIs de negocio ──
+  h += '<div class="ana-kpis">';
+
+  h += '<div class="ana-kpi"><div class="ana-kpi-icon">\uD83E\uDDFE</div>'
+    + '<div class="ana-kpi-lbl">Ticket medio</div>'
+    + '<div class="ana-kpi-val">$' + fN(ticketMedio) + '</div>'
+    + '<div class="ana-kpi-sub">' + fN(unidadesVendidas, 0) + ' unidades vendidas</div>'
+    + '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:100%;background:#6c71c4"></div></div></div>';
+
+  var deltaBar = deltaPct === null ? 0 : Math.min(100, Math.abs(deltaPct));
+  h += '<div class="ana-kpi"><div class="ana-kpi-icon">\uD83D\uDCC5</div>'
+    + '<div class="ana-kpi-lbl">Tendencia 14 d\u00edas</div>'
+    + '<div class="ana-kpi-val" style="color:' + (deltaPct === null ? 'var(--color-text-secondary)' : deltaPct >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)') + '">'
+    + (deltaPct === null ? '\u2014' : (deltaPct >= 0 ? '\u2191 +' : '\u2193 ') + fN(deltaPct, 1) + '%') + '</div>'
+    + '<div class="ana-kpi-sub">$' + fN(revActual14) + ' vs $' + fN(revPrevio14) + ' previos</div>'
+    + '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:' + deltaBar.toFixed(0) + '%;background:' + (deltaPct !== null && deltaPct >= 0 ? '#859900' : '#dc322f') + '"></div></div></div>';
+
+  h += '<div class="ana-kpi"><div class="ana-kpi-icon">\uD83D\uDCE5</div>'
+    + '<div class="ana-kpi-lbl">Deuda viva (folios)</div>'
+    + '<div class="ana-kpi-val" style="color:' + (deudaViva > 0 ? 'var(--color-text-warning)' : 'var(--color-text-success)') + '">$' + fN(deudaViva) + '</div>'
+    + '<div class="ana-kpi-sub">' + foliosConDeuda + ' folios pendientes de cobro</div>'
+    + '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:' + (totalRevenue > 0 ? Math.min(100, deudaViva / totalRevenue * 100).toFixed(0) : 0) + '%;background:#cb4b16"></div></div></div>';
+
+  h += '<div class="ana-kpi"><div class="ana-kpi-icon">\uD83C\uDFED</div>'
+    + '<div class="ana-kpi-lbl">Stock a costo (DDP)</div>'
+    + '<div class="ana-kpi-val">$' + fN(stockCosto) + '</div>'
+    + '<div class="ana-kpi-sub">capital inmovilizado \u00b7 ' + stockProds + ' productos</div>'
+    + '<div class="ana-kpi-bar"><div class="ana-kpi-bar-fill" style="width:100%;background:#2aa198"></div></div></div>';
+
+  h += '</div>';
+
+  // ── Grafico: ventas por dia (14 dias, barras CSS) ──
+  h += '<div class="ana-section">Ventas \u00faltimos 14 d\u00edas</div>';
+  h += '<div class="ana-chart">';
+  dias.forEach(function(d) {
+    var hpx = Math.round(d.rev / maxDia * 100);
+    h += '<div class="ana-chart-col" title="' + d.f + ': $' + fN(d.rev) + ' (' + d.n + ' ventas)">'
+      + '<div class="ana-chart-val">' + (d.rev > 0 ? '$' + (d.rev >= 1000 ? (d.rev / 1000).toFixed(1) + 'k' : Math.round(d.rev)) : '') + '</div>'
+      + '<div class="ana-chart-barwrap"><div class="ana-chart-bar" style="height:' + Math.max(hpx, d.rev > 0 ? 4 : 0) + '%"></div></div>'
+      + '<div class="ana-chart-lbl">' + d.lbl + '</div>'
+      + '</div>';
+  });
+  h += '</div>';
+
   // ── CONTAINER PROFITABILITY TABLE ─────────────────────────
   if (contData.length > 0) {
     h += '<div class="ana-section">Rentabilidad por Contenedor</div>';
@@ -16208,7 +16331,7 @@ function renderAdminAnalytics() {
       h += '<td>' + estadoBadge + '</td>';
       h += '<td class="mono">' + cd.linkedProds + '</td>';
       h += '<td class="mono">$' + fN(cd.costLogistics) + '</td>';
-      h += '<td class="mono">$' + fN(cd.productCost) + '</td>';
+      h += '<td class="mono">$' + fN(cd.mercCost) + '</td>';
       h += '<td class="mono" style="font-weight:600">$' + fN(cd.totalCost) + '</td>';
       h += '<td class="mono" style="font-weight:600">$' + fN(cd.revenue) + '</td>';
       h += '<td class="mono ' + margenClass + '">$' + fN(cd.margin) + '</td>';
@@ -16231,6 +16354,11 @@ function renderAdminAnalytics() {
   h += _anaRankCard('💰 Más Rentable', topMargin, function(p) { return fN(p.marginPct, 1) + '%'; }, 'name');
   // Least profitable
   h += _anaRankCard('📉 Menor Margen', worstMargin, function(p) { return fN(p.marginPct, 1) + '%'; }, 'name');
+  // Por vendedor / almacen
+  h += _anaRankCard('\uD83E\uDDD1\u200D\uD83D\uDCBC Por Vendedor', rankVend, function(v) { return '$' + fN(v.total) + ' \u00b7 ' + v.ops + ' ops'; }, 'name');
+  h += _anaRankCard('\uD83C\uDFEC Por Almac\u00e9n', rankAlm, function(a) { return '$' + fN(a.total) + ' \u00b7 ' + a.ops + ' ops'; }, 'name');
+  // Capital dormido: stock valioso sin ventas en el periodo
+  h += _anaRankCard('\uD83D\uDE34 Sin Rotaci\u00f3n (capital dormido)', sinRotacion, function(p) { return '$' + fN(p.valor) + ' \u00b7 ' + fN(p.stk, 0) + ' uds'; }, 'name');
 
   h += '</div>'; // .ana-rankings
 
