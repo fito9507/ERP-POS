@@ -28,9 +28,9 @@ WHERE producto_id = 949 AND almacen = 'Habana' AND lote = 'SIN LOTE';
 -- Rastro en auditoría (opcional pero recomendado):
 INSERT INTO stock_movimientos (id, fecha, tipo, producto, almacen, cantidad, motivo, usuario, contenedor)
 VALUES
-  ('smov-fix-dup-828', '2026-08-20', 'ajuste', 'KIT TORNILLO&TUERCA M6x30', 'Habana', -266466,
+  ('smov-fix-dup-828', '2026-08-20', 'ajuste_baja', 'KIT TORNILLO&TUERCA M6x30', 'Habana', -266466,
    'Corrección doble conteo: fila legacy SIN LOTE no se anuló al migrar al lote # 13', 'Sistema', 'SIN LOTE'),
-  ('smov-fix-dup-949', '2026-08-20', 'ajuste', 'KIT TORNILLO&TUERCA M6x50', 'Habana', -113636,
+  ('smov-fix-dup-949', '2026-08-20', 'ajuste_baja', 'KIT TORNILLO&TUERCA M6x50', 'Habana', -113636,
    'Corrección doble conteo: fila legacy SIN LOTE no se anuló al migrar al lote # 13', 'Sistema', 'SIN LOTE');
 
 -- Verificación (debe devolver solo las filas del lote #13 con cantidad > 0):

@@ -2494,18 +2494,25 @@ window.getLotesOrdenados = function(prod, almacen) {
 // al reconectar. Antes los ajustes eran fire-and-forget: un borrado de
 // folio sin red devolvia el stock solo en el dispositivo y la BD quedaba
 // descuadrada para siempre (caso folio 15 del 20-08).
+var _stkChain = {}; // cadena de escrituras por fila (evita pisadas en paralelo)
 async function _stockUpsert(body) {
   var path = 'stock_almacen?on_conflict=producto_id,almacen,lote';
-  try {
-    if (typeof _supaOnline !== 'undefined' && !_supaOnline) throw new Error('offline');
-    var r = await supaReq('POST', path, body);
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    return true;
-  } catch (e) {
-    console.warn('stock upsert -> cola offline:', e && e.message, body);
-    try { if (typeof enqueue === 'function') enqueue({ method: 'POST', path: path, body: body }); } catch (e2) {}
-    return false;
-  }
+  var key = body.producto_id + '|' + body.almacen + '|' + (body.lote || '');
+  var run = async function() {
+    try {
+      if (typeof _supaOnline !== 'undefined' && !_supaOnline) throw new Error('offline');
+      var r = await supaReq('POST', path, body);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return true;
+    } catch (e) {
+      console.warn('stock upsert -> cola offline:', e && e.message, body);
+      try { if (typeof enqueue === 'function') enqueue({ method: 'POST', path: path, body: body }); } catch (e2) {}
+      return false;
+    }
+  };
+  var pr = (_stkChain[key] || Promise.resolve()).then(run, run);
+  _stkChain[key] = pr;
+  return pr;
 }
 
 window.adjustStockByDelta = async function(prod, almacen, delta, preferredLote, opts) {
