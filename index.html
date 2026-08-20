@@ -4034,7 +4034,7 @@ function ventaCreditoPOS() {
     if(p&&alm){
       p.stk=Math.max(0,(p.stk||0)-l.q);
       if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
-      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cnt}],alm);
+      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cntVal}],alm);
     }
   });
   
