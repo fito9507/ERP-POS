@@ -9175,6 +9175,13 @@ function renderFichaNF(c){
         <div><label class="lbl">Almacén</label><select id="nf-alm-${c.id}" onchange="renderNFLCli('${c.id}')"><option>Placetas</option><option>Habana</option><option>Xportprise</option></select></div>
         <div><label class="lbl">Moneda ref.</label><select id="nf-mon-${c.id}"><option>USD</option><option>EUR</option><option>CUP</option></select></div>
       </div>
+      <div><label class="lbl">Folio destino</label>
+        <select id="nf-folio-${c.id}" style="width:100%" onchange="nfFolioSel('${c.id}')">
+          <option value="">➕ Crear folio nuevo</option>
+          ${(c.folios||[]).filter(function(f){return typeof estF==='function'&&estF(f)!=='pagado'&&f.tipo!=='credito_anticipado';}).map(function(f){
+            return '<option value="'+f.id+'">📋 Folio '+f.id+' — '+String(f.desc||'').slice(0,28)+' (debe '+fN(typeof pdtF==='function'?pdtF(f):0)+' USD)</option>';
+          }).join('')}
+        </select></div>
       <div><label class="lbl">Descripción</label><input type="text" id="nf-desc-${c.id}" placeholder="Ej: Container #4 — perfiles"></div>
       <div><label class="lbl">🚢 Lote / Contenedor (opcional)</label>
         <select id="nf-cnt-${c.id}" style="width:100%">
@@ -9204,6 +9211,29 @@ function renderFichaNF(c){
   window['nfl_'+c.id]=[];
   addNFLCli(c.id);
 }
+// Al elegir un folio existente como destino: el almacén y el contenedor
+// los manda el folio (el stock debe salir del mismo sitio), y el botón
+// cambia de "Crear folio" a "Añadir venta al folio".
+function nfFolioSel(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var sel=document.getElementById('nf-folio-'+cid);
+  var fid=sel?sel.value:'';
+  var f=fid?c.folios.find(function(x){return String(x.id)===String(fid);}):null;
+  var almSel=document.getElementById('nf-alm-'+cid);
+  var cntSel=document.getElementById('nf-cnt-'+cid);
+  var btn=document.querySelector('#f-nf-body .btn.btn-p');
+  if(f){
+    if(almSel){almSel.value=f.alm||almSel.value;almSel.disabled=true;}
+    if(cntSel){cntSel.value=f.contenedor||'';cntSel.disabled=true;}
+    if(btn)btn.textContent='Añadir venta al Folio '+f.id;
+    if(typeof renderNFLCli==='function')renderNFLCli(cid);
+  } else {
+    if(almSel)almSel.disabled=false;
+    if(cntSel)cntSel.disabled=false;
+    if(btn)btn.textContent='Crear folio';
+  }
+}
+
 function _getPrecioNF(p, alm, qty){
   var isPlac = alm==='Placetas';
   var maj = (isPlac && p.maj_placetas!=null) ? p.maj_placetas : (p.maj||p.min||0);
@@ -9269,7 +9299,10 @@ function crearFolioCli(cid){
   const lineas=window['nfl_'+cid]||[];
   if(!lineas.length){alert('Añade al menos un producto');return;}
   const fecha=document.getElementById('nf-fecha-'+cid)?.value||today();
-  const alm=document.getElementById('nf-alm-'+cid)?.value||'Placetas';
+  // ¿Destino: folio existente? (la venta se añade ahí en vez de crear uno)
+  const _folioDest=(document.getElementById('nf-folio-'+cid)||{}).value||'';
+  const _fExist=_folioDest?c.folios.find(x=>String(x.id)===String(_folioDest)):null;
+  const alm=_fExist?(_fExist.alm||'Placetas'):(document.getElementById('nf-alm-'+cid)?.value||'Placetas');
   const mon=document.getElementById('nf-mon-'+cid)?.value||'USD';
   const desc=document.getElementById('nf-desc-'+cid)?.value||'Nueva venta';
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
@@ -9298,6 +9331,53 @@ function crearFolioCli(cid){
          return;
       }
     }
+  }
+
+  if(_fExist){
+    // ── Añadir la venta a un folio EXISTENTE ──
+    lineas.forEach(function(l){ _fExist.lineas.push({...l,qO:l.q,pO:l.precio}); });
+    if(ini>0){ _fExist.abonos=_fExist.abonos||[]; _fExist.abonos.push(abonos[0]); }
+    // Descontar stock (mismo circuito que un folio nuevo)
+    lineas.forEach(function(l){
+      var p=PRODS.find(function(x){return x.n===l.prod;});
+      if(p&&alm){
+        p.stk=Math.max(0,(p.stk||0)-l.q);
+        if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
+        if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:_fExist.contenedor||''}],alm);
+      }
+    });
+    window['nfl_'+cid]=[];
+    // Registrar como venta en el libro
+    var _ventaAdd={
+      id:venNextId++, fecha:fecha,
+      vend:(typeof S!=='undefined'&&S.user)||'Admin',
+      alm:alm, cli:c.nombre, tipo:'Mayorista', mon:mon,
+      prods:lineas.map(function(l){return l.q+'× '+l.prod;}).join(', '),
+      totalUSD:lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0),
+      comPct:0, comUSD:0, estCom:'No aplica',
+      nota:'Folio '+_fExist.id+' — '+(desc||'venta adicional'),
+      pagos:[], vueltos:[]
+    };
+    VENTAS.unshift(_ventaAdd);
+    offlineSaveVentas();
+    offlineSaveClientes();
+    (async function(){
+      try{
+        await syncSaveFolio(c.id,_fExist);
+        if(ini>0&&typeof syncSaveAbono==='function') await syncSaveAbono(c.id,_fExist.id,abonos[0]);
+        await syncSaveVenta(_ventaAdd);
+        offlineSaveVentas();
+      }catch(e){console.warn('folio append sync:',e);}
+    })();
+    if((TG_ON||TG_TOKEN)){
+      var _tgE=function(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+      var _aP=lineas.map(function(l){return '  • '+l.q+'x '+_tgE(l.prod)+' @ $'+fN(l.precio)+' = $'+fN(l.q*l.precio);}).join('\n');
+      var _aT=lineas.reduce(function(a,l){return a+toUSD(l.q*l.precio,l.mon);},0);
+      tgSend('\uD83D\uDCC4 <b>Venta a\u00f1adida al Folio '+_fExist.id+'</b>\n\uD83D\uDC64 '+_tgE(c.nombre)+' \u2022 '+alm+'\n\uD83D\uDCE6 <b>Productos:</b>\n'+_aP+'\n\uD83D\uDCB5 <b>$'+fN(_aT)+'</b>'+_tgCliBalance(c.nombre),alm,'venta');
+    }
+    showToast('Venta a\u00f1adida al Folio '+_fExist.id+' de '+c.nombre);
+    folioFiltro='todos';fichaNavTo('f-folios');
+    return;
   }
 
   var newFolio={id:fid,fecha,alm,mon,desc,contenedor:cnt,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
