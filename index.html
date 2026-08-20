@@ -12145,59 +12145,100 @@ function syncRevolutApi() {
 // correspondiente del ERP y, si no cuadran, se ofrece crear el ajuste.
 // Esto absorbe lo que /activities no puede dar: el historial anterior a su
 // ventana y la pata de origen de las conversiones entre saldos propios.
+// ── Cuadre contra saldo real del banco (base común) ──────────
+// El saldo del ERP se calcula SIEMPRE contra la BD (saldo_inicial + suma
+// de mov_cajas de esa caja), nunca contra la memoria del dispositivo: tras
+// una importación la memoria puede tener movimientos duplicados y proponer
+// ajustes falsos. Si el usuario rechaza un ajuste, no se le repregunta por
+// el mismo descuadre durante 24h (solo aviso).
+async function _saldoCajaBD(cObj) {
+  var enc = encodeURIComponent(cObj.nombre);
+  var r = await supaReq('GET', 'mov_cajas?select=caja_origen,caja_destino,monto_origen,monto_destino'
+    + '&or=(caja_origen.eq.' + enc + ',caja_destino.eq.' + enc + ')&limit=10000');
+  if (!r.ok) return null;
+  var rows = await r.json() || [];
+  var s = parseFloat(cObj.saldo_inicial || 0);
+  rows.forEach(function(m) {
+    if (m.caja_destino === cObj.nombre) s += parseFloat(m.monto_destino || 0);
+    if (m.caja_origen === cObj.nombre) s -= parseFloat(m.monto_origen || 0);
+  });
+  return parseFloat(s.toFixed(2));
+}
+
+async function _cuadrarCajaReal(cObj, realAmt, currency, banco, etiqueta) {
+  if (/cr[eé]dito/i.test(cObj.nombre)) return; // disponible != dispuesto
+  var erp = await _saldoCajaBD(cObj);
+  if (erp === null) { console.warn('cuadre ' + cObj.nombre + ': no se pudo leer la BD'); return; }
+  var diff = parseFloat((realAmt - erp).toFixed(2));
+  if (Math.abs(diff) < 0.01) return;
+
+  // ¿rechazado hace <24h el mismo descuadre? -> solo avisar
+  var snoozeKey = 'erp_cuadre_no';
+  var snooze = {};
+  try { snooze = JSON.parse(localStorage.getItem(snoozeKey) || '{}'); } catch (e) {}
+  var prev = snooze[cObj.nombre];
+  if (prev && Math.abs(prev.diff - diff) < 0.01 && (Date.now() - prev.ts) < 24 * 60 * 60 * 1000) {
+    showToast('\u26a0 ' + cObj.nombre + ' sigue descuadrada ' + (diff > 0 ? '+' : '') + diff + ' ' + currency + ' vs ' + banco);
+    return;
+  }
+
+  if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + currency
+      + ' seg\u00fan la base de datos, pero el saldo real en ' + banco + (etiqueta ? ' (' + etiqueta + ')' : '') + ' es ' + realAmt + ' ' + currency + '.\n\n'
+      + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + currency + ' para cuadrarla?')) {
+    snooze[cObj.nombre] = { diff: diff, ts: Date.now() };
+    try { localStorage.setItem(snoozeKey, JSON.stringify(snooze)); } catch (e) {}
+    showToast('Sin ajustar. No se volver\u00e1 a preguntar por este descuadre en 24h.');
+    return;
+  }
+  delete snooze[cObj.nombre];
+  try { localStorage.setItem(snoozeKey, JSON.stringify(snooze)); } catch (e) {}
+
+  var hoy = new Date().toISOString().slice(0, 10);
+  var esPos = diff > 0;
+  var amt = Math.abs(diff);
+  var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
+  var mov = {
+    fecha: hoy,
+    tipo: esPos ? 'Ajuste positivo' : 'Ajuste negativo',
+    descripcion: 'Cuadre con saldo real de ' + banco + ' (' + realAmt + ' ' + currency + ')',
+    monto: amt,
+    moneda: currency,
+    equiv_usd: parseFloat((amt * (_rates[currency] || 1)).toFixed(4)),
+    cuenta: cObj.nombre,
+    vendedor: 'Sistema',
+    notas: 'Ajuste cuadre ' + banco + ' ' + hoy
+  };
+  var movCaja = {
+    fecha: hoy,
+    tipo: esPos ? 'deposito' : 'retiro',
+    caja_origen: esPos ? null : cObj.nombre,
+    caja_destino: esPos ? cObj.nombre : null,
+    monto_origen: amt,
+    monto_destino: amt,
+    notas: mov.descripcion,
+    usuario: 'Sistema'
+  };
+  var okIns = await _bancoInsertar(mov, movCaja);
+  if (okIns) {
+    showToast('\u2705 ' + cObj.nombre + ' cuadrada a ' + realAmt + ' ' + currency);
+    if (typeof _initApp === 'function') _initApp(true);
+  } else {
+    showToast('\u274c No se pudo crear el ajuste de ' + cObj.nombre + ' (detalle en consola)');
+  }
+}
+
 function _wiseCompararSaldos(data, insertadas) {
   var balances = data && data.balances;
   if (!balances || !balances.length) return;
-  // si se insertaron movimientos, esperar a que _initApp recargue las cajas
   setTimeout(function() {
     balances.forEach(function(b) {
       if (typeof _cajasData === 'undefined' || !b.currency) return;
       var cObj = _cajasData.find(function(c) {
         return c.moneda === b.currency && c.activa !== false && c.nombre.toLowerCase().includes('wise');
       });
-      if (!cObj) return;
-      var erp = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(cObj.nombre) : null;
-      if (erp === null) return;
-      var diff = parseFloat((b.amount - erp).toFixed(2));
-      if (Math.abs(diff) < 0.01) return;
-      if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + b.currency
-          + ' en el ERP, pero el saldo real en Wise es ' + b.amount + ' ' + b.currency + '.\n\n'
-          + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + b.currency + ' para cuadrarla?')) return;
-      var hoy = new Date().toISOString().slice(0, 10);
-      var esPos = diff > 0;
-      var amt = Math.abs(diff);
-      var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
-      var mov = {
-        fecha: hoy,
-        tipo: esPos ? 'Ajuste positivo' : 'Ajuste negativo',
-        descripcion: 'Cuadre con saldo real de Wise (' + b.amount + ' ' + b.currency + ')',
-        monto: amt,
-        moneda: b.currency,
-        equiv_usd: parseFloat((amt * (_rates[b.currency] || 1)).toFixed(4)),
-        cuenta: cObj.nombre,
-        vendedor: 'Sistema',
-        notas: 'Ajuste cuadre Wise ' + hoy
-      };
-      var movCaja = {
-        fecha: hoy,
-        tipo: esPos ? 'deposito' : 'retiro',
-        caja_origen: esPos ? null : cObj.nombre,
-        caja_destino: esPos ? cObj.nombre : null,
-        monto_origen: amt,
-        monto_destino: amt,
-        notas: mov.descripcion,
-        usuario: 'Sistema'
-      };
-      _bancoInsertar(mov, movCaja).then(function(okIns) {
-        if (okIns) {
-          showToast('\u2705 ' + cObj.nombre + ' cuadrada a ' + b.amount + ' ' + b.currency);
-          if (typeof _initApp === 'function') _initApp(true);
-        } else {
-          showToast('\u274c No se pudo crear el ajuste de ' + cObj.nombre + ' (detalle en consola)');
-        }
-      });
+      if (cObj) _cuadrarCajaReal(cObj, b.amount, b.currency, 'Wise', '');
     });
-  }, insertadas > 0 ? 4500 : 600);
+  }, insertadas > 0 ? 3000 : 600);
 }
 
 function syncWiseApi() {
@@ -12276,47 +12317,9 @@ function _abancaCompararSaldos(data, insertadas) {
       var nombre = map[b.iban];
       if (!nombre || typeof _cajasData === 'undefined') return;
       var cObj = _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; });
-      if (!cObj) return;
-      // Cuentas de credito: el banco reporta el DISPONIBLE y la caja lleva el
-      // DISPUESTO (p.ej. disponible 0 vs caja -12.000). No comparar.
-      if (/cr[eé]dito/i.test(cObj.nombre)) return;
-      var erp = typeof _getSaldoCaja === 'function' ? _getSaldoCaja(cObj.nombre) : null;
-      if (erp === null) return;
-      var diff = parseFloat((b.amount - erp).toFixed(2));
-      if (Math.abs(diff) < 0.01) return;
-      if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + b.currency
-          + ' en el ERP, pero el saldo real en Abanca (' + b.iban.slice(-4) + ') es ' + b.amount + ' ' + b.currency + '.\n\n'
-          + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + b.currency + ' para cuadrarla?')) return;
-      var hoy = new Date().toISOString().slice(0, 10);
-      var esPos = diff > 0;
-      var amt = Math.abs(diff);
-      var _rates = { USD: 1, EUR: 1 / RATES.EUR, CUP: 1 / RATES.CUP, CUPT: 1 / RATES.CUPT };
-      var mov = {
-        fecha: hoy,
-        tipo: esPos ? 'Ajuste positivo' : 'Ajuste negativo',
-        descripcion: 'Cuadre con saldo real de Abanca (' + b.amount + ' ' + b.currency + ')',
-        monto: amt, moneda: b.currency,
-        equiv_usd: parseFloat((amt * (_rates[b.currency] || 1)).toFixed(4)),
-        cuenta: cObj.nombre, vendedor: 'Sistema',
-        notas: 'Ajuste cuadre Abanca ' + hoy
-      };
-      var movCaja = {
-        fecha: hoy, tipo: esPos ? 'deposito' : 'retiro',
-        caja_origen: esPos ? null : cObj.nombre,
-        caja_destino: esPos ? cObj.nombre : null,
-        monto_origen: amt, monto_destino: amt,
-        notas: mov.descripcion, usuario: 'Sistema'
-      };
-      _bancoInsertar(mov, movCaja).then(function(okIns) {
-        if (okIns) {
-          showToast('\u2705 ' + cObj.nombre + ' cuadrada a ' + b.amount + ' ' + b.currency);
-          if (typeof _initApp === 'function') _initApp(true);
-        } else {
-          showToast('\u274c No se pudo crear el ajuste de ' + cObj.nombre + ' (detalle en consola)');
-        }
-      });
+      if (cObj) _cuadrarCajaReal(cObj, b.amount, b.currency, 'Abanca', (b.iban || '').slice(-4));
     });
-  }, insertadas > 0 ? 4500 : 600);
+  }, insertadas > 0 ? 3000 : 600);
 }
 
 function syncAbancaApi() {
