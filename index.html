@@ -746,7 +746,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   .step-bar{flex-wrap:wrap!important;gap:2px!important}
   .res-line{font-size:12px!important}
   /* POS prod grid: 3 col on mobile */
-  .prod-grid{grid-template-columns:repeat(3,1fr)!important;max-height:200px!important}
+  .prod-grid{grid-template-columns:repeat(3,1fr)!important;max-height:45vh!important}
   /* Cart: full width below product panel */
   .prod-layout{flex-direction:column!important}
   .prod-panel,.cart-panel{min-width:unset!important;width:100%!important}
@@ -866,6 +866,19 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   @media(max-width:520px){
     .ana-kpis{grid-template-columns:1fr}
   }
+
+  /* ── Pulido transversal ─────────────────────────────────── */
+  /* Foco visible al navegar con teclado o tabulador */
+  :focus-visible{outline:2px solid #268bd2;outline-offset:1px}
+  input:focus,select:focus,textarea:focus{border-color:#268bd2}
+  /* Cifras monetarias con digitos tabulares: columnas de numeros alineadas */
+  .mov-amt-main,.mov-amt-sub,.mov-day-net,.metric .val,.adm-val,.ana-kpi-val,
+  .ci-sub-main,.total-alt,.ia-prop-amount,.ana-rank-val{font-variant-numeric:tabular-nums}
+  /* Barras de scroll finas y discretas */
+  *{scrollbar-width:thin;scrollbar-color:var(--color-border-secondary) transparent}
+  *::-webkit-scrollbar{width:8px;height:8px}
+  *::-webkit-scrollbar-thumb{background:var(--color-border-secondary);border-radius:4px}
+  *::-webkit-scrollbar-track{background:transparent}
 </style>
 
 </head>
@@ -1650,7 +1663,7 @@ let _gToastTimer;
 function showToast(msg){
   let t=document.getElementById('g-toast');
   if(!t){t=document.createElement('div');t.id='g-toast';
-    t.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:9px 18px;font-size:12px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap;color:var(--color-text-primary)';
+    t.style.cssText='position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:var(--border-radius-lg);padding:9px 18px;font-size:12px;z-index:9999;opacity:0;transition:opacity .2s;pointer-events:none;max-width:calc(100vw - 32px);text-align:center;line-height:1.4;color:var(--color-text-primary)';
     document.body.appendChild(t);}
   t.textContent=msg;t.style.opacity=1;
   clearTimeout(_gToastTimer);_gToastTimer=setTimeout(()=>t.style.opacity=0,2800);
