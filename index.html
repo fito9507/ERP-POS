@@ -16803,6 +16803,14 @@ function _iaBuildContext() {
     });
   }
 
+  var listaContenedores = [];
+  if (typeof CONTENEDORES !== 'undefined') {
+    CONTENEDORES.forEach(function(ct) {
+      listaContenedores.push({ ref: ct.ref || ct.id, estado: ct.estado || '',
+        gastos: (ct.gastos || []).length });
+    });
+  }
+
   var reservasActivas = [];
   if (typeof S !== 'undefined' && S.reservas) {
     S.reservas.filter(function(r) { return r.activa !== false; }).forEach(function(r) {
@@ -16828,6 +16836,7 @@ function _iaBuildContext() {
     tipos_movimiento: tiposDisponibles,
     catalogo: catalogo,
     almacenes: almacenes,
+    contenedores: listaContenedores,
     ventas_recientes: ventasRecientes,
     reservas_activas: reservasActivas,
     clientes: listaClientes,
@@ -16846,6 +16855,7 @@ function _iaBuildSystemPrompt(context) {
     + '### Almacenes: ' + context.almacenes.join(', ') + '\n\n'
     + '### Últimas ventas:\n' + JSON.stringify(context.ventas_recientes, null, 1) + '\n\n'
     + '### Reservas activas (stock apartado, pendiente de cobrar):\n' + JSON.stringify(context.reservas_activas, null, 1) + '\n\n'
+    + '### Contenedores de importaci\u00f3n:\n' + JSON.stringify(context.contenedores, null, 1) + '\n\n'
     + '### Folios pendientes de cobro (ventas a crédito):\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
     + '### Clientes:\n' + JSON.stringify(context.clientes, null, 1) + '\n\n'
     + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
@@ -16872,7 +16882,8 @@ function _iaBuildSystemPrompt(context) {
     + '  {"accion": "crear_cliente", "nombre": "Nombre Nuevo", "telefono": "+53...", "descripcion": "Alta de cliente"},\n'
     + '  {"accion": "crear_folio", "cliente_id": "nombre_o_id_exacto", "almacen": "Habana", "productos": [{"prod": "nombre_exacto_producto", "q": 2, "precio": 150}], "descripcion": "Venta a crédito", "fecha": "2026-08-19"},\n'
     + '  {"accion": "crear_reserva", "cliente": "nombre_o_walkin", "almacen": "Habana", "productos": [{"prod": "nombre_exacto_producto", "q": 3, "precio": 80}], "descripcion": "Aparta hasta el viernes"},\n'
-    + '  {"accion": "ajustar_stock", "producto": "nombre_exacto_producto", "almacen": "Habana", "nueva_cantidad": 25, "descripcion": "Conteo físico: había 25, no 30"}\n'
+    + '  {"accion": "ajustar_stock", "producto": "nombre_exacto_producto", "almacen": "Habana", "nueva_cantidad": 25, "descripcion": "Conteo físico: había 25, no 30"},\n'
+    + '  {"accion": "costos_contenedor", "contenedor": "ref_exacta_del_contenedor", "gastos": [{"concepto": "Mercancía proveedor Factura X", "monto": 25111, "acreedor": "Proveedor"}, {"concepto": "Flete", "monto": 7773.95}], "productos": [{"prod": "nombre_exacto_producto", "costo_ddp": 0.0563}], "descripcion": "Costes del Cotizador DDP"}\n'
     + ']}\n```\n\n'
     + '8. Sobre las acciones: abono_folio necesita la caja donde entra el dinero (pregunta si no la sabes); '
     + 'crear_folio descuenta stock del almacén y deja la deuda en el folio; crear_reserva aparta stock sin cobrar; '
@@ -16881,6 +16892,7 @@ function _iaBuildSystemPrompt(context) {
     + '10. Muestra siempre un resumen en lenguaje natural ANTES del bloque JSON explicando qué identificaste.\n'
     + '11. Si el usuario te da un CSV bancario, analiza las filas, detecta patrones y sugiere a qué cajas o folios corresponden.\n'
     + '12. Nunca inventes datos. Si no estás seguro de algo, pregunta.\n'
+    + '12b. Si el usuario sube la hoja o el resumen de costes del Cotizador DDP de un contenedor, extrae (a) las PARTIDAS DE GASTOS con su importe (las facturas de la mercancía del proveedor con concepto que empiece por "Mercancía proveedor", y flete, aranceles, gestión, ONAT, estibadores, etc.) y (b) el COSTO DDP UNITARIO de cada producto, y propon UNA acción costos_contenedor. Usa la ref exacta del contenedor y los nombres exactos de producto del catálogo; si alguno no casa, indícalo en el resumen en vez de inventarlo.\n'
     + '13. Si el usuario te pide que recuerdes algo para siempre (una regla, una tasa, cómo procesar ciertos pagos), incluye también este JSON en tu respuesta:\n'
     + '```json\n{"actualizar_memoria": "Aquí redactas la nueva regla que debes recordar, sumada a las reglas anteriores si existían"}\n```\n';
 }
@@ -17102,6 +17114,11 @@ function _iaRenderProposal(proposal) {
       if (typeof p.nueva_cantidad !== 'undefined' && typeof p.monto === 'undefined') p.monto = p.nueva_cantidad;
       p.moneda = 'uds';
     }
+    else if (p.accion === 'costos_contenedor') {
+      iconClass = 'transfer'; icon = '\uD83D\uDEA2';
+      label = 'Costes de ' + (p.contenedor || '') + ' \u00b7 ' + ((p.gastos || []).length) + ' gastos, ' + ((p.productos || []).length) + ' costos DDP';
+      if (typeof p.monto === 'undefined') p.monto = (p.gastos || []).reduce(function(a, g) { return a + (parseFloat(g.monto) || 0); }, 0);
+    }
 
     h += '<div class="ia-prop-row">'
       + '<div class="ia-prop-icon ' + iconClass + '">' + icon + '</div>'
@@ -17228,6 +17245,39 @@ async function iaEjecutarPropuesta() {
             }
           }
         });
+        success++;
+      } else if (p.accion === 'costos_contenedor') {
+        var cnt = typeof CONTENEDORES !== 'undefined' ? CONTENEDORES.find(function(x) {
+          return x.ref === p.contenedor || x.id === p.contenedor;
+        }) : null;
+        if (!cnt) throw new Error('Contenedor no encontrado: ' + p.contenedor);
+        if (!cnt.gastos) cnt.gastos = [];
+        // gastos: actualizar por concepto (conservando pagos ya registrados)
+        (p.gastos || []).forEach(function(g) {
+          if (!g || !g.concepto) return;
+          var m = parseFloat(g.monto) || 0;
+          var ex = cnt.gastos.find(function(x) {
+            return String(x.concepto || '').trim().toLowerCase() === String(g.concepto).trim().toLowerCase();
+          });
+          if (ex) { ex.monto = m; if (g.acreedor) ex.acreedor = g.acreedor; if (g.vencimiento) ex.vencimiento = g.vencimiento; }
+          else cnt.gastos.push({ id: 'cg-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+            concepto: g.concepto, acreedor: g.acreedor || '', monto: m,
+            moneda: g.moneda || 'USD', vencimiento: g.vencimiento || '', pagos: [] });
+        });
+        // costos DDP unitarios por producto (nombres exactos; nunca inventar)
+        var _noEnc = [];
+        (p.productos || []).forEach(function(x) {
+          var nomC = x.prod || x.producto;
+          var prC = typeof PRODS !== 'undefined' ? PRODS.find(function(pp) { return pp.n === nomC; }) : null;
+          if (!prC) { _noEnc.push(nomC); return; }
+          var cu = parseFloat(x.costo_ddp != null ? x.costo_ddp : x.ddp);
+          if (isFinite(cu) && cu > 0) {
+            prC.ddp = cu;
+            if (typeof syncSaveProducto === 'function') syncSaveProducto(prC);
+          }
+        });
+        if (_noEnc.length) errors.push('Productos no encontrados (sin tocar): ' + _noEnc.join(', '));
+        if (typeof saveContenedor === 'function') saveContenedor(cnt);
         success++;
       } else if (p.accion === 'ajustar_stock') {
         var prAj = typeof PRODS !== 'undefined' ? PRODS.find(function(x) { return x.n === p.producto; }) : null;
