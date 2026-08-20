@@ -6816,6 +6816,7 @@ function _renderDeudaCard(p){
     +'</div>'
     +'<div style="font-size:11px;color:var(--color-text-secondary);margin-top:2px">'
     +tipoLabel+(p.tasa && p.tipo!=='simple'?' · '+p.tasa+'%/mes':'')
+    +((!p.tasa&&(p.tipo==='interes_simple'||p.tipo==='revolving'))?' · <span style="color:var(--color-text-danger);font-weight:600">⚠ tasa sin definir → Editar</span>':'')
     +(esIS?'':' · <span title="Capital sin intereses">'+fN(p.capital,2)+' '+p.moneda+'</span>')
     +(p.cta?' · <span style="color:var(--color-text-tertiary)">'+p.cta+'</span>':'')
     +(p.notas?' · <em>'+p.notas+'</em>':'')
@@ -13624,6 +13625,8 @@ function showEditarDeudaModal(id){
     +'</select></div>'
     +'<div><label class="lbl">Moneda</label>'
     +'<select class="adm-inp" id="ed-mon" disabled><option>'+p.moneda+'</option></select></div>'
+    +(p.tipo!=='simple'?'<div><label class="lbl">Tasa mensual (%)</label>'
+    +'<input class="adm-inp" type="number" id="ed-tasa" step="0.1" min="0" value="'+(p.tasa||0)+'"></div>':'')
     +'<div><label class="lbl">Fecha inicio</label>'
     +'<input class="adm-inp" type="date" id="ed-fecha" value="'+(p.fechaInicio||'')+'"></div>'
     +'<div><label class="lbl">Vencimiento</label>'
@@ -13654,6 +13657,14 @@ function admGuardarDeuda(id){
   var nombre=(document.getElementById('ed-nombre')?.value||'').trim();
   if(!nombre){showToast('El nombre es obligatorio');return;}
   p.nombre=nombre;
+  var _tasaEl=document.getElementById('ed-tasa');
+  if(_tasaEl){
+    var _nt=parseFloat(_tasaEl.value);
+    if(isFinite(_nt)&&_nt>=0&&_nt!==p.tasa){
+      _addAuditLog(p,'Tasa cambiada de '+(p.tasa||0)+'% a '+_nt+'%/mes');
+      p.tasa=_nt;
+    }
+  }
   p.fechaInicio=document.getElementById('ed-fecha')?.value||p.fechaInicio;
   p.vencimiento=document.getElementById('ed-venc')?.value||'';
   p.cta=document.getElementById('ed-cta')?.value||'';
