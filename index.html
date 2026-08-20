@@ -1798,17 +1798,33 @@ function _tgCliBalance(cliName) {
   if(typeof CLIENTES==='undefined' || !CLIENTES) return '';
   var cli = CLIENTES.find(function(x){return x.nombre===cliName;});
   if(!cli) return '';
-  var _tot = 0, _pag = 0;
+  // Estado de cuentas real: totF/pagF por folio (antes usaba f.totalUSD,
+  // campo inexistente en folios, y la deuda siempre daba 0).
+  var pend=[], favor=0, tuvo=false;
   (cli.folios||[]).forEach(function(f){
-    _tot += (f.totalUSD||0);
-    (f.abonos||[]).forEach(function(ab){ _pag += (ab.equivUSD||0); });
+    var t = typeof totF==='function'?totF(f):0;
+    var p = typeof pagF==='function'?pagF(f):0;
+    if(t>0.01||p>0.01) tuvo=true;
+    var d = t-p;
+    if(d>0.01) pend.push({id:f.id,debe:d});
+    else if(d<-0.01) favor+=-d;
   });
-  var _pdt = _tot - _pag;
-  var _favor = _pag > _tot + 0.01 ? _pag - _tot : 0;
-  if (_pdt > 0.01) return '\n\n🔴 <b>Deuda pendiente:</b> '+fN(_pdt)+' USD';
-  if (_favor > 0.01) return '\n\n💰 <b>Saldo a favor:</b> +'+fN(_favor)+' USD';
-  if (_tot > 0) return '\n\n🟢 <b>Cuenta:</b> Saldada';
-  return '';
+  var out='\n\n📒 <b>Estado de cuentas:</b>';
+  if(!pend.length){
+    if(!tuvo) return '';
+    out += favor>0.01 ? '\n💰 <b>Saldo a favor: +'+fN(favor)+' USD</b>' : '\n🟢 Al d\u00eda — sin deudas';
+    return out;
+  }
+  pend.slice(0,6).forEach(function(x){ out+='\n  📋 Folio '+x.id+': debe '+fN(x.debe)+' USD'; });
+  if(pend.length>6) out+='\n  … y '+(pend.length-6)+' folios m\u00e1s';
+  var tp=0; pend.forEach(function(x){ tp+=x.debe; });
+  out+='\n🔴 <b>Total pendiente: '+fN(tp)+' USD</b>';
+  if(favor>0.01){
+    out+='\n💰 Saldo a favor en otros folios: +'+fN(favor)+' USD';
+    var neto=tp-favor;
+    out+='\n⚖ Neto: '+(neto>0.01?'debe '+fN(neto)+' USD':'a favor +'+fN(-neto)+' USD');
+  }
+  return out;
 }
 let _supaOnline = navigator.onLine;
 let _syncQueue  = [];
