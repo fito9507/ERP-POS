@@ -554,6 +554,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   button,select,input,.adm-btn,.btn,.adm-tab,.sb-item,.pin-btn{
     min-height:42px;
   }
+  /* Legibilidad: nada por debajo de 12px en pantallas pequenas */
+  .mov-meta,.mov-amt-sub,.ci-sub-alt,.ci-badges,.sub,.mut,
+  .mov-day,.tipo-tag,.badge{font-size:12px !important}
   .adm-btn-sm,.btn-sm,.cat-pill,.mt-btn,.tg-btn,.adm-btn-sm{
     min-height:32px;
   }
@@ -1191,8 +1194,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div class="g1">
     <div class="card">
       <h3>Resumen Acumulado por Vendedor y Almacén</h3>
-      <table><thead><tr><th>Vendedor</th><th>Almacén</th><th>% com.</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Estado</th></tr></thead>
-      <tbody id="c-grupos"></tbody></table>
+      <div style="overflow-x:auto"><table><thead><tr><th>Vendedor</th><th>Almacén</th><th>% com.</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Estado</th></tr></thead>
+      <tbody id="c-grupos"></tbody></table></div>
     </div>
   </div>
 </div>
@@ -1219,8 +1222,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div id="liq-out"></div>
   <div class="card" id="liq-hist-wrap" style="display:none">
     <h3>Liquidaciones guardadas</h3>
-    <table><thead><tr><th>Semana</th><th>Almacén</th><th style="text-align:right">Com. USD</th><th style="text-align:right">Pago Final</th><th>Cuenta</th><th>Estado</th><th id="th-liq-acc"></th></tr></thead>
-    <tbody id="liq-hist"></tbody></table>
+    <div style="overflow-x:auto"><table><thead><tr><th>Semana</th><th>Almacén</th><th style="text-align:right">Com. USD</th><th style="text-align:right">Pago Final</th><th>Cuenta</th><th>Estado</th><th id="th-liq-acc"></th></tr></thead>
+    <tbody id="liq-hist"></tbody></table></div>
   </div>
 </div>
 
@@ -1558,6 +1561,9 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <div style="display:flex;gap:8px;flex-wrap:wrap" id="nc-colores"></div>
       </div>
       <div><label class="lbl">Notas</label><textarea id="nc-notas" rows="2" placeholder="Observaciones..."></textarea></div>
+      <div id="nc-owner-wrap" style="display:none"><label class="lbl">Administrado por</label>
+        <select id="nc-owner"></select>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:2px">El vendedor asignado verá y gestionará este cliente (folios, abonos, ventas)</div></div>
       <button class="btn btn-p" id="modal-cli-btn" onclick="crearCliente()">Crear cliente</button>
     </div>
   </div>
@@ -6665,7 +6671,7 @@ function exportarDeudasDeudorPDF(nombre) {
     var pagos = p.pagos || [];
     if (pagos.length > 0) {
       html += '<h3>Historial de Movimientos (Amortizaciones, Incrementos, Pagos)</h3>';
-      html += '<table><thead><tr><th>Fecha</th><th>Concepto / Tipo</th><th class="text-right">Monto</th><th class="text-right">Amortiza a Deuda</th><th>Nota</th></tr></thead><tbody>';
+      html += '<div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Concepto / Tipo</th><th class="text-right">Monto</th><th class="text-right">Amortiza a Deuda</th><th>Nota</th></tr></thead><tbody>';
       pagos.slice().sort(function(a,b){var c=((b.fecha||'')+(b.hora||'')).localeCompare((a.fecha||'')+(a.hora||'')); return c!==0?c:(b.id||'').localeCompare(a.id||'');}).forEach(function(pg) {
         html += '<tr>';
         html += '<td>' + (pg.fecha ? fD(pg.fecha) : '—') + (pg.hora ? ' ' + pg.hora : '') + '</td>';
@@ -6675,14 +6681,14 @@ function exportarDeudasDeudorPDF(nombre) {
         html += '<td>' + (pg.nota || '') + '</td>';
         html += '</tr>';
       });
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     } else {
       html += '<p><em>Sin movimientos registrados.</em></p>';
     }
 
     if (p.cuotas && p.cuotas.length > 0) {
       html += '<h3>Esquema de Pagos (Cuadro de amortización)</h3>';
-      html += '<table><thead><tr><th>#</th><th>Vencimiento</th><th class="text-right">Capital</th><th class="text-right">Interés</th><th class="text-right">Total</th><th>Estado</th></tr></thead><tbody>';
+      html += '<div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Vencimiento</th><th class="text-right">Capital</th><th class="text-right">Interés</th><th class="text-right">Total</th><th>Estado</th></tr></thead><tbody>';
       p.cuotas.forEach(function(c) {
         var esPagada = pagos.some(function(pg){return pg._cuotaNum === c.num;});
         html += '<tr style="'+(esPagada?'color:#999':'')+'">';
@@ -6698,7 +6704,7 @@ function exportarDeudasDeudorPDF(nombre) {
         html += '<td>' + (esPagada ? '✅ Pagada' : 'Pendiente') + '</td>';
         html += '</tr>';
       });
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     }
     html += '</div>';
   });
@@ -8186,6 +8192,9 @@ function renderLista(){
     } else {
       _badge='<span class="badge bg">Liquidado</span>';
     }
+    if(isAdminUser&&c.owner&&c.owner!==S.user){
+      _badge+=' <span class="badge" style="background:var(--color-background-info);font-size:9px" title="Administrado por">\uD83D\uDC64 '+c.owner+'</span>';
+    }
     return `<div class="cli-card" onclick="abrirCliente('${c.id}')">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
         <div class="cli-avatar" style="background:${col.bg};color:${col.tc}">${c.nombre[0].toUpperCase()}</div>
@@ -9314,8 +9323,26 @@ function crearFolioCli(cid){
 }
 
 // ── NUEVO CLIENTE ─────────────────────────────────────────
+// Rellena el selector "Administrado por" (solo lo ve el admin): Admin +
+// vendedores activos. `actual` preselecciona el owner del cliente editado.
+function _fillOwnerSelect(actual){
+  var wrap=document.getElementById('nc-owner-wrap');
+  var sel=document.getElementById('nc-owner');
+  if(!wrap||!sel) return;
+  var esAdm=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+  wrap.style.display=esAdm?'':'none';
+  if(!esAdm) return;
+  var nombres=Object.keys(USERS).filter(function(k){return USERS[k]&&USERS[k].activo!==false;});
+  if(actual&&nombres.indexOf(actual)<0) nombres.push(actual); // owner historico
+  sel.innerHTML=nombres.map(function(n){
+    var rol=USERS[n]?(USERS[n].rol==='admin'?' (admin)':''):'';
+    return '<option value="'+n+'"'+(n===(actual||S.user)?' selected':'')+'>'+n+rol+'</option>';
+  }).join('');
+}
+
 function showModal(){
   colorSel='info';renderColores();
+  _fillOwnerSelect(null);
   document.getElementById('modal-cli-titulo').textContent='Nuevo cliente';
   var _b=document.getElementById('modal-cli-btn');
   _b.textContent='Crear cliente'; _b.setAttribute('onclick','crearCliente()');
@@ -9330,6 +9357,7 @@ function editarCliente(cid){
   document.getElementById('nc-tel').value=c.tel||'';
   document.getElementById('nc-alm').value=c.alm||'Habana';
   document.getElementById('nc-notas').value=c.notas||'';
+  _fillOwnerSelect(c.owner||'Admin');
   document.getElementById('modal-cli-titulo').textContent='Editar cliente';
   var _b=document.getElementById('modal-cli-btn');
   _b.textContent='Guardar cambios'; _b.setAttribute('onclick',"guardarEdicionCliente('"+cid+"')");
@@ -9345,6 +9373,11 @@ function guardarEdicionCliente(cid){
   c.alm=document.getElementById('nc-alm').value;
   c.color=colorSel;
   c.notas=document.getElementById('nc-notas').value;
+  (function(){
+    var esAdm=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+    var sel=document.getElementById('nc-owner');
+    if(esAdm&&sel&&sel.value) c.owner=sel.value; // reasignar administrador
+  })();
   hideModal();
   offlineSaveClientes();
   syncSaveCliente(c);
@@ -9369,7 +9402,12 @@ function crearCliente(){
     alm:document.getElementById('nc-alm').value,
     color:colorSel,
     notas:document.getElementById('nc-notas').value,
-    owner: (typeof S!=='undefined'&&S.user)||'Admin',
+    owner: (function(){
+      var esAdm=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
+      var sel=document.getElementById('nc-owner');
+      if(esAdm&&sel&&sel.value) return sel.value;
+      return (typeof S!=='undefined'&&S.user)||'Admin';
+    })(),
     folios:[]
   });
   ['nc-nombre','nc-tel','nc-notas'].forEach(id=>document.getElementById(id).value='');
