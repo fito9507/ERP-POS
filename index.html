@@ -16053,8 +16053,20 @@ function renderAdminAnalytics() {
     });
 
     var totalCostCnt = costLogistics + productCost;
-    var margin = revenue - totalCostCnt;
+    // Margen REAL de lo vendido: ingresos vs costo proporcional de las
+    // unidades vendidas (producto vendido + logistica prorrateada por
+    // fraccion vendida). Restar el costo del contenedor ENTERO a lo
+    // ingresado por una parte daba "margenes" de -68% enganosos.
+    var soldCogs = 0;
+    prodsDetail.forEach(function(pd) {
+      if (pd.qOriginal > 0) soldCogs += pd.pCost * (pd.qSold / pd.qOriginal);
+    });
+    var _totU = prodsDetail.reduce(function(a, pd) { return a + pd.qOriginal; }, 0);
+    var _soldU = prodsDetail.reduce(function(a, pd) { return a + pd.qSold; }, 0);
+    if (_totU > 0) soldCogs += costLogistics * (_soldU / _totU);
+    var margin = revenue - soldCogs;
     var marginP = revenue > 0 ? (margin / revenue * 100) : 0;
+    var porRecuperar = totalCostCnt - revenue; // inversion aun no recuperada
     
     var expectedRevenue = revenue;
     prodsDetail.forEach(function(pd) { expectedRevenue += (pd.pExpectedExtra || 0); });
@@ -16073,6 +16085,8 @@ function renderAdminAnalytics() {
       revenue: revenue,
       margin: margin,
       marginPct: marginP,
+      soldCogs: soldCogs,
+      porRecuperar: porRecuperar,
       expectedRevenue: expectedRevenue,
       expectedMargin: expectedMargin,
       expectedMarginPct: expectedMarginP,
@@ -16169,7 +16183,7 @@ function renderAdminAnalytics() {
     h += '<div class="ana-section">Rentabilidad por Contenedor</div>';
     h += '<div class="ana-table-wrap"><table class="ana-table">';
     h += '<thead><tr>';
-    h += '<th>Contenedor</th><th>Estado</th><th>Prods</th><th>Costo Logístico</th><th>Costo Mercancía</th><th>Costo Total</th><th>Revenue</th><th>Margen</th><th>%</th>';
+    h += '<th>Contenedor</th><th>Estado</th><th>Prods</th><th>Costo Logístico</th><th>Costo Mercancía</th><th>Costo Total</th><th>Revenue</th><th>Margen vendido</th><th>%</th>';
     h += '</tr></thead><tbody>';
 
     contData.forEach(function(cd) {
@@ -16226,9 +16240,14 @@ function renderAdminAnalytics() {
       h += '<div class="ana-cycle-stat"><b>' + cd.unitsSold + '</b> vendidas</div>';
       h += '<div class="ana-cycle-stat"><b>' + (cd.totalUnits - cd.unitsSold) + '</b> en stock</div>';
       h += '<div class="ana-cycle-stat">Revenue: <b>$' + fN(cd.revenue) + '</b></div>';
-      h += '<div class="ana-cycle-stat">Costo: <b>$' + fN(cd.totalCost) + '</b></div>';
+      h += '<div class="ana-cycle-stat" title="Costo total del contenedor (producto + logistica)">Costo total: <b>$' + fN(cd.totalCost) + '</b></div>';
       var mClass = cd.margin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
-      h += '<div class="ana-cycle-stat" style="' + mClass + '">Margen: <b>$' + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
+      h += '<div class="ana-cycle-stat" style="' + mClass + '" title="Ingresos menos costo proporcional de lo vendido">Margen vendido: <b>$' + fN(cd.margin) + ' (' + fN(cd.marginPct, 1) + '%)</b></div>';
+      if (cd.porRecuperar > 0.01) {
+        h += '<div class="ana-cycle-stat" style="color:var(--color-text-warning)" title="Inversion del contenedor aun no recuperada con ventas">Por recuperar: <b>$' + fN(cd.porRecuperar) + '</b></div>';
+      } else {
+        h += '<div class="ana-cycle-stat" style="color:var(--color-text-success)">✓ Inversión recuperada</div>';
+      }
       
       h += '<div class="ana-cycle-stat" style="border-left:1px solid rgba(255,255,255,0.1);padding-left:10px;margin-left:6px;color:var(--color-text-info)">Venta esp: <b>$' + fN(cd.expectedRevenue) + '</b></div>';
       var emClass = cd.expectedMargin >= 0 ? 'color:var(--color-text-success)' : 'color:var(--color-text-danger)';
