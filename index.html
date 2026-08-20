@@ -492,6 +492,12 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 #mod-clientes .folio-hdr:hover {background:var(--color-background-secondary)}
 #mod-clientes .folio-body {display:none;border-top:.5px solid var(--color-border-tertiary)}
 #mod-clientes .folio-body.open {display:block}
+/* Nombre de producto en lineas de folio: capa visible que envuelve (el
+   select nativo no puede partir el texto) + select transparente encima */
+.prod-row .pl-prod{position:relative;display:block;min-width:0}
+.prod-row .pl-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;word-break:break-word;padding:2px 0;cursor:pointer;color:var(--color-text-primary)}
+.prod-row .pl-caret{color:var(--color-text-tertiary);margin-left:4px;font-size:9px}
+.prod-row select.pl-sel{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;border:none}
 #mod-clientes .abono-row {display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:.5px solid var(--color-border-tertiary);font-size:12px}
 #mod-clientes .abono-row:last-child {border-bottom:none}
 #mod-clientes .abono-icon {width:26px;height:26px;border-radius:50%;background:var(--color-background-success);color:var(--color-text-success);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
@@ -699,11 +705,11 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     padding:8px 0!important;
   }
   #mod-clientes .prod-row > span:nth-child(1){grid-column:1/-1;min-width:0}
-  #mod-clientes .prod-row > span:nth-child(1) select{
+  #mod-clientes .prod-row .pl-name{
     font-size:13px!important;padding:6px 8px!important;
     background:var(--color-background-primary)!important;
     border:1px solid var(--color-border-tertiary)!important;
-    border-radius:8px!important;width:100%!important;
+    border-radius:8px!important;
   }
   #mod-clientes .prod-row .qi,#mod-clientes .prod-row .pi{width:100%!important;min-height:36px}
   #mod-clientes .prod-row > span:nth-child(5){text-align:right;align-self:center;font-weight:600}
@@ -8343,7 +8349,9 @@ function renderFichaCuenta(c){
 function renderFichaFolios(c){
   var openFolios = [];
   document.querySelectorAll('.folio-body').forEach(function(el) {
-    if(el.style.display === 'block') openFolios.push(el.id);
+    // toggleBody abre con la clase 'open'; antes se miraba style.display
+    // (siempre vacio) y cada re-render plegaba todos los folios.
+    if(el.classList.contains('open') || el.style.display === 'block') openFolios.push(el.id);
   });
   const data=folioFiltro==='todos'?c.folios:c.folios.filter(f=>estF(f)===folioFiltro);
   document.getElementById('f-folios-body').innerHTML=`
@@ -8428,7 +8436,7 @@ function renderFichaFolios(c){
     }).join('')||`<div class="card" style="text-align:center;color:var(--color-text-tertiary);padding:20px">Sin folios "${folioFiltro}"</div>`}`;
   openFolios.forEach(function(id) {
     var el = document.getElementById(id);
-    if(el) el.style.display = 'block';
+    if(el) el.classList.add('open');
   });
 }
 function _getLoteDisp(prodName, loteName) {
@@ -8463,8 +8471,9 @@ function renderPL(c,f){
   
   return f.lineas.map((l,i)=>`
     <div class="prod-row">
-      <span style="font-size:11px;min-width:0">
-        <select class="adm-inp" id="prod-${c.id}-${f.id}-${i}" style="width:100%;max-width:100%;padding:2px;font-size:11px;border:none;background:transparent;outline:none;cursor:pointer;text-overflow:ellipsis" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
+      <span class="pl-prod" style="font-size:11px">
+        <span class="pl-name">${l.prod}<span style="color:var(--color-text-tertiary)">${optsMap[l.prod]||''}</span><span class="pl-caret">\u25be</span></span>
+        <select class="adm-inp pl-sel" id="prod-${c.id}-${f.id}-${i}" onchange="event.stopPropagation();updLN('${c.id}','${f.id}',${i},this.value)" onclick="event.stopPropagation()">
           <option value="${l.prod.replace(/"/g,'&quot;')}" style="background:var(--color-background-primary);color:var(--color-text-primary)" selected>${l.prod}${optsMap[l.prod]||''}</option>
           ${opts}
         </select>
@@ -8531,6 +8540,25 @@ function updLQ(cid,fid,i,v){
   }
 
 }
+function updLP(cid,fid,i,v){
+  const c=CLIENTES.find(x=>x.id===cid);
+  const f=c?.folios.find(x=>x.id===fid);
+  if(!f||!f.lineas[i])return;
+  const nv=parseFloat(v);
+  if(!isFinite(nv)||nv<0){
+    const pl0=document.getElementById(`pl-${cid}-${fid}`);
+    if(pl0)pl0.innerHTML=renderPL(c,f);
+    return;
+  }
+  f.lineas[i].precio=nv;
+  if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);
+  if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+  const activeId=document.activeElement?document.activeElement.id:null;
+  const pl=document.getElementById(`pl-${cid}-${fid}`);
+  if(pl)pl.innerHTML=renderPL(c,f);
+  renderFichaFolios(c);
+  if(activeId){setTimeout(function(){const el=document.getElementById(activeId);if(el)el.focus();},10);}
+}
 function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;
   const oldName=f.lineas[i].prod||f.lineas[i].n;
   const q=parseFloat(f.lineas[i].q)||0;
@@ -8557,7 +8585,7 @@ function updLN(cid,fid,i,v){const c=CLIENTES.find(x=>x.id===cid);const f=c?.foli
       if(typeof renderProds==='function')renderProds();
     }
   }
-  f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof pr.precio_venta==='number'?pr.precio_venta:(pr.min||20);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();const activeId = document.activeElement ? document.activeElement.id : null;
+  f.lineas[i].prod=v;f.lineas[i].producto=v;const pr=PRODS.find(p=>p.n===v);if(pr){f.lineas[i].precio=typeof _getPrecioNF==='function'?(_getPrecioNF(pr,f.alm||'Habana',parseFloat(f.lineas[i].q)||1)||0):(pr.min||pr.maj||0);f.lineas[i].mon=pr.moneda||'USD';}if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();const activeId = document.activeElement ? document.activeElement.id : null;
    const plEl = document.getElementById(`pl-${cid}-${fid}`);
    if(plEl) plEl.innerHTML = renderPL(c,f);
    renderFichaFolios(c);
@@ -8631,7 +8659,7 @@ function elimL(cid,fid,i){
   if(typeof renderProds==='function') renderProds();
   renderFichaFolios(c);
 }
-function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;f.lineas.push({prod:_getProdNames()[0]||"",q:1,precio:20,mon:'USD',qO:1,pO:20});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();
+function addLF(cid,fid){const c=CLIENTES.find(x=>x.id===cid);const f=c?.folios.find(x=>x.id===fid);if(!f)return;const _n0=_getProdNames()[0]||"";const _p0=PRODS.find(p=>p.n===_n0);const _pr0=_p0&&typeof _getPrecioNF==='function'?(_getPrecioNF(_p0,f.alm||'Habana',1)||0):0;f.lineas.push({prod:_n0,q:1,precio:_pr0,mon:(_p0&&_p0.moneda)||'USD',qO:1,pO:_pr0});if(typeof syncSaveFolio==='function')syncSaveFolio(cid,f);if(typeof offlineSaveClientes==='function')offlineSaveClientes();
    const activeId = document.activeElement ? document.activeElement.id : null;
    renderFichaFolios(c);
    if(activeId) { setTimeout(() => { const el = document.getElementById(activeId); if(el) el.focus(); }, 10); }}
