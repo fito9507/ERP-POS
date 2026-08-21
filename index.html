@@ -8975,7 +8975,7 @@ async function elimA(cid,fid,aid){
 }
 function irAbonar(cid,fid){
   fichaNavTo('f-abonar');
-  setTimeout(()=>{const s=document.getElementById('a-folio-'+cid);if(s)s.value=fid;},60);
+  setTimeout(()=>{const s=document.getElementById('a-folio-'+cid);if(s){s.value=fid;abonoAutoCajaCli(cid);}},60);
 }
 
 // ── FICHA — ABONAR ────────────────────────────────────────
@@ -9005,7 +9005,7 @@ function renderFichaAbonar(c){
         <div><label class="lbl">Fecha</label>
           <input type="date" id="a-fecha-${c.id}" value="${today()}" style="width:100%"></div>
         <div><label class="lbl">Folio</label>
-          <select id="a-folio-${c.id}" style="width:100%">
+          <select id="a-folio-${c.id}" style="width:100%" onchange="abonoAutoCajaCli('${c.id}')">
             <option value="">Abono general</option>
             ${c.folios.map(f=>`<option value="${f.id}">F${f.id} — ${fN(pdtF(f))} USD</option>`).join('')}
           </select></div>
@@ -9069,6 +9069,29 @@ function renderFichaAbonar(c){
   </div>`;
   window['em_'+c.id]=false;
   window['cajaon_'+c.id]=false;
+}
+
+// Precarga automatica al elegir folio: moneda de la venta y caja del
+// almacen donde se vendio (ej. Habana + USD -> "USD Habana").
+function abonoAutoCajaCli(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var fid=(document.getElementById('a-folio-'+cid)||{}).value;
+  var f=fid?c.folios.find(function(x){return String(x.id)===String(fid);}):null;
+  if(!f) return; // abono general: no tocar lo que haya
+  var mon=f.mon||'USD';
+  var alm=f.alm||c.almacen||'';
+  var monSel=document.getElementById('a-mon-'+cid);
+  if(monSel&&monSel.value!==mon){ monSel.value=mon; resetOnMonChangeCli(cid); }
+  var cajaSel=document.getElementById('a-caja-'+cid);
+  if(cajaSel){
+    var opts=_getCajasForMon(mon,alm);
+    var almL=String(alm).toLowerCase();
+    var pref=opts.filter(function(k){return k===mon+' '+alm;})[0]
+      || (alm?opts.filter(function(k){return k.toLowerCase().indexOf(almL)>=0;})[0]:null)
+      || opts[0];
+    cajaSel.innerHTML=opts.map(function(k){return '<option'+(k===pref?' selected':'')+'>'+k+'</option>';}).join('');
+  }
+  if(typeof updCajaExplicaCli==='function')try{updCajaExplicaCli(cid);}catch(e){}
 }
 
 // Al cambiar moneda: limpiar tasa y equiv para que recalcule desde cero
