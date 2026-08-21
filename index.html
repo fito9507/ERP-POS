@@ -6474,6 +6474,8 @@ async function renderCajas(){
 
   var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'\u20b1'};
   var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
+  // exactamente 2 decimales (fN alarga hasta 4 y salian "8561,935")
+  var _f2 = function(n){ return (parseFloat(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 
   var html = '';
   // Header con totales y refresh
@@ -6488,36 +6490,60 @@ async function renderCajas(){
     if (!byAlm[alm] || !byAlm[alm].length) return;
     var almCajas = byAlm[alm];
     var almTot = almCajas.reduce(function(a,c){return a+c.equivUSD;},0);
-    html += '<div style="margin-bottom:20px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;padding:0 2px">'
-      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+(almLabel[alm]||alm)+'</div>'
-      + '<div style="font-size:12px;color:var(--color-text-secondary)">Total: <b style="color:var(--color-text-primary)">'+fN(almTot,2)+' USD</b></div>'
-      + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">';
-    almCajas.forEach(function(c){
-      var pos = c.saldo >= 0;
-      var icon = monIcon[c.mon]||'';
-      var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      var dec = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
-      var _cf = (c.nombre||c.cta||'').toUpperCase();
+    // Las cajas sin saldo no merecen tarjeta: chips al pie de la seccion.
+    var conSaldo = almCajas.filter(function(c){ return Math.abs(c.saldo) >= 0.005; });
+    var vacias   = almCajas.filter(function(c){ return Math.abs(c.saldo) <  0.005; });
+    var _nomCorto = function(c){
+      var _cf = (c.cta||'').toUpperCase();
       var _mp = (c.mon||'').toUpperCase()+' ';
       var _as = (alm||'').toUpperCase();
       var _cs = _cf.startsWith(_mp) ? _cf.slice(_mp.length) : _cf;
       if(_cs === _as) _cs = '';
-      var _sl = _cs.length > 0 && _cs !== _as;
-      html += '<div class="card" style="padding:14px 12px;text-align:center;border-color:'+(pos?'var(--color-border-tertiary)':'rgba(220,50,47,.3)')+'">'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:4px;font-weight:600;letter-spacing:.05em">'+c.mon+(_sl?' · '+_cs:'')+'</div>'
-        + '<div style="font-size:clamp(13px,3vw,20px);font-weight:800;color:'+color+';line-height:1.2;word-break:break-all">'+icon+' '+fN(c.saldo,dec)+'</div>'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:5px">≈ '+fN(c.equivUSD,2)+' USD</div>'
+      return _cs;
+    };
+    html += '<div style="margin-bottom:20px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;padding:0 2px">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+(almLabel[alm]||alm)
+      + ' <span style="font-weight:500;letter-spacing:0;text-transform:none">· '+conSaldo.length+' caja'+(conSaldo.length===1?'':'s')+'</span></div>'
+      + '<div style="font-size:12px;color:var(--color-text-secondary)">Total: <b style="color:var(--color-text-primary);font-size:14px">'+_f2(almTot)+' USD</b></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
+    conSaldo.forEach(function(c){
+      var pos = c.saldo >= 0;
+      var icon = monIcon[c.mon]||'';
+      var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
+      var dec = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
+      var _cs = _nomCorto(c);
+      var _sl = _cs.length > 0;
+      var txt = fN(c.saldo,dec);
+      // fuente adaptativa: la cifra nunca se parte de linea
+      var fs = txt.length > 12 ? 14 : (txt.length > 9 ? 16 : 19);
+      html += '<div class="card" style="padding:12px;border-color:'+(pos?'var(--color-border-tertiary)':'rgba(220,50,47,.35)')+'">'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.mon+(_sl?' · '+_cs:'')+'</div>'
+        + '<div style="font-size:'+fs+'px;font-weight:800;color:'+color+';line-height:1.15;white-space:nowrap" title="'+icon+' '+txt+'">'+icon+' '+txt+'</div>'
+        + (c.mon!=='USD' ? '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">≈ '+_f2(c.equivUSD)+' USD</div>' : '')
         + '</div>';
     });
-    html += '</div></div>';
+    if(!conSaldo.length){
+      html += '<div style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);padding:6px 2px">Sin saldos en este almacén</div>';
+    }
+    html += '</div>';
+    if(vacias.length){
+      html += '<div style="margin-top:6px;font-size:10px;color:var(--color-text-tertiary);display:flex;flex-wrap:wrap;gap:4px;align-items:center">'
+        + '<span style="opacity:.7">Vacías:</span>'
+        + vacias.map(function(c){
+            var _cs=_nomCorto(c);
+            return '<span style="border:.5px solid var(--color-border-tertiary);border-radius:10px;padding:1px 8px;white-space:nowrap">'+c.mon+(_cs?' '+_cs:'')+'</span>';
+          }).join('')
+        + '</div>';
+    }
+    html += '</div>';
   });
 
   // Total general
   html += '<div style="border-top:1px solid var(--color-border-secondary);padding-top:14px;display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
     + '<span style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Total general</span>'
-    + '<span style="font-size:22px;font-weight:800;color:var(--color-text-success)">'+fN(totUSD,2)+' USD</span>'
+    + '<span style="font-size:22px;font-weight:800;color:var(--color-text-success)">'+_f2(totUSD)+' USD</span>'
     + '</div>';
 
   if (elGrid) elGrid.innerHTML = html;
