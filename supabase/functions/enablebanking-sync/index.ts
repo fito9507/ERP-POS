@@ -91,16 +91,25 @@ Deno.serve(async (req) => {
         monedaCta = det.json?.currency && det.json.currency !== 'XXX' ? det.json.currency : '';
       } else { avisos.push(`details ${uid}: ${det.status}`); }
 
-      // 2. Saldo
+      // 2. Saldo — disponible (amount) y posición contable (booked, la que
+      // en una póliza de crédito va en negativo por lo dispuesto)
       const bal = await ebGet(`/accounts/${encodeURIComponent(uid)}/balances`, token);
       if (bal.ok) {
         const arr = bal.json?.balances || [];
-        // preferir "disponible" (interimAvailable/expected), si no el primero
-        const pick = arr.find((b: any) => /avail|expected|clbd|interim/i.test(String(b?.balance_type ?? b?.name ?? ''))) || arr[0];
-        if (pick) {
-          const ba = pick.balance_amount ?? pick.amount ?? {};
+        const leer = (b: any) => {
+          const ba = b?.balance_amount ?? b?.amount ?? {};
           const bn = parseFloat(String(ba.amount ?? ba.value ?? '').replace(',', '.'));
-          if (isFinite(bn)) balances.push({ iban, alias, currency: ba.currency ?? (monedaCta || 'EUR'), amount: bn });
+          return isFinite(bn) ? { n: bn, cur: ba.currency ?? (monedaCta || 'EUR') } : null;
+        };
+        const tipoDe = (b: any) => String(b?.balance_type ?? b?.name ?? '');
+        const pick = arr.find((b: any) => /avail|expected|interim|xpcd|itav/i.test(tipoDe(b))) || arr[0];
+        const book = arr.find((b: any) => /clbd|itbd|closingbooked|book/i.test(tipoDe(b)) && b !== pick);
+        const pv = leer(pick);
+        if (pv) {
+          const bv = book ? leer(book) : null;
+          balances.push({ iban, alias, currency: pv.cur, amount: pv.n,
+            booked: bv ? bv.n : null,
+            tipos: arr.map((b: any) => ({ tipo: tipoDe(b), valor: leer(b)?.n ?? null })) });
         }
       } else { avisos.push(`balance ${iban}: ${bal.status} ${bal.txt.slice(0, 120)}`); }
 
@@ -129,7 +138,81 @@ Deno.serve(async (req) => {
       }
     }
 
-    return J({ transactions, balances, avisos, cuentas: uids.length });
+    // ── 4. Cuadre automático en el SERVIDOR ─────────────────────────
+    // La inserción ya no depende del dispositivo (mapeo local, PWA vieja,
+    // freno de 30 min): la propia función compara banco↔base por el
+    // marcador ABANCA_ID y escribe lo que falte en movimientos_ig y
+    // mov_cajas. El cliente sigue recibiendo transactions/balances y su
+    // dedup verá los marcadores, así que nunca duplica.
+    let insertadas = 0;
+    const detalles: string[] = [];
+    const SB = Deno.env.get('SUPABASE_URL');
+    const SRK = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const MAPA: Record<string, string> = {
+      'ES2120805043933940202989': 'USD ABANCA',
+      'ES8720805043943040076381': 'EUR ABANCA',
+      'ES6020805043995500163656': 'EUR CRÉDITO ABANCA',
+    };
+    if (SB && SRK) {
+      const db = (method: string, path: string, body?: unknown) =>
+        fetch(`${SB}/rest/v1/${path}`, {
+          method,
+          headers: { apikey: SRK, Authorization: `Bearer ${SRK}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+      try {
+        const rv = await db('GET', 'movimientos_ig?select=notas&notas=like.*ABANCA_ID*&limit=10000');
+        if (!rv.ok) throw new Error(`markers: ${rv.status}`);
+        const vistos = new Set<string>();
+        for (const f of await rv.json()) {
+          const m = String(f?.notas ?? '').match(/ABANCA_ID:([A-Za-z0-9_-]+)/);
+          if (m) vistos.add(m[1]);
+        }
+        // tasa para equiv_usd de los EUR (misma fila que usa el ERP)
+        let eurusd = 0.89;
+        try {
+          const rt = await db('GET', 'tasas?select=valor&moneda=eq.EURUSD');
+          const v = parseFloat((await rt.json())?.[0]?.valor);
+          if (isFinite(v) && v > 0.5 && v < 2) eurusd = v;
+        } catch { /* fallback 0.89 */ }
+
+        for (const t of transactions) {
+          if (t.estado !== 'COMPLETED' || t.signo_conocido === false) continue;
+          if (typeof t.amount !== 'number' || !isFinite(t.amount) || t.amount === 0) continue;
+          if (vistos.has(t.id)) continue;
+          const caja = MAPA[t.cuenta_iban];
+          if (!caja) { avisos.push(`sin caja para ${t.cuenta_iban}: ${t.amount} ${t.currency}`); continue; }
+          const esIng = t.amount > 0;
+          const amt = Math.abs(t.amount);
+          const equiv = t.currency === 'USD' ? amt : (t.currency === 'EUR' ? amt / eurusd : amt);
+          const marca = 'ABANCA_ID:' + t.id;
+          const fecha = t.created_at || new Date().toISOString().slice(0, 10);
+          const r1 = await db('POST', 'movimientos_ig', {
+            fecha, tipo: esIng ? 'Ingreso no-venta' : 'Gasto operativo',
+            descripcion: t.reference, monto: amt, moneda: t.currency,
+            equiv_usd: parseFloat(equiv.toFixed(4)), cuenta: caja, vendedor: 'Sistema', notas: marca,
+          });
+          if (!r1.ok) { avisos.push(`ig ${t.id}: ${r1.status}`); continue; }
+          const r2 = await db('POST', 'mov_cajas', {
+            fecha, tipo: esIng ? 'deposito' : 'retiro',
+            caja_origen: esIng ? null : caja, caja_destino: esIng ? caja : null,
+            monto_origen: amt, monto_destino: amt,
+            notas: `${t.reference} (${marca})`, usuario: 'Sistema',
+          });
+          if (!r2.ok) {
+            // revertir el marcador para que el próximo sync lo reintente
+            await db('DELETE', `movimientos_ig?notas=eq.${encodeURIComponent(marca)}`);
+            avisos.push(`mov_cajas ${t.id}: ${r2.status}`);
+            continue;
+          }
+          insertadas++;
+          vistos.add(t.id);
+          detalles.push(`${caja} ${esIng ? '+' : '-'}${amt} ${t.currency} · ${String(t.reference).slice(0, 40)}`);
+        }
+      } catch (e: any) { avisos.push(`cuadre servidor: ${e.message}`); }
+    } else { avisos.push('cuadre servidor desactivado: falta SERVICE_ROLE_KEY'); }
+
+    return J({ transactions, balances, avisos, cuentas: uids.length, insertadas, detalles });
   } catch (e: any) {
     return J({ error: e.message }, 400);
   }

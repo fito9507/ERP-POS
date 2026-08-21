@@ -2302,6 +2302,22 @@ async function syncSaveVenta(v) {
   return false;
 }
 
+// Refresco en vivo del libro IG: mientras el modulo esta abierto y la
+// pestana visible, recargar movimientos cada 60s (sin robar el foco si
+// se esta escribiendo en algun campo del modulo).
+setInterval(function() {
+  try {
+    var mod = document.getElementById('mod-ig');
+    if (!mod || !mod.classList.contains('act')) return;
+    if (document.hidden) return;
+    if (typeof _supaOnline !== 'undefined' && !_supaOnline) return;
+    if (document.activeElement && mod.contains(document.activeElement) &&
+        /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName)) return;
+    syncLoadMovsIG();
+    if (typeof loadCajasData === 'function') loadCajasData();
+  } catch (e) {}
+}, 60000);
+
 async function syncLoadMovsIG(){
   try{
     var _rm=await supaReq('GET','movimientos_ig?order=fecha.desc&limit=500');
@@ -12234,6 +12250,11 @@ async function _bancoSync(cfg) {
     }
 
     var data = await r.json();
+    if (data.insertadas) {
+      showToast('\ud83c\udfe6 ' + cfg.nombre + ': el servidor registr\u00f3 ' + data.insertadas + ' movimientos nuevos');
+      try { if (typeof loadCajasData === 'function') loadCajasData(); } catch (e) {}
+      try { if (typeof syncLoadMovsIG === 'function') syncLoadMovsIG(); } catch (e) {}
+    }
     var brutas = data.transactions || [];
     if (!brutas.length) {
       showToast('✅ ' + cfg.nombre + ' sincronizado (sin movimientos).');
@@ -12392,7 +12413,6 @@ async function _saldoCajaBD(cObj) {
 }
 
 async function _cuadrarCajaReal(cObj, realAmt, currency, banco, etiqueta) {
-  if (/cr[eé]dito/i.test(cObj.nombre)) return; // disponible != dispuesto
   var erp = await _saldoCajaBD(cObj);
   if (erp === null) { console.warn('cuadre ' + cObj.nombre + ': no se pudo leer la BD'); return; }
   var diff = parseFloat((realAmt - erp).toFixed(2));
@@ -12462,7 +12482,7 @@ function _wiseCompararSaldos(data, insertadas) {
       var cObj = _cajasData.find(function(c) {
         return c.moneda === b.currency && c.activa !== false && c.nombre.toLowerCase().includes('wise');
       });
-      if (cObj) _cuadrarCajaReal(cObj, b.amount, b.currency, 'Wise', '');
+      if (cObj && !/cr[e\u00e9]dito/i.test(cObj.nombre)) _cuadrarCajaReal(cObj, b.amount, b.currency, 'Wise', '');
     });
   }, insertadas > 0 ? 3000 : 600);
 }
@@ -12539,6 +12559,11 @@ function _abancaCajaPara(t) {
 
 // Compara el saldo real de cada cuenta Abanca con su caja mapeada y ofrece
 // el ajuste (mismo patrón que Wise).
+// Limite de las polizas de credito (para cuadrar el dispuesto):
+// el banco publica el DISPONIBLE; la caja mide el dispuesto en negativo
+// (dispuesto = disponible - limite). Ajustar aqui si cambia la poliza.
+var _ABANCA_POLIZA_LIMITE = { 'EUR CR\u00c9DITO ABANCA': 12000 };
+
 function _abancaCompararSaldos(data, insertadas) {
   var balances = data && data.balances;
   if (!balances || !balances.length) return;
@@ -12548,7 +12573,15 @@ function _abancaCompararSaldos(data, insertadas) {
       var nombre = map[b.iban];
       if (!nombre || typeof _cajasData === 'undefined') return;
       var cObj = _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; });
-      if (cObj) _cuadrarCajaReal(cObj, b.amount, b.currency, 'Abanca', (b.iban || '').slice(-4));
+      if (!cObj) return;
+      if (/cr[e\u00e9]dito/i.test(nombre)) {
+        var lim = _ABANCA_POLIZA_LIMITE[nombre];
+        if (lim == null) return; // sin limite conocido no se puede cuadrar
+        var dispuesto = parseFloat((b.amount - lim).toFixed(2));
+        _cuadrarCajaReal(cObj, dispuesto, b.currency, 'Abanca', 'p\u00f3liza ' + (b.iban || '').slice(-4) + ': dispuesto');
+      } else {
+        _cuadrarCajaReal(cObj, b.amount, b.currency, 'Abanca', (b.iban || '').slice(-4));
+      }
     });
   }, insertadas > 0 ? 3000 : 600);
 }
