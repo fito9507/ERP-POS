@@ -12269,7 +12269,11 @@ async function _bancoSync(cfg) {
             return c.moneda === t.moneda && c.nombre.toLowerCase().includes(cfg.cajaClave);
           });
         }
-        if (!cObj) { sinCaja++; return; }
+        if (!cObj) {
+          sinCaja++;
+          console.warn(cfg.nombre + ' SIN CAJA para: ' + (t.cuenta_iban || t.moneda) + ' ' + t.importe + ' ' + t.moneda + ' \u00b7 ' + (t.concepto || ''));
+          return;
+        }
         if (!_rates[t.moneda]) {
           console.warn(cfg.nombre + ': sin tasa para ' + t.moneda + ', equiv_usd saldrá 1:1');
         }
@@ -12278,6 +12282,7 @@ async function _bancoSync(cfg) {
     }
 
     if (!pendientes.length) {
+      if (sinCaja) showToast('\u26a0 ' + cfg.nombre + ': ' + sinCaja + ' movimientos SALTADOS por no tener caja (detalle en consola). Revisa el mapeo (clic derecho en el bot\u00f3n).');
       showToast('✅ Todo al día en ' + cfg.nombre + '.' +
         (sinCaja ? ' (' + sinCaja + ' sin caja "' + cfg.cajaClave + '" para su moneda)' : '') +
         (descartadas ? ' (' + descartadas + ' pendientes o no interpretables)' : ''));
@@ -12516,11 +12521,16 @@ function _abancaMap() {
 
 function _abancaCajaPara(t) {
   if (typeof _cajasData === 'undefined') return null;
+  var buscar = function(nom) {
+    return nom ? (_cajasData.find(function(c) { return c.nombre === nom && c.activa !== false; }) || null) : null;
+  };
   var nombre = _abancaMap()[t.cuenta_iban];
-  if (nombre) {
-    return _cajasData.find(function(c) { return c.nombre === nombre && c.activa !== false; }) || null;
-  }
-  // sin mapeo: solo si hay UNA única caja abanca en esa moneda (sin ambigüedad)
+  var cj = buscar(nombre);
+  // Mapeo local roto (caja renombrada o borrada): probar el de fábrica
+  // antes de rendirse — antes esto saltaba el movimiento en silencio.
+  if (!cj && nombre && _ABANCA_MAP_DEF[t.cuenta_iban] !== nombre) cj = buscar(_ABANCA_MAP_DEF[t.cuenta_iban]);
+  if (cj) return cj;
+  // sin mapeo utilizable: solo si hay UNA única caja abanca en esa moneda
   var candidatas = _cajasData.filter(function(c) {
     return c.moneda === t.moneda && c.activa !== false && c.nombre.toLowerCase().includes('abanca');
   });
