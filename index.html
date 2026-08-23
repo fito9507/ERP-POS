@@ -8306,11 +8306,27 @@ function renderLista(){
   const nActivos=visClientes.filter(c=>c.folios.some(f=>estF(f)!=='pagado')).length;
   document.getElementById('lista-metrics').innerHTML=`
     <div class="metric"><div class="lbl">Clientes</div><div class="val">${visClientes.length}</div><div class="sub">${nActivos} con deuda activa</div></div>
-    <div class="metric"><div class="lbl">Deuda total</div><div class="val">${fN(totDeuda)}</div><div class="sub">USD equiv.</div></div>
-    <div class="metric"><div class="lbl">Total abonado</div><div class="val" style="color:var(--color-text-success)">${fN(totPag)}</div><div class="sub">USD equiv.</div></div>
-    <div class="metric"><div class="lbl">Pendiente global</div><div class="val" style="color:var(--color-text-danger)">${fN(totPdte)}</div><div class="sub">USD equiv.</div></div>`;
+    <div class="metric"><div class="lbl">Deuda total</div><div class="val">${fN(parseFloat(totDeuda.toFixed(2)))}</div><div class="sub">USD equiv.</div></div>
+    <div class="metric"><div class="lbl">Total abonado</div><div class="val" style="color:var(--color-text-success)">${fN(parseFloat(totPag.toFixed(2)))}</div><div class="sub">USD equiv.</div></div>
+    <div class="metric"><div class="lbl">Pendiente global</div><div class="val" style="color:var(--color-text-danger)">${fN(parseFloat(totPdte.toFixed(2)))}</div><div class="sub">USD equiv.</div></div>`;
 
-  document.getElementById('clientes-grid').innerHTML=visClientes.map(c=>{
+  // Filtro de la lista (las métricas de arriba siguen siendo globales)
+  if(typeof window.cliFiltro==='undefined') window.cliFiltro='deuda';
+  var _fCli=window.cliFiltro;
+  var _conDeuda=visClientes.filter(function(c){return pdtCli(c)>=0.01;});
+  var _liquidados=visClientes.filter(function(c){return pdtCli(c)<0.01;});
+  var gridClientes=_fCli==='deuda'?_conDeuda:(_fCli==='liquidados'?_liquidados:visClientes);
+  var _chip=function(key,label,n){
+    var act=_fCli===key;
+    return '<button class="btn-sm" style="'+(act?'background:var(--color-background-secondary);border-color:var(--color-border-primary);color:var(--color-text-primary);font-weight:600':'color:var(--color-text-secondary)')+'" '
+      + 'onclick="event.stopPropagation();window.cliFiltro=\''+key+'\';renderLista()">'+label+' ('+n+')</button>';
+  };
+  var _chipsRow='<div style="grid-column:1/-1;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'
+    + _chip('deuda','\uD83D\uDD34 Con deuda',_conDeuda.length)
+    + _chip('todos','Todos',visClientes.length)
+    + _chip('liquidados','\u2705 Liquidados',_liquidados.length)
+    + '</div>';
+  document.getElementById('clientes-grid').innerHTML=_chipsRow+(gridClientes.length?'':'<div style="grid-column:1/-1;color:var(--color-text-tertiary);font-size:12px;padding:12px 2px">Ning\u00fan cliente en este filtro</div>')+gridClientes.map(c=>{
   const tot=totCli(c),pag=pagCli(c),pdt=pdtCli(c);
     const credito=pag>tot+0.01?pag-tot:0; // saldo a favor
     const pct=tot>0?Math.round(pag/tot*100):0;
@@ -9012,11 +9028,11 @@ function renderFichaAbonar(c){
   <div class="card" style="margin-bottom:10px;padding:10px 12px;display:flex;align-items:center;gap:12px;background:var(--color-background-secondary);border-radius:var(--border-radius-md)">
     <div style="flex:1">
       <div style="font-size:11px;color:var(--color-text-secondary)">Deuda pendiente</div>
-      <div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">${fN(pdt)} USD</div>
+      <div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">${fN(parseFloat(pdt.toFixed(2)))} USD</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:11px;color:var(--color-text-secondary)">Total / Abonado</div>
-      <div style="font-size:13px">${fN(tot)} / <span style="color:var(--color-text-success)">${fN(pag)}</span> USD</div>
+      <div style="font-size:13px">${fN(parseFloat(tot.toFixed(2)))} / <span style="color:var(--color-text-success)">${fN(parseFloat(pag.toFixed(2)))}</span> USD</div>
     </div>
     <div style="width:50px;height:50px;border-radius:50%;background:conic-gradient(var(--color-text-success) ${pct}%,var(--color-background-tertiary) 0);display:flex;align-items:center;justify-content:center;flex-shrink:0">
       <div style="width:38px;height:38px;border-radius:50%;background:var(--color-background-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${pct}%</div>
@@ -9033,7 +9049,7 @@ function renderFichaAbonar(c){
         <div><label class="lbl">Folio</label>
           <select id="a-folio-${c.id}" style="width:100%" onchange="abonoAutoCajaCli('${c.id}')">
             <option value="">Abono general</option>
-            ${c.folios.map(f=>`<option value="${f.id}">F${f.id} — ${fN(pdtF(f))} USD</option>`).join('')}
+            ${c.folios.filter(f=>estF(f)!=='pagado').map(f=>`<option value="${f.id}">F${f.id} — ${fN(parseFloat(pdtF(f).toFixed(2)))} USD</option>`).join('')}
           </select></div>
       </div>
 
@@ -9052,7 +9068,8 @@ function renderFichaAbonar(c){
         <input type="text" id="a-desc-${c.id}" placeholder="Ej: Cash Placetas, Aranceles container #3..." style="width:100%"></div>
 
       <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
-        <div><label class="lbl">Monto</label>
+        <div><div style="display:flex;justify-content:space-between;align-items:baseline"><label class="lbl">Monto</label>
+            <button class="btn-sm" style="font-size:10px;padding:2px 8px;border-color:var(--color-text-success);color:var(--color-text-success)" onclick="liquidarTodoCli('${c.id}')">\u2714 Liquidar todo</button></div>
           <input type="text" inputmode="decimal" id="a-monto-${c.id}" placeholder="0"
             oninput="window['em_'+'${c.id}']=false; calcEquivCli('${c.id}')" style="width:100%;font-size:16px;font-weight:600"></div>
         <div><label class="lbl">Moneda</label>
@@ -9095,6 +9112,33 @@ function renderFichaAbonar(c){
   </div>`;
   window['em_'+c.id]=false;
   window['cajaon_'+c.id]=false;
+}
+
+// "Liquidar todo": rellena el monto con el pendiente EXACTO del folio
+// elegido (o de toda la deuda del cliente) para que no queden restos de
+// centimos. Si se paga en otra moneda, fija el equivalente USD manual al
+// pendiente exacto: la deuda queda a 0 aunque la tasa baile.
+function liquidarTodoCli(cid){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var fid=(document.getElementById('a-folio-'+cid)||{}).value;
+  var f=fid?c.folios.find(function(x){return String(x.id)===String(fid);}):null;
+  var pdt=parseFloat((f?pdtF(f):pdtCli(c)).toFixed(4));
+  if(pdt<=0){ showToast('No hay deuda pendiente'+(f?' en este folio':'')); return; }
+  var mon=(document.getElementById('a-mon-'+cid)||{}).value||'USD';
+  var montoEl=document.getElementById('a-monto-'+cid);
+  var equivEl=document.getElementById('a-equiv-'+cid);
+  if(mon==='USD'){
+    if(montoEl)montoEl.value=pdt;
+    window['em_'+cid]=false;
+    if(typeof calcEquivCli==='function')try{calcEquivCli(cid);}catch(e){}
+  } else {
+    var tasaManual=parseFloat(String((document.getElementById('a-tasa-'+cid)||{value:''}).value).replace(/,/g,'.'))||0;
+    var monto=tasaManual>0?((mon==='EUR')?pdt/tasaManual:pdt*tasaManual):fromUSD(pdt,mon);
+    if(montoEl)montoEl.value=(mon==='CUP'||mon==='CUPT')?Math.round(monto):parseFloat(parseFloat(monto).toFixed(2));
+    if(equivEl){ equivEl.value=pdt; window['em_'+cid]=true; }
+    if(typeof updPrevCli==='function')try{updPrevCli(cid);}catch(e){}
+  }
+  showToast('Abono preparado para liquidar '+(f?'el Folio '+fid:'toda la deuda')+': '+fN(pdt)+' USD');
 }
 
 // Precarga automatica al elegir folio: moneda de la venta y caja del
