@@ -2286,6 +2286,21 @@ async function syncSaveVenta(v) {
                  +(v.nota?' '+v.nota:''),
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[],comDetalle:v.comDetalle||{}}) : ''
   };
+  // Sin supaId: intentar encontrar la fila real en la BD antes de crear
+  // una nueva (un POST ciego duplica la venta y el cambio no se ve).
+  if(!v.supaId && _supaOnline && typeof supaReq!=='undefined'){
+    try{
+      var _q='ventas?select=id&fecha=eq.'+encodeURIComponent(v.fecha||'')
+        +'&vendedor=eq.'+encodeURIComponent(v.vend||'')
+        +'&cliente=eq.'+encodeURIComponent(v.cli||'Walk-in')
+        +'&total_usd=eq.'+encodeURIComponent(v.totalUSD||0);
+      var _rr=await supaReq('GET',_q);
+      if(_rr.ok){
+        var _rows=await _rr.json()||[];
+        if(_rows.length===1){ v.supaId=_rows[0].id; if(typeof offlineSaveVentas==='function')offlineSaveVentas(); }
+      }
+    }catch(e){}
+  }
   // Solo incluir id si NO es PATCH (para evitar errores en update)
   var path = v.supaId ? 'ventas?id=eq.'+v.supaId : 'ventas';
   var method = v.supaId ? 'PATCH' : 'POST';
@@ -5014,7 +5029,12 @@ async function setEstCom(id,est){
   v.estCom=est;
   if(est==='No aplica'){v.comPct=0;v.comUSD=0;v.comDetalle={};}
   renderVentas();
-  if(typeof syncSaveVenta==='function') syncSaveVenta(v);
+  if(typeof offlineSaveVentas==='function')offlineSaveVentas();
+  if(typeof syncSaveVenta==='function'){
+    var ok=await syncSaveVenta(v);
+    if(ok) showToast('\u2713 Comisi\u00f3n marcada: '+est);
+    else showToast('\u26a0 El estado NO se guard\u00f3 en la nube (detalle en consola; se reintentar\u00e1)');
+  }
 }
 
 // ── Revertir venta: devuelve stock + cajas ────────────────
