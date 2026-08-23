@@ -1715,7 +1715,7 @@ function _zoomImg(src) {
 
 function fD(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'2-digit'});}
 
-function today(){return new Date().toISOString().slice(0,10);}
+function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');} // fecha LOCAL del dispositivo (toISOString daba la UTC: de madrugada estampaba el dia de ayer)
 
 
 // ── Debounced render helpers (prevent focus loss on mobile) ──
@@ -16711,16 +16711,19 @@ function renderAdminAnalytics() {
 
   // Ventas por dia: ultimos 14 dias (siempre) + delta vs los 14 previos
   var hoyStr = new Date();
+  // fecha LOCAL (indexar por UTC con etiqueta local corria el eje un dia
+  // de madrugada: lo vendido el 19 salia bajo la barra del 20)
+  var _fLoc = function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
   var dias = [];
   for (var di = 13; di >= 0; di--) {
     var dd = new Date(hoyStr - di * 86400000);
-    dias.push({ f: dd.toISOString().slice(0, 10), lbl: dd.getDate(), rev: 0, n: 0 });
+    dias.push({ f: _fLoc(dd), lbl: dd.getDate(), rev: 0, n: 0 });
   }
   var diasIdx = {};
   dias.forEach(function(d) { diasIdx[d.f] = d; });
   var revActual14 = 0, revPrevio14 = 0;
-  var iniActual = new Date(hoyStr - 13 * 86400000).toISOString().slice(0, 10);
-  var iniPrevio = new Date(hoyStr - 27 * 86400000).toISOString().slice(0, 10);
+  var iniActual = _fLoc(new Date(hoyStr - 13 * 86400000));
+  var iniPrevio = _fLoc(new Date(hoyStr - 27 * 86400000));
   ventas.forEach(function(v) {
     var f = String(v.fecha || '').slice(0, 10);
     if (diasIdx[f]) { diasIdx[f].rev += (v.totalUSD || 0); diasIdx[f].n++; }
