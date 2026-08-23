@@ -2193,7 +2193,25 @@ async function flushQueue() {
         var _errBody = '';
         try { _errBody = await r.clone().text(); } catch(e2) {}
         console.warn('Queue op failed:', r.status, op.path, _errBody);
-        _syncQueue.push(op);
+        if (r.status >= 400 && r.status < 500) {
+          // Error PERMANENTE: reintentarlo eternamente envenena la cola.
+          var _colM = _errBody.match(/Could not find the '([A-Za-z_]+)' column/);
+          if (op.path.indexOf('stock_almacen') === 0) {
+            // Nunca reproducir un upsert de stock viejo: lleva una cantidad
+            // ABSOLUTA de cuando se encolo y pisaria el stock actual.
+            console.error('Queue: upsert de stock descartado (verifica el stock de', op.body && op.body.producto_id, '):', op.body);
+          } else if (_colM && op.body && (_colM[1] in op.body)) {
+            delete op.body[_colM[1]];
+            console.warn('Queue: columna inexistente "' + _colM[1] + '" eliminada; se reintenta');
+            _syncQueue.push(op);
+          } else if (r.status === 409) {
+            console.warn('Queue: 409 (ya existe) — descartada:', op.path);
+          } else {
+            console.error('Queue: error permanente ' + r.status + ' — DESCARTADA:', op.path, op.body);
+          }
+        } else {
+          _syncQueue.push(op); // transitorio (red/5xx): reintentar
+        }
       }
     } catch(e) {
       console.warn('Queue flush error:', e);
@@ -2527,16 +2545,30 @@ window.getLotesOrdenados = function(prod, almacen) {
 // folio sin red devolvia el stock solo en el dispositivo y la BD quedaba
 // descuadrada para siempre (caso folio 15 del 20-08).
 var _stkChain = {}; // cadena de escrituras por fila (evita pisadas en paralelo)
-async function _stockUpsert(body) {
+async function _stockUpsert(bodyRaw) {
   var path = 'stock_almacen?on_conflict=producto_id,almacen,lote';
+  // Solo las columnas que la tabla tiene de verdad: enviar de mas (costo,
+  // precio_venta...) da 400 PGRST204 y la escritura se pierde.
+  var body = {};
+  ['producto_id', 'almacen', 'lote', 'cantidad', 'cantidad_inicial'].forEach(function(k) {
+    if (bodyRaw[k] !== undefined) body[k] = bodyRaw[k];
+  });
   var key = body.producto_id + '|' + body.almacen + '|' + (body.lote || '');
   var run = async function() {
+    var status = 0;
     try {
       if (typeof _supaOnline !== 'undefined' && !_supaOnline) throw new Error('offline');
       var r = await supaReq('POST', path, body);
+      status = r.status;
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return true;
     } catch (e) {
+      if (status >= 400 && status < 500) {
+        // permanente: encolarlo seria un bucle infinito de reintentos
+        console.error('stock upsert ERROR PERMANENTE (no se reintenta):', status, body);
+        try { showToast('\u274c Error guardando stock (' + status + '): revisa consola'); } catch (e3) {}
+        return false;
+      }
       console.warn('stock upsert -> cola offline:', e && e.message, body);
       try { if (typeof enqueue === 'function') enqueue({ method: 'POST', path: path, body: body }); } catch (e2) {}
       return false;
