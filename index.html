@@ -16607,14 +16607,18 @@ function renderAdminAnalytics() {
 
     // Parse prods string: "10× Chapa galv. 2000x1000x1 @ $31.00, 5× Cuadrado S275JR 16 @ $20.00"
     if (v.prods && typeof v.prods === 'string') {
-      v.prods.split(',').forEach(function(seg) {
+      // Separar SOLO donde empieza otra linea de producto ("1234x "):
+      // partir por toda coma troceaba los precios decimales ($0,1092)
+      // y el ingreso de esos productos se contaba como 0.
+      v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
         seg = seg.trim();
-        // Regex soporta ventas normales (10× Prod @ $10.00) y folios/reservas (10× Prod)
-        var m = seg.match(/^(\d+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
+        // Regex soporta ventas normales (10× Prod @ $10,00) y folios/reservas (10× Prod)
+        var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
         if (m) {
-          var qty = parseInt(m[1]) || 0;
+          var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
           var name = m[2].trim();
-          var price = m[3] ? parseFloat(m[3].replace(',', '.')) : 0;
+          // precio en es-ES: '1.234,56' -> 1234.56 ; '0,1092' -> 0.1092
+          var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
           if (!prodSales[name]) prodSales[name] = { qty: 0, pricedQty: 0, revenue: 0, cost: 0 };
           prodSales[name].qty += qty;
           if (m[3]) {
