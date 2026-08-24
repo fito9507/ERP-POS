@@ -4176,15 +4176,23 @@ function ventaCreditoPOS() {
     c.folios.push(newFolio);
   }
   
-  // discount stock
-  lineas.forEach(function(l){
-    var p=PRODS.find(function(x){return x.n===l.prod;});
-    if(p&&alm){
-      p.stk=Math.max(0,(p.stk||0)-l.q);
-      if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
-      if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cntVal}],alm);
-    }
-  });
+  // discount stock — salvo que el folio sea de un contenedor que aun
+  // no ha llegado: esa mercancia no esta en el almacen y descontarla
+  // se comia el stock de otros lotes (preventa del #14 -> discos #13).
+  var _esPreventaCnt = typeof _cntEnTransito==='function' && _cntEnTransito(cntVal);
+  if(_esPreventaCnt){
+    console.warn('Folio de contenedor en tr\u00e1nsito ('+cntVal+'): no se descuenta stock f\u00edsico');
+    try{ showToast('\u2139 '+cntVal+' a\u00fan no ha llegado: las unidades quedan comprometidas, sin descontar del almac\u00e9n'); }catch(e){}
+  } else {
+    lineas.forEach(function(l){
+      var p=PRODS.find(function(x){return x.n===l.prod;});
+      if(p&&alm){
+        p.stk=Math.max(0,(p.stk||0)-l.q);
+        if(p.stk_alm&&p.stk_alm[alm]!=null) p.stk_alm[alm]=Math.max(0,(p.stk_alm[alm]||0)-l.q);
+        if(typeof syncStockUpdate==='function') syncStockUpdate([{n:l.prod,q:l.q,lote:cntVal}],alm);
+      }
+    });
+  }
   
   var _ventaFolio={
     id:venNextId++, fecha:fecha,
@@ -4479,6 +4487,14 @@ function renderPagoTotalsOnly(){
 }
 
 // Returns caja names for a given moneda, preferring Supabase _cajasData
+// Un contenedor que aun no ha llegado no tiene stock fisico: sus
+// ventas son preventa y no deben descontar unidades de otros lotes.
+function _cntEnTransito(ref) {
+  if (!ref || typeof CONTENEDORES === 'undefined') return false;
+  var ct = CONTENEDORES.find(function(x) { return x.ref === ref || x.lote === ref || x.id === ref; });
+  return !!ct && ct.estado !== 'recibido' && ct.estado !== 'cerrado';
+}
+
 function _getCajasForMon(mon, alm) {
   var preferred = mon + ' ' + (alm || S.alm || '');
   // Use _cajasData if loaded (Supabase)
@@ -4539,14 +4555,22 @@ function confirmar(){
     vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};})  
   };
   VENTAS.unshift(venta);
-  // Descontar stock
+  // Descontar stock — avisando si alguna linea supera las existencias.
+  // Antes se truncaba a cero en silencio y la diferencia desaparecia.
+  var _faltantes = [];
   S.cart.forEach(function(c){
     var p=PRODS.find(function(x){return x.n===c.n;});
     if(p){
+      var _disp = typeof _getStk==='function' ? _getStk(p, S.alm) : (p.stk||0);
+      if(c.q > _disp) _faltantes.push(c.n+': hay '+fN(_disp,0)+', se venden '+fN(c.q,0));
       p.stk=Math.max(0,(p.stk||0)-c.q);
       if(p.stk_alm&&p.stk_alm[S.alm]!=null) p.stk_alm[S.alm]=Math.max(0,(p.stk_alm[S.alm]||0)-c.q);
     }
   });
+  if(_faltantes.length){
+    console.warn('Venta con stock insuficiente:', _faltantes);
+    try{ showToast('\u26a0 Stock insuficiente en '+_faltantes.length+' producto(s): '+_faltantes[0]+(_faltantes.length>1?' (+'+(_faltantes.length-1)+' m\u00e1s)':'')); }catch(e){}
+  }
   // Sync Supabase
   if(typeof syncSaveVenta==='function') syncSaveVenta(venta);
   if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
