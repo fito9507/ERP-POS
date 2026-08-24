@@ -4676,7 +4676,16 @@ function _comisionDeAbono(cid, fid, ab){
     COMS=COMS.filter(function(x){return x.id!==com.id;}); COMS.push(com);
     if(typeof supaReq!=='undefined'&&_supaOnline){
       supaReq('POST','comisiones?on_conflict=id',com).then(function(r){
-        if(!r.ok) console.warn('comision de abono no guardada:', r.status, com.id);
+        if(r.ok) return;
+        // Antes esto solo hacia console.warn y la comision se perdia sin
+        // que nadie lo supiera (la tabla nacio con RLS y sin politicas).
+        console.warn('comision de abono NO guardada:', r.status, com.id);
+        r.text().then(function(t){
+          var permiso=r.status===401||r.status===403||/row-level security|42501/i.test(t||'');
+          showToast(permiso
+            ? '⚠ Comisión de '+fN(com.com_usd)+' USD NO guardada: la tabla comisiones bloquea escrituras (ejecuta supabase_comisiones_retro.sql)'
+            : '⚠ Comisión de '+fN(com.com_usd)+' USD no guardada ('+r.status+') — detalle en consola');
+        }).catch(function(){ showToast('⚠ Comisión del abono no guardada ('+r.status+')'); });
       }).catch(function(e){console.warn('comision abono:',e);});
     } else {
       try{ enqueue({method:'POST',path:'comisiones?on_conflict=id',body:com}); }catch(e){}
