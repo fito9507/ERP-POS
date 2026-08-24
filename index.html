@@ -1241,6 +1241,17 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div style="overflow-x:auto"><table><thead><tr><th>Vendedor</th><th>Almacén</th><th>% com.</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Estado</th></tr></thead>
       <tbody id="c-grupos"></tbody></table></div>
     </div>
+    <div class="card" id="c-cobros-card" style="display:none">
+      <h3>Detalle — comisiones por cobro de folio</h3>
+      <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:8px">Cada abono cobrado de un cliente asignado a un vendedor genera su comisión sobre lo cobrado.</div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Folio</th><th style="text-align:right">Cobrado</th><th style="text-align:center">%</th><th style="text-align:right">Comisión USD</th><th>Caja</th><th>Estado</th></tr></thead>
+      <tbody id="c-cobros-body"></tbody><tfoot id="c-cobros-foot"></tfoot></table></div>
+    </div>
+    <div class="card" id="c-ventas-card" style="display:none">
+      <h3>Detalle — comisiones por venta de contado</h3>
+      <div style="overflow-x:auto"><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Cliente</th><th style="text-align:right">Venta USD</th><th style="text-align:center">%</th><th style="text-align:right">Comisión USD</th><th>Estado</th></tr></thead>
+      <tbody id="c-ventas-body"></tbody><tfoot id="c-ventas-foot"></tfoot></table></div>
+    </div>
   </div>
 </div>
 
@@ -5390,6 +5401,7 @@ function renderCom(){
     grupos[k].vUSD+=parseFloat(x.base_usd)||0;grupos[k].comUSD+=parseFloat(x.com_usd)||0;
     if(_comsPdteF(x))grupos[k].pdte+=parseFloat(x.com_usd)||0;
   });
+  _renderComDetalle(comsF, data);
   document.getElementById('c-grupos').innerHTML=Object.values(grupos).map(g=>`<tr>
     <td><strong>${g.vend}</strong></td><td>${g.alm}</td>
     <td><span class="badge bb">${g.pct}%</span></td>
@@ -5399,6 +5411,66 @@ function renderCom(){
     <td style="text-align:right">${fN(fromUSD(g.comUSD,'CUP'),0)}</td>
     <td><span class="badge ${g.pdte<0.01?'bg':'ba'}">${g.pdte<0.01?'Liquidado':fN(g.pdte)+' pdte.'}</span></td>
   </tr>`).join('')||'<tr><td colspan="8" style="color:var(--color-text-tertiary);text-align:center;padding:10px">Sin datos</td></tr>';
+}
+
+// Detalle auditable de las comisiones (de donde sale cada USD)
+function _renderComDetalle(comsF, ventas){
+  var badge=function(e){
+    var cls=e==='Pagada'?'bg':(e==='Liquidada (Pdte)'?'bb':'ba');
+    return '<span class="badge '+cls+'" style="font-size:9px">'+(e||'Pendiente')+'</span>';
+  };
+  // -- cobros de folios --
+  var card=document.getElementById('c-cobros-card');
+  var body=document.getElementById('c-cobros-body');
+  var foot=document.getElementById('c-cobros-foot');
+  if(card&&body){
+    var lista=(comsF||[]).slice().sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
+    card.style.display=lista.length?'':'none';
+    var totC=0,totB=0;
+    body.innerHTML=lista.map(function(x){
+      var com=parseFloat(x.com_usd)||0, base=parseFloat(x.base_usd)||0;
+      totC+=com; totB+=base;
+      var fol=String(x.folio_id||'');
+      if(fol.indexOf('f-credito')===0) fol='cr\u00e9dito';
+      var mon=x.moneda&&x.moneda!=='USD'?'<div style="font-size:9px;color:var(--color-text-tertiary)">'+fN(parseFloat(x.monto)||0,0)+' '+x.moneda+'</div>':'';
+      return '<tr>'
+        +'<td style="white-space:nowrap;font-size:11px">'+(typeof fD==='function'?fD(x.fecha):x.fecha)+'</td>'
+        +'<td style="font-size:11px">'+(x.cliente||'')+'</td>'
+        +'<td style="font-size:11px;color:var(--color-text-secondary)">'+fol+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'+fN(base)+mon+'</td>'
+        +'<td style="text-align:center"><span class="badge bb" style="font-size:9px">'+(x.pct||0)+'%</span></td>'
+        +'<td style="text-align:right;font-weight:600;color:var(--color-text-warning);white-space:nowrap">'+fN(com)+'</td>'
+        +'<td style="font-size:10px;color:var(--color-text-info)">'+(x.caja||'')+'</td>'
+        +'<td>'+badge(x.estado)+'</td></tr>';
+    }).join('');
+    if(foot) foot.innerHTML=lista.length?'<tr class="sum-row"><td colspan="3" style="font-weight:600">Total ('+lista.length+' cobro'+(lista.length!==1?'s':'')+')</td>'
+      +'<td style="text-align:right;font-weight:600">'+fN(totB)+'</td><td></td>'
+      +'<td style="text-align:right;font-weight:700;color:var(--color-text-warning)">'+fN(totC)+'</td><td colspan="2"></td></tr>':'';
+  }
+  // -- ventas de contado --
+  var cardV=document.getElementById('c-ventas-card');
+  var bodyV=document.getElementById('c-ventas-body');
+  var footV=document.getElementById('c-ventas-foot');
+  if(cardV&&bodyV){
+    var lv=(ventas||[]).filter(function(v){return (v.comUSD||0)>0;})
+      .sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
+    cardV.style.display=lv.length?'':'none';
+    var tv=0,tc=0;
+    bodyV.innerHTML=lv.map(function(v){
+      tv+=v.totalUSD||0; tc+=v.comUSD||0;
+      return '<tr>'
+        +'<td style="white-space:nowrap;font-size:11px">'+(typeof fD==='function'?fD(v.fecha):v.fecha)+'</td>'
+        +'<td style="font-size:11px">'+(v.vend||'')+'</td>'
+        +'<td style="font-size:11px;color:var(--color-text-secondary)">'+(v.cli||'')+'</td>'
+        +'<td style="text-align:right;white-space:nowrap">'+fN(v.totalUSD||0)+'</td>'
+        +'<td style="text-align:center"><span class="badge bb" style="font-size:9px">'+(v.comPct||0)+'%</span></td>'
+        +'<td style="text-align:right;font-weight:600;color:var(--color-text-warning);white-space:nowrap">'+fN(v.comUSD||0)+'</td>'
+        +'<td>'+badge(v.estCom)+'</td></tr>';
+    }).join('');
+    if(footV) footV.innerHTML=lv.length?'<tr class="sum-row"><td colspan="3" style="font-weight:600">Total ('+lv.length+' venta'+(lv.length!==1?'s':'')+')</td>'
+      +'<td style="text-align:right;font-weight:600">'+fN(tv)+'</td><td></td>'
+      +'<td style="text-align:right;font-weight:700;color:var(--color-text-warning)">'+fN(tc)+'</td><td></td></tr>':'';
+  }
 }
 
 // ── LIQUIDACIÓN ───────────────────────────────────────────
