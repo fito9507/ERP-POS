@@ -2391,6 +2391,8 @@ async function syncLoadVentas() {
       var _tkM  = _raw.match(/\[([A-Z]{3}\d{2}-\d+)\]/);
       var _hrM  = _raw.match(/\[(\d{2}:\d{2})\]/);
       var _nota = _raw.replace(/\[[^\]]*\]/g,'').trim();
+      // venta de folio: comisiona por sus abonos, nunca por si misma
+      var _esFolioRow = /Folio\s*\d/i.test(_raw);
       VENTAS.push({
         id:       venNextId++,
         supaId:   row.id,
@@ -2404,9 +2406,9 @@ async function syncLoadVentas() {
         mon:      row.moneda_cobro,
         prods:    row.productos,
         totalUSD: parseFloat(row.total_usd),
-        comPct:   parseFloat(row.com_pct || 0),
-        comUSD:   parseFloat(row.com_usd  || 0),
-        estCom:   row.est_com,
+        comPct:   _esFolioRow ? 0 : parseFloat(row.com_pct || 0),
+        comUSD:   _esFolioRow ? 0 : parseFloat(row.com_usd  || 0),
+        estCom:   _esFolioRow ? 'No aplica' : row.est_com,
         nota:     _nota,
         pagos:   (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.pagos||[]; }catch(e){return [];} })(),
         vueltos: (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.vueltos||[]; }catch(e){return [];} })(),
@@ -4959,7 +4961,7 @@ function renderVentas(){
       ${!_showCom?'':(_isVend ? `<td style="white-space:nowrap;text-align:center">${v.comPct}%</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap;color:var(--color-text-warning)">${fN(v.comUSD)}</td>
       <td style="white-space:nowrap"><span class="badge ${v.estCom==='Pagada'?'bg':v.estCom==='No aplica'?'bn':'ba'}">${v.estCom}</span></td>`
-      : `<td style="white-space:nowrap"><input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %" style="width:60px;padding:4px;font-size:11px"></td>
+      : `<td style="white-space:nowrap">${_esVentaFolio(v)?'<span style="color:var(--color-text-tertiary);font-size:11px" title="La comisi\u00f3n de esta venta sale de sus abonos">\u2014</span>':`<input type="number" class="com-inp" value="${v.comPct}" step="0.5" min="0" max="100" onchange="updComPct(${v.id},this.value)" title="Editar %" style="width:60px;padding:4px;font-size:11px">`}</td>
       <td style="text-align:right;font-weight:500;white-space:nowrap;color:var(--color-text-warning)">${fN(v.comUSD)}</td>
       <td style="white-space:nowrap">${renderEstComCell(v)}</td>`)}
       <td style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--color-text-secondary)">${v.nota||''}</td>
@@ -8287,6 +8289,9 @@ let cajaOn=false,equivManual=false;
 let folioFiltro='todos';
 
 // ── CALCULOS ──────────────────────────────────────────────
+// Una venta ligada a un folio comisiona al COBRAR (por sus abonos), no
+// al vender: por eso nunca lleva comision propia (modelo A).
+function _esVentaFolio(v){ return !!v && /Folio\s*\d/i.test(v.nota||v.notas||''); }
 function totF(f){return (f.lineas||f.productos||[]).reduce((a,l)=>a+toUSD((l.q||l.cantidad||0)*(l.precio||l.price||0),l.mon||'USD'),0);}
 function pagF(f){return (f.abonos||[]).reduce((a,ab)=>a+(ab.equivUSD||0),0);}
 function pdtF(f){return Math.max(0,totF(f)-pagF(f));}
@@ -13610,6 +13615,10 @@ async function syncStockUpdate(cart, alm) {
 function renderEstComCell(v) {
   var isAdm = typeof S!=="undefined" && S.user && USERS[S.user] && USERS[S.user].rol==="admin";
   var col = v.estCom==="Pagada" ? "var(--color-text-success)" : v.estCom==="No aplica" ? "var(--color-text-tertiary)" : "var(--color-text-warning)";
+  // Venta a credito: su comision va por los abonos, no se marca aqui
+  if (typeof _esVentaFolio==="function" && _esVentaFolio(v)) {
+    return '<span class="badge bb" style="font-size:9px" title="Venta a cr\u00e9dito: la comisi\u00f3n se genera al cobrar cada abono, no al vender">al cobrar</span>';
+  }
   if (isAdm) {
     return '<select class="est-sel" onchange="setEstCom('+v.id+',this.value)" style="color:'+col+'">'
       + '<option'+(v.estCom==="Pendiente"?' selected':'')+'>Pendiente</option>'
