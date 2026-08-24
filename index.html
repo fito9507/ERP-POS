@@ -4697,17 +4697,27 @@ async function loadComReglas(){
 // Get commission % for a vendedor+producto+almacen
 // Priority: vendedor+producto > vendedor+categoria > vendedor+almacen > vendedor global
 function getComPct(vend, prod, cat, alm){
-  var rules=COM_REGLAS.filter(function(r){return r.vendedor===vend||r.vendedor==='*';});
-  // Most specific first
-  var byProd=rules.find(function(r){return r.producto&&r.producto===prod&&(!r.almacen||r.almacen===alm);});
-  if(byProd) return byProd.pct;
-  var byCat=rules.find(function(r){return r.categoria&&r.categoria===cat&&(!r.almacen||r.almacen===alm);});
-  if(byCat) return byCat.pct;
-  var byAlm=rules.find(function(r){return !r.producto&&!r.categoria&&r.almacen===alm;});
-  if(byAlm) return byAlm.pct;
-  var global=rules.find(function(r){return !r.producto&&!r.categoria&&!r.almacen;});
-  if(global) return global.pct;
-  
+  // Las reglas del PROPIO vendedor mandan sobre la comodin '*'. Antes
+  // iban en la misma lista y el find() cogia la de id menor: con un
+  // "* 1,5%" ya creado, anadir "Keiler 4%" no habria servido de nada.
+  var propias=COM_REGLAS.filter(function(r){return r.vendedor===vend;});
+  var comodin=COM_REGLAS.filter(function(r){return r.vendedor==='*';});
+  var buscar=function(rules){
+    var byProd=rules.find(function(r){return r.producto&&r.producto===prod&&(!r.almacen||r.almacen===alm);});
+    if(byProd) return byProd.pct;
+    var byCat=rules.find(function(r){return r.categoria&&r.categoria===cat&&(!r.almacen||r.almacen===alm);});
+    if(byCat) return byCat.pct;
+    var byAlm=rules.find(function(r){return !r.producto&&!r.categoria&&r.almacen===alm;});
+    if(byAlm) return byAlm.pct;
+    var global=rules.find(function(r){return !r.producto&&!r.categoria&&!r.almacen;});
+    if(global) return global.pct;
+    return null;
+  };
+  var p=buscar(propias);
+  if(p!=null) return p;
+  p=buscar(comodin);
+  if(p!=null) return p;
+
   // fallback to COM_DEF if no custom rules apply
   return (COM_DEF[vend]&&COM_DEF[vend][alm])||0;
 }
@@ -5010,7 +5020,11 @@ function getSelIds(){
 async function setVendVenta(id,vend){
   const v=VENTAS.find(x=>x.id===id);if(!v||v.vend===vend)return;
   v.vend=vend;
-  var puede=USERS[vend]&&USERS[vend].aComision!==false;
+  // Modelo A: la venta a credito NO comisiona al vender — su comision
+  // entra por los abonos segun se cobra. Reasignarla solo cambia el
+  // vendedor; si comisionara aqui se pagaria dos veces.
+  var esFolio=/Folio\s*\d/i.test(v.nota||'');
+  var puede=USERS[vend]&&USERS[vend].aComision!==false&&!esFolio;
   if(puede){
     var pct=parseFloat(v.comPct)||0;
     if(!(pct>0))pct=typeof getComPct==='function'?(parseFloat(getComPct(vend,null,null,v.alm))||0):0;
@@ -5022,7 +5036,7 @@ async function setVendVenta(id,vend){
   }
   renderVentas();
   if(typeof offlineSaveVentas==='function')offlineSaveVentas();
-  var avisoFolio=puede&&/Folio \d/i.test(v.nota||'')?' · ⚠ es venta de folio: si el cliente está asignado a '+vend+', sus abonos también comisionan (evita duplicar)':'';
+  var avisoFolio=esFolio?' · ℹ venta a crédito: comisiona al cobrar los abonos, no al vender':'';
   if(typeof syncSaveVenta==='function'){
     var ok=await syncSaveVenta(v);
     showToast(ok?('✓ Venta asignada a '+vend+(puede&&v.comPct>0?' · '+v.comPct+'% = '+fN(v.comUSD)+' USD':'')+avisoFolio):'⚠ No se guardó (se reintentará)');
