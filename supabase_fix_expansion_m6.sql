@@ -1,3 +1,11 @@
+-- ╔══════════════════════════════════════════════════════════════════╗
+-- ║  YA APLICADO el 24/08/2026 a las 18:42 — NO VOLVER A EJECUTAR    ║
+-- ║  Stock resultante verificado: 30.889 uds (correcto).             ║
+-- ║  Si se ejecuta otra vez, el INSERT falla por id duplicado (eso   ║
+-- ║  protege el UPDATE de sumarse dos veces), pero no hay que        ║
+-- ║  correrlo: el ajuste ya está hecho.                              ║
+-- ╚══════════════════════════════════════════════════════════════════╝
+
 -- ════════════════════════════════════════════════════════════════════
 -- AJUSTE: EXPANSIÓN MECÁNICA M6 (Ø8) x 50 mm CON ANILLA (id 1025)
 -- Habana · lote "# 13 Mixto 20'DV"        Ejecutar en Supabase → SQL Editor
