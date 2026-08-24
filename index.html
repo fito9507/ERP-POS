@@ -4927,7 +4927,7 @@ function renderVentas(){
         <div style="font-size:11px">${fD(v.fecha)} ${v.hora?'<span style="color:var(--color-text-secondary);font-weight:500">'+v.hora+'</span>':''}</div>
         ${v.ticket?'<div style="font-size:9px;color:var(--color-text-tertiary);opacity:.8;margin-top:2px">'+v.ticket+'</div>':''}
       </td>
-      <td><span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span></td>
+      <td>${_isVend?`<span class="chip" style="background:${v.vend==='Keiler'?'var(--color-background-info)':'var(--color-background-warning)'};color:${v.vend==='Keiler'?'var(--color-text-info)':'var(--color-text-warning)'};font-size:10px;padding:2px 6px">${v.vend}</span>`:`<select class="est-sel" onchange="setVendVenta(${v.id},this.value)" title="Reasignar vendedor" style="font-size:10px;max-width:80px">${Object.keys(USERS).map(u=>`<option${u===v.vend?' selected':''}>${u}</option>`).join('')}${USERS[v.vend]?'':`<option selected>${v.vend}</option>`}</select>`}</td>
       <td style="font-size:11px">${v.alm}</td>
       <td style="font-size:11px;color:var(--color-text-secondary);max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${v.cli} ${(CLIENTES.find(c=>c.nombre===v.cli)||{}).tel||''}">${v.cli}<br><span style="font-size:9px;color:var(--color-text-tertiary)">${(CLIENTES.find(c=>c.nombre===v.cli)||{}).tel||''}</span></td>
       <td><span class="badge ${v.tipo==='Mayorista'?'bg':'bb'}" style="font-size:9px">${v.tipo==='Mayorista'?'May':'Min'}</span></td>
@@ -5004,6 +5004,31 @@ function getSelIds(){
 }
 
 // ── ACCIONES ──────────────────────────────────────────────
+// Reasignar el vendedor de una venta (solo admin). Si el nuevo vendedor
+// comisiona, se recalcula (respetando el % de la fila si ya lo tiene) y
+// queda Pendiente a su nombre; si no comisiona, No aplica.
+async function setVendVenta(id,vend){
+  const v=VENTAS.find(x=>x.id===id);if(!v||v.vend===vend)return;
+  v.vend=vend;
+  var puede=USERS[vend]&&USERS[vend].aComision!==false;
+  if(puede){
+    var pct=parseFloat(v.comPct)||0;
+    if(!(pct>0))pct=typeof getComPct==='function'?(parseFloat(getComPct(vend,null,null,v.alm))||0):0;
+    v.comPct=pct;
+    v.comUSD=parseFloat(((v.totalUSD||0)*pct/100).toFixed(2));
+    if(v.estCom!=='Pagada')v.estCom=pct>0?'Pendiente':'No aplica';
+  }else{
+    v.comPct=0;v.comUSD=0;v.comDetalle={};if(v.estCom!=='Pagada')v.estCom='No aplica';
+  }
+  renderVentas();
+  if(typeof offlineSaveVentas==='function')offlineSaveVentas();
+  var avisoFolio=puede&&/Folio \d/i.test(v.nota||'')?' · ⚠ es venta de folio: si el cliente está asignado a '+vend+', sus abonos también comisionan (evita duplicar)':'';
+  if(typeof syncSaveVenta==='function'){
+    var ok=await syncSaveVenta(v);
+    showToast(ok?('✓ Venta asignada a '+vend+(puede&&v.comPct>0?' · '+v.comPct+'% = '+fN(v.comUSD)+' USD':'')+avisoFolio):'⚠ No se guardó (se reintentará)');
+  }
+}
+
 async function updComPct(id,val){
   const v=VENTAS.find(x=>x.id===id);if(!v)return;
   v.comPct=parseFloat(val)||0;
