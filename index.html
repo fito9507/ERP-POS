@@ -12167,12 +12167,15 @@ function _calcMcDestino() {
 
   if (!destEl) return;
   var montoDest = monto;
+  // OJO: es un <input type="number">, hay que darle el numero crudo.
+  // Con fN() llegaba "7.352,94" (formato es-ES), el navegador lo
+  // rechazaba y el campo se quedaba vacio mostrando 0.00.
   if (tipo==='transferencia') {
-    destEl.value=fN(monto,2);
+    destEl.value = monto ? parseFloat(monto.toFixed(2)) : '';
   } else if (tipo==='cambio') {
     if (divOp && tasa>0) montoDest = monto/tasa;
     else montoDest = monto*tasa;
-    destEl.value=fN(montoDest,2);
+    destEl.value = montoDest ? parseFloat(montoDest.toFixed(2)) : '';
   }
   // Update balance preview
   _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD);
@@ -12266,6 +12269,12 @@ function _onMcDestManual() {
     if(hiEl) {
       if (divOp) hiEl.textContent = t + ' ' + monO + ' = 1 ' + monD;
       else hiEl.textContent = '1 ' + monO + ' = ' + t + ' ' + monD;
+    }
+    // Refrescar tambien la previsualizacion de saldos con el importe
+    // que acaba de teclear el usuario (antes se quedaba con el viejo).
+    if (typeof _updateBalancePreview === 'function') {
+      var _tipo = document.getElementById('mc-tipo') ? document.getElementById('mc-tipo').value : 'cambio';
+      try { _updateBalancePreview(_tipo, orig, dc, monto, dest, monO, monD); } catch(e) {}
     }
   }
 }
