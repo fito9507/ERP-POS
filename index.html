@@ -12062,6 +12062,12 @@ function _renderNuevoMovCaja() {
     + '<label class="adm-lbl-f">Resultado <span id="mc-mon-dest-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
     + '<input class="adm-inp" type="number" id="mc-monto-dest" step="0.01" placeholder="0.00" oninput="_onMcDestManual()" style="font-size:20px;font-weight:600;height:46px">'
     + '</div>'
+    // Comision de la operacion (banco / cambista): se descuenta del destino
+    + '<div id="mc-com-wrap" style="display:none">'
+    + '<label class="adm-lbl-f">Comisión de la operación <span id="mc-com-mon" style="color:var(--color-text-tertiary);font-weight:600"></span> <span style="font-size:10px;color:var(--color-text-tertiary)">(banco, cambista… se resta de lo que llega)</span></label>'
+    + '<input class="adm-inp" type="number" id="mc-comision" step="0.01" placeholder="0.00" oninput="_calcMcDestino()">'
+    + '<div id="mc-com-neto" style="font-size:11px;color:var(--color-text-secondary);margin-top:4px"></div>'
+    + '</div>'
     // Fecha y notas
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
     + '<div><label class="adm-lbl-f">Fecha</label><input class="adm-inp" type="date" id="mc-fecha" value="'+today()+'"></div>'
@@ -12073,6 +12079,8 @@ function _renderNuevoMovCaja() {
 
 function _onMcTipoChange() {
   var tipo = document.getElementById('mc-tipo')?.value;
+  var cw=document.getElementById('mc-com-wrap');
+  if(cw) cw.style.display=(tipo==='cambio'||tipo==='transferencia')?'':'none';
   var dw=document.getElementById('mc-destino-wrap'), tw=document.getElementById('mc-tasa-wrap');
   var ddw=document.getElementById('mc-dest-wrap'),   ol=document.getElementById('mc-origen-lbl');
   if (tipo==='deposito') {
@@ -12177,8 +12185,20 @@ function _calcMcDestino() {
     else montoDest = monto*tasa;
     destEl.value = montoDest ? parseFloat(montoDest.toFixed(2)) : '';
   }
-  // Update balance preview
-  _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD);
+  // La comision se la queda el banco/cambista: al destino llega menos
+  var com=parseFloat(document.getElementById('mc-comision')?.value)||0;
+  var cmEl=document.getElementById('mc-com-mon');
+  if(cmEl) cmEl.textContent=monD?('('+monD+')'):'';
+  var netoEl=document.getElementById('mc-com-neto');
+  var neto=montoDest-com;
+  if(netoEl){
+    netoEl.textContent = com>0
+      ? ('Entra en ' + (dest||'destino') + ': ' + fN(neto,2) + ' ' + monD + '  (' + fN(montoDest,2) + ' \u2212 ' + fN(com,2) + ' de comisi\u00f3n)')
+      : '';
+    netoEl.style.color = neto<0 ? 'var(--color-text-danger)' : 'var(--color-text-secondary)';
+  }
+  // Update balance preview (con lo que realmente entra)
+  _updateBalancePreview(tipo, orig, dest, monto, neto, monO, monD);
 }
 
 function _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD) {
@@ -12285,6 +12305,9 @@ async function admRegistrarMovCaja() {
   var dest=document.getElementById('mc-destino')?.value;
   var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
   var montoDest=parseFloat(document.getElementById('mc-monto-dest')?.value)||monto;
+  var comOp=parseFloat(document.getElementById('mc-comision')?.value)||0;
+  // Lo que de verdad entra en la caja destino, ya sin la comision
+  if(comOp>0) montoDest=parseFloat((montoDest-comOp).toFixed(4));
   var tasa=parseFloat(document.getElementById('mc-tasa')?.value)||null;
   var fecha=document.getElementById('mc-fecha')?.value||today();
   var notas=document.getElementById('mc-notas')?.value||'';
@@ -12385,10 +12408,20 @@ async function admRegistrarMovCaja() {
           cuenta: dest, vendedor: usuario, notas: notas
         }).catch(function(e){console.warn('ig cambio entrada:',e);});
       }
+      // La comision de la operacion, como gasto (para que se vea el coste)
+      if(comOp>0){
+        supaReq('POST','movimientos_ig',{
+          fecha:fecha, tipo:'Gasto operativo',
+          descripcion:'Comisi\u00f3n ' + (tipo==='cambio'?'de cambio':'de transferencia') + ' ' + orig + ' \u2192 ' + dest,
+          monto: comOp, moneda: _monD,
+          equiv_usd: parseFloat((comOp*(_RATES_USD[_monD]||1)).toFixed(4)),
+          cuenta: dest, vendedor: usuario, notas: notas
+        }).catch(function(e){console.warn('ig comision op:',e);});
+      }
       // Reload I/G if visible
       if(typeof syncLoadMovsIG==='function') syncLoadMovsIG().catch(function(){});
 
-      ['mc-monto','mc-monto-dest','mc-notas'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+      ['mc-monto','mc-monto-dest','mc-notas','mc-comision'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
       _setCajasTab('resumen');
     } else {
       // El servidor rechazo la escritura: encolar para reintentar,
