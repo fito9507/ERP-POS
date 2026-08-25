@@ -13686,18 +13686,24 @@ function getSelectedModulos() {
 
 <script>
 async function syncStockUpdate(cart, alm) {
-  if (!_supaOnline) return;
+  // OJO: antes esto era `if (!_supaOnline) return;` y sin internet el
+  // descuento de stock se perdia (la venta si se encolaba). Ahora se
+  // ejecuta igual: adjustStockByDelta escribe via _stockUpsert, que
+  // encola la fila cuando no hay red y la manda al reconectar.
   for (var c of cart) {
     var p = PRODS.find(function(x){ return x.n === c.n; });
     if (!p) continue;
-    // Lookup supaId by nombre if missing
-    if (!p.supaId) {
+    // Lookup supaId by nombre if missing (solo posible con conexion)
+    if (!p.supaId && _supaOnline) {
       try {
         var lr = await supaReq('GET', 'productos?nombre=eq.'+encodeURIComponent(p.n)+'&select=id');
         if (lr.ok) { var ld = await lr.json(); if (ld&&ld[0]) p.supaId = ld[0].id; }
       } catch(e) {}
     }
-    if (!p.supaId) continue;
+    if (!p.supaId) {
+      console.warn('syncStockUpdate: producto sin id en Supabase, descuento pendiente:', p.n, c.q);
+      continue;
+    }
     // Descontar usando el motor de lotes (FIFO) en lugar de parchear destructivamente todos los lotes a la vez
     try {
       await adjustStockByDelta(p, alm, -c.q, c.lote, {strictLote: true});
