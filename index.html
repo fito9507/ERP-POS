@@ -17777,6 +17777,116 @@ function _iaBuildContext() {
     });
   }
 
+  // ── Prestamos y deudas (saldo pendiente de cada uno) ──
+  var deudas = [];
+  if (typeof PRESTAMOS !== 'undefined' && Array.isArray(PRESTAMOS)) {
+    PRESTAMOS.forEach(function(p) {
+      var pagado = 0;
+      try {
+        var pg = typeof p.pagos === 'string' ? JSON.parse(p.pagos || '[]') : (p.pagos || []);
+        pg.forEach(function(x) { pagado += parseFloat(x.monto || x.total || 0) || 0; });
+      } catch (e) {}
+      var cap = parseFloat(p.capital || 0) || 0;
+      var pend = Math.round((cap - pagado) * 100) / 100;
+      if (pend > 0.01 || cap > 0) {
+        deudas.push({ nombre: p.nombre || p.id, tipo: p.tipo || '', capital: cap,
+          pagado: Math.round(pagado * 100) / 100, pendiente: pend,
+          moneda: p.moneda || 'USD', tasa_mensual_pct: parseFloat(p.tasa || 0) || 0,
+          sentido: (p.esPorCobrar || p.por_cobrar) ? 'nos deben' : 'debemos' });
+      }
+    });
+  }
+
+  // ── Gastos e ingresos recientes (libro I/G) ──
+  var movsRecientes = [], gastoMes = 0, ingresoMes = 0;
+  var _mesActual = (typeof today === 'function' ? today() : '').slice(0, 7);
+  if (typeof MOVS !== 'undefined' && Array.isArray(MOVS)) {
+    MOVS.slice(0, 25).forEach(function(m) {
+      movsRecientes.push({ fecha: m.fecha, tipo: m.tipo, desc: (m.desc || '').slice(0, 60),
+        monto: m.monto, moneda: m.mon || 'USD', usd: Math.round((m.equivUSD || 0) * 100) / 100,
+        cuenta: m.cta || '' });
+    });
+    MOVS.forEach(function(m) {
+      if (String(m.fecha || '').slice(0, 7) !== _mesActual) return;
+      if (m.sentido === 'ingreso') ingresoMes += (m.equivUSD || 0);
+      else gastoMes += (m.equivUSD || 0);
+    });
+  }
+
+  // ── Comisiones pendientes por vendedor ──
+  var comisiones = {};
+  if (typeof VENTAS !== 'undefined') {
+    VENTAS.forEach(function(v) {
+      if (!v.comUSD || v.estCom === 'No aplica' || v.estCom === 'Pagada') return;
+      comisiones[v.vend] = (comisiones[v.vend] || 0) + v.comUSD;
+    });
+  }
+  if (typeof COMS !== 'undefined' && Array.isArray(COMS)) {
+    COMS.forEach(function(x) {
+      if (x.estado === 'Pagada') return;
+      comisiones[x.vendedor] = (comisiones[x.vendedor] || 0) + (parseFloat(x.com_usd) || 0);
+    });
+  }
+  var comisionesPend = Object.keys(comisiones).map(function(k) {
+    return { vendedor: k, pendiente_usd: Math.round(comisiones[k] * 100) / 100 };
+  });
+
+  // ── Stock por contenedor: que queda de cada lote ──
+  var stockLotes = {};
+  if (typeof PRODS !== 'undefined') {
+    PRODS.forEach(function(p) {
+      (p.lotes || []).forEach(function(l) {
+        var q = parseFloat(l.cantidad) || 0;
+        if (q <= 0) return;
+        var k = l.lote || 'SIN LOTE';
+        if (!stockLotes[k]) stockLotes[k] = { lote: k, unidades: 0, productos: [] };
+        stockLotes[k].unidades += q;
+        if (stockLotes[k].productos.length < 12) stockLotes[k].productos.push(p.n + ': ' + q);
+      });
+    });
+  }
+
+  // ── Analitica: ventas del mes, top productos y clientes ──
+  var ventasMes = 0, nVentasMes = 0, porProd = {}, porCli = {};
+  if (typeof VENTAS !== 'undefined') {
+    VENTAS.forEach(function(v) {
+      if (String(v.fecha || '').slice(0, 7) !== _mesActual) return;
+      ventasMes += (v.totalUSD || 0); nVentasMes++;
+      porCli[v.cli || 'Walk-in'] = (porCli[v.cli || 'Walk-in'] || 0) + (v.totalUSD || 0);
+      String(v.prods || '').split(/,\s*(?=[\d.]+\s*[\u00d7x]\s)/).forEach(function(seg) {
+        var m = seg.trim().match(/^([\d.]+)\s*\u00d7\s+(.+?)(?:\s+@.*)?$/);
+        if (m) porProd[m[2].trim()] = (porProd[m[2].trim()] || 0) + parseInt(m[1].replace(/\./g, ''), 10);
+      });
+    });
+  }
+  var top = function(o, n) {
+    return Object.keys(o).sort(function(a, b) { return o[b] - o[a]; }).slice(0, n)
+      .map(function(k) { return { nombre: k, valor: Math.round(o[k] * 100) / 100 }; });
+  };
+
+  // ── Resumen financiero de una ojeada ──
+  var dineroCajas = 0;
+  cajas.forEach(function(c2) {
+    var r = { USD: 1, EUR: 1 / (RATES.EUR || 1), CUP: 1 / (RATES.CUP || 1), CUPT: 1 / (RATES.CUPT || 1) };
+    dineroCajas += (c2.saldo || 0) * (r[c2.moneda] || 1);
+  });
+  var deudaClientes = 0;
+  foliosPendientes.forEach(function(f) { deudaClientes += f.pendiente || 0; });
+  var valorStock = 0;
+  if (typeof PRODS !== 'undefined') {
+    PRODS.forEach(function(p) { valorStock += (p.stk || 0) * (parseFloat(p.ddp || p.cif || 0) || 0); });
+  }
+
+  // ── Vendedores ──
+  var vendedores = [];
+  if (typeof USERS !== 'undefined') {
+    Object.keys(USERS).forEach(function(u) {
+      var d = USERS[u] || {};
+      if (d.activo === false) return;
+      vendedores.push({ nombre: u, rol: d.rol || '', almacen: d.almacen || '', comisiona: d.aComision !== false });
+    });
+  }
+
   var listaClientes = [];
   if (typeof CLIENTES !== 'undefined') {
     CLIENTES.forEach(function(c) {
@@ -17795,13 +17905,34 @@ function _iaBuildContext() {
     ventas_recientes: ventasRecientes,
     reservas_activas: reservasActivas,
     clientes: listaClientes,
+    resumen_financiero: {
+      dinero_en_cajas_usd: Math.round(dineroCajas * 100) / 100,
+      deuda_clientes_usd: Math.round(deudaClientes * 100) / 100,
+      valor_stock_coste_usd: Math.round(valorStock * 100) / 100,
+      ventas_mes_usd: Math.round(ventasMes * 100) / 100,
+      n_ventas_mes: nVentasMes,
+      ingresos_mes_usd: Math.round(ingresoMes * 100) / 100,
+      gastos_mes_usd: Math.round(gastoMes * 100) / 100
+    },
+    deudas_y_prestamos: deudas,
+    movimientos_recientes: movsRecientes,
+    comisiones_pendientes: comisionesPend,
+    stock_por_contenedor: Object.keys(stockLotes).map(function(k) { return stockLotes[k]; }),
+    top_productos_mes: top(porProd, 8),
+    top_clientes_mes: top(porCli, 8),
+    vendedores: vendedores,
     fecha_hoy: typeof today === 'function' ? today() : new Date().toISOString().slice(0, 10)
   };
 
 }
 
 function _iaBuildSystemPrompt(context) {
-  return 'Eres el asistente operativo del ERP de Xportprise: contabilidad, inventario, ventas, folios (ventas a crédito) y reservas. '
+  return 'Eres el asistente operativo del ERP de Xportprise: contabilidad, inventario, ventas, folios (ventas a cr\u00e9dito), reservas, '
+    + 'finanzas (cajas, deudas y pr\u00e9stamos), comisiones de vendedores, importaciones por contenedor y an\u00e1lisis del negocio. '
+    + 'Tienes datos reales y actualizados de todas esas \u00e1reas m\u00e1s abajo: \u00daSALOS para responder cualquier pregunta sobre el negocio '
+    + '(cu\u00e1nto dinero hay, qui\u00e9n debe, qu\u00e9 se vende m\u00e1s, qu\u00e9 queda de un contenedor, cu\u00e1nto se le debe a un vendedor, '
+    + 'en qu\u00e9 se gast\u00f3 el mes, qu\u00e9 producto conviene reponer...). Responde con las cifras concretas que tienes, no en general. '
+    + 'Si te preguntan algo cuyo dato NO est\u00e9 en el contexto, dilo claramente en vez de inventarlo. '
     + 'Interpretas lo que el usuario describe (lenguaje natural, chats de WhatsApp, comprobantes, fotos, CSV) y propones las operaciones exactas, '
     + 'o respondes consultas directamente con los datos del contexto.\n\n'
     + '## ESTADO ACTUAL DEL ERP\n'
@@ -17811,6 +17942,14 @@ function _iaBuildSystemPrompt(context) {
     + '### Últimas ventas:\n' + JSON.stringify(context.ventas_recientes, null, 1) + '\n\n'
     + '### Reservas activas (stock apartado, pendiente de cobrar):\n' + JSON.stringify(context.reservas_activas, null, 1) + '\n\n'
     + '### Contenedores de importaci\u00f3n:\n' + JSON.stringify(context.contenedores, null, 1) + '\n\n'
+    + '### Resumen financiero (USD):\n' + JSON.stringify(context.resumen_financiero, null, 1) + '\n\n'
+    + '### Deudas y pr\u00e9stamos:\n' + JSON.stringify(context.deudas_y_prestamos, null, 1) + '\n\n'
+    + '### \u00daltimos movimientos de ingresos y gastos:\n' + JSON.stringify(context.movimientos_recientes, null, 1) + '\n\n'
+    + '### Comisiones pendientes de pagar:\n' + JSON.stringify(context.comisiones_pendientes, null, 1) + '\n\n'
+    + '### Stock que queda de cada contenedor:\n' + JSON.stringify(context.stock_por_contenedor, null, 1) + '\n\n'
+    + '### Lo m\u00e1s vendido este mes (unidades):\n' + JSON.stringify(context.top_productos_mes, null, 1) + '\n\n'
+    + '### Mejores clientes del mes (USD):\n' + JSON.stringify(context.top_clientes_mes, null, 1) + '\n\n'
+    + '### Vendedores:\n' + JSON.stringify(context.vendedores, null, 1) + '\n\n'
     + '### Folios pendientes de cobro (ventas a crédito):\n' + JSON.stringify(context.folios_pendientes, null, 1) + '\n\n'
     + '### Clientes:\n' + JSON.stringify(context.clientes, null, 1) + '\n\n'
     + '### Tasas de cambio:\n' + JSON.stringify(context.tasas) + '\n\n'
