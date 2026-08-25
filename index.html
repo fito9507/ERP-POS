@@ -1236,6 +1236,17 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   </div>
   <div class="g4" id="c-metrics"></div>
   <div class="g1">
+    <div class="card" id="c-cierre-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <h3 style="margin:0">🧾 Cierre de comisiones</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-sm" onclick="cierreComRango(0)">Esta semana</button>
+          <button class="btn-sm" onclick="cierreComRango(-1)">Semana pasada</button>
+          <button class="btn-sm" onclick="copiarCierreCom()">📋 Copiar</button>
+        </div>
+      </div>
+      <div id="c-cierre-body"></div>
+    </div>
     <div class="card">
       <h3>Resumen Acumulado por Vendedor y Almacén</h3>
       <div style="overflow-x:auto"><table><thead><tr><th>Vendedor</th><th>Almacén</th><th>% com.</th><th>Venta USD</th><th>Com. USD</th><th>Com. EUR</th><th>Com. CUP</th><th>Estado</th></tr></thead>
@@ -4258,7 +4269,7 @@ function ventaCreditoPOS() {
     }
     if(ini>0) newFolio.abonos.push(abonos[0]);
   } else {
-    newFolio={id:fid,fecha,alm,mon,desc,contenedor:cntVal,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+    newFolio={id:fid,fecha,alm,mon,desc,contenedor:cntVal,vend:(typeof S!=='undefined'&&S.user)||'',lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
     c.folios.push(newFolio);
   }
   
@@ -4774,19 +4785,43 @@ async function loadComisiones(){
   }catch(e){ console.warn('loadComisiones:',e); }
 }
 
+// % de comision de un FOLIO: media ponderada de sus lineas, para que
+// las excepciones por producto (p.ej. silicona al 1,5%) valgan tambien
+// en las ventas a credito. Un abono es dinero y no sabe que se vendio,
+// asi que el porcentaje se hereda del folio que esta pagando.
+function _pctFolio(vend, f, alm){
+  var lineas = (f && f.lineas) || [];
+  var base = 0, acum = 0;
+  lineas.forEach(function(l){
+    var nom = l.prod || l.n || '';
+    var imp = (parseFloat(l.q) || 0) * (parseFloat(l.precio) || 0);
+    if (!(imp > 0)) return;
+    var pr = typeof PRODS !== 'undefined' ? PRODS.find(function(x){ return x.n === nom; }) : null;
+    var pct = typeof getComPct === 'function'
+      ? (parseFloat(getComPct(vend, nom, pr ? pr.cat : null, alm)) || 0) : 0;
+    base += imp; acum += imp * pct;
+  });
+  if (!(base > 0)) return typeof getComPct === 'function' ? (parseFloat(getComPct(vend, null, null, alm)) || 0) : 0;
+  return Math.round((acum / base) * 10000) / 10000;
+}
+
 function _comisionDeAbono(cid, fid, ab){
   try{
     var base=parseFloat(ab&&(ab.equivUSD!=null?ab.equivUSD:ab.equiv_usd))||0;
     if(!(base>0)) return;
     var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
-    var vend=c.owner||'';
+    var _f0=(c.folios||[]).find(function(x){return String(x.id)===String(fid);});
+    // Comisiona QUIEN HIZO LA VENTA (guardado en el folio). El dueno
+    // del cliente es solo el respaldo de los folios antiguos.
+    var vend=(_f0&&_f0.vend)||c.owner||'';
     if(!vend||!USERS[vend]||USERS[vend].aComision===false) return;
     // idempotente: si ya existe y avanzo de estado, no tocarla
     var prev=COMS.find(function(x){return x.id==='com-'+ab.id;});
     if(prev&&prev.estado&&prev.estado!=='Pendiente') return;
-    var f=(c.folios||[]).find(function(x){return String(x.id)===String(fid);});
+    var f=_f0;
     var alm=(f&&f.alm)||c.alm||c.almacen||'';
-    var pct=typeof getComPct==='function'?parseFloat(getComPct(vend,null,null,alm))||0:0;
+    // % ponderado de las lineas del folio (respeta las excepciones por producto)
+    var pct=_pctFolio(vend,f,alm);
     if(!(pct>0)) return;
     var com={
       id:'com-'+ab.id, fecha:ab.fecha||today(), vendedor:vend, origen:'abono',
@@ -5527,6 +5562,7 @@ function renderCom(){
     grupos[k].vUSD+=parseFloat(x.base_usd)||0;grupos[k].comUSD+=parseFloat(x.com_usd)||0;
     if(_comsPdteF(x))grupos[k].pdte+=parseFloat(x.com_usd)||0;
   });
+  _renderCierreCom(desde, hasta, data, comsF);
   _renderComDetalle(comsF, data);
   document.getElementById('c-grupos').innerHTML=Object.values(grupos).map(g=>`<tr>
     <td><strong>${g.vend}</strong></td><td>${g.alm}</td>
@@ -5537,6 +5573,83 @@ function renderCom(){
     <td style="text-align:right">${fN(fromUSD(g.comUSD,'CUP'),0)}</td>
     <td><span class="badge ${g.pdte<0.01?'bg':'ba'}">${g.pdte<0.01?'Liquidado':fN(g.pdte)+' pdte.'}</span></td>
   </tr>`).join('')||'<tr><td colspan="8" style="color:var(--color-text-tertiary);text-align:center;padding:10px">Sin datos</td></tr>';
+}
+
+// ── Cierre de comisiones: lo que hay que pagar y de donde sale ──
+function _renderCierreCom(desde, hasta, ventas, coms){
+  var el=document.getElementById('c-cierre-body'); if(!el) return;
+  var pdte=function(e){ return e==='Pendiente'||e==='Liquidada (Pdte)'||!e; };
+  var acc={};
+  var tocar=function(v){ if(!acc[v]) acc[v]={vend:v,nVta:0,baseVta:0,comVta:0,nCob:0,baseCob:0,comCob:0,rev:0,pagado:0}; return acc[v]; };
+  (ventas||[]).forEach(function(v){
+    if(!v.comUSD) return;
+    var a=tocar(v.vend||'(sin vendedor)');
+    if(v.estCom==='Pagada'){ a.pagado+=v.comUSD; return; }
+    a.nVta++; a.baseVta+=(v.totalUSD||0); a.comVta+=v.comUSD;
+  });
+  (coms||[]).forEach(function(x){
+    var com=parseFloat(x.com_usd)||0;
+    var a=tocar(x.vendedor||'(sin vendedor)');
+    if(x.estado==='Pagada'){ a.pagado+=com; return; }
+    if(com<0 || x.origen==='reverso'){ a.rev+=com; return; }
+    a.nCob++; a.baseCob+=(parseFloat(x.base_usd)||0); a.comCob+=com;
+  });
+  var filas=Object.keys(acc).map(function(k){ return acc[k]; })
+    .filter(function(a){ return a.comVta||a.comCob||a.rev||a.pagado; });
+  var rango=(desde||hasta)?((desde?fD(desde):'inicio')+' a '+(hasta?fD(hasta):'hoy')):'todo el histórico';
+  if(!filas.length){ el.innerHTML='<div style="color:var(--color-text-tertiary);font-size:12px">Sin comisiones en '+rango+'</div>'; window._cierreComTxt=''; return; }
+  var h='<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:10px">Periodo: <b>'+rango+'</b></div>';
+  var txt='CIERRE DE COMISIONES\n'+rango+'\n';
+  var granTotal=0;
+  filas.sort(function(a,b){ return (b.comVta+b.comCob+b.rev)-(a.comVta+a.comCob+a.rev); });
+  filas.forEach(function(a){
+    var aPagar=a.comVta+a.comCob+a.rev;
+    granTotal+=aPagar;
+    h+='<div style="border:1px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+      +'<b style="font-size:14px">'+a.vend+'</b>'
+      +'<span style="font-size:16px;font-weight:800;color:'+(aPagar>=0?'var(--color-text-warning)':'var(--color-text-danger)')+'">'+fN(aPagar)+' USD</span></div>'
+      +'<table style="width:100%;font-size:11px;border-collapse:collapse">'
+      +'<tr><td>Ventas de contado ('+a.nVta+')</td><td style="text-align:right;color:var(--color-text-secondary)">sobre '+fN(a.baseVta)+'</td><td style="text-align:right;font-weight:600">'+fN(a.comVta)+'</td></tr>'
+      +'<tr><td>Cobros de folios ('+a.nCob+')</td><td style="text-align:right;color:var(--color-text-secondary)">sobre '+fN(a.baseCob)+'</td><td style="text-align:right;font-weight:600">'+fN(a.comCob)+'</td></tr>'
+      +(a.rev?'<tr><td style="color:var(--color-text-danger)">Reversos (anulaciones ya pagadas)</td><td></td><td style="text-align:right;font-weight:600;color:var(--color-text-danger)">'+fN(a.rev)+'</td></tr>':'')
+      +'<tr style="border-top:1px solid var(--color-border-tertiary)"><td style="font-weight:700;padding-top:4px">A PAGAR</td><td></td><td style="text-align:right;font-weight:800;padding-top:4px">'+fN(aPagar)+' USD</td></tr>'
+      +(a.pagado?'<tr><td style="color:var(--color-text-success);font-size:10px">Ya pagado en este periodo</td><td></td><td style="text-align:right;color:var(--color-text-success);font-size:10px">'+fN(a.pagado)+'</td></tr>':'')
+      +'</table></div>';
+    txt+='\n'+a.vend+'\n'
+      +'  Ventas contado ('+a.nVta+'): '+fN(a.baseVta)+' USD -> '+fN(a.comVta)+'\n'
+      +'  Cobros de folios ('+a.nCob+'): '+fN(a.baseCob)+' USD -> '+fN(a.comCob)+'\n'
+      +(a.rev?'  Reversos: '+fN(a.rev)+'\n':'')
+      +'  A PAGAR: '+fN(aPagar)+' USD\n';
+  });
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--color-border-secondary);padding-top:10px;margin-top:4px">'
+    +'<span style="font-weight:600">TOTAL A PAGAR</span>'
+    +'<span style="font-size:20px;font-weight:800;color:var(--color-text-warning)">'+fN(granTotal)+' USD</span></div>';
+  txt+='\nTOTAL A PAGAR: '+fN(granTotal)+' USD';
+  el.innerHTML=h;
+  window._cierreComTxt=txt;
+}
+
+// Rango rapido: 0 = semana actual (lunes a hoy), -1 = semana pasada
+function cierreComRango(delta){
+  var hoy=new Date();
+  var dow=(hoy.getDay()+6)%7; // lunes=0
+  var lunes=new Date(hoy); lunes.setDate(hoy.getDate()-dow+(delta*7));
+  var fin=new Date(lunes); fin.setDate(lunes.getDate()+6);
+  var f=function(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+  var de=document.getElementById('c-desde'), ha=document.getElementById('c-hasta');
+  if(de) de.value=f(lunes);
+  if(ha) ha.value=f(delta<0?fin:hoy);
+  renderCom();
+}
+
+function copiarCierreCom(){
+  var t=window._cierreComTxt||'';
+  if(!t){ showToast('No hay cierre que copiar'); return; }
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(function(){ showToast('\u2713 Cierre copiado'); })
+      .catch(function(){ showToast('No se pudo copiar'); });
+  } else { showToast('Este navegador no permite copiar'); }
 }
 
 // Detalle auditable de las comisiones (de donde sale cada USD)
@@ -9385,6 +9498,23 @@ async function elimA(cid,fid,aid){
       if(_cxA&&_cxA.estado!=='Pagada'){
         COMS=COMS.filter(function(x){return x.id!==_cxA.id;});
         if(_supaOnline&&typeof supaReq!=='undefined') supaReq('DELETE','comisiones?id=eq.'+encodeURIComponent(_cxA.id)).catch(function(e){});
+      } else if(_cxA&&_cxA.estado==='Pagada'){
+        // Ya se le pago: no se borra (falsearia el historico). Se crea
+        // un contra-apunte negativo que se descuenta en la proxima
+        // liquidacion del vendedor.
+        var _rev={
+          id:'com-rev-'+aid, fecha:(typeof today==='function'?today():_cxA.fecha),
+          vendedor:_cxA.vendedor, origen:'reverso', abono_id:String(aid),
+          folio_id:_cxA.folio_id, cliente:_cxA.cliente, almacen:_cxA.almacen,
+          base_usd:-(parseFloat(_cxA.base_usd)||0), pct:_cxA.pct,
+          com_usd:-(parseFloat(_cxA.com_usd)||0), moneda:_cxA.moneda,
+          monto:-(parseFloat(_cxA.monto)||0), caja:_cxA.caja, estado:'Pendiente'
+        };
+        COMS.push(_rev);
+        if(_supaOnline&&typeof supaReq!=='undefined'){
+          supaReq('POST','comisiones?on_conflict=id',_rev).catch(function(e){});
+        } else { try{ enqueue({method:'POST',path:'comisiones?on_conflict=id',body:_rev}); }catch(e){} }
+        try{ showToast('\u21a9 Comisi\u00f3n ya pagada: se descontar\u00e1 '+fN(Math.abs(_rev.com_usd))+' USD en la pr\u00f3xima liquidaci\u00f3n de '+_rev.vendedor); }catch(e){}
       }
     }
   }catch(e){}
