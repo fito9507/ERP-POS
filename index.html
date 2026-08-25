@@ -1906,6 +1906,35 @@ window.addEventListener('online', function() {
 });
 window.addEventListener('offline', function() { _supaOnline = false; updOnlineDot(); });
 
+// El service worker avisa cuando ha vaciado la cola por su cuenta
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', function(e) {
+    if (!e.data || e.data.tipo !== 'cola-vaciada') return;
+    _idbTodasOps().then(function(quedan) {
+      var vivos = {};
+      (quedan || []).forEach(function(o) { if (o.qid) vivos[o.qid] = true; });
+      _syncQueue = _syncQueue.filter(function(o) { return !o.qid || vivos[o.qid]; });
+      try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(err) {}
+      updOnlineDot();
+      try { showToast('\u2601 ' + e.data.enviadas + ' operaci\u00f3n(es) sincronizada(s) en segundo plano'); } catch(err) {}
+    });
+  });
+  // Sincronizacion periodica: Chrome la concede a PWAs instaladas
+  navigator.serviceWorker.ready.then(function(reg) {
+    if (reg.periodicSync && reg.periodicSync.register) {
+      reg.periodicSync.register('erp-flush-periodico', { minInterval: 30 * 60 * 1000 }).catch(function(){});
+    }
+  }).catch(function(){});
+}
+
+// Reintento propio cada 2 minutos mientras la app siga abierta
+setInterval(function() {
+  if (_supaOnline && _syncQueue.length > 0) {
+    console.log('Reintento autom\u00e1tico de ' + _syncQueue.length + ' pendiente(s)');
+    flushQueue();
+  }
+}, 120000);
+
 // ── AUTO SYNC ─────────────────────────────────────────────
 var _lastSync = 0;
 async function _autoSync() {
@@ -2129,11 +2158,66 @@ async function enviarCierreDiario(fecha, isAuto) {
   showToast('\uD83D\uDCCA Cierre enviado');
 }
 
+// ── Cola en IndexedDB para la sincronizacion en segundo plano ──
+// El service worker no puede leer localStorage, asi que la cola se
+// espeja en IndexedDB: con eso el movil manda lo pendiente en cuanto
+// hay senal aunque la app este cerrada (Android/Chrome; en iPhone no
+// existe Background Sync y sincroniza al abrir, como antes).
+var _IDB_NOMBRE = 'erp-sync', _IDB_VER = 1, _idbP = null;
+function _idb() {
+  if (_idbP) return _idbP;
+  _idbP = new Promise(function(res, rej) {
+    if (!window.indexedDB) return rej(new Error('sin IndexedDB'));
+    var r = indexedDB.open(_IDB_NOMBRE, _IDB_VER);
+    r.onupgradeneeded = function() {
+      var db = r.result;
+      if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'qid' });
+      if (!db.objectStoreNames.contains('cfg')) db.createObjectStore('cfg', { keyPath: 'k' });
+    };
+    r.onsuccess = function() { res(r.result); };
+    r.onerror = function() { rej(r.error); };
+  }).catch(function(e) { console.warn('IndexedDB no disponible:', e && e.message); return null; });
+  return _idbP;
+}
+function _idbOp(store, modo, fn) {
+  return _idb().then(function(db) {
+    if (!db) return null;
+    return new Promise(function(res) {
+      try {
+        var st = db.transaction(store, modo).objectStore(store);
+        var pet = fn(st);
+        pet.onsuccess = function() { res(pet.result); };
+        pet.onerror = function() { res(null); };
+      } catch (e) { res(null); }
+    });
+  });
+}
+function _idbGuardarOp(op) { return _idbOp('queue', 'readwrite', function(st) { return st.put(op); }); }
+function _idbBorrarOp(qid) { return _idbOp('queue', 'readwrite', function(st) { return st.delete(qid); }); }
+function _idbTodasOps() { return _idbOp('queue', 'readonly', function(st) { return st.getAll(); }); }
+
+// Dejar las credenciales al alcance del service worker y pedirle que
+// despierte cuando vuelva la conexion.
+function _pedirSyncFondo() {
+  try {
+    _idbOp('cfg', 'readwrite', function(st) { return st.put({ k: 'supa', url: SUPA_URL, key: SUPA_KEY }); });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(function(reg) {
+        if (reg.sync && reg.sync.register) reg.sync.register('erp-flush').catch(function(){});
+        if (reg.active) reg.active.postMessage({ tipo: 'vaciar-cola' });
+      }).catch(function(){});
+    }
+  } catch (e) {}
+}
+
 function enqueue(op) {
   op.ts = Date.now();
+  if (!op.qid) op.qid = 'q-' + op.ts + '-' + Math.random().toString(36).slice(2, 9);
   _syncQueue.push(op);
   updOnlineDot();
   try { localStorage.setItem('erp_queue', JSON.stringify(_syncQueue)); } catch(e) {}
+  _idbGuardarOp(op);      // espejo para el service worker
+  _pedirSyncFondo();      // que lo mande el sistema aunque cerremos la app
 }
 
 // Write to Supabase if online, otherwise enqueue for later
@@ -2200,11 +2284,13 @@ async function flushQueue() {
         delete op.body.id;
       }
       var r = await supaReq(op.method, op.path, op.body);
+      if (r.ok && op.qid) _idbBorrarOp(op.qid);   // ya enviada: fuera del espejo
       if (!r.ok) {
         var _errBody = '';
         try { _errBody = await r.clone().text(); } catch(e2) {}
         console.warn('Queue op failed:', r.status, op.path, _errBody);
         if (r.status >= 400 && r.status < 500) {
+          if (op.qid) _idbBorrarOp(op.qid);
           // Error PERMANENTE: reintentarlo eternamente envenena la cola.
           var _colM = _errBody.match(/Could not find the '([A-Za-z_]+)' column/);
           if (op.path.indexOf('stock_almacen') === 0) {
