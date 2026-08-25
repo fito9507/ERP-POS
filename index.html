@@ -12149,10 +12149,20 @@ async function admRegistrarMovCaja() {
 
       ['mc-monto','mc-monto-dest','mc-notas'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
       _setCajasTab('resumen');
-    } else { showToast('Error al guardar'); }
+    } else {
+      // El servidor rechazo la escritura: encolar para reintentar,
+      // antes solo se avisaba y el movimiento se perdia.
+      _cajasMovs.unshift(row);
+      try { enqueue({method:'POST', path:'mov_cajas', body:row}); } catch(e) {}
+      showToast('\u26a0 No se pudo guardar en la nube: queda pendiente de sincronizar');
+      _setCajasTab('resumen');
+    }
   } else {
+    // Sin conexion: guardar local Y ENCOLAR (antes solo se guardaba
+    // en memoria y el movimiento no llegaba nunca a Supabase).
     _cajasMovs.unshift(row);
-    showToast('\u2713 Guardado localmente');
+    try { enqueue({method:'POST', path:'mov_cajas', body:row}); } catch(e) {}
+    showToast('\u2713 Guardado sin conexi\u00f3n \u2014 se sincronizar\u00e1 al volver internet');
     _setCajasTab('resumen');
   }
 }
