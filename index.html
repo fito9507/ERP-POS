@@ -5251,9 +5251,25 @@ function _revertirVenta(v){
         prod.stk=(prod.stk||0)+l.q;
         if(!prod.stk_alm) prod.stk_alm={};
         if(v.alm) prod.stk_alm[v.alm]=(prod.stk_alm[v.alm]||0)+l.q;
+        // A que lote vuelve: si la venta no era de un folio con
+        // contenedor, al lote REAL del producto en ese almacen. Antes
+        // caia siempre en 'SIN LOTE' y creaba una fila fantasma.
+        var loteVuelta = targetContenedor;
+        if((!loteVuelta || loteVuelta==='SIN LOTE') && v.alm && prod.lotes && prod.lotes.length){
+          var cand = prod.lotes.filter(function(x){
+            return x.almacen===v.alm && x.lote && x.lote!=='SIN LOTE';
+          });
+          if(cand.length){
+            cand.sort(function(a,b){
+              var d=(parseFloat(b.cantidad)||0)-(parseFloat(a.cantidad)||0);
+              return d!==0?d:((parseFloat(b.cantidad_inicial)||0)-(parseFloat(a.cantidad_inicial)||0));
+            });
+            loteVuelta = cand[0].lote;
+          }
+        }
         // Persist stock update to Supabase!
         if(v.alm && typeof adjustStockByDelta==='function' && prod.supaId){
-          adjustStockByDelta(prod, v.alm, l.q, targetContenedor);
+          adjustStockByDelta(prod, v.alm, l.q, loteVuelta);
         } else if(v.alm && typeof syncStockUpdate==='function'){
           syncStockUpdate([{n:prod.n}], v.alm);
         }
