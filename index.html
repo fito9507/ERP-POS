@@ -6549,6 +6549,29 @@ function filtrar_ig(){
   });
 }
 
+// Detalle legible de una operacion de caja: de donde sale, a donde va
+// y a que tasa. Se saca del movimiento de caja que comparte el mismo
+// identificador [OP:...] con este apunte del libro.
+function _detalleMov(m){
+  var op=(String(m.desc||'')+' '+String(m.notas||'')).match(/\[OP:([A-Za-z0-9]+)\]/);
+  if(!op||typeof _cajasMovs==='undefined') return '';
+  var mc=_cajasMovs.find(function(x){ return String(x.notas||'').indexOf('[OP:'+op[1]+']')>=0; });
+  if(!mc||!mc.caja_origen||!mc.caja_destino) return '';
+  var mo=parseFloat(mc.monto_origen)||0, md=parseFloat(mc.monto_destino)||0;
+  if(!(mo>0&&md>0)) return '';
+  var monO=(mc.caja_origen.split(' ')[0]||''), monD=(mc.caja_destino.split(' ')[0]||'');
+  var dec=function(mn){ return (mn==='CUP'||mn==='CUPT')?0:2; };
+  var txt=fN(mo,dec(monO))+' '+monO+' \u2192 '+fN(md,dec(monD))+' '+monD;
+  if(monO!==monD){
+    var tasa=(monO==='CUP'||monO==='CUPT')?(mo/md):(md/mo);
+    txt+=' \u00b7 tasa '+fN(tasa,2);
+  }
+  return txt;
+}
+
+// Quitar el identificador tecnico de lo que ve el usuario
+function _sinOp(t){ return String(t||'').replace(/\s*\[OP:[A-Za-z0-9]+\]/g,'').trim(); }
+
 // ── RENDER LIBRO ──────────────────────────────────────────
 function renderLibro(){
   // Sort and group transfer pairs together
@@ -6606,7 +6629,7 @@ function renderLibro(){
   const _dayNet={};
   data.forEach(function(m){
     var d=m.fecha; if(!_dayNet[d])_dayNet[d]={ing:0,gas:0,n:0};
-    var _g=m.sentido==='gasto'||(m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0);
+    var _g=m.sentido==='gasto'||(m.tipo==='Transferencia entre cuentas'&&/\(salida/i.test(m.desc||''));
     if(_g)_dayNet[d].gas+=m.equivUSD||0; else _dayNet[d].ing+=m.equivUSD||0;
     _dayNet[d].n++;
   });
@@ -6634,23 +6657,26 @@ function renderLibro(){
     }
     const tm=meta[m.tipo]||{icon:'•',cls:'bb'};
     var isGasto=m.sentido==='gasto';
-    var isTransferSalida=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(salida)')>=0;
-    var isTransferEntrada=m.tipo==='Transferencia entre cuentas'&&(m.desc||'').indexOf('(entrada)')>=0;
+    // Ojo: los cambios de divisa escriben "(salida CUP)" / "(entrada USD)",
+    // por eso se busca el prefijo y no el texto exacto "(salida)".
+    var isTransferSalida=m.tipo==='Transferencia entre cuentas'&&/\(salida/i.test(m.desc||'');
+    var isTransferEntrada=m.tipo==='Transferencia entre cuentas'&&/\(entrada/i.test(m.desc||'');
     if(isTransferSalida) isGasto=true;
     var timeStr = m.ts && !isNaN(new Date(m.ts).getTime()) ? new Date(m.ts).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'}) : '';
     return _hdr+`<div class="mov-row">
       <div class="mov-icon" style="background:var(--color-background-secondary)">${tm.icon}</div>
       <div class="mov-main">
         <div class="mov-desc">
-          <strong>${m.desc}</strong>
+          <strong>${_sinOp(m.desc)}</strong>
           ${m.vend?`<span style="font-size:10px;color:var(--color-text-secondary)"> — ${m.vend}</span>`:''}
           ${m.acreedor?`<span style="font-size:10px;color:var(--color-text-secondary)"> — ${m.acreedor}</span>`:''}
         </div>
         <div class="mov-meta">
           <span class="tipo-tag ${tm.cls}">${m.tipo}</span>
           &nbsp;${fD(m.fecha)}${timeStr?' '+timeStr:''} · ${m.cta}
-          ${m.notas?` · <em>${m.notas}</em>`:''}
+          ${_sinOp(m.notas)?` · <em>${_sinOp(m.notas)}</em>`:''}
         </div>
+        ${(function(){var d=_detalleMov(m);return d?`<div style="font-size:10px;color:var(--color-text-info);margin-top:2px">↔ ${d}</div>`:'';})()}
       </div>
       <div class="mov-amt">
         <div class="mov-amt-main" style="color:${isTransferSalida?'var(--color-text-danger)':isTransferEntrada?'var(--color-text-success)':isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
