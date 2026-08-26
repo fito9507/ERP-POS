@@ -9340,47 +9340,110 @@ function _asignarCntFolio(cid,fid){
   showToast(f.contenedor?'✓ Contenedor '+f.contenedor+' asignado al Folio '+fid:'Contenedor removido del Folio '+fid);
 }
 function elimFolioCli(cid,fid){
-  if(!confirm('¿Eliminar este folio completo? Esto devolverá el stock a los productos y borrará la venta del libro de ventas.')) return;
   const c=CLIENTES.find(x=>x.id===cid);
-  const idx=c?.folios.findIndex(x=>x.id===fid);
+  const idx=c?c.folios.findIndex(x=>x.id===fid):-1;
   if(idx==null||idx<0) return;
   var f=c.folios[idx];
-  var targetVenta=VENTAS.find(v=>(v.notas||v.nota||v.desc||'').includes('Folio '+fid));
-    if(targetVenta){
-    eliminarV(targetVenta.id, true);
-  } else {
-    if(f.lineas){
-      f.lineas.forEach(l=>{
-        var prod=PRODS.find(p=>p.n===l.prod||p.n===l.n);
-        if(prod){
-          prod.stk=(prod.stk||0)+l.q;
-          if(f.alm){
-            if(!prod.stk_alm)prod.stk_alm={};
-            prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
-            if(typeof adjustStockByDelta==='function'&&prod.supaId){
-              adjustStockByDelta(prod,f.alm,l.q, f.contenedor || 'SIN LOTE',{strictLote:true});
-            }
-          }
+
+  // Todo lo que hay que deshacer
+  var ventas=(typeof VENTAS!=='undefined'?VENTAS:[]).filter(function(v){
+    return (v.notas||v.nota||v.desc||'').indexOf('Folio '+fid)>=0;
+  });
+  var abonos=(f.abonos||[]).slice();
+  var cobrado=abonos.reduce(function(a,ab){return a+(parseFloat(ab.equivUSD)||0);},0);
+
+  var txt='\u00bfEliminar el folio '+fid+' de '+c.nombre+'?\n\n';
+  if(f.lineas&&f.lineas.length) txt+='\u2022 Se devolver\u00e1 el stock de '+f.lineas.length+' producto(s)\n';
+  if(ventas.length) txt+='\u2022 Se borrar\u00e1n '+ventas.length+' venta(s) del libro\n';
+  if(abonos.length) txt+='\u2022 Se sacar\u00e1n de las cajas '+fN(cobrado)+' USD de '+abonos.length+' abono(s) ya cobrados\n';
+  txt+='\nEsta acci\u00f3n no se puede deshacer.';
+  if(!confirm(txt)) return;
+
+  // 1. Revertir TODAS las ventas asociadas (stock + cajas de cada una).
+  //    Antes solo se revertia la primera que apareciera.
+  if(ventas.length){
+    ventas.forEach(function(v){ try{ eliminarV(v.id,true); }catch(e){ console.warn('revertir venta folio:',e); } });
+  } else if(f.lineas){
+    // Sin ventas asociadas: devolver el stock desde las lineas del folio
+    f.lineas.forEach(function(l){
+      var prod=PRODS.find(function(p){return p.n===l.prod||p.n===l.n;});
+      if(!prod) return;
+      prod.stk=(prod.stk||0)+l.q;
+      if(f.alm){
+        if(!prod.stk_alm)prod.stk_alm={};
+        prod.stk_alm[f.alm]=(prod.stk_alm[f.alm]||0)+l.q;
+        if(typeof adjustStockByDelta==='function'&&prod.supaId){
+          adjustStockByDelta(prod,f.alm,l.q,f.contenedor||'SIN LOTE',{strictLote:true});
         }
-      });
-      if(typeof renderProds==='function') renderProds();
-    }
+      }
+    });
+    if(typeof renderProds==='function') renderProds();
   }
-  // Recalculate idx since eliminarV might have deleted it
+
+  // 2. Devolver el dinero de los abonos: cada cobro salio de una caja.
+  //    Esto faltaba y dejaba las cajas infladas.
+  abonos.forEach(function(ab){
+    if(!ab||!ab.enCaja||!ab.caja) return;
+    var monto=parseFloat(ab.monto)||0;
+    if(!(monto>0)) return;
+    var retiro={
+      tipo:'retiro', fecha:ab.fecha||today(),
+      notas:'Anulaci\u00f3n folio '+fid+' \u2014 abono '+(ab.desc||ab.id||''),
+      usuario:(typeof S!=='undefined'&&S.user)||'Admin',
+      caja_origen:ab.caja, caja_destino:null,
+      monto_origen:monto, monto_destino:monto, tasa_usada:null
+    };
+    if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(retiro);
+    if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',retiro);
+  });
+  if(typeof _cajasMovs!=='undefined'){
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+  }
+
+  // 3. Anular las comisiones que generaron esos cobros
+  if(typeof COMS!=='undefined'&&abonos.length){
+    abonos.forEach(function(ab){
+      var cx=COMS.find(function(x){return x.id==='com-'+ab.id;});
+      if(!cx) return;
+      if(cx.estado==='Pagada'){
+        // Ya se pago: contra-apunte para descontarlo en la siguiente liquidacion
+        var rev={
+          id:'com-rev-'+ab.id, fecha:(typeof today==='function'?today():cx.fecha),
+          vendedor:cx.vendedor, origen:'reverso', abono_id:String(ab.id),
+          folio_id:String(fid), cliente:cx.cliente, almacen:cx.almacen,
+          base_usd:-(parseFloat(cx.base_usd)||0), pct:cx.pct,
+          com_usd:-(parseFloat(cx.com_usd)||0), moneda:cx.moneda,
+          monto:-(parseFloat(cx.monto)||0), caja:cx.caja, estado:'Pendiente'
+        };
+        COMS.push(rev);
+        if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','comisiones?on_conflict=id',rev).catch(function(e){});
+        else { try{ enqueue({method:'POST',path:'comisiones?on_conflict=id',body:rev}); }catch(e){} }
+      } else {
+        COMS=COMS.filter(function(x){return x.id!==cx.id;});
+        if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('DELETE','comisiones?id=eq.'+encodeURIComponent(cx.id)).catch(function(e){});
+        else { try{ enqueue({method:'DELETE',path:'comisiones?id=eq.'+encodeURIComponent(cx.id)}); }catch(e){} }
+      }
+    });
+  }
+
+  // 4. Quitar el folio (eliminarV puede haberlo borrado ya)
   const realIdx=c.folios.findIndex(x=>x.id===fid);
-  if(realIdx>=0) {
-    c.folios.splice(realIdx,1);
-    offlineSaveClientes();
-  }
+  if(realIdx>=0){ c.folios.splice(realIdx,1); }
+  offlineSaveClientes();
+
   if(typeof supaReq!=='undefined'&&_supaOnline){
-    supaReq('DELETE','folios?id=eq.'+fid).catch(e=>{});
-    supaReq('DELETE','abonos?folio_id=eq.'+fid).catch(e=>{});
+    supaReq('DELETE','folios?id=eq.'+fid).catch(function(e){});
+    supaReq('DELETE','abonos?folio_id=eq.'+fid).catch(function(e){});
   } else {
     enqueue({method:'DELETE',path:'folios?id=eq.'+fid});
     enqueue({method:'DELETE',path:'abonos?folio_id=eq.'+fid});
   }
+
   renderFichaFolios(c);
-  showToast('Folio y venta eliminados con éxito');
+  if(typeof loadCajasData==='function') loadCajasData().then(function(){
+    if(typeof renderCajas==='function') try{renderCajas();}catch(e){}
+  });
+  showToast('\u2713 Folio eliminado'+(abonos.length?' \u00b7 '+fN(cobrado)+' USD devueltos a las cajas':''));
 }
 
 async function renombrarFolio(cid, fid) {
