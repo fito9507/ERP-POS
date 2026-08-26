@@ -12063,9 +12063,18 @@ function _renderNuevoMovCaja() {
     + '<input class="adm-inp" type="number" id="mc-monto-dest" step="0.01" placeholder="0.00" oninput="_onMcDestManual()" style="font-size:20px;font-weight:600;height:46px">'
     + '</div>'
     // Comision de la operacion (banco / cambista): se descuenta del destino
+    + '<div id="mc-com-sw" style="display:none">'
+    + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--color-text-secondary);padding:2px 0">'
+    + '<input type="checkbox" id="mc-com-on" onchange="_toggleMcCom()" style="width:16px;height:16px;cursor:pointer">'
+    + 'Esta operación tiene comisión (banco, cambista…)</label>'
+    + '</div>'
     + '<div id="mc-com-wrap" style="display:none">'
-    + '<label class="adm-lbl-f">Comisión de la operación <span id="mc-com-mon" style="color:var(--color-text-tertiary);font-weight:600"></span> <span style="font-size:10px;color:var(--color-text-tertiary)">(banco, cambista… se resta de lo que llega)</span></label>'
-    + '<input class="adm-inp" type="number" id="mc-comision" step="0.01" placeholder="0.00" oninput="_calcMcDestino()">'
+    + '<div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px">'
+    + '<div><label class="adm-lbl-f">Comisión %</label>'
+    + '<input class="adm-inp" type="number" id="mc-com-pct" step="0.01" placeholder="0.00" oninput="_onMcComPct()"></div>'
+    + '<div><label class="adm-lbl-f">Importe <span id="mc-com-mon" style="color:var(--color-text-tertiary);font-weight:600"></span></label>'
+    + '<input class="adm-inp" type="number" id="mc-comision" step="0.01" placeholder="0.00" oninput="_onMcComImp()"></div>'
+    + '</div>'
     + '<div id="mc-com-neto" style="font-size:11px;color:var(--color-text-secondary);margin-top:4px"></div>'
     + '</div>'
     // Fecha y notas
@@ -12079,8 +12088,14 @@ function _renderNuevoMovCaja() {
 
 function _onMcTipoChange() {
   var tipo = document.getElementById('mc-tipo')?.value;
-  var cw=document.getElementById('mc-com-wrap');
-  if(cw) cw.style.display=(tipo==='cambio'||tipo==='transferencia')?'':'none';
+  var csw=document.getElementById('mc-com-sw');
+  var aplica=(tipo==='cambio'||tipo==='transferencia');
+  if(csw) csw.style.display=aplica?'':'none';
+  if(!aplica){
+    var chk=document.getElementById('mc-com-on'); if(chk) chk.checked=false;
+    var cw0=document.getElementById('mc-com-wrap'); if(cw0) cw0.style.display='none';
+    ['mc-com-pct','mc-comision'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  }
   var dw=document.getElementById('mc-destino-wrap'), tw=document.getElementById('mc-tasa-wrap');
   var ddw=document.getElementById('mc-dest-wrap'),   ol=document.getElementById('mc-origen-lbl');
   if (tipo==='deposito') {
@@ -12154,6 +12169,36 @@ function _adjMcTasa(delta) {
   _calcMcDestino();
 }
 
+// Interruptor de la comision: al apagarlo se limpian los campos para
+// que no quede una comision aplicandose sin verse.
+function _toggleMcCom(){
+  var on=document.getElementById('mc-com-on');
+  var w=document.getElementById('mc-com-wrap');
+  if(w) w.style.display=(on&&on.checked)?'':'none';
+  if(on&&!on.checked){
+    ['mc-com-pct','mc-comision'].forEach(function(id){var e=document.getElementById(id); if(e) e.value='';});
+  }
+  _calcMcDestino();
+}
+
+// El % manda: se calcula el importe sobre lo que llegaria al destino
+function _onMcComPct(){
+  var pct=parseFloat(document.getElementById('mc-com-pct')?.value)||0;
+  var bruto=parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var impEl=document.getElementById('mc-comision');
+  if(impEl) impEl.value = (pct>0&&bruto>0) ? parseFloat((bruto*pct/100).toFixed(2)) : '';
+  _calcMcDestino();
+}
+
+// El importe manda: se deduce el % que representa
+function _onMcComImp(){
+  var imp=parseFloat(document.getElementById('mc-comision')?.value)||0;
+  var bruto=parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var pctEl=document.getElementById('mc-com-pct');
+  if(pctEl) pctEl.value = (imp>0&&bruto>0) ? parseFloat((imp/bruto*100).toFixed(4)) : '';
+  _calcMcDestino();
+}
+
 function _calcMcDestino() {
   var tipo=document.getElementById('mc-tipo')?.value;
   var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
@@ -12185,8 +12230,16 @@ function _calcMcDestino() {
     else montoDest = monto*tasa;
     destEl.value = montoDest ? parseFloat(montoDest.toFixed(2)) : '';
   }
-  // La comision se la queda el banco/cambista: al destino llega menos
-  var com=parseFloat(document.getElementById('mc-comision')?.value)||0;
+  // La comision se la queda el banco/cambista: al destino llega menos.
+  // Si se fijo un %, el importe se recalcula al cambiar monto o tasa.
+  var _comOn=document.getElementById('mc-com-on');
+  var _pctEl=document.getElementById('mc-com-pct');
+  var _impEl=document.getElementById('mc-comision');
+  var _pct=parseFloat(_pctEl?_pctEl.value:0)||0;
+  if(_comOn&&_comOn.checked&&_pct>0&&_impEl&&montoDest>0){
+    _impEl.value=parseFloat((montoDest*_pct/100).toFixed(2));
+  }
+  var com=(_comOn&&_comOn.checked)?(parseFloat(_impEl?_impEl.value:0)||0):0;
   var cmEl=document.getElementById('mc-com-mon');
   if(cmEl) cmEl.textContent=monD?('('+monD+')'):'';
   var netoEl=document.getElementById('mc-com-neto');
@@ -12305,7 +12358,8 @@ async function admRegistrarMovCaja() {
   var dest=document.getElementById('mc-destino')?.value;
   var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
   var montoDest=parseFloat(document.getElementById('mc-monto-dest')?.value)||monto;
-  var comOp=parseFloat(document.getElementById('mc-comision')?.value)||0;
+  var _comSw=document.getElementById('mc-com-on');
+  var comOp=(_comSw&&_comSw.checked)?(parseFloat(document.getElementById('mc-comision')?.value)||0):0;
   // Lo que de verdad entra en la caja destino, ya sin la comision
   if(comOp>0) montoDest=parseFloat((montoDest-comOp).toFixed(4));
   var tasa=parseFloat(document.getElementById('mc-tasa')?.value)||null;
@@ -12421,7 +12475,8 @@ async function admRegistrarMovCaja() {
       // Reload I/G if visible
       if(typeof syncLoadMovsIG==='function') syncLoadMovsIG().catch(function(){});
 
-      ['mc-monto','mc-monto-dest','mc-notas','mc-comision'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+      ['mc-monto','mc-monto-dest','mc-notas','mc-comision','mc-com-pct'].forEach(function(id){var e=document.getElementById(id);if(e)e.value='';});
+      var _cs=document.getElementById('mc-com-on'); if(_cs){ _cs.checked=false; if(typeof _toggleMcCom==='function') _toggleMcCom(); }
       _setCajasTab('resumen');
     } else {
       // El servidor rechazo la escritura: encolar para reintentar,
