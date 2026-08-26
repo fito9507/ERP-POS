@@ -6556,6 +6556,9 @@ var _opsVistas = null; // se reinicia en cada render del libro
 function _detalleMov(m){
   var op=(String(m.desc||'')+' '+String(m.notas||'')).match(/\[OP:([A-Za-z0-9]+)\]/);
   if(!op||typeof _cajasMovs==='undefined') return '';
+  // La comision es un gasto de la operacion, no el movimiento: su
+  // linea no lleva el detalle (ademas suele pintarse la primera).
+  if(/comisi/i.test(m.desc||'')) return '';
   // Una operacion genera varias lineas (salida, entrada, comision):
   // el detalle se pinta solo en la primera, no tres veces seguidas.
   if(_opsVistas){ if(_opsVistas[op[1]]) return ''; _opsVistas[op[1]]=true; }
@@ -6566,6 +6569,8 @@ function _detalleMov(m){
   var monO=(mc.caja_origen.split(' ')[0]||''), monD=(mc.caja_destino.split(' ')[0]||'');
   var dec=function(mn){ return (mn==='CUP'||mn==='CUPT')?0:2; };
   var _n2=function(v,d){ return (parseFloat(v)||0).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+  // Si es la misma moneda y el mismo importe no hay nada que explicar
+  if(monO===monD && Math.abs(mo-md)<0.005) return '';
   var txt=_n2(mo,dec(monO))+' '+monO+' \u2192 '+_n2(md,dec(monD))+' '+monD;
   if(monO!==monD){
     var tasa=(monO==='CUP'||monO==='CUPT')?(mo/md):(md/mo);
@@ -12562,7 +12567,7 @@ async function admRegistrarMovCaja() {
         // Salida de origen
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Transferencia') + ' → ' + dest,
+          descripcion: (notas||'Transferencia') + ' → ' + dest + ' (salida)',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
           cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
@@ -12570,7 +12575,7 @@ async function admRegistrarMovCaja() {
         // Entrada a destino
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Transferencia') + ' ← ' + orig,
+          descripcion: (notas||'Transferencia') + ' ← ' + orig + ' (entrada)',
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
           cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
