@@ -12567,7 +12567,7 @@ async function admRegistrarMovCaja() {
         // Salida de origen
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Transferencia') + ' → ' + dest + ' (salida)',
+          descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida)',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
           cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
@@ -12575,7 +12575,7 @@ async function admRegistrarMovCaja() {
         // Entrada a destino
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Transferencia') + ' ← ' + orig + ' (entrada)',
+          descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada)',
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
           cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
@@ -12584,7 +12584,7 @@ async function admRegistrarMovCaja() {
         // Cambio de divisa: salida en moneda origen
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Cambio de divisa') + ' → ' + dest + ' (salida ' + _monO + ')',
+          descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida ' + _monO + ')',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
           cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
@@ -12592,7 +12592,7 @@ async function admRegistrarMovCaja() {
         // Entrada en moneda destino
         supaReq('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
-          descripcion: (notas||'Cambio de divisa') + ' ← ' + orig + ' (entrada ' + _monD + ')',
+          descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada ' + _monD + ')',
           monto: montoDest, moneda: _monD,
           equiv_usd: parseFloat((montoDest*(_RATES_USD[_monD]||1)).toFixed(4)),
           cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
