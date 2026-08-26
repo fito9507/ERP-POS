@@ -6879,60 +6879,92 @@ function registrar(){
   showToast('Registrado: '+desc);
 }
 
+function _opDe(txt){
+  var m = String(txt || '').match(/\[OP:([A-Za-z0-9]+)\]/);
+  return m ? m[1] : '';
+}
+
+// Borrar un apunte del libro deshace la OPERACION entera: sus apuntes
+// hermanos (la otra pata de un cambio o transferencia, su comision) y el
+// movimiento de caja que movio el dinero. Antes solo borraba el apunte y
+// el dinero se quedaba movido.
 function eliminar(id){
   if(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol!=='admin'){
-    showToast('⚠ Solo el admin puede eliminar movimientos');return;
+    showToast('\u26a0 Solo el admin puede eliminar movimientos');return;
   }
-  if(!confirm('¿Eliminar este movimiento?'))return;
-  // Find mov before removing to reverse caja movement
-  var _mov=MOVS.find(function(m){return m.id===id;});
-  MOVS=MOVS.filter(function(m){return m.id!==id;});
-  // Also remove paired transfer entry if exists
-  if(_mov&&_mov.tipo==='Transferencia entre cuentas'){
-    var _baseDesc=(_mov.desc||'').replace(' (salida)','').replace(' (entrada)','');
-    MOVS=MOVS.filter(function(m){
-      return !(m.tipo==='Transferencia entre cuentas'&&
-        (m.desc||'').replace(' (salida)','').replace(' (entrada)','')=== _baseDesc&&
-        m.fecha===_mov.fecha);
-    });
-  }
-  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
-  // Reverse mov_cajas entry
-  if(_mov&&typeof _getSaldoCaja!=='undefined'){
-    // Find and remove matching mov_cajas row
-    var _ctaMov=_mov.cta||'';
-    _cajasMovs=_cajasMovs.filter(function(mc){
-      var matchOrigen=mc.caja_origen===_ctaMov&&parseFloat(mc.monto_origen)===parseFloat(_mov.monto);
-      var matchDest=mc.caja_destino===_ctaMov&&parseFloat(mc.monto_destino)===parseFloat(_mov.monto);
-      var matchDesc=(mc.notas||'').indexOf(_baseDesc||_mov.desc||'')>=0;
-      return !(matchOrigen||matchDest)&&matchDesc!==false||!(matchDesc);
-    });
-    // Delete from Supabase mov_cajas by description+caja+monto
-    if(_supaOnline&&typeof supaReq!=='undefined'){
-      var _q='mov_cajas?notas=like.*'+encodeURIComponent((_mov.desc||'').replace(' (salida)','').replace(' (entrada)',''))+'*&monto_origen=eq.'+_mov.monto;
-      supaReq('DELETE',_q).catch(function(e){console.warn('mov_cajas delete:',e);});
-    }
-  }
-  // Delete from Supabase movimientos_ig — await before reload
-  if(_supaOnline&&typeof supaReq!=='undefined'){
-    var _delPromises=[supaReq('DELETE','movimientos_ig?id=eq.'+id)];
-    if(_mov&&_mov.tipo==='Transferencia entre cuentas'){
-      var _baseDsc=(_mov.desc||'').replace(' (salida)','').replace(' (entrada)','');
-      // Delete paired entry by matching description and fecha
-      _delPromises.push(supaReq('DELETE','movimientos_ig?descripcion=like.*'+encodeURIComponent(_baseDsc)+'*&fecha=eq.'+_mov.fecha+'&tipo=eq.Transferencia+entre+cuentas&id=neq.'+id));
-    }
-    Promise.all(_delPromises).then(function(){
-      renderLibro();
-      if(typeof renderCajas==='function') renderCajas();
-    }).catch(function(e){
-      console.warn('I/G delete error:',e);
-      renderLibro();
+  var mov=MOVS.find(function(m){return m.id===id;});
+  if(!mov){ showToast('Movimiento no encontrado'); return; }
+
+  var op=_opDe(mov.desc)||_opDe(mov.notas);
+  var hermanos=[], cajas=[];
+
+  if(op){
+    hermanos=MOVS.filter(function(m){ return _opDe(m.desc)===op||_opDe(m.notas)===op; });
+    cajas=(typeof _cajasMovs!=='undefined'?_cajasMovs:[]).filter(function(mc){
+      return _opDe(mc.notas)===op;
     });
   } else {
-    enqueue({method:'DELETE',path:'movimientos_ig?id=eq.'+id,body:null});
-    renderLibro();
-    if(typeof renderCajas==='function') renderCajas();
+    // Movimientos antiguos (sin identificador): buscar el de caja que
+    // encaje por fecha, cuenta e importe.
+    hermanos=[mov];
+    var imp=Math.abs(parseFloat(mov.monto)||0);
+    cajas=(typeof _cajasMovs!=='undefined'?_cajasMovs:[]).filter(function(mc){
+      if(mc.fecha!==mov.fecha) return false;
+      var oOK=mc.caja_origen===mov.cta&&Math.abs((parseFloat(mc.monto_origen)||0)-imp)<0.01;
+      var dOK=mc.caja_destino===mov.cta&&Math.abs((parseFloat(mc.monto_destino)||0)-imp)<0.01;
+      return oOK||dOK;
+    });
   }
+
+  // Contar lo que se va a deshacer para que el usuario lo confirme
+  var txt='\u00bfEliminar este movimiento?\n\n';
+  hermanos.forEach(function(m){
+    txt+='  \u2022 '+(m.desc||m.tipo)+': '+fN(m.monto,2)+' '+(m.mon||'USD')+' ('+(m.cta||'')+')\n';
+  });
+  if(cajas.length){
+    txt+='\nSe devolver\u00e1 el dinero a las cajas:\n';
+    cajas.forEach(function(mc){
+      if(mc.caja_origen) txt+='  \u2022 '+mc.caja_origen+': +'+fN(mc.monto_origen,2)+'\n';
+      if(mc.caja_destino) txt+='  \u2022 '+mc.caja_destino+': \u2212'+fN(mc.monto_destino,2)+'\n';
+    });
+  } else {
+    txt+='\n\u26a0 No se encontr\u00f3 el movimiento de caja asociado: revisa los saldos a mano.\n';
+  }
+  if(!confirm(txt)) return;
+
+  var idsIG=hermanos.map(function(m){return m.id;});
+  MOVS=MOVS.filter(function(m){ return idsIG.indexOf(m.id)<0; });
+  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS.slice(0,500)));}catch(e){}
+
+  var idsCaja=cajas.map(function(mc){return mc.id;}).filter(function(x){return x!=null;});
+  if(typeof _cajasMovs!=='undefined'){
+    _cajasMovs=_cajasMovs.filter(function(mc){
+      return idsCaja.indexOf(mc.id)<0 && cajas.indexOf(mc)<0;
+    });
+    try{localStorage.setItem('erp_cajas_movs',JSON.stringify(_cajasMovs.slice(0,500)));}catch(e){}
+  }
+
+  var borrar=function(path){
+    if(_supaOnline&&typeof supaReq!=='undefined'){
+      return supaReq('DELETE',path).then(function(r){
+        if(!r.ok) console.warn('delete falló:',path,r.status);
+        return r;
+      }).catch(function(e){ console.warn('delete:',path,e); });
+    }
+    try{ enqueue({method:'DELETE',path:path,body:null}); }catch(e){}
+    return Promise.resolve();
+  };
+
+  var tareas=idsIG.map(function(i){ return borrar('movimientos_ig?id=eq.'+encodeURIComponent(i)); });
+  idsCaja.forEach(function(i){ tareas.push(borrar('mov_cajas?id=eq.'+encodeURIComponent(i))); });
+
+  Promise.all(tareas).then(function(){
+    showToast('\u2713 Movimiento eliminado'+(idsCaja.length?' y dinero devuelto a las cajas':''));
+    try{ renderLibro(); }catch(e){}
+    if(typeof loadCajasData==='function') loadCajasData().then(function(){
+      if(typeof renderCajas==='function') try{ renderCajas(); }catch(e){}
+    });
+  });
 }
 
 // ── CAJAS ─────────────────────────────────────────────────
@@ -12398,6 +12430,10 @@ async function admRegistrarMovCaja() {
     tasa_usada: tasa
   };
 
+  // Identificador comun para poder deshacer la operacion entera luego
+  var _opId = 'OP' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  var _marca = ' [OP:' + _opId + ']';
+  row.notas = (row.notas || '') + _marca;
   if (_supaOnline) {
     var r=await supaReq('POST','mov_cajas',row);
     if (r.ok) {
@@ -12416,7 +12452,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Depósito externo') + ' → ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig deposito:',e);});
       } else if (tipo === 'retiro') {
         // Gasto desde la caja
@@ -12425,7 +12461,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Retiro') + ' ← ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig retiro:',e);});
       } else if (tipo === 'transferencia') {
         // Salida de origen
@@ -12434,7 +12470,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Transferencia') + ' → ' + dest,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig transferencia salida:',e);});
         // Entrada a destino
         supaReq('POST','movimientos_ig',{
@@ -12442,7 +12478,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Transferencia') + ' ← ' + orig,
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: notas
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig transferencia entrada:',e);});
       } else if (tipo === 'cambio') {
         // Cambio de divisa: salida en moneda origen
@@ -12451,7 +12487,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Cambio de divisa') + ' → ' + dest + ' (salida ' + _monO + ')',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: notas
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig cambio salida:',e);});
         // Entrada en moneda destino
         supaReq('POST','movimientos_ig',{
@@ -12459,7 +12495,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Cambio de divisa') + ' ← ' + orig + ' (entrada ' + _monD + ')',
           monto: montoDest, moneda: _monD,
           equiv_usd: parseFloat((montoDest*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: notas
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig cambio entrada:',e);});
       }
       // La comision de la operacion, como gasto (para que se vea el coste)
@@ -12469,7 +12505,7 @@ async function admRegistrarMovCaja() {
           descripcion:'Comisi\u00f3n ' + (tipo==='cambio'?'de cambio':'de transferencia') + ' ' + orig + ' \u2192 ' + dest,
           monto: comOp, moneda: _monD,
           equiv_usd: parseFloat((comOp*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: notas
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
         }).catch(function(e){console.warn('ig comision op:',e);});
       }
       // Reload I/G if visible
