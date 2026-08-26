@@ -6552,19 +6552,24 @@ function filtrar_ig(){
 // Detalle legible de una operacion de caja: de donde sale, a donde va
 // y a que tasa. Se saca del movimiento de caja que comparte el mismo
 // identificador [OP:...] con este apunte del libro.
+var _opsVistas = null; // se reinicia en cada render del libro
 function _detalleMov(m){
   var op=(String(m.desc||'')+' '+String(m.notas||'')).match(/\[OP:([A-Za-z0-9]+)\]/);
   if(!op||typeof _cajasMovs==='undefined') return '';
+  // Una operacion genera varias lineas (salida, entrada, comision):
+  // el detalle se pinta solo en la primera, no tres veces seguidas.
+  if(_opsVistas){ if(_opsVistas[op[1]]) return ''; _opsVistas[op[1]]=true; }
   var mc=_cajasMovs.find(function(x){ return String(x.notas||'').indexOf('[OP:'+op[1]+']')>=0; });
   if(!mc||!mc.caja_origen||!mc.caja_destino) return '';
   var mo=parseFloat(mc.monto_origen)||0, md=parseFloat(mc.monto_destino)||0;
   if(!(mo>0&&md>0)) return '';
   var monO=(mc.caja_origen.split(' ')[0]||''), monD=(mc.caja_destino.split(' ')[0]||'');
   var dec=function(mn){ return (mn==='CUP'||mn==='CUPT')?0:2; };
-  var txt=fN(mo,dec(monO))+' '+monO+' \u2192 '+fN(md,dec(monD))+' '+monD;
+  var _n2=function(v,d){ return (parseFloat(v)||0).toLocaleString('es-ES',{minimumFractionDigits:d,maximumFractionDigits:d}); };
+  var txt=_n2(mo,dec(monO))+' '+monO+' \u2192 '+_n2(md,dec(monD))+' '+monD;
   if(monO!==monD){
     var tasa=(monO==='CUP'||monO==='CUPT')?(mo/md):(md/mo);
-    txt+=' \u00b7 tasa '+fN(tasa,2);
+    txt+=' a '+_n2(tasa,2);
   }
   return txt;
 }
@@ -6574,6 +6579,7 @@ function _sinOp(t){ return String(t||'').replace(/\s*\[OP:[A-Za-z0-9]+\]/g,'').t
 
 // ── RENDER LIBRO ──────────────────────────────────────────
 function renderLibro(){
+  _opsVistas = {};   // el detalle de cada operacion se pinta una sola vez
   // Sort and group transfer pairs together
   // Ordenar por FECHA real (no por ts de insercion): los movimientos
   // bancarios se importan hoy pero su fecha es la del banco. Dentro de
@@ -6676,7 +6682,7 @@ function renderLibro(){
           &nbsp;${fD(m.fecha)}${timeStr?' '+timeStr:''} · ${m.cta}
           ${_sinOp(m.notas)?` · <em>${_sinOp(m.notas)}</em>`:''}
         </div>
-        ${(function(){var d=_detalleMov(m);return d?`<div style="font-size:10px;color:var(--color-text-info);margin-top:2px">↔ ${d}</div>`:'';})()}
+        ${(function(){var d=_detalleMov(m);return d?`<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">${d}</div>`:'';})()}
       </div>
       <div class="mov-amt">
         <div class="mov-amt-main" style="color:${isTransferSalida?'var(--color-text-danger)':isTransferEntrada?'var(--color-text-success)':isGasto?'var(--color-text-danger)':'var(--color-text-success)'}">
