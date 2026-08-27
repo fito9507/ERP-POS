@@ -182,7 +182,9 @@ body{font-family:var(--font-sans);color:var(--color-text-primary);font-size:14px
   color:var(--color-text-primary);line-height:1;
 }
 .qty-n{
-  width:32px !important;
+  min-width:32px !important;
+  width:auto !important;
+  max-width:96px !important;
   height:22px !important;
   text-align:center !important;
   font-size:12px !important;
@@ -4157,7 +4159,8 @@ function renderCart(){
         <button class="qb" onclick="chQty(${i},-1)">−</button>
         <input type="number" class="qty-n"
           value="${c.q}" min="1" max="${stk}"
-          oninput="setQtyDirect(${i},this.value)"
+          style="width:${Math.min(96, Math.max(32, String(c.q||'').length*9+14))}px"
+          oninput="setQtyDirect(${i},this.value);this.style.width=Math.min(96,Math.max(32,this.value.length*9+14))+'px'"
           onblur="commitQty(${i},this.value)"
           onkeydown="if(event.key==='Enter'){commitQty(${i},this.value);this.blur();}"
           onfocus="this.select()">
@@ -16149,12 +16152,7 @@ function renderStock(){
     }).filter(Boolean).join('');
     if(!lotesStr) lotesStr = '<span style="color:var(--color-text-tertiary);font-size:10px">—</span>';
     
-    var _res=parseFloat(p.qty_reservada)||0;
-    var _libre=(p.stk||0)-_res;
-    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)
-      +(_res>0?'<div style="font-size:9px;font-weight:400;color:var(--color-text-warning);white-space:nowrap">'+fN(_res,0)+' reservado</div>'
-        +'<div style="font-size:10px;font-weight:600;color:'+(_libre>0?'var(--color-text-success)':'var(--color-text-danger)')+';white-space:nowrap">'+fN(_libre,0)+' libre</div>':'')
-      +'</td>'
+    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'
       +'<td style="line-height:1.2;max-width:200px">'+lotesStr+'</td>'
       +'<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+(p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
   });}
