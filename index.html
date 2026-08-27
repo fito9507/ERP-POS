@@ -8635,72 +8635,115 @@ function executeExportarContenedorPDF() {
 
   lotes.forEach(function(lote) {
     var items = dataByLote[lote];
-    html += '<h2>📦 Contenedor: ' + lote + '</h2>';
-    html += '<table><thead><tr><th>Cliente / Folio</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Pdte</th></tr></thead><tbody>';
-    
+    html += '<h2>\ud83d\udce6 Contenedor: ' + lote + '</h2>';
+
+    // Separar por estado: primero lo que queda por cobrar
+    var pdtDe = function(f){ return typeof pdtF === 'function' ? pdtF(f) : 0; };
+    var conSaldo = items.filter(function(it){ return pdtDe(it.fol) > 0.01; });
+    var liquidados = items.filter(function(it){ return pdtDe(it.fol) <= 0.01; });
+
     var cTot = 0, cPag = 0, cPdt = 0;
-    
-    items.forEach(function(item) {
-      var f = item.fol;
-      var c = item.cli;
+
+    // Dibuja un folio con sus productos y abonos
+    var filaFolio = function(item) {
+      var f = item.fol, c2 = item.cli;
       var t = typeof totF === 'function' ? totF(f) : 0;
       var p = typeof pagF === 'function' ? pagF(f) : 0;
-      var pd = typeof pdtF === 'function' ? pdtF(f) : 0;
+      var pd = pdtDe(f);
       cTot += t; cPag += p; cPdt += pd;
-      
-      var bg = pd > 0 ? '#fff5f5' : '#f0fdf4';
+
+      var bg = pd > 0.01 ? '#fff5f5' : '#f0fdf4';
       if (t === 0) bg = '#fdf6e3';
-      
-      html += '<tr style="background:'+bg+';font-weight:600">';
-      html += '<td>' + c.nombre + (c.tel ? ' 📞 ' + c.tel : '') + ' - #' + f.id + (f.desc ? ' (' + f.desc + ')' : '') + '</td>';
+
+      var h = '<tr style="background:'+bg+';font-weight:600">';
+      h += '<td>' + c2.nombre + (c2.tel ? ' \ud83d\udcde ' + c2.tel : '') + ' - #' + f.id + (f.desc ? ' (' + f.desc + ')' : '') + '</td>';
       var ffecha = typeof fD === 'function' ? fD(f.fecha) : f.fecha;
-      html += '<td>' + (ffecha || '') + '</td>';
+      h += '<td>' + (ffecha || '') + '</td>';
       var festado = (typeof EL !== 'undefined' && EL[typeof estF === 'function' ? estF(f) : '']) ? EL[estF(f)] : (typeof estF === 'function' ? estF(f) : '');
-      html += '<td>' + festado + '</td>';
-      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(t) : t) + '</td>';
-      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(p) : p) + '</td>';
-      html += '<td class="text-right" style="color:'+(pd>0?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(pd) : pd) + '</td>';
-      html += '</tr>';
-      
-      // Add product lines
-      var hasLineas = f.lineas && f.lineas.length > 0;
-      if (hasLineas) {
-        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px '+(f.abonos&&f.abonos.length?'4px':'12px')+' 16px">';
-        html += '<div style="font-weight:bold;margin-bottom:2px">Productos:</div>';
-        html += '<ul style="margin:0 0 4px 0;padding-left:20px">';
+      h += '<td>' + festado + '</td>';
+      h += '<td class="text-right">$' + (typeof fN === 'function' ? fN(t) : t) + '</td>';
+      h += '<td class="text-right">$' + (typeof fN === 'function' ? fN(p) : p) + '</td>';
+      h += '<td class="text-right" style="color:'+(pd>0.01?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(pd) : pd) + '</td>';
+      h += '</tr>';
+
+      if (f.lineas && f.lineas.length > 0) {
+        h += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px '+(f.abonos&&f.abonos.length?'4px':'12px')+' 16px">';
+        h += '<div style="font-weight:bold;margin-bottom:2px">Productos:</div>';
+        h += '<ul style="margin:0 0 4px 0;padding-left:20px">';
         f.lineas.forEach(function(l) {
           var pname = l.prod || l.n || l.producto || 'Producto sin nombre';
           var pprice = l.precio != null ? l.precio : (l.p != null ? l.p : 0);
-          html += '<li>' + l.q + 'x ' + pname + ' a $' + (typeof fN === 'function' ? fN(pprice) : pprice) + ' = <b>$' + (typeof fN === 'function' ? fN(l.q * pprice) : (l.q * pprice)) + '</b></li>';
+          h += '<li>' + l.q + 'x ' + pname + ' a $' + (typeof fN === 'function' ? fN(pprice) : pprice) + ' = <b>$' + (typeof fN === 'function' ? fN(l.q * pprice) : (l.q * pprice)) + '</b></li>';
         });
-        html += '</ul>';
-        html += '</td></tr>';
+        h += '</ul></td></tr>';
       }
-      
-      // Add abonos
-      var hasAbonos = f.abonos && f.abonos.length > 0;
-      if (hasAbonos) {
-        html += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px 12px 16px;background:#f0fdf4">';
-        html += '<div style="font-weight:bold;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
-        html += '<ul style="margin:0 0 4px 0;padding-left:20px;color:#16a34a">';
+
+      if (f.abonos && f.abonos.length > 0) {
+        h += '<tr class="prod-row"><td colspan="6" style="padding:4px 8px 12px 16px;background:#f0fdf4">';
+        h += '<div style="font-weight:bold;margin-bottom:2px;color:#16a34a">Abonos realizados:</div>';
+        h += '<ul style="margin:0 0 4px 0;padding-left:20px;color:#16a34a">';
         f.abonos.forEach(function(a) {
-          var eq = a.mon!=='USD' ? ' (≈ $'+(typeof fN === 'function' ? fN(a.equivUSD) : a.equivUSD)+')' : '';
+          var eq = a.mon!=='USD' ? ' (\u2248 $'+(typeof fN === 'function' ? fN(a.equivUSD) : a.equivUSD)+')' : '';
           var date = typeof fD === 'function' ? fD(a.fecha) : a.fecha;
-          html += '<li>' + (date||'') + ' - ' + (a.desc||a.concepto||'') + ': <b>' + (typeof fN === 'function' ? fN(a.monto) : a.monto) + ' ' + (a.mon||'USD') + eq + '</b></li>';
+          h += '<li>' + (date||'') + ' - ' + (a.desc||a.concepto||'') + ': <b>' + (typeof fN === 'function' ? fN(a.monto) : a.monto) + ' ' + (a.mon||'USD') + eq + '</b></li>';
         });
-        html += '</ul>';
-        html += '</td></tr>';
+        h += '</ul></td></tr>';
       }
-    });
-    
-    html += '<tr class="tot-row">';
+      return h;
+    };
+
+    var cabecera = '<table><thead><tr><th>Cliente / Folio</th><th>Fecha</th><th>Estado</th><th class="text-right">Total</th><th class="text-right">Pagado</th><th class="text-right">Pdte</th></tr></thead><tbody>';
+
+    // ── Grupo 1: pendientes de cobro ──
+    if (conSaldo.length) {
+      var sTot = 0, sPag = 0, sPdt = 0;
+      conSaldo.forEach(function(it){
+        var f = it.fol;
+        sTot += (typeof totF === 'function' ? totF(f) : 0);
+        sPag += (typeof pagF === 'function' ? pagF(f) : 0);
+        sPdt += pdtDe(f);
+      });
+      html += '<h3 style="margin:14px 0 6px;padding:6px 10px;background:#fef2f2;border-left:4px solid #dc2626;color:#dc2626;font-size:14px">'
+        + '\ud83d\udd34 CON SALDO PENDIENTE \u2014 ' + conSaldo.length + ' folio' + (conSaldo.length!==1?'s':'')
+        + ' \u00b7 $' + (typeof fN === 'function' ? fN(sPdt) : sPdt) + ' por cobrar</h3>';
+      html += cabecera;
+      conSaldo.forEach(function(it){ html += filaFolio(it); });
+      html += '<tr class="tot-row" style="background:#fef2f2">';
+      html += '<td colspan="3" class="text-right">Subtotal pendientes:</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(sTot) : sTot) + '</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(sPag) : sPag) + '</td>';
+      html += '<td class="text-right" style="color:#dc2626">$' + (typeof fN === 'function' ? fN(sPdt) : sPdt) + '</td>';
+      html += '</tr></tbody></table>';
+    }
+
+    // ── Grupo 2: ya liquidados ──
+    if (liquidados.length) {
+      var lTot = 0, lPag = 0;
+      liquidados.forEach(function(it){
+        var f = it.fol;
+        lTot += (typeof totF === 'function' ? totF(f) : 0);
+        lPag += (typeof pagF === 'function' ? pagF(f) : 0);
+      });
+      html += '<h3 style="margin:14px 0 6px;padding:6px 10px;background:#f0fdf4;border-left:4px solid #16a34a;color:#16a34a;font-size:14px">'
+        + '\u2705 LIQUIDADOS \u2014 ' + liquidados.length + ' folio' + (liquidados.length!==1?'s':'')
+        + ' \u00b7 $' + (typeof fN === 'function' ? fN(lPag) : lPag) + ' cobrados</h3>';
+      html += cabecera;
+      liquidados.forEach(function(it){ html += filaFolio(it); });
+      html += '<tr class="tot-row" style="background:#f0fdf4">';
+      html += '<td colspan="3" class="text-right">Subtotal liquidados:</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(lTot) : lTot) + '</td>';
+      html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(lPag) : lPag) + '</td>';
+      html += '<td class="text-right" style="color:#16a34a">$0,00</td>';
+      html += '</tr></tbody></table>';
+    }
+
+    // ── Totales del contenedor ──
+    html += '<table><tbody><tr class="tot-row">';
     html += '<td colspan="3" class="text-right">TOTALES CONTENEDOR:</td>';
     html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(cTot) : cTot) + '</td>';
     html += '<td class="text-right">$' + (typeof fN === 'function' ? fN(cPag) : cPag) + '</td>';
-    html += '<td class="text-right" style="color:'+(cPdt>0?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(cPdt) : cPdt) + '</td>';
-    html += '</tr>';
-    
-    html += '</tbody></table>';
+    html += '<td class="text-right" style="color:'+(cPdt>0.01?'#dc2626':'#16a34a')+'">$' + (typeof fN === 'function' ? fN(cPdt) : cPdt) + '</td>';
+    html += '</tr></tbody></table>';
   });
   
   html += '</body></html>';
