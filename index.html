@@ -3377,13 +3377,19 @@ async function recalcReservasGlobales(){
         reservasPorProd[pn] = (reservasPorProd[pn] || 0) + (parseFloat(l.q) || 0);
       });
     });
+    // Un folio normal es una VENTA: su mercancia ya salio del almacen
+    // al crearlo, asi que NO se cuenta como reservada (seria doble
+    // conteo). Solo cuentan los folios de contenedores EN TRANSITO:
+    // ahi la mercancia esta vendida pero todavia no ha llegado.
     CLIENTES.forEach(function(cli){
       (cli.folios||[]).forEach(function(f){
+        if(!f.contenedor) return;
+        if(typeof _cntEnTransito !== 'function' || !_cntEnTransito(f.contenedor)) return;
         var isPag = (f.estado === 'pagado' || f.estado === 'Pagado');
         if(!isPag && typeof estF === 'function'){
           try { isPag = (estF(f) === 'pagado'); } catch(e){}
         }
-        if(isPag) return; // Exclude paid folios!
+        if(isPag) return; // ya cobrado y servido
         (f.lineas||[]).forEach(function(l){
           var pname = l.prod || l.n || l.producto;
           if(!pname) return;
@@ -3413,11 +3419,10 @@ async function recalcReservasGlobales(){
       
       var newBadge = oldBadge;
       
-      if (totalInventory <= 0 && newQtyRes > 0) {
-        // Si el stock disponible (físico + tránsito) es 0 y hay reservas -> Auto-Reservado
+      // Marcado como RESERVADO solo si no queda nada libre que vender
+      if (newQtyRes > 0 && available <= 0) {
         newBadge = 'RESERVADO';
-      } else if (totalInventory > 0 && oldBadge === 'RESERVADO') {
-        // Si queda stock disponible, NO está reservado -> Auto-Limpiar
+      } else if (oldBadge === 'RESERVADO' && (available > 0 || newQtyRes <= 0)) {
         newBadge = '';
       }
 
