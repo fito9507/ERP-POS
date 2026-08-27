@@ -3761,7 +3761,8 @@ function syncSaveReserva(r){
   supaReq('POST','reservas?on_conflict=id',body).then(function(rr){
     if(!rr.ok) rr.text().then(function(t){
       console.warn('reserva no guardada:', rr.status, t.slice(0,120));
-      if(/relation .*reservas.* does not exist|PGRST205/i.test(t)) showToast('\u26a0 Falta crear la tabla de reservas: ejecuta supabase_reservas.sql');
+      if(/row-level security|42501/i.test(t)) showToast('\u26a0 La tabla de reservas bloquea escrituras: ejecuta supabase_reservas_rls.sql');
+      else if(/relation .*reservas.* does not exist|PGRST205/i.test(t)) showToast('\u26a0 Falta crear la tabla de reservas: ejecuta supabase_reservas.sql');
       else try{ enqueue({method:'POST',path:'reservas?on_conflict=id',body:body}); }catch(e){}
     });
   }).catch(function(e){ try{ enqueue({method:'POST',path:'reservas?on_conflict=id',body:body}); }catch(e2){} });
