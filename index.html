@@ -3363,6 +3363,18 @@ async function recalcReservasGlobales(){
     if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
     // 1. Sum all quantities per product name across active (unpaid) client folios
     var reservasPorProd = {};
+    // Reservas hechas desde el POS ("Solo Reservar"): antes no se
+    // contaban aqui y por eso no bloqueaban nada.
+    var _resPos = (typeof RESERVAS_GLOBAL !== 'undefined' && RESERVAS_GLOBAL)
+      ? RESERVAS_GLOBAL : ((typeof S !== 'undefined' && S.reservas) || []);
+    (_resPos || []).forEach(function(r){
+      if(!r || r.activa === false) return;
+      (r.lineas || []).forEach(function(l){
+        var pn = l.n || l.prod || l.producto;
+        if(!pn) return;
+        reservasPorProd[pn] = (reservasPorProd[pn] || 0) + (parseFloat(l.q) || 0);
+      });
+    });
     CLIENTES.forEach(function(cli){
       (cli.folios||[]).forEach(function(f){
         var isPag = (f.estado === 'pagado' || f.estado === 'Pagado');
@@ -4401,8 +4413,17 @@ function _confirmarReserva(){
     if(cnt)  tgMsg += '\n\uD83D\uDE22 Contenedor: '+cnt;
     tgSend(tgMsg,S.alm,'pedido');
   }
-  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();showToast('Reservado — stock bloqueado');
+  // Propagar la reserva: sin esto se quedaba solo en este dispositivo
+  // y el stock no se bloqueaba en ningun sitio.
+  if(typeof syncReservasGlobal==='function') try{ syncReservasGlobal(); }catch(e){}
+  if(typeof recalcReservasGlobales==='function') try{ recalcReservasGlobales(); }catch(e){}
+  updResBadge();renderSteps(S.step||2);S.cart=[];renderCart();renderProds();
+  if(typeof renderStock==='function') try{ renderStock(); }catch(e){}
+  showToast('\u2713 Reservado \u2014 '+S.reservas.filter(function(r){return r.activa;}).length+' reserva(s) activa(s), stock bloqueado');
 }
+var RESERVAS_GLOBAL = (function(){
+  try{ var r=JSON.parse(localStorage.getItem('erp_reservas_global')||'null'); return Array.isArray(r)?r:null; }catch(e){ return null; }
+})();
 function syncReservasGlobal(){
   RESERVAS_GLOBAL=S.reservas.slice();
   try{localStorage.setItem("erp_reservas_global",JSON.stringify(RESERVAS_GLOBAL));}catch(e){}
@@ -16128,7 +16149,12 @@ function renderStock(){
     }).filter(Boolean).join('');
     if(!lotesStr) lotesStr = '<span style="color:var(--color-text-tertiary);font-size:10px">—</span>';
     
-    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)+'</td>'
+    var _res=parseFloat(p.qty_reservada)||0;
+    var _libre=(p.stk||0)-_res;
+    h+='<td style="text-align:right;font-weight:600">'+fN(p.stk||0,0)
+      +(_res>0?'<div style="font-size:9px;font-weight:400;color:var(--color-text-warning);white-space:nowrap">'+fN(_res,0)+' reservado</div>'
+        +'<div style="font-size:10px;font-weight:600;color:'+(_libre>0?'var(--color-text-success)':'var(--color-text-danger)')+';white-space:nowrap">'+fN(_libre,0)+' libre</div>':'')
+      +'</td>'
       +'<td style="line-height:1.2;max-width:200px">'+lotesStr+'</td>'
       +'<td style="text-align:right;font-size:11px;color:var(--color-text-secondary)">'+(p.min!=null?fN(p.min):'—')+' / '+(p.maj!=null?fN(p.maj):'—')+'</td></tr>';
   });}
