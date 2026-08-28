@@ -3778,11 +3778,22 @@ async function syncLoadReservas(){
     var r=await supaReq('GET','reservas?select=*&activa=is.true&order=created_at.desc&limit=500');
     if(!r.ok) return;
     var rows=await r.json()||[];
-    S.reservas=rows.map(function(x){
+    var nube=rows.map(function(x){
       return { id:isNaN(Number(x.id))?x.id:Number(x.id), fecha:x.fecha, user:x.usuario, alm:x.almacen,
         cli:x.cliente, nota:x.nota, contenedor:x.contenedor,
         lineas:x.lineas||[], totalUSD:parseFloat(x.total_usd)||0, activa:x.activa!==false };
     });
+    // FUSIONAR, no reemplazar: una reserva local que aun no llego a la
+    // nube (creada offline o cuando la tabla estaba bloqueada) se
+    // conserva y se REsube, en vez de borrarse al cargar.
+    var enNube={};
+    nube.forEach(function(x){ enNube[String(x.id)]=true; });
+    var locales=(S.reservas||[]).filter(function(x){ return x&&x.activa!==false&&!enNube[String(x.id)]; });
+    locales.forEach(function(x){
+      console.log('Reserva local no estaba en la nube, resubiendo:', x.id, x.nota||'');
+      if(typeof syncSaveReserva==='function') try{ syncSaveReserva(x); }catch(e){}
+    });
+    S.reservas=nube.concat(locales);
     _saveReservas();
     if(typeof syncReservasGlobal==='function') syncReservasGlobal();
     if(typeof updResBadge==='function') updResBadge();
