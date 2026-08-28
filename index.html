@@ -2514,7 +2514,7 @@ async function syncLoadMovsIG(){
 async function syncLoadVentas() {
   if (!_supaOnline) return false;
   try {
-    var r = await supaReq('GET', 'ventas?order=fecha.desc&limit=500&select=*,cobros_json');
+    var r = await supaReq('GET', 'ventas?order=fecha.desc&limit=2000&select=*,cobros_json');
     if (!r.ok) {
       console.error('syncLoadVentas HTTP error:', r.status);
       return false;
@@ -17329,6 +17329,28 @@ function renderAdminAnalytics() {
   // Calculate total cost from product-level
   Object.keys(prodSales).forEach(function(k) { totalCost += prodSales[k].cost; });
 
+  // ── Ventas POS reales por producto (HISTORICO completo, sin filtro de
+  // periodo y sin las filas espejo de folios, que ya cuentan por sus
+  // lineas de folio). Es la fuente del "Vendido" del ciclo contenedor:
+  // antes se derivaba de inicial - stock y un stock corrupto falseaba
+  // la fila sin avisar.
+  var posSalesAll = {}; // {prodName: {qty, pricedQty, revenue}}
+  ventas.forEach(function(v) {
+    if (v.nota && /Folio\s*[\w-]/i.test(v.nota)) return; // espejo de folio
+    if (!(v.prods && typeof v.prods === 'string')) return;
+    v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
+      seg = seg.trim();
+      var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
+      if (!m) return;
+      var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
+      var name = m[2].trim();
+      var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
+      if (!posSalesAll[name]) posSalesAll[name] = { qty: 0, pricedQty: 0, revenue: 0 };
+      posSalesAll[name].qty += qty;
+      if (m[3]) { posSalesAll[name].pricedQty += qty; posSalesAll[name].revenue += qty * price; }
+    });
+  });
+
   var grossMargin = totalRevenue - totalCost;
   var marginPct = totalRevenue > 0 ? (grossMargin / totalRevenue * 100) : 0;
 
@@ -17405,29 +17427,38 @@ function renderAdminAnalytics() {
           });
         }
         
-        // El stock FISICO manda: 'Quedan' es lo que de verdad hay en el
-        // almacen. Antes se calculaba inicial - vendido_en_folios, y como
-        // las ventas por POS no llevan folio, prometia unidades que ya no
-        // estaban (el #13 mostraba 241.090 de M6 con 105.090 reales).
+        // 'Quedan' sigue siendo el stock FISICO real del almacen.
         var qCurrentDisplay = qCurrent;
-        var qSold = Math.max(0, qOriginal - qCurrent);
-        // Salidas no atribuibles a folios de este contenedor (ventas POS,
-        // ajustes): se valoran al precio medio real de venta del producto.
-        var qFuera = Math.max(0, qSold - fSold);
+        // ── 'Vendido' por REGISTROS (folios + tickets POS), no por stock.
+        // Los tickets POS no llevan lote: se reparten entre los lotes del
+        // producto en proporcion a lo que entro en cada uno (si solo vive
+        // en este contenedor, todo va aqui). El descuadre contra el stock
+        // fisico se calcula y se MUESTRA, en vez de absorberse.
+        var _pos = posSalesAll[p.n];
+        var _totIni = 0;
+        (p.lotes || []).forEach(function(le) { _totIni += Math.max(parseFloat(le.cantidad_inicial) || 0, parseFloat(le.cantidad) || 0); });
+        var share = _totIni > 0 ? Math.min(1, qOriginal / _totIni) : 1;
+        var posAttr = Math.round((_pos ? _pos.qty : 0) * share);
         var _ps = prodSales[p.n];
-        var pMedio = (_ps && _ps.pricedQty > 0) ? (_ps.revenue / _ps.pricedQty)
-                   : (fSold > 0 ? fRev / fSold : 0);
-        var revFuera = qFuera * pMedio;
+        var pMedio = (_pos && _pos.pricedQty > 0) ? (_pos.revenue / _pos.pricedQty)
+                   : ((_ps && _ps.pricedQty > 0) ? (_ps.revenue / _ps.pricedQty)
+                   : (fSold > 0 ? fRev / fSold : 0));
+        var revPos = posAttr * pMedio;
+        var qSold = fSold + posAttr;                      // vendido segun registros
+        var descuadre = (qOriginal - qSold) - qCurrent;   // >0 faltan en estante, <0 sobran
+        // Tolerancia: el reparto proporcional entre lotes es aproximado
+        var tolDesc = share < 1 ? Math.max(10, qOriginal * 0.02) : 0.5;
+        if (Math.abs(descuadre) <= tolDesc) descuadre = 0;
 
         totalUnits += qOriginal;
         unitsSold += qSold;
-        revenue += fRev + revFuera;
+        revenue += fRev + revPos;
         
         var currentP = 0;
         if(p.escala && p.escala.length > 0) currentP = parseFloat(p.escala[0].precio);
         if(!currentP) currentP = parseFloat(p.min) || parseFloat(p.maj) || 0;
         var expectedRevExtra = qCurrentDisplay * currentP;
-        fRev += revFuera; // el ingreso de la fila incluye lo vendido fuera de folios
+        fRev += revPos; // el ingreso de la fila incluye lo vendido por POS
         var pCost = qOriginal * (parseFloat(l.costo) || parseFloat(p.ddp) || parseFloat(p.cif) || 0);
         productCost += pCost;
         
@@ -17438,7 +17469,8 @@ function renderAdminAnalytics() {
           qCurrent: qCurrentDisplay,
           pCost: pCost,
           pRev: fRev,
-          pExpectedExtra: expectedRevExtra
+          pExpectedExtra: expectedRevExtra,
+          descuadre: descuadre
         });
       });
     });
@@ -17456,7 +17488,7 @@ function renderAdminAnalytics() {
     var escala = (usaFacturas && productCost > 0) ? (costMercFacturas / productCost) : 1;
     var soldCogs = 0;
     prodsDetail.forEach(function(pd) {
-      if (pd.qOriginal > 0) soldCogs += pd.pCost * escala * (pd.qSold / pd.qOriginal);
+      if (pd.qOriginal > 0) soldCogs += pd.pCost * escala * Math.min(1, pd.qSold / pd.qOriginal);
     });
     var _totU = prodsDetail.reduce(function(a, pd) { return a + pd.qOriginal; }, 0);
     var _soldU = prodsDetail.reduce(function(a, pd) { return a + pd.qSold; }, 0);
@@ -17792,7 +17824,9 @@ function renderAdminAnalytics() {
             + '<td style="padding:4px;font-weight:500">'+pd.n+'</td>'
             + '<td style="text-align:right;padding:4px">'+fN(pd.qOriginal,0)+'</td>'
             + '<td style="text-align:right;padding:4px;color:var(--color-text-success)">'+fN(pd.qSold,0)+' <span style="font-size:8px;color:var(--color-text-tertiary)">('+pct+'%)</span></td>'
-            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)+'</td>'
+            + '<td style="text-align:right;padding:4px">'+fN(pd.qCurrent,0)
+            + (pd.descuadre ? ' <span title="Seg\u00fan folios+POS deber\u00edan quedar '+fN(pd.qCurrent+pd.descuadre,0)+': el estante tiene '+(pd.descuadre>0?fN(pd.descuadre,0)+' de menos':fN(-pd.descuadre,0)+' de m\u00e1s')+'" style="color:#e6a23c;font-size:9px;font-weight:600;cursor:help">\u26a0'+(pd.descuadre>0?'\u2212':'+')+fN(Math.abs(pd.descuadre),0)+'</span>' : '')
+            + '</td>'
             + '<td style="text-align:right;padding:4px;font-weight:500;color:var(--color-text-info)">$'+fN(pd.pRev,2)+'</td>'
             + '</tr>';
         });
