@@ -17976,27 +17976,16 @@ function _iaSaveChat() {
   } catch(e) { console.error('Error saving IA chat', e); }
 }
 var _iaProposal = null;  // parsed proposal from AI
+// Barrer claves viejas de OpenAI que queden en este navegador de antes
+// del arreglo de seguridad (la clave ahora vive en el servidor)
+try { localStorage.removeItem('erp_openai_key'); } catch(e) {}
 
 function renderIAAssistant() {
   var el = document.getElementById('ia-content');
   if (!el) return;
-  var apiKey = localStorage.getItem('erp_openai_key') || (typeof HARDCODED_OPENAI_KEY !== 'undefined' ? HARDCODED_OPENAI_KEY : '');
-
-  // If no API key configured, show setup screen
-  if (!apiKey) {
-    el.innerHTML = '<div class="ia-api-setup">'
-      + '<div style="font-size:40px;margin-bottom:12px">🤖</div>'
-      + '<div style="font-size:16px;font-weight:600;margin-bottom:6px">Asistente Financiero IA</div>'
-      + '<div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:16px;max-width:400px;margin-left:auto;margin-right:auto">'
-      + 'Analiza comprobantes bancarios, chats de WhatsApp, fotos de recibos y más. '
-      + 'La IA interpreta tus flujos de dinero y te propone los movimientos contables exactos para aprobar con un clic.</div>'
-      + '<div style="font-size:12px;color:var(--color-text-tertiary);margin-bottom:8px">Introduce tu API Key de OpenAI para empezar:</div>'
-      + '<input type="password" id="ia-api-key-input" placeholder="sk-..." autocomplete="off">'
-      + '<br><button onclick="iaGuardarKey()">Guardar y empezar</button>'
-      + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:12px">Tu clave se guarda solo en este navegador (localStorage). Nadie más tiene acceso.</div>'
-      + '</div>';
-    return;
-  }
+  // La clave de OpenAI vive en el servidor (openai-proxy): el navegador
+  // no necesita ninguna, asi que se entra directo al chat. La pantalla
+  // que pedia la API Key se elimino con el arreglo de seguridad.
 
   // Render the chat interface
   var chatHtml = '';
@@ -18065,28 +18054,15 @@ function renderIAAssistant() {
 }
 
 function iaGuardarKey() {
-  var key = (document.getElementById('ia-api-key-input') || {}).value || '';
-  key = key.trim();
-  if (!key || !key.startsWith('sk-')) { alert('La API Key debe comenzar con "sk-"'); return; }
-  localStorage.setItem('erp_openai_key', key);
-  showToast('API Key guardada correctamente ✓');
+  // Ya no hay clave en el navegador: vive en el servidor (openai-proxy)
+  showToast('La clave vive en el servidor: no hace falta configurar nada ✓');
   renderIAAssistant();
 }
 
 function iaConfigKey() {
-  var newKey = prompt('Introduce tu nueva OpenAI API Key (sk-...):', '');
-  if (newKey === null) return;
-  if (newKey.trim() && newKey.trim().startsWith('sk-')) {
-    localStorage.setItem('erp_openai_key', newKey.trim());
-    showToast('API Key actualizada ✓');
-  } else if (newKey.trim() === '') {
-    localStorage.removeItem('erp_openai_key');
-    _iaChatHistory = [];
-    _iaSaveChat();
-    renderIAAssistant();
-  } else {
-    alert('La API Key debe comenzar con "sk-"');
-  }
+  // La clave ya no se configura aqui: vive como secreto del servidor
+  // (Supabase > Edge Functions > openai-proxy > OPENAI_API_KEY)
+  alert('La clave de OpenAI ya no se guarda en el navegador.\n\nVive como secreto en el servidor (Supabase \u2192 openai-proxy) con tope de gasto diario. Para cambiarla: Supabase \u2192 Settings \u2192 Edge Functions \u2192 Secrets \u2192 OPENAI_API_KEY.');
 }
 
 function iaLimpiarChat() {
