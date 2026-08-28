@@ -3371,6 +3371,11 @@ async function recalcReservasGlobales(){
     if(typeof CLIENTES==='undefined'||typeof PRODS==='undefined') return;
     // 1. Sum all quantities per product name across active (unpaid) client folios
     var reservasPorProd = {};
+    // Folios de contenedores en transito: se cuentan APARTE, porque esa
+    // mercancia viene en el contenedor y solo puede "reservar" stock en
+    // transito, nunca el fisico que ya esta en el almacen (bloquearlo
+    // dejaba el POS en "no quedan" con miles de unidades en estante).
+    var transitoPorProd = {};
     // Reservas hechas desde el POS ("Solo Reservar"): antes no se
     // contaban aqui y por eso no bloqueaban nada.
     var _resPos = (typeof RESERVAS_GLOBAL !== 'undefined' && RESERVAS_GLOBAL)
@@ -3399,8 +3404,8 @@ async function recalcReservasGlobales(){
         (f.lineas||[]).forEach(function(l){
           var pname = l.prod || l.n || l.producto;
           if(!pname) return;
-          if(!reservasPorProd[pname]) reservasPorProd[pname] = 0;
-          reservasPorProd[pname] += (l.q||0);
+          if(!transitoPorProd[pname]) transitoPorProd[pname] = 0;
+          transitoPorProd[pname] += (l.q||0);
         });
       });
     });
@@ -3410,7 +3415,6 @@ async function recalcReservasGlobales(){
     PRODS.forEach(function(p){
       var oldQtyRes = p.qty_reservada || 0;
       var oldBadge = p.badgeTexto || '';
-      var newQtyRes = reservasPorProd[p.n] || 0;
       
       var physStock = p.stk || 0;
       var transitStock = 0;
@@ -3421,6 +3425,11 @@ async function recalcReservasGlobales(){
         transitStock += hTr + pTr + xTr;
       }
       var totalInventory = physStock + transitStock;
+      // Los folios en transito solo bloquean hasta donde llega el stock
+      // en transito registrado; el resto lo cubrira el contenedor al
+      // llegar, no el estante de hoy.
+      var resFoliosTr = Math.min(transitoPorProd[p.n] || 0, transitStock);
+      var newQtyRes = (reservasPorProd[p.n] || 0) + resFoliosTr;
       var available = totalInventory - newQtyRes;
       
       var newBadge = oldBadge;
