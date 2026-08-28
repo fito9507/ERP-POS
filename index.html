@@ -17842,7 +17842,11 @@ function _escHtml(s) {
 // ══════════════════════════════════════════════════════════════
 
 // AQUI PUEDES PEGAR TU CLAVE FIJA PARA QUE NO SE BORRE NUNCA MÁS:
-const HARDCODED_OPENAI_KEY = 'sk-proj-' + 'Bb2B9ZG8GoQnum6y5uY4pbZyWcq8JvuU5favpT2_SQQLoShEkM_HWK38rLtQLb-VBO1eH440cdT3BlbkFJa71zFhGFNX4y5FCb7YFnU86giUD8uk0rgFgGEL6sVbujFCWBUKAUo-tWUg65b4JPkMpSxC_98A'; // <-- Clave fija de OpenAI
+// La clave de OpenAI YA NO vive aqui: este archivo se publica en
+// GitHub Pages y cualquiera podia leerla (paso: 155 USD de consumo
+// ajeno el 27-28/08/2026). Ahora las llamadas van a la Edge Function
+// openai-proxy, que guarda la clave como secreto del servidor.
+const IA_PROXY = SUPA_URL + '/functions/v1/openai-proxy';
 
 
 var _iaAttachments = []; // {name, type, base64, mimeType}
@@ -18519,9 +18523,7 @@ async function iaEnviar() {
   var text = (input ? input.value : '').trim();
   if (!text && _iaAttachments.length === 0) return;
 
-  var apiKey = localStorage.getItem('erp_openai_key') || (typeof HARDCODED_OPENAI_KEY !== 'undefined' ? HARDCODED_OPENAI_KEY : '');
-  if (!apiKey) { showToast('Configura tu API Key primero'); return; }
-
+  // Ya no hace falta clave en el navegador: la pone el servidor
   var userContent = [];
   var displayText = text || '';
 
@@ -18544,7 +18546,7 @@ async function iaEnviar() {
         var fd = new FormData();
         fd.append('file', a.rawFile);
         fd.append('model', 'whisper-1');
-        var wRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        var wRes = await fetch(IA_PROXY + '?endpoint=transcriptions', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey },
           body: fd
@@ -18626,14 +18628,15 @@ async function iaEnviar() {
       messages.push({ role: m.role, content: cont });
     });
 
-    var response = await fetch('https://api.openai.com/v1/chat/completions', {
+    var response = await fetch(IA_PROXY, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'apikey': SUPA_KEY
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: messages,
         max_tokens: 1500,
         temperature: 0.3
@@ -18642,6 +18645,11 @@ async function iaEnviar() {
 
     if (!response.ok) {
       var errBody = await response.text();
+      if (response.status === 429 && /tope_diario/.test(errBody)) {
+        var _m = '';
+        try { _m = JSON.parse(errBody).error.message; } catch (e) {}
+        throw new Error(_m || 'Se alcanz\u00f3 el tope de gasto diario del asistente.');
+      }
       throw new Error('API error ' + response.status + ': ' + errBody.slice(0, 200));
     }
 
