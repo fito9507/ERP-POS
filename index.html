@@ -18712,6 +18712,9 @@ async function iaEnviar() {
         try { _m = JSON.parse(errBody).error.message; } catch (e) {}
         throw new Error(_m || 'Se alcanz\u00f3 el tope de gasto diario del asistente.');
       }
+      if (/insufficient_quota|credit_balance_exhausted|no credits/i.test(errBody)) {
+        throw new Error('La cuenta de OpenAI no tiene saldo. La clave est\u00e1 bien instalada en el servidor: solo falta recargar cr\u00e9ditos en platform.openai.com \u2192 Billing.');
+      }
       throw new Error('API error ' + response.status + ': ' + errBody.slice(0, 200));
     }
 
