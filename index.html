@@ -1088,7 +1088,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
     </div>
   </div>
   <div class="est-bar" id="est-bar"></div>
-  <div style="margin-bottom:10px"><input class="adm-inp" id="venta-nota" placeholder="📝 Nota opcional (cliente, referencia...)" style="font-size:12px;padding:8px 10px;width:100%;background:var(--color-background-secondary)"></div>  <button class="btn btn-p" id="btn-conf" onclick="confirmar()">Confirmar venta</button>
+  <div style="margin-bottom:10px"><input class="adm-inp" id="venta-nota" placeholder="📝 Nota opcional (cliente, referencia...)" style="font-size:12px;padding:8px 10px;width:100%;background:var(--color-background-secondary)"></div>  <button class="btn btn-p" id="btn-conf" onclick="confirmar()" disabled style="opacity:.45">Confirmar venta</button>
   <button class="btn btn-ghost" onclick="goStep('pg-prod',2)">← Volver a productos</button>
 </div>
 </div>
@@ -4752,6 +4752,25 @@ function _getCajasForMon(mon, alm) {
 
 function confirmar(){
   var totalUSD=getVentaUSD();
+  // Candado: el boton de la UI puede estar habilitado antes de tiempo
+  // (nace asi en el HTML y renderPago puede tardar o fallar con mala
+  // conexion). La venta NUNCA se guarda sin su cobro cuadrado: ya
+  // paso dos veces (HAB08-011 y HAB08-017) y el dinero quedo sin caja.
+  if(!S.pagos.length||getCobUSD()<0.01){
+    showToast('\u26a0 A\u00f1ade la forma de cobro antes de confirmar');
+    try{renderPago();}catch(e){}
+    return;
+  }
+  if(getPendCobro()>0.005){
+    showToast('\u26a0 Faltan '+fN(getPendCobro())+' USD por cobrar');
+    try{renderPago();}catch(e){}
+    return;
+  }
+  if(getPendVuelto()>0.005||getPendVuelto()<-0.005){
+    showToast('\u26a0 El vuelto no cuadra: revisa antes de confirmar');
+    try{renderPago();}catch(e){}
+    return;
+  }
   var prods=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join(', ');
   var cobDesc=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
   var vueltoDesc=S.vueltos.length?S.vueltos.map(function(v){return fN(v.m,dFor(v.mon))+' '+v.mon;}).join(' + '):'';
