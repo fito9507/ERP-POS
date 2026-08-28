@@ -17354,6 +17354,7 @@ function renderAdminAnalytics() {
   // antes se derivaba de inicial - stock y un stock corrupto falseaba
   // la fila sin avisar.
   var posSalesAll = {}; // {prodName: {qty, pricedQty, revenue}}
+  var posVentaDet = []; // {n, fecha, cli, usd} por linea de ticket (dashboard por contenedor)
   ventas.forEach(function(v) {
     if (v.nota && /Folio\s*[\w-]/i.test(v.nota)) return; // espejo de folio
     if (!(v.prods && typeof v.prods === 'string')) return;
@@ -17366,7 +17367,11 @@ function renderAdminAnalytics() {
       var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
       if (!posSalesAll[name]) posSalesAll[name] = { qty: 0, pricedQty: 0, revenue: 0 };
       posSalesAll[name].qty += qty;
-      if (m[3]) { posSalesAll[name].pricedQty += qty; posSalesAll[name].revenue += qty * price; }
+      if (m[3]) {
+        posSalesAll[name].pricedQty += qty;
+        posSalesAll[name].revenue += qty * price;
+        posVentaDet.push({ n: name, fecha: v.fecha, cli: v.cli || 'Walk-in', usd: qty * price });
+      }
     });
   });
 
@@ -17403,6 +17408,7 @@ function renderAdminAnalytics() {
     var revenue = 0;
     var unitsSold = 0;
     var prodsDetail = [];
+    var shareProd = {}; // reparto por lote de cada producto (para el dashboard)
 
     linkedProds.forEach(function(p) {
       var lotEntries = p.lotes.filter(function(l) { return l.lote === loteKey; });
@@ -17458,6 +17464,7 @@ function renderAdminAnalytics() {
         (p.lotes || []).forEach(function(le) { _totIni += Math.max(parseFloat(le.cantidad_inicial) || 0, parseFloat(le.cantidad) || 0); });
         var share = _totIni > 0 ? Math.min(1, qOriginal / _totIni) : 1;
         var posAttr = Math.round((_pos ? _pos.qty : 0) * share);
+        shareProd[p.n] = share;
         var _ps = prodSales[p.n];
         var pMedio = (_pos && _pos.pricedQty > 0) ? (_pos.revenue / _pos.pricedQty)
                    : ((_ps && _ps.pricedQty > 0) ? (_ps.revenue / _ps.pricedQty)
@@ -17522,6 +17529,54 @@ function renderAdminAnalytics() {
     var expectedMarginP = expectedRevenue > 0 ? (expectedMargin / expectedRevenue * 100) : 0;
     var soldPct = totalUnits > 0 ? Math.min(100, (unitsSold / totalUnits * 100)) : 0;
 
+    // ── Dashboard del contenedor: cobros, deudas, ritmo y clientes ──
+    var _dash = null;
+    try {
+      var _pset = {}; prodsDetail.forEach(function(pd){ _pset[pd.n] = true; });
+      var _fact = 0, _cobF = 0, _topCli = {}, _sem = {};
+      var _wk = function(fs){
+        if(!/^\d{4}-\d{2}-\d{2}/.test(fs||'')) return null;
+        var d = new Date(fs.slice(0,10) + 'T12:00:00'); if(isNaN(d)) return null;
+        var l = new Date(d); l.setDate(d.getDate() - ((d.getDay()+6)%7));
+        return l.toISOString().slice(0,10);
+      };
+      clientes.forEach(function(cli){
+        (cli.folios||[]).forEach(function(f){
+          if (f.contenedor !== loteKey) return;
+          var ft = (f.lineas||[]).reduce(function(a,ln){ return a + (parseFloat(ln.q)||0)*(parseFloat(ln.precio!=null?ln.precio:ln.p)||0); },0);
+          var pg = (f.abonos||[]).reduce(function(a,ab){ return a + (parseFloat(ab.equivUSD)||0); },0);
+          _fact += ft; _cobF += pg;
+          _topCli[cli.nombre] = (_topCli[cli.nombre]||0) + ft;
+          (f.abonos||[]).forEach(function(ab){ var k=_wk(ab.fecha); if(k) _sem[k]=(_sem[k]||0)+(parseFloat(ab.equivUSD)||0); });
+        });
+      });
+      var _posC = 0;
+      posVentaDet.forEach(function(dv){
+        if(!_pset[dv.n]) return;
+        var sh = shareProd[dv.n] != null ? shareProd[dv.n] : 1;
+        var u = dv.usd * sh;
+        _posC += u;
+        _topCli[dv.cli] = (_topCli[dv.cli]||0) + u;
+        var k = _wk(dv.fecha); if(k) _sem[k]=(_sem[k]||0)+u;
+      });
+      var _sems = Object.keys(_sem).sort().slice(-8).map(function(k){ return {k:k, v:_sem[k]}; });
+      var _hoy = new Date(); var _c21 = 0;
+      Object.keys(_sem).forEach(function(k){ var d=new Date(k+'T12:00:00'); if((_hoy-d)/86400000 <= 21) _c21 += _sem[k]; });
+      var _rate = _c21 / 21;
+      var _porV = Math.max(0, expectedRevenue - revenue);
+      _dash = {
+        cobrado: _cobF + _posC,
+        pendiente: Math.max(0, _fact - _cobF),
+        porVender: _porV,
+        descNeto: prodsDetail.reduce(function(a,pd){ return a + (pd.descuadre||0); },0),
+        topCli: Object.keys(_topCli).map(function(k){ return {n:k, v:_topCli[k]}; }).sort(function(a,b){ return b.v-a.v; }).slice(0,5),
+        semanas: _sems,
+        rate: _rate,
+        diasAgotar: (_rate > 0 && _porV > 1) ? Math.round(_porV/_rate) : null,
+        llegada: c.fecha_llegada || c.fecha_eta || ''
+      };
+    } catch(eD) { console.warn('dash contenedor:', eD); }
+
     return {
       id: c.id,
       ref: c.ref || c.id,
@@ -17543,7 +17598,8 @@ function renderAdminAnalytics() {
       unitsSold: unitsSold,
       soldPct: soldPct,
       linkedProds: linkedProds.length,
-      prodsDetail: prodsDetail
+      prodsDetail: prodsDetail,
+      dash: _dash
     };
   });
 
@@ -17825,6 +17881,44 @@ function renderAdminAnalytics() {
       
       h += '</div>';
       h += '</summary>';
+
+      if (cd.dash) {
+        var D = cd.dash;
+        var _chip = function(lbl, val, col){ return '<div style="flex:1;min-width:110px;background:var(--color-background-primary);border:1px solid rgba(255,255,255,.06);border-radius:6px;padding:8px 10px"><div style="font-size:9px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.5px">'+lbl+'</div><div style="font-size:14px;font-weight:700;color:'+col+'">'+val+'</div></div>'; };
+        h += '<div style="margin-top:12px;padding:10px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
+        h += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+        h += _chip('\ud83d\udcb5 Cobrado', '$'+fN(D.cobrado), 'var(--color-text-success)');
+        h += _chip('\u23f3 Pendiente por cobrar', '$'+fN(D.pendiente), D.pendiente>0.01?'var(--color-text-warning)':'var(--color-text-tertiary)');
+        h += _chip('\ud83d\udce6 Por vender (PVP)', '$'+fN(D.porVender), 'var(--color-text-info)');
+        if (Math.abs(D.descNeto) > 0.5) h += _chip('\u26a0 Descuadre stock', (D.descNeto>0?'\u2212':'+')+fN(Math.abs(D.descNeto),0)+' uds', '#e6a23c');
+        if (D.diasAgotar != null) h += _chip('\ud83d\udd2e Se agota en', '~'+D.diasAgotar+' d\u00edas', 'var(--color-text-primary)');
+        h += '</div>';
+        if (D.semanas.length > 1) {
+          var _mx = Math.max.apply(null, D.semanas.map(function(s){ return s.v; })) || 1;
+          h += '<div style="font-size:9px;color:var(--color-text-tertiary);margin:10px 0 3px;text-transform:uppercase;letter-spacing:.5px">Entradas por semana (abonos + POS)</div>';
+          h += '<div style="display:flex;align-items:flex-end;gap:4px">';
+          D.semanas.forEach(function(s){
+            var hp = Math.max(3, Math.round(s.v/_mx*40));
+            var lb = s.k.slice(8,10)+'/'+s.k.slice(5,7);
+            h += '<div title="Semana del '+lb+': $'+fN(s.v)+'" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
+              + '<div style="font-size:8px;color:var(--color-text-tertiary)">'+(s.v>=1000?(s.v/1000).toFixed(1)+'k':Math.round(s.v))+'</div>'
+              + '<div style="width:100%;max-width:34px;height:'+hp+'px;background:var(--color-primary);opacity:.8;border-radius:3px 3px 0 0"></div>'
+              + '<div style="font-size:8px;color:var(--color-text-tertiary)">'+lb+'</div></div>';
+          });
+          h += '</div>';
+        }
+        if (D.topCli.length) {
+          h += '<div style="font-size:9px;color:var(--color-text-tertiary);margin:10px 0 3px;text-transform:uppercase;letter-spacing:.5px">Top clientes del contenedor</div>';
+          var _mc = D.topCli[0].v || 1;
+          D.topCli.forEach(function(tc){
+            h += '<div style="display:flex;align-items:center;gap:6px;margin:2px 0"><div style="flex:0 0 150px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+_escHtml(tc.n)+'</div>'
+              + '<div style="flex:1;height:8px;background:var(--color-background-primary);border-radius:4px;overflow:hidden"><div style="width:'+Math.max(2,Math.round(tc.v/_mc*100))+'%;height:100%;background:var(--color-text-info);opacity:.75"></div></div>'
+              + '<div style="flex:0 0 70px;text-align:right;font-size:10px;font-weight:600">$'+fN(tc.v)+'</div></div>';
+          });
+        }
+        if (D.rate > 0.01) h += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:6px">Ritmo \u00faltimas 3 semanas: <b>$'+fN(D.rate)+'/d\u00eda</b>'+(D.llegada?' \u00b7 llegada: '+D.llegada:'')+'</div>';
+        h += '</div>';
+      }
       
       if (cd.prodsDetail && cd.prodsDetail.length > 0) {
         h += '<div style="margin-top:12px;padding:8px;background:var(--color-background-secondary);border-radius:6px;cursor:default">';
