@@ -18566,7 +18566,9 @@ async function iaEnviar() {
       } else if (a.type === 'image') {
         userContent.push({
           type: 'image_url',
-          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'high' }
+          // 'auto' deja que el modelo decida: en fotos de comprobantes
+          // y capturas da igual de bien que 'high' y cuesta mucho menos
+          image_url: { url: 'data:' + a.mimeType + ';base64,' + a.base64, detail: 'auto' }
         });
         displayText += '\n📷 ' + a.name;
       } else if (a.type === 'text') {
@@ -18605,9 +18607,23 @@ async function iaEnviar() {
     var context = _iaBuildContext();
     var messages = [{ role: 'system', content: _iaBuildSystemPrompt(context) }];
 
-    var histSlice = _iaChatHistory.slice(-10);
-    histSlice.forEach(function(m) {
-      messages.push({ role: m.role, content: m.content });
+    // Historial: 6 mensajes en vez de 10, y SIN reenviar las fotos.
+    // Una imagen cuesta ~1.100 tokens y antes se remandaba en cada
+    // pregunta posterior mientras siguiera en el historial: subir una
+    // foto y hacer 10 preguntas la cobraba 10 veces.
+    var histSlice = _iaChatHistory.slice(-6);
+    var _ultimo = _iaChatHistory.length - 1;
+    histSlice.forEach(function(m, idx) {
+      var esActual = (_iaChatHistory.length - histSlice.length + idx) === _ultimo;
+      var cont = m.content;
+      if (!esActual && Array.isArray(cont)) {
+        // Sustituir las imagenes por una nota de texto
+        cont = cont.map(function(part) {
+          if (part && part.type === 'image_url') return { type: 'text', text: '[imagen enviada antes]' };
+          return part;
+        });
+      }
+      messages.push({ role: m.role, content: cont });
     });
 
     var response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -18619,7 +18635,7 @@ async function iaEnviar() {
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: messages,
-        max_tokens: 4096,
+        max_tokens: 1500,
         temperature: 0.3
       })
     });
