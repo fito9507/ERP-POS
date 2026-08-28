@@ -2960,6 +2960,10 @@ async function supaInit() {
     await syncLoadContenedores();
     await syncLoadMovsIG();
     await syncLoadStockMovs();
+    // Reservas de la nube: antes solo se cargaban tras vaciar la cola
+    // offline, asi que un arranque normal nunca las traia y cada movil
+    // veia solo las suyas.
+    try { if (typeof syncLoadReservas === 'function') await syncLoadReservas(); } catch(errR){ console.warn('syncLoadReservas init:', errR); }
     try {
       if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
     } catch(errRes){ console.warn('recalcReservasGlobales non-blocking:', errRes); }
@@ -2991,6 +2995,7 @@ async function supaInit() {
       await flushQueue(); 
       await syncLoadVentas(); 
       await syncLoadClientes();
+      try { if (typeof syncLoadReservas === 'function') await syncLoadReservas(); } catch(eR){}
     }
   }, 120000);
   setInterval(function() {
@@ -4506,7 +4511,10 @@ function updResBadge(){
   var rbanner=document.getElementById('res-banner');if(rbanner)rbanner.style.display=n>0?'flex':'none';
   var rbannern=document.getElementById('res-banner-n');if(rbannern)rbannern.textContent=n+' reserva'+(n===1?'':'s');
 }
-function openRes(){
+function openRes(noFetch){
+  if(!noFetch && typeof syncLoadReservas==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
+    syncLoadReservas().then(function(){ try{ openRes(true); }catch(e){} });
+  }
   var _isAdmRes = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   const act=S.reservas.filter(r=>r.activa&&(_isAdmRes||r.user===S.user));
   document.getElementById('res-list').innerHTML=act.length?act.map(r=>{
