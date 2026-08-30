@@ -2969,6 +2969,7 @@ async function supaInit() {
     // offline, asi que un arranque normal nunca las traia y cada movil
     // veia solo las suyas.
     try { if (typeof syncLoadReservas === 'function') await syncLoadReservas(); } catch(errR){ console.warn('syncLoadReservas init:', errR); }
+    try { if (typeof syncLoadLiquidaciones === 'function') await syncLoadLiquidaciones(); } catch(errL){ console.warn('syncLoadLiquidaciones init:', errL); }
     try {
       if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
     } catch(errRes){ console.warn('recalcReservasGlobales non-blocking:', errRes); }
@@ -6366,14 +6367,16 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     vend: typeof S!=='undefined'?S.user:'',
     estado:'Pendiente',
     fecha:today(),
-    ventas: VENTAS.filter(v=>v.estCom==='Pendiente'&&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)&&(!alm||v.alm===alm)).map(v=>v.id),
+    // ids REALES (supaId) para que sobrevivan a recargas y otros moviles;
+    // 'Todos' = sin filtro de almacen (antes no casaba ninguna venta)
+    ventas: VENTAS.filter(v=>v.estCom==='Pendiente'&&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)&&(!alm||alm==='Todos'||v.alm===alm)).map(v=>v.supaId||v.id),
     coms: (typeof COMS!=='undefined'?COMS:[]).filter(function(x){
       return x.estado==='Pendiente'&&(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta)&&(!alm||alm==='Todos'||x.almacen===alm);
     }).map(function(x){return x.id;})
   };
   
   VENTAS.forEach(v => {
-    if(liq.ventas.includes(v.id)) {
+    if(liq.ventas.includes(v.supaId)||liq.ventas.includes(v.id)) {
       v.estCom = 'Liquidada (Pdte)';
       v.liqId = liq.id;
       if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId, {est_com: 'Liquidada (Pdte)'}).catch(e=>{});
@@ -6404,21 +6407,55 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
   refreshLiqHist();renderLiq();showToast('Liquidación guardada como Pendiente ✓');
 }
 
+// Liquidaciones desde la nube (la nube manda): antes solo vivian en el
+// navegador de cada movil y no se veian desde otro dispositivo.
+async function syncLoadLiquidaciones(){
+  if(typeof supaReq==='undefined'||!_supaOnline) return;
+  try{
+    var r=await supaReq('GET','liquidaciones?select=*&order=fecha.desc&limit=300');
+    if(!r.ok) return;
+    var rows=await r.json()||[];
+    liquidaciones=rows.map(function(x){
+      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'',
+        alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
+        totalCUP:parseFloat(x.com_cup)||0, mon:x.mon||'', cuenta:x.cuenta||'',
+        comDetalle:x.com_detalle||{}, estado:x.estado||'Pendiente', fecha:x.fecha||'',
+        ventas:Array.isArray(x.ventas)?x.ventas:[], coms:Array.isArray(x.coms)?x.coms:[] };
+    });
+    try{ localStorage.setItem('erp_liquidaciones',JSON.stringify(liquidaciones)); }catch(e){}
+    if(document.getElementById('liq-hist')) try{ refreshLiqHist(); }catch(e){}
+  }catch(e){ console.warn('syncLoadLiquidaciones:',e); }
+}
 function refreshLiqHist(){
   var _isV=typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='vendedor';
   document.getElementById('liq-hist').innerHTML=liquidaciones.map((l,i)=>{
-    var vs = (l.ventas||[]).map(id=>VENTAS.find(v=>v.id===id)).filter(Boolean);
-    var subRows = vs.length ? vs.map(v=>{
-      var txt = (v.cart||[]).map(c=>`${c.qty}x ${c.n}`).join(', ');
+    // Ventas por id real (supaId) o local; cobros de folios por id de comision
+    var vs = (l.ventas||[]).map(function(id){ return VENTAS.find(function(v){ return String(v.supaId)===String(id)||v.id===id; }); }).filter(Boolean);
+    var cs = (l.coms||[]).map(function(id){ return (typeof COMS!=='undefined'?COMS:[]).find(function(x){ return x.id===id; }); }).filter(Boolean);
+    var bd='border-bottom:1px solid rgba(238,232,213,0.05)';
+    var subRows = vs.map(v=>{
+      var txt = String(v.prods||'');
       return `<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none">
-        <td style="padding-left:20px;border-bottom:1px solid rgba(238,232,213,0.05)">↳ ${fD(v.fecha)}</td>
-        <td style="border-bottom:1px solid rgba(238,232,213,0.05)">${v.alm}</td>
-        <td style="text-align:right;color:var(--color-text-warning);border-bottom:1px solid rgba(238,232,213,0.05)">${fN(v.comUSD||0)} USD</td>
-        <td colspan="2" style="font-size:11px;color:var(--color-text-secondary);max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(238,232,213,0.05)" title="${txt.replace(/"/g,'&quot;')}">${txt}</td>
-        <td style="border-bottom:1px solid rgba(238,232,213,0.05)">Venta: ${fN(v.totUSD)} USD</td>
-        <td style="border-bottom:1px solid rgba(238,232,213,0.05);${_isV?'display:none':''}"></td>
+        <td style="padding-left:20px;${bd}">↳ ${fD(v.fecha)} <span style="color:var(--color-text-tertiary)">${v.ticket||''}</span></td>
+        <td style="${bd}">${v.vend||''} · ${v.alm||''}</td>
+        <td style="text-align:right;color:var(--color-text-warning);${bd}">${fN(v.comUSD||0)} USD <span style="color:var(--color-text-tertiary)">(${v.comPct||0}%)</span></td>
+        <td colspan="2" style="font-size:11px;color:var(--color-text-secondary);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${bd}" title="${txt.replace(/"/g,'&quot;')}">${v.cli&&v.cli!=='Walk-in'?v.cli+' · ':''}${txt}</td>
+        <td style="${bd}">Venta: ${fN(v.totalUSD||0)} USD</td>
+        <td style="${bd};${_isV?'display:none':''}"></td>
       </tr>`;
-    }).join('') : `<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;border-bottom:1px solid rgba(238,232,213,0.05)">Sin detalles de ventas</td></tr>`;
+    }).join('') + cs.map(function(x){
+      var m=x.moneda||'USD';
+      return `<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none">
+        <td style="padding-left:20px;${bd}">↳ ${fD(x.fecha)} <span style="color:var(--color-text-tertiary)">folio ${String(x.folio_id||'').replace(/^f-credito-/,'crédito ')}</span></td>
+        <td style="${bd}">${x.vendedor||''} · ${x.almacen||''}</td>
+        <td style="text-align:right;color:var(--color-text-warning);${bd}">${fN(parseFloat(x.com_usd)||0)} USD <span style="color:var(--color-text-tertiary)">(${fN(parseFloat(x.pct)||0,2)}%)</span></td>
+        <td colspan="2" style="font-size:11px;color:var(--color-text-secondary);${bd}">Cobro de folio · ${x.cliente||''}${x.caja?' · '+x.caja:''}</td>
+        <td style="${bd}">Abono: ${fN(parseFloat(x.monto)||0,(m==='CUP'||m==='CUPT')?0:2)} ${m}</td>
+        <td style="${bd};${_isV?'display:none':''}"></td>
+      </tr>`;
+    }).join('');
+    if(!subRows) subRows=`<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:12px;opacity:0.9;display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;${bd}">Sin detalles de ventas</td></tr>`;
+    else subRows=`<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:11px;color:var(--color-text-tertiary);display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;${bd}">${vs.length} venta(s) de contado · ${cs.length} cobro(s) de folio</td></tr>`+subRows;
 
     return `<tr onclick="var rows=document.querySelectorAll('.liq-subrow-${i}');var isHidden=rows[0]&&rows[0].style.display==='none';rows.forEach(r=>r.style.display=isHidden?'table-row':'none');var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=isHidden?'▼':'▶';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
     <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}</td><td>${l.alm}</td>
@@ -6515,6 +6552,7 @@ function confirmarPagarLiq(i, btn) {
   var liqDesde=liq.desde||''; var liqHasta=liq.hasta||''; var liqAlm=liq.alm||'';
   var ventasLiq=VENTAS.filter(function(v){
     if(v.liqId&&liq.id&&v.liqId===liq.id) return true; // exact match
+    if(liq.ventas&&(liq.ventas.indexOf(v.supaId)>=0||liq.ventas.indexOf(v.id)>=0)) return true; // ids guardados
     var dateOk = (!liqDesde||v.fecha>=liqDesde) && (!liqHasta||v.fecha<=liqHasta);
     var almOk  = !liqAlm||liqAlm==='Todos'||v.alm===liqAlm;
     var vendOk = !liq.vend||v.vend===liq.vend;
@@ -6630,6 +6668,7 @@ function eliminarLiq(i) {
     var liqDesde=liq.desde||''; var liqHasta=liq.hasta||''; var liqAlm=liq.alm||'';
     // Re-calculate per-caja deductions from ventas to reverse exactly
     var ventasLiq=VENTAS.filter(function(v){
+      if(liq.ventas&&(liq.ventas.indexOf(v.supaId)>=0||liq.ventas.indexOf(v.id)>=0)) return true; // ids guardados
       var dateOk=(!liqDesde||v.fecha>=liqDesde)&&(!liqHasta||v.fecha<=liqHasta);
       var almOk=!liqAlm||liqAlm==='Todos'||v.alm===liqAlm;
       var vendOk=!liq.vend||v.vend===liq.vend;
