@@ -6574,7 +6574,8 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
       cuenta:liq.cuenta||'', com_detalle:liq.comDetalle||{},
       estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[],
       ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{}),
-      ...(window._liqAjusteOK!==false&&liq.ajuste?{ajuste:liq.ajuste}:{})
+      ...(window._liqAjusteOK!==false&&liq.ajuste?{ajuste:liq.ajuste}:{}),
+      ...(window._liqLoteOK!==false&&liq.lote?{lote:liq.lote}:{})
     }).then(function(r){ if(!r||!r.ok){ console.warn('liq sync fallo:', r&&r.status); showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube — ejecuta supabase_comisiones.sql'); } })
       .catch(function(e){console.warn('liq sync:',e);});
   } else if(typeof enqueue==='function'){
@@ -6599,8 +6600,9 @@ async function syncLoadLiquidaciones(){
     var rows=await r.json()||[];
     window._liqTasaOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'tasa') : window._liqTasaOK;
     window._liqAjusteOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'ajuste') : window._liqAjusteOK;
+    window._liqLoteOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'lote') : window._liqLoteOK;
     liquidaciones=rows.map(function(x){
-      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null),
+      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null), lote:x.lote||'',
         alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
         totalCUP:parseFloat(x.com_cup)||0, mon:x.mon||'', cuenta:x.cuenta||'',
         comDetalle:x.com_detalle||{}, estado:x.estado||'Pendiente', fecha:x.fecha||'',
@@ -6642,7 +6644,7 @@ function refreshLiqHist(){
     else subRows=`<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:11px;color:var(--color-text-tertiary);display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;${bd}">${vs.length} venta(s) de contado · ${cs.length} cobro(s) de folio</td></tr>`+subRows;
 
     return `<tr onclick="var rows=document.querySelectorAll('.liq-subrow-${i}');var isHidden=rows[0]&&rows[0].style.display==='none';rows.forEach(r=>r.style.display=isHidden?'table-row':'none');var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=isHidden?'▼':'▶';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
-    <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}${l.tasa?` <span style="font-size:10px;color:var(--color-text-tertiary)" title="Tasa CUP/USD de esta liquidación">· tasa ${fN(l.tasa,2)}</span>`:''}</td><td>${l.alm}</td>
+    <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}${l.tasa?` <span style="font-size:10px;color:var(--color-text-tertiary)" title="Tasa CUP/USD de esta liquidación">· tasa ${fN(l.tasa,2)}</span>`:''}${l.lote?` <span style="font-size:10px;color:var(--color-text-info)" title="Contenedor/Lote de esta liquidación">· ${l.lote}</span>`:''}</td><td>${l.alm}</td>
     <td style="text-align:right;color:var(--color-text-warning);font-weight:bold">${fN(l.comUSD)} USD</td>
     <td style="text-align:right;font-weight:bold">${fN(l.totalCUP || l.comCUP || 0, l.mon==='CUP'?0:2)} ${l.mon||'CUP'}</td>
     <td style="font-size:11px;color:var(--color-text-secondary)">${l.cuenta&&!l.cuenta.startsWith('{')?l.cuenta:'—'}</td>
@@ -6978,7 +6980,9 @@ function _liqPDF(o){
     +'.meta{color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{padding:4px 6px;border-bottom:1px solid #ddd;vertical-align:top}th{text-align:left;background:#f1f5f9;font-size:10px}'
     +'.r{text-align:right;white-space:nowrap}.c{text-align:center}.tot td{font-weight:700;border-top:2px solid #333;background:#f8fafc}.big{font-size:15px;font-weight:700}.warn{color:#b45309}'
     +'.firmas{display:flex;gap:40px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;color:#555}@media print{button{display:none}}</style></head><body>';
-  h+='<h1>'+esc(o.titulo)+'</h1><div class="meta">Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.lote?' · Contenedor <b>'+esc(o.lote)+'</b>':'')+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+  h+='<h1>'+esc(o.titulo)+'</h1>'
+    +'<div class="meta"><b>Filtros aplicados:</b> Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Contenedor/Lote <b>'+esc(o.lote||'Todos')+'</b></div>'
+    +'<div class="meta">Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
   // resumen por vendedor
   h+='<h2>Resumen por vendedor</h2><table><thead><tr><th>Vendedor</th><th class="r">Ventas contado</th><th class="r">Com. contado</th><th class="r">Cobros folios</th><th class="r">Com. folios</th><th class="r">A pagar USD</th></tr></thead><tbody>';
   Object.keys(porV).forEach(function(n){var a=porV[n];h+='<tr><td><b>'+esc(n)+'</b></td><td class="r">'+fN(a.baseV)+' ('+a.nV+')</td><td class="r">'+fN(a.comV)+'</td><td class="r">'+fN(a.baseF)+' ('+a.nF+')</td><td class="r">'+fN(a.comF)+'</td><td class="r"><b>'+fN(a.comV+a.comF)+'</b></td></tr>';});
@@ -7037,7 +7041,7 @@ function exportLiqPDFGuardada(i){
     tasaLiq=Math.round((totalGuardado-(ajusteLiq||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
     if(ajusteLiq==null) ajusteLiq=0;
   } else { if(typeof RATES!=='undefined') tasaLiq=parseFloat(RATES.CUP)||null; if(ajusteLiq==null) ajusteLiq=0; }
-  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
+  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', lote:l.lote||'', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
     ventas:vs, coms:cs, totalPago:totalGuardado-(ajusteLiq||0), ajuste:ajusteLiq||0, det:det });
 }
 function exportLiqCSV(){
