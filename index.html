@@ -6539,7 +6539,9 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     lote: (document.getElementById('l-lote')?.value||''),
     ventas: VENTAS.filter(v=>v.estCom==='Pendiente'&&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)&&(!alm||alm==='Todos'||v.alm===alm)&&_ventaEnLote(v,document.getElementById('l-lote')?.value||'')).map(v=>v.supaId||v.id),
     coms: (typeof COMS!=='undefined'?COMS:[]).filter(function(x){
-      return x.estado==='Pendiente'&&(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta)&&(!alm||alm==='Todos'||x.almacen===alm)&&_comEnLote(x,document.getElementById('l-lote')?.value||'');
+      // Pendientes, y tambien los 'Liquidada (Pdte)' cuya liquidacion ya no existe (huerfanos)
+      var pdte=x.estado==='Pendiente'||(x.estado==='Liquidada (Pdte)'&&!(typeof liquidaciones!=='undefined'&&liquidaciones.some(function(q){return q.id===x.liq_id;})));
+      return pdte&&(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta)&&(!alm||alm==='Todos'||x.almacen===alm)&&_comEnLote(x,document.getElementById('l-lote')?.value||'');
     }).map(function(x){return x.id;})
   };
   
@@ -6636,6 +6638,7 @@ function refreshLiqHist(){
     // Ventas por id real (supaId) o local; cobros de folios por id de comision
     var vs = (l.ventas||[]).map(function(id){ return VENTAS.find(function(v){ return String(v.supaId)===String(id)||v.id===id; }); }).filter(Boolean);
     var cs = (l.coms||[]).map(function(id){ return (typeof COMS!=='undefined'?COMS:[]).find(function(x){ return x.id===id; }); }).filter(Boolean);
+    (typeof COMS!=='undefined'?COMS:[]).forEach(function(x){ if(x.liq_id===l.id&&cs.indexOf(x)<0) cs.push(x); });
     var bd='border-bottom:1px solid rgba(238,232,213,0.05)';
     var subRows = vs.map(v=>{
       var txt = String(v.prods||'');
@@ -7045,6 +7048,8 @@ function exportLiqPDFGuardada(i){
   var l=liquidaciones[i]; if(!l) return;
   var vs=(l.ventas||[]).map(function(id){return VENTAS.find(function(v){return String(v.supaId)===String(id)||v.id===id;});}).filter(Boolean);
   var cs=(l.coms||[]).map(function(id){return (typeof COMS!=='undefined'?COMS:[]).find(function(x){return x.id===id;});}).filter(Boolean);
+  // Respaldo: cobros que apuntan a esta liquidacion aunque no esten en la lista
+  (typeof COMS!=='undefined'?COMS:[]).forEach(function(x){ if(x.liq_id===l.id&&cs.indexOf(x)<0) cs.push(x); });
   var det=l.comDetalle||{}; var mon=l.mon||'CUP';
   // La tasa no se guardaba: se deduce de los totales (pago = USD x tasa + nominales)
   var tasaLiq=(l.tasa!=null&&parseFloat(l.tasa)>0)?parseFloat(l.tasa):null;
