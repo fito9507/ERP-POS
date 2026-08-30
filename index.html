@@ -2533,7 +2533,7 @@ async function syncLoadVentas() {
       var _hrM  = _raw.match(/\[(\d{2}:\d{2})\]/);
       var _nota = _raw.replace(/\[[^\]]*\]/g,'').trim();
       // venta de folio: comisiona por sus abonos, nunca por si misma
-      var _esFolioRow = /Folio\s*\d/i.test(_raw);
+      var _esFolioRow = /Folio\s+\S/i.test(_raw);
       VENTAS.push({
         id:       venNextId++,
         supaId:   row.id,
@@ -5564,7 +5564,7 @@ async function setVendVenta(id,vend){
   // Modelo A: la venta a credito NO comisiona al vender — su comision
   // entra por los abonos segun se cobra. Reasignarla solo cambia el
   // vendedor; si comisionara aqui se pagaria dos veces.
-  var esFolio=/Folio\s*\d/i.test(v.nota||'');
+  var esFolio=/Folio\s+\S/i.test(v.nota||'');
   var puede=USERS[vend]&&USERS[vend].aComision!==false&&!esFolio;
   if(puede){
     // % ponderado por las lineas de la venta para el NUEVO vendedor.
@@ -9093,7 +9093,7 @@ let folioFiltro='todos';
 // ── CALCULOS ──────────────────────────────────────────────
 // Una venta ligada a un folio comisiona al COBRAR (por sus abonos), no
 // al vender: por eso nunca lleva comision propia (modelo A).
-function _esVentaFolio(v){ return !!v && /Folio\s*\d/i.test(v.nota||v.notas||''); }
+function _esVentaFolio(v){ return !!v && /Folio\s+\S/i.test(v.nota||v.notas||''); }
 function totF(f){return (f.lineas||f.productos||[]).reduce((a,l)=>a+toUSD((l.q||l.cantidad||0)*(l.precio||l.price||0),l.mon||'USD'),0);}
 function pagF(f){return (f.abonos||[]).reduce((a,ab)=>a+(ab.equivUSD||0),0);}
 function pdtF(f){return Math.max(0,totF(f)-pagF(f));}
