@@ -3773,6 +3773,7 @@ function syncSaveReserva(r){
     return;
   }
   supaReq('POST','reservas?on_conflict=id',body).then(function(rr){
+    if(rr.ok){ try{ r.pend=false; _saveReservas(); }catch(e){} }
     if(!rr.ok) rr.text().then(function(t){
       console.warn('reserva no guardada:', rr.status, t.slice(0,120));
       if(/row-level security|42501/i.test(t)) showToast('\u26a0 La tabla de reservas bloquea escrituras: ejecuta supabase_reservas_rls.sql');
@@ -3782,29 +3783,43 @@ function syncSaveReserva(r){
   }).catch(function(e){ try{ enqueue({method:'POST',path:'reservas?on_conflict=id',body:body}); }catch(e2){} });
 }
 function syncDelReserva(id){
+  // Lapida, no DELETE: la fila se queda con activa=false para que un
+  // movil con una copia vieja NO la resuba al fusionar (antes pasaba:
+  // la reserva cobrada resucitaba hasta borrarla otra vez).
   var path='reservas?id=eq.'+encodeURIComponent(String(id));
-  if(typeof supaReq==='undefined'||!_supaOnline){ try{ enqueue({method:'DELETE',path:path,body:null}); }catch(e){} return; }
-  supaReq('DELETE',path).catch(function(e){ try{ enqueue({method:'DELETE',path:path,body:null}); }catch(e2){} });
+  var body={activa:false};
+  if(typeof supaReq==='undefined'||!_supaOnline){ try{ enqueue({method:'PATCH',path:path,body:body}); }catch(e){} return; }
+  supaReq('PATCH',path,body).catch(function(e){ try{ enqueue({method:'PATCH',path:path,body:body}); }catch(e2){} });
 }
 async function syncLoadReservas(){
   if(typeof supaReq==='undefined'||!_supaOnline) return;
   try{
-    var r=await supaReq('GET','reservas?select=*&activa=is.true&order=created_at.desc&limit=500');
+    // Se traen TODAS (activas e inactivas): una reserva cobrada o
+    // cancelada queda en la nube como lapida (activa=false) y manda
+    // sobre cualquier copia vieja que tenga un movil.
+    var r=await supaReq('GET','reservas?select=*&order=created_at.desc&limit=500');
     if(!r.ok) return;
     var rows=await r.json()||[];
-    var nube=rows.map(function(x){
-      return { id:isNaN(Number(x.id))?x.id:Number(x.id), fecha:x.fecha, user:x.usuario, alm:x.almacen,
+    var estadoNube={};
+    var nube=[];
+    rows.forEach(function(x){
+      var id=isNaN(Number(x.id))?x.id:Number(x.id);
+      estadoNube[String(id)]=(x.activa!==false);
+      if(x.activa===false) return; // lapida: no se muestra ni se resube
+      nube.push({ id:id, fecha:x.fecha, user:x.usuario, alm:x.almacen,
         cli:x.cliente, nota:x.nota, contenedor:x.contenedor,
-        lineas:x.lineas||[], totalUSD:parseFloat(x.total_usd)||0, activa:x.activa!==false };
+        lineas:x.lineas||[], totalUSD:parseFloat(x.total_usd)||0, activa:true });
     });
-    // FUSIONAR, no reemplazar: una reserva local que aun no llego a la
-    // nube (creada offline o cuando la tabla estaba bloqueada) se
-    // conserva y se REsube, en vez de borrarse al cargar.
-    var enNube={};
-    nube.forEach(function(x){ enNube[String(x.id)]=true; });
-    var locales=(S.reservas||[]).filter(function(x){ return x&&x.activa!==false&&!enNube[String(x.id)]; });
+    // Locales que no estan en la nube: solo se resuben las que NUNCA
+    // llegaron (pend=true, creadas offline). Si no tienen esa marca es
+    // que se borraron o cobraron desde otro sitio: se descartan.
+    var locales=(S.reservas||[]).filter(function(x){
+      if(!x||x.activa===false) return false;
+      if(estadoNube[String(x.id)]!==undefined) return false; // la nube manda
+      return !!x.pend;
+    });
     locales.forEach(function(x){
-      console.log('Reserva local no estaba en la nube, resubiendo:', x.id, x.nota||'');
+      console.log('Reserva creada offline, subiendo:', x.id, x.nota||'');
       if(typeof syncSaveReserva==='function') try{ syncSaveReserva(x); }catch(e){}
     });
     S.reservas=nube.concat(locales);
@@ -4483,7 +4498,7 @@ function _confirmarReserva(){
   var cnt=(document.getElementById('res-cnt-sel')||{}).value||'';
   var mo=document.getElementById('res-modal-cnt');
   if(mo)mo.style.display='none';
-  S.reservas.push({id:Date.now(),activa:true,user:S.user,alm:S.alm,cli:S.cli, nota:nota, contenedor:cnt,
+  S.reservas.push({id:Date.now(),activa:true,pend:true,user:S.user,alm:S.alm,cli:S.cli, nota:nota, contenedor:cnt,
     lineas:S.cart.map(c=>({...c})),totalUSD:S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0),
     fecha:new Date().toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'})});
   _saveReservas();
@@ -4562,12 +4577,12 @@ function cancelRes(id){
 function cobrarReserva(id){
   const r=S.reservas.find(x=>x.id===id);if(!r)return;
   S.user=r.user;S.alm=r.alm;S.cli=r.cli;S.cart=r.lineas.map(c=>({...c}));
-  r.activa=false;
-  if(typeof syncDelReserva==='function') try{ syncDelReserva(r.id); }catch(e){}
-  // Al pasar la reserva a venta deja de estar apartada
-  if(typeof syncReservasGlobal==='function') try{ syncReservasGlobal(); }catch(e){}
-  if(typeof recalcReservasGlobales==='function') try{ recalcReservasGlobales(); }catch(e){}
-  updResBadge();closeRes();goStep('pg-pago',3);
+  // La reserva sigue viva hasta que la venta se CONFIRME (ver
+  // confirmar()). Antes se mataba aqui: si el cobro no se completaba
+  // se perdia, y como no se guardaba en localStorage, al recargar
+  // volvia a aparecer y se resubia a la nube.
+  S.resCobrando=r.id;
+  closeRes();goStep('pg-pago',3);
 }
 function getVentaUSD(){return S.cart.reduce((a,c)=>a+c.precioUSD*c.q,0);}
 function getCobUSD(){return S.pagos.reduce((a,p)=>a+toUSD(p.m||0,p.mon),0);}
@@ -4815,6 +4830,21 @@ function confirmar(){
     vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};})  
   };
   VENTAS.unshift(venta);
+  // Si esta venta cobra una reserva, ahora si se libera (local + lapida
+  // en la nube). Solo si el carrito sigue siendo el de esa reserva.
+  if(S.resCobrando!=null){
+    var _rid=S.resCobrando; S.resCobrando=null;
+    var _rr=S.reservas.find(function(x){return x.id===_rid;});
+    var _mismo=_rr&&(_rr.lineas||[]).some(function(l){return S.cart.some(function(cc){return cc.n===l.n;});});
+    if(_rr&&_mismo){
+      S.reservas=S.reservas.filter(function(x){return x.id!==_rid;});
+      _saveReservas();
+      if(typeof syncDelReserva==='function') try{ syncDelReserva(_rid); }catch(e){}
+      if(typeof syncReservasGlobal==='function') try{ syncReservasGlobal(); }catch(e){}
+      if(typeof recalcReservasGlobales==='function') try{ recalcReservasGlobales(); }catch(e){}
+      try{ updResBadge(); }catch(e){}
+    }
+  }
   // Descontar stock — avisando si alguna linea supera las existencias.
   // Antes se truncaba a cero en silencio y la diferencia desaparecia.
   var _faltantes = [];
@@ -4895,11 +4925,13 @@ function confirmar(){
   goStep('pg-ok',3);
 }
 function nuevaVenta(){
+  S.resCobrando=null;
   S.cart=[];S.pagos=[];S.vueltos=[];S.alm='';S.cli='';S.tipo='Minorista';
   document.querySelectorAll('.alm-card').forEach(c=>c.classList.remove('sel'));
   document.getElementById('s-cli').value='';goStep('pg-alm',1);
 }
 function otraVentaMismoAlmacen(){
+  S.resCobrando=null;
   S.cart=[];S.pagos=[];S.vueltos=[];S.tipo='Minorista';S.cartMon='USD';
   document.getElementById('tb-min').classList.add('act');document.getElementById('tb-may').classList.remove('act');if(document.getElementById('tb-pre'))document.getElementById('tb-pre').classList.remove('act');
   document.querySelectorAll('.mt-btn').forEach((b,i)=>b.classList.toggle('act',i===0));
