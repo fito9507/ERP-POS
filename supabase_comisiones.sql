@@ -1,5 +1,5 @@
 -- ════════════════════════════════════════════════════════════════════
--- COMISIONES v2 — ejecutar UNA VEZ en Supabase → SQL Editor → Run
+-- COMISIONES v2 — Supabase → SQL Editor → Run (seguro de repetir: no borra nada)
 --
 -- 1. Tabla `comisiones`: comisiones por COBRO de folio (cada abono de un
 --    cliente asignado a un vendedor genera su comisión al registrarse).
@@ -31,8 +31,9 @@ create table if not exists comisiones (
 );
 
 -- 2. liquidaciones: recrear con columnas (estaba vacía y sin esquema útil)
-drop table if exists liquidaciones;
-create table liquidaciones (
+-- (antes aqui habia un DROP TABLE: borraba las liquidaciones guardadas al
+--  volver a ejecutar el script. Ya no.)
+create table if not exists liquidaciones (
   id          text primary key,
   vend        text,
   desde       date,
@@ -55,6 +56,13 @@ create table liquidaciones (
 -- 3. limpieza de arrastres (Admin y Pedro ya no comisionan)
 update ventas set est_com = 'No aplica'
  where vendedor in ('Admin', 'Pedro') and est_com = 'Pendiente';
+
+-- 4. La app usa la clave publica: sin RLS en estas tablas
+alter table public.comisiones    disable row level security;
+alter table public.liquidaciones disable row level security;
+alter table public.liquidaciones add column if not exists tasa   numeric;
+alter table public.liquidaciones add column if not exists ajuste numeric;
+alter table public.liquidaciones add column if not exists lote   text;
 
 -- Verificación
 select 'comisiones' as tabla, count(*) from comisiones
