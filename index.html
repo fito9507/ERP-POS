@@ -5383,8 +5383,11 @@ function _ventaEnLote(v, lote){
   if(v.lotes&&Object.keys(v.lotes).length) return Object.keys(v.lotes).some(function(n){return (v.lotes[n]||'SIN LOTE')===lote;});
   return (typeof _lineasVenta==='function'?_lineasVenta(v):[]).some(function(l){
     var p=typeof PRODS!=='undefined'?PRODS.find(function(x){return x.n===l.n;}):null;
-    if(!p||!p.lotes||!p.lotes.length) return lote==='SIN LOTE';
-    return p.lotes.some(function(le){ return (le.lote||'SIN LOTE')===lote && ((parseFloat(le.cantidad)||0)>0||(parseFloat(le.cantidad_inicial)||0)>0); });
+    // Lotes REALES del producto (contenedores con unidades); SIN LOTE = no
+    // pertenece a ninguno (aunque tenga una entrada 'SIN LOTE' a cero)
+    var reales=(p&&p.lotes?p.lotes:[]).filter(function(le){ return le.lote&&le.lote!=='SIN LOTE'&&((parseFloat(le.cantidad)||0)>0||(parseFloat(le.cantidad_inicial)||0)>0); });
+    if(lote==='SIN LOTE') return !reales.length;
+    return reales.some(function(le){ return le.lote===lote; });
   });
 }
 // ¿Pertenece una comision de cobro de folio a un contenedor/lote?
