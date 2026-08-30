@@ -1,5 +1,14 @@
 {
   "dependencies": {
     "jsdom": "^29.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:humo": "playwright test humo",
+    "huella:antes": "python tests/huella_bd.py antes",
+    "huella:despues": "python tests/huella_bd.py despues"
   }
 }

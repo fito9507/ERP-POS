@@ -25,3 +25,9 @@ all.js
 /git_log*.txt
 /all_git.txt
 /all.js
+
+# ── Robot de pruebas (Playwright) ──
+node_modules/
+test-results/
+playwright-report/
+tests/_huella_antes.json
