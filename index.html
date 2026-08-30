@@ -11623,6 +11623,43 @@ function renderMiComision(){
     _miComCargando=true;
     loadComisiones().then(function(){ _miComCargando=false; try{ renderMiComision(); if(typeof refreshLiqHist==='function') refreshLiqHist(); }catch(e){} }).catch(function(){ _miComCargando=false; });
   }
+  // ── Admin: resumen de TODOS los vendedores (no 'mi' comision) ──
+  var _esAdminMC=USERS[vend]&&USERS[vend].rol==='admin';
+  if(_esAdminMC){
+    var porV={};
+    var tocar=function(n){ n=n||'(sin vendedor)'; if(!porV[n]) porV[n]={pV:0,nV:0,pF:0,nF:0,pag:0,liq:0}; return porV[n]; };
+    VENTAS.forEach(function(v){
+      if(v.estCom==='No aplica'||!(v.comUSD>0)) return;
+      var a=tocar(v.vend);
+      if(v.estCom==='Pendiente'){ a.pV+=v.comUSD; a.nV++; }
+      else if(v.estCom==='Liquidada (Pdte)') a.liq+=v.comUSD;
+      else if(v.estCom==='Pagada') a.pag+=v.comUSD;
+    });
+    (typeof COMS!=='undefined'?COMS:[]).forEach(function(x){
+      var cu=parseFloat(x.com_usd)||0; if(!cu) return;
+      var a=tocar(x.vendedor);
+      if(x.estado==='Pendiente'){ a.pF+=cu; a.nF++; }
+      else if(x.estado==='Liquidada (Pdte)') a.liq+=cu;
+      else if(x.estado==='Pagada') a.pag+=cu;
+    });
+    var noms=Object.keys(porV).filter(function(n){var a=porV[n];return a.pV||a.pF||a.liq||a.pag;}).sort(function(a,b){return (porV[b].pV+porV[b].pF)-(porV[a].pV+porV[a].pF);});
+    var totP=noms.reduce(function(s,n){return s+porV[n].pV+porV[n].pF;},0);
+    el.innerHTML='<div style="padding:4px;margin-bottom:12px">'
+      +'<div style="font-size:16px;font-weight:700;margin-bottom:10px">\ud83c\udfc6 Comisiones por vendedor <span style="font-size:12px;font-weight:400;color:var(--color-text-tertiary)">pendiente total: <b style="color:var(--color-text-danger)">'+fN(totP)+' USD</b></span></div>'
+      +'<div style="overflow-x:auto"><table class="adm-table" style="font-size:12px;width:100%"><thead><tr>'
+      +'<th style="text-align:left;padding:6px">Vendedor</th><th style="text-align:right;padding:6px">Pdte. contado</th><th style="text-align:right;padding:6px">Pdte. folios</th><th style="text-align:right;padding:6px">PENDIENTE</th><th style="text-align:right;padding:6px">En liquidaci\u00f3n</th><th style="text-align:right;padding:6px">Pagado</th></tr></thead><tbody>'
+      +(noms.length?noms.map(function(n){var a=porV[n];return '<tr><td style="padding:6px;font-weight:600">'+n+'</td>'
+        +'<td style="padding:6px;text-align:right">'+fN(a.pV)+' <span style="color:var(--color-text-tertiary)">('+a.nV+')</span></td>'
+        +'<td style="padding:6px;text-align:right">'+fN(a.pF)+' <span style="color:var(--color-text-tertiary)">('+a.nF+')</span></td>'
+        +'<td style="padding:6px;text-align:right;font-weight:700;color:var(--color-text-danger)">'+fN(a.pV+a.pF)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:var(--color-text-warning)">'+fN(a.liq)+'</td>'
+        +'<td style="padding:6px;text-align:right;color:var(--color-text-success)">'+fN(a.pag)+'</td></tr>';}).join('')
+        :'<tr><td colspan="6" style="padding:8px;text-align:center;color:var(--color-text-tertiary)">Sin comisiones registradas</td></tr>')
+      +'</tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">Genera abajo la liquidaci\u00f3n del periodo para pagar lo pendiente. "En liquidaci\u00f3n" = ya incluido en una liquidaci\u00f3n pendiente de pago.</div>'
+      +'</div>';
+    return;
+  }
   var misVentas=VENTAS.filter(function(v){return v.vend===vend&&v.estCom!=='No aplica';});
   var misComs=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){return x.vendedor===vend;});
   var pendiente=misVentas.filter(function(v){return v.estCom==='Pendiente';}).reduce(function(a,v){return a+v.comUSD;},0)
