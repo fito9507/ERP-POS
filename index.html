@@ -6735,6 +6735,28 @@ function eliminarLiq(i) {
     if(typeof renderVentas==='function')try{renderVentas();}catch(e){}
   }
 
+  // Reintegrar la deuda de comision: ventas y cobros de folio de esta
+  // liquidacion vuelven a Pendiente (pendiente o pagada).
+  var idsV=liq.ventas||[], nV=0;
+  VENTAS.forEach(function(v){
+    var mia=(v.liqId&&v.liqId===liq.id)||idsV.indexOf(v.supaId)>=0||idsV.indexOf(v.id)>=0;
+    if(!mia||v.estCom==='Pendiente'||v.estCom==='No aplica') return;
+    v.estCom='Pendiente'; delete v.liqId; nV++;
+    if(!v.supaId) return;
+    if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId,{est_com:'Pendiente'}).catch(function(e){});
+    else if(typeof enqueue==='function') enqueue({method:'PATCH',path:'ventas?id=eq.'+v.supaId,body:{est_com:'Pendiente'}});
+  });
+  var idsC=liq.coms||[], nC=0;
+  (typeof COMS!=='undefined'?COMS:[]).forEach(function(x){
+    var mia=(x.liq_id&&x.liq_id===liq.id)||idsC.indexOf(x.id)>=0;
+    if(!mia||x.estado==='Pendiente') return;
+    x.estado='Pendiente'; x.liq_id=null; nC++;
+    var body={estado:'Pendiente',liq_id:null};
+    if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','comisiones?id=eq.'+encodeURIComponent(x.id),body).catch(function(e){});
+    else if(typeof enqueue==='function') enqueue({method:'PATCH',path:'comisiones?id=eq.'+encodeURIComponent(x.id),body:body});
+  });
+  if(nV||nC) showToast('\u21a9 '+nV+' venta(s) y '+nC+' cobro(s) de folio vuelven a Pendiente');
+
   liquidaciones.splice(i, 1);
   try{localStorage.setItem('erp_liquidaciones',JSON.stringify(liquidaciones));}catch(e){}
   if(typeof supaReq!=='undefined'&&_supaOnline){
