@@ -46,7 +46,16 @@ async function armar(page) {
     });
   });
 
-  await page.route('**/*', async function (route) {
+  // Ventanas emergentes (PDF, impresión): también vigiladas
+  st.popups = [];
+  page.context().on('page', function (p) {
+    st.popups.push(p.url());
+    p.on('pageerror', function (e) { st.errores.push('[popup] ' + String((e && e.message) || e)); });
+  });
+
+  // A nivel de CONTEXTO, no de página: cubre también las ventanas
+  // emergentes que abra la app (una page.route no las vigilaría).
+  await page.context().route('**/*', async function (route) {
     const req = route.request();
     const url = new URL(req.url());
     const m = req.method();
