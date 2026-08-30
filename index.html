@@ -6201,7 +6201,7 @@ function renderLiq(){
   // Datos de esta liquidacion para exportLiqPDF()
   window._liqActual={ titulo:'Liquidación pendiente', desde:desde, hasta:hasta, alm:almLabel, tasa:tasa, mon:targetMon, cuenta:cuentaPago,
     ventas:data.filter(isPdte), coms:comsPdte, comVta:comVtaPdteUSD, comFol:comsPdteUSD, totalPago:totalPago,
-    cuentaMon:Object.keys(comDetalleAcum).filter(function(m){return Math.abs(comDetalleAcum[m]||0)>0.005;}).map(function(m){var a=comDetalleAcum[m]||0;var dec=(m==='CUP'||m==='CUPT')?0:2;return m===targetMon?(m+' '+fN(a,dec)):(m+' '+fN(a,dec)+' → '+fN(toTgt(a,m),targetMon==='CUP'?0:2)+' '+targetMon);}).join(' + ') };
+    det:comDetalleAcum, eurusd:t_EURUSD };
   document.getElementById('liq-out').innerHTML=`
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
@@ -6235,7 +6235,7 @@ function renderLiq(){
       ${comVtaPagadaUSD>0.005?`<div class="liq-r" style="color:var(--color-text-tertiary)"><span>(ya pagadas en este periodo, no se incluyen)</span><span>${fN(comVtaPagadaUSD)} USD</span></div>`:''}
       ${comsPdte.length?`<div class="liq-r"><span>+ Comisiones por cobros de folios (${comsPdte.length} abonos)</span><span style="color:var(--color-text-warning);font-weight:500">${fN(comsPdteUSD)} USD</span></div>`:''}
       <div class="liq-r tot"><span>Pago a liquidar (Convertido a ${targetMon})</span><span style="color:var(--color-text-danger)">${fN(totalPago, targetMon==='CUP'?0:2)} ${targetMon}</span></div>
-      <div class="liq-r" style="color:var(--color-text-tertiary);font-size:11px"><span>Cómo se calcula: la comisión cobrada en ${targetMon} se paga tal cual; el resto se convierte a la tasa de hoy</span><span>${Object.keys(comDetalleAcum).filter(function(m){return Math.abs(comDetalleAcum[m]||0)>0.005;}).map(function(m){var a=comDetalleAcum[m]||0;var dec=(m==='CUP'||m==='CUPT')?0:2;return m===targetMon?(m+' '+fN(a,dec)):(m+' '+fN(a,dec)+' → '+fN(toTgt(a,m),targetMon==='CUP'?0:2)+' '+targetMon);}).join(' + ')}</span></div>
+      <div class="liq-r" style="color:var(--color-text-tertiary);font-size:11px;display:block"><div style="margin-bottom:2px">Cómo se calcula el pago en ${targetMon} (la comisión se calcula en la moneda en que se cobró cada venta):</div>${_liqCuentaLineas(comDetalleAcum,targetMon,tasa,t_EURUSD).lineas.map(function(t,i){return '<div style="padding-left:12px">'+(i?'+ ':'&nbsp;&nbsp;')+t+'</div>';}).join('')}<div style="padding-left:12px;font-weight:600">= ${fN(totalPago,targetMon==='CUP'?0:2)} ${targetMon}</div></div>
     </div>
     <div class="sep"></div>
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:8px">
@@ -6742,6 +6742,29 @@ function eliminarLiq(i) {
   renderLiq();
   showToast('Liquidación eliminada'+(wasPaid?' · saldo reintegrado':''));
 }
+// Cuenta del pago por moneda, linea a linea y con la conversion hecha.
+// det = {USD:.., CUP:.., CUPT:.., EUR:..} (comision por moneda de cobro)
+function _liqCuentaLineas(det, mon, tasa, eurusd){
+  var dec=function(m){return (m==='CUP'||m==='CUPT')?0:2;};
+  eurusd=eurusd||(typeof RATES_EURUSD!=='undefined'?RATES_EURUSD:1.08); tasa=parseFloat(tasa)||0;
+  var conv=function(a,m){
+    if(m===mon) return a;
+    var usd = m==='USD'?a : m==='EUR'?a*eurusd : (tasa?a/tasa:0);
+    if(mon==='USD') return usd; if(mon==='EUR') return usd/eurusd; return usd*tasa;
+  };
+  var out=[], total=0, orden=['USD','EUR','CUP','CUPT'];
+  Object.keys(det||{}).sort(function(a,b){return orden.indexOf(a)-orden.indexOf(b);}).forEach(function(m){
+    var a=parseFloat(det[m])||0; if(Math.abs(a)<=0.005) return;
+    var v=conv(a,m); total+=v;
+    var txt;
+    if(m===mon) txt=m+' '+fN(a,dec(m))+' — cobrado en '+m+', se paga tal cual';
+    else if(m==='CUPT'&&mon==='CUP') txt='CUPT '+fN(a,0)+' — transferencia en CUP, se paga tal cual';
+    else if(m==='USD'&&mon==='CUP') txt='USD '+fN(a,2)+' × '+fN(tasa,2)+' = '+fN(v,0)+' CUP';
+    else txt=m+' '+fN(a,dec(m))+' → '+fN(v,dec(mon))+' '+mon+(tasa?' (tasa '+fN(tasa,2)+')':'');
+    out.push(txt);
+  });
+  return {lineas:out,total:total};
+}
 // ── PDF de una liquidacion (ventana de impresion) ──────────────
 function _liqPDF(o){
   var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
@@ -6782,7 +6805,10 @@ function _liqPDF(o){
     +'<tr><td>Comisión ventas de contado</td><td class="r">'+fN(totV)+' USD</td></tr>'
     +'<tr><td>Comisión cobros de folios</td><td class="r">'+fN(totF)+' USD</td></tr>'
     +'<tr><td><b>Comisión total</b></td><td class="r"><b>'+fN(totV+totF)+' USD</b></td></tr>'
-    +(o.cuentaMon?'<tr><td class="warn">Cómo se paga: la comisión cobrada en '+esc(o.mon)+' se paga tal cual; el resto se convierte a la tasa</td><td class="r">'+esc(o.cuentaMon)+'</td></tr>':'')
+    +(function(){ var cu=_liqCuentaLineas(o.det||{},o.mon,o.tasa,o.eurusd); if(!cu.lineas.length) return '';
+        return '<tr><td class="warn" colspan="2">Cómo se calcula el pago en '+esc(o.mon)+' (la comisión se calcula en la moneda en que se cobró cada venta):<br>'
+          +cu.lineas.map(function(t,i){return '<div style="padding-left:14px">'+(i?'+ ':'&nbsp;&nbsp;')+esc(t)+'</div>';}).join('')
+          +'<div style="padding-left:14px"><b>= '+fN(cu.total,(o.mon==='CUP'||o.mon==='CUPT')?0:2)+' '+esc(o.mon)+'</b></div></td></tr>'; })()
     +(o.ajuste?'<tr><td>Ajuste / redondeo</td><td class="r">'+fN(o.ajuste,dec(o.mon))+' '+esc(o.mon)+'</td></tr>':'')
     +'<tr class="tot"><td class="big">TOTAL A PAGAR</td><td class="r big">'+fN((o.totalPago||0)+(o.ajuste||0),dec(o.mon))+' '+esc(o.mon)+'</td></tr></tbody></table>';
   h+='<div class="firmas"><div>Entregado por (admin)</div><div>Recibido por (vendedor)</div></div>';
@@ -6800,9 +6826,14 @@ function exportLiqPDFGuardada(i){
   var vs=(l.ventas||[]).map(function(id){return VENTAS.find(function(v){return String(v.supaId)===String(id)||v.id===id;});}).filter(Boolean);
   var cs=(l.coms||[]).map(function(id){return (typeof COMS!=='undefined'?COMS:[]).find(function(x){return x.id===id;});}).filter(Boolean);
   var det=l.comDetalle||{}; var mon=l.mon||'CUP';
-  var cuentaMon=Object.keys(det).filter(function(m){return Math.abs(det[m]||0)>0.005;}).map(function(m){var a=det[m]||0;return m+' '+fN(a,(m==='CUP'||m==='CUPT')?0:2);}).join(' + ');
-  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', tasa:null, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
-    ventas:vs, coms:cs, totalPago:parseFloat(l.totalCUP)||0, cuentaMon:cuentaMon });
+  // La tasa no se guardaba: se deduce de los totales (pago = USD x tasa + nominales)
+  var tasaLiq=null;
+  if(mon==='CUP'&&(parseFloat(det.USD)||0)>0){
+    var nominal=(parseFloat(det.CUP)||0)+(parseFloat(det.CUPT)||0)+(parseFloat(det.EUR)||0)*(typeof RATES_EURUSD!=='undefined'?RATES_EURUSD:1.08)*0;
+    tasaLiq=Math.round(((parseFloat(l.totalCUP)||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
+  } else if(typeof RATES!=='undefined'){ tasaLiq=parseFloat(RATES.CUP)||null; }
+  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
+    ventas:vs, coms:cs, totalPago:parseFloat(l.totalCUP)||0, det:det });
 }
 function exportLiqCSV(){
   const desde=document.getElementById('l-desde').value;
