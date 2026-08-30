@@ -6373,6 +6373,7 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon, cuenta: cuentaPago||'',
     comDetalle: comDetalle,
     tasa: parseFloat(document.getElementById('l-tasa')?.value)||null,
+    ajuste: ajuste||0,
     vend: typeof S!=='undefined'?S.user:'',
     estado:'Pendiente',
     fecha:today(),
@@ -6416,7 +6417,8 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
       com_usd:liq.comUSD, com_cup:liq.totalCUP, mon:liq.mon||'',
       cuenta:liq.cuenta||'', com_detalle:liq.comDetalle||{},
       estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[],
-      ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{})
+      ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{}),
+      ...(window._liqAjusteOK!==false&&liq.ajuste?{ajuste:liq.ajuste}:{})
     }).then(function(r){ if(!r||!r.ok){ console.warn('liq sync fallo:', r&&r.status); showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube — ejecuta supabase_comisiones.sql'); } })
       .catch(function(e){console.warn('liq sync:',e);});
   } else if(typeof enqueue==='function'){
@@ -6440,8 +6442,9 @@ async function syncLoadLiquidaciones(){
     if(!r.ok) return;
     var rows=await r.json()||[];
     window._liqTasaOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'tasa') : window._liqTasaOK;
+    window._liqAjusteOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'ajuste') : window._liqAjusteOK;
     liquidaciones=rows.map(function(x){
-      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null),
+      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null),
         alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
         totalCUP:parseFloat(x.com_cup)||0, mon:x.mon||'', cuenta:x.cuenta||'',
         comDetalle:x.com_detalle||{}, estado:x.estado||'Pendiente', fecha:x.fecha||'',
@@ -6867,13 +6870,19 @@ function exportLiqPDFGuardada(i){
   var det=l.comDetalle||{}; var mon=l.mon||'CUP';
   // La tasa no se guardaba: se deduce de los totales (pago = USD x tasa + nominales)
   var tasaLiq=(l.tasa!=null&&parseFloat(l.tasa)>0)?parseFloat(l.tasa):null;
-  if(tasaLiq){ /* guardada con la liquidacion */ }
-  else if(mon==='CUP'&&(parseFloat(det.USD)||0)>0){
-    var nominal=(parseFloat(det.CUP)||0)+(parseFloat(det.CUPT)||0)+(parseFloat(det.EUR)||0)*(typeof RATES_EURUSD!=='undefined'?RATES_EURUSD:1.08)*0;
-    tasaLiq=Math.round(((parseFloat(l.totalCUP)||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
-  } else if(typeof RATES!=='undefined'){ tasaLiq=parseFloat(RATES.CUP)||null; }
+  var ajusteLiq=(l.ajuste!=null&&!isNaN(parseFloat(l.ajuste)))?parseFloat(l.ajuste):null;
+  var totalGuardado=parseFloat(l.totalCUP)||0;
+  if(tasaLiq){
+    // Tasa guardada: el ajuste es lo que sobra entre el total y la cuenta por moneda
+    if(ajusteLiq==null){ var cu0=_liqCuentaLineas(det,mon,tasaLiq); ajusteLiq=Math.round((totalGuardado-cu0.total)*100)/100; if(Math.abs(ajusteLiq)<0.5) ajusteLiq=0; }
+  } else if(mon==='CUP'&&(parseFloat(det.USD)||0)>0){
+    // Liquidacion antigua sin tasa: deducirla del total (descontando el ajuste si se conoce)
+    var nominal=(parseFloat(det.CUP)||0)+(parseFloat(det.CUPT)||0);
+    tasaLiq=Math.round((totalGuardado-(ajusteLiq||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
+    if(ajusteLiq==null) ajusteLiq=0;
+  } else { if(typeof RATES!=='undefined') tasaLiq=parseFloat(RATES.CUP)||null; if(ajusteLiq==null) ajusteLiq=0; }
   _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
-    ventas:vs, coms:cs, totalPago:parseFloat(l.totalCUP)||0, det:det });
+    ventas:vs, coms:cs, totalPago:totalGuardado-(ajusteLiq||0), ajuste:ajusteLiq||0, det:det });
 }
 function exportLiqCSV(){
   const desde=document.getElementById('l-desde').value;
