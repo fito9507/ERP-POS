@@ -2970,6 +2970,9 @@ async function supaInit() {
     // veia solo las suyas.
     try { if (typeof syncLoadReservas === 'function') await syncLoadReservas(); } catch(errR){ console.warn('syncLoadReservas init:', errR); }
     try { if (typeof syncLoadLiquidaciones === 'function') await syncLoadLiquidaciones(); } catch(errL){ console.warn('syncLoadLiquidaciones init:', errL); }
+    // Comisiones por cobros de folio: antes solo se cargaban al entrar en
+    // la pestana Comisiones (admin); un vendedor no las veia nunca.
+    try { if (typeof loadComisiones === 'function') await loadComisiones(); } catch(errC){ console.warn('loadComisiones init:', errC); }
     try {
       if(typeof recalcReservasGlobales==='function') await recalcReservasGlobales();
     } catch(errRes){ console.warn('recalcReservasGlobales non-blocking:', errRes); }
@@ -6195,6 +6198,10 @@ function renderLiq(){
   }
   var totalPago = Object.keys(comDetalleAcum).reduce(function(s,m){return s+toTgt(comDetalleAcum[m]||0,m);},0);
                
+  // Datos de esta liquidacion para exportLiqPDF()
+  window._liqActual={ titulo:'Liquidación pendiente', desde:desde, hasta:hasta, alm:almLabel, tasa:tasa, mon:targetMon, cuenta:cuentaPago,
+    ventas:data.filter(isPdte), coms:comsPdte, comVta:comVtaPdteUSD, comFol:comsPdteUSD, totalPago:totalPago,
+    cuentaMon:Object.keys(comDetalleAcum).filter(function(m){return Math.abs(comDetalleAcum[m]||0)>0.005;}).map(function(m){var a=comDetalleAcum[m]||0;var dec=(m==='CUP'||m==='CUPT')?0:2;return m===targetMon?(m+' '+fN(a,dec)):(m+' '+fN(a,dec)+' → '+fN(toTgt(a,m),targetMon==='CUP'?0:2)+' '+targetMon);}).join(' + ') };
   document.getElementById('liq-out').innerHTML=`
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
@@ -6350,6 +6357,7 @@ function renderLiq(){
 
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px">
       <button class="btn-sm" onclick="exportLiqCSV()">Exportar CSV</button>
+      <button class="btn-sm" onclick="exportLiqPDF()">Exportar PDF</button>
       <button class="btn" onclick='guardarLiq("${desde}","${hasta}","${almLabel}",${totVentaUSD},${totComPdteUSD},${totalPago},"${targetMon}",${JSON.stringify(comDetalleAcum)},"${cuentaPago}")'>Crear Liquidación Pendiente</button>
     </div>
   </div>`;
@@ -6464,6 +6472,7 @@ function refreshLiqHist(){
     <td style="font-size:11px;color:var(--color-text-secondary)">${l.cuenta&&!l.cuenta.startsWith('{')?l.cuenta:'—'}</td>
     <td><span class="badge ${l.estado==='Pagado'?'bg':'ba'}">${l.estado}</span></td>
     <td style="${_isV?'display:none':''}" onclick="event.stopPropagation()">
+      <button class="btn-sm" onclick="event.stopPropagation();exportLiqPDFGuardada(${i})" style="margin-right:4px" title="Exportar esta liquidación a PDF">PDF</button>
       ${!_isV && l.estado==='Pendiente'?`<button class="btn-sm btn-p" onclick="pagarLiq(${i})" style="margin-right:4px">Pagar</button>`:''}
       ${!_isV ? `<button class="btn-sm" style="color:var(--color-text-danger);border-color:var(--color-border-danger)" onclick="eliminarLiq(${i})">Borrar</button>` : ''}
     </td>
@@ -6732,6 +6741,68 @@ function eliminarLiq(i) {
   refreshLiqHist();
   renderLiq();
   showToast('Liquidación eliminada'+(wasPaid?' · saldo reintegrado':''));
+}
+// ── PDF de una liquidacion (ventana de impresion) ──────────────
+function _liqPDF(o){
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var dec=function(m){return (m==='CUP'||m==='CUPT')?0:2;};
+  var ventas=o.ventas||[], coms=o.coms||[];
+  // resumen por vendedor
+  var porV={}; var tocar=function(n){n=n||'(sin vendedor)';if(!porV[n])porV[n]={nV:0,baseV:0,comV:0,nF:0,baseF:0,comF:0};return porV[n];};
+  ventas.forEach(function(v){var a=tocar(v.vend);a.nV++;a.baseV+=v.totalUSD||0;a.comV+=v.comUSD||0;});
+  coms.forEach(function(x){var a=tocar(x.vendedor);a.nF++;a.baseF+=parseFloat(x.base_usd)||0;a.comF+=parseFloat(x.com_usd)||0;});
+  var totV=ventas.reduce(function(a,v){return a+(v.comUSD||0);},0), totF=coms.reduce(function(a,x){return a+(parseFloat(x.com_usd)||0);},0);
+  var h='<!DOCTYPE html><html><head><meta charset="utf-8"><title>'+esc(o.titulo)+' '+esc(o.desde)+' - '+esc(o.hasta)+'</title>'
+    +'<style>body{font-family:Segoe UI,Arial,sans-serif;font-size:11px;color:#111;margin:24px}h1{font-size:18px;margin:0 0 2px}h2{font-size:12px;margin:18px 0 6px;border-bottom:1px solid #999;padding-bottom:3px;text-transform:uppercase;letter-spacing:.5px}'
+    +'.meta{color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{padding:4px 6px;border-bottom:1px solid #ddd;vertical-align:top}th{text-align:left;background:#f1f5f9;font-size:10px}'
+    +'.r{text-align:right;white-space:nowrap}.c{text-align:center}.tot td{font-weight:700;border-top:2px solid #333;background:#f8fafc}.big{font-size:15px;font-weight:700}.warn{color:#b45309}'
+    +'.firmas{display:flex;gap:40px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;color:#555}@media print{button{display:none}}</style></head><body>';
+  h+='<h1>'+esc(o.titulo)+'</h1><div class="meta">Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+  // resumen por vendedor
+  h+='<h2>Resumen por vendedor</h2><table><thead><tr><th>Vendedor</th><th class="r">Ventas contado</th><th class="r">Com. contado</th><th class="r">Cobros folios</th><th class="r">Com. folios</th><th class="r">A pagar USD</th></tr></thead><tbody>';
+  Object.keys(porV).forEach(function(n){var a=porV[n];h+='<tr><td><b>'+esc(n)+'</b></td><td class="r">'+fN(a.baseV)+' ('+a.nV+')</td><td class="r">'+fN(a.comV)+'</td><td class="r">'+fN(a.baseF)+' ('+a.nF+')</td><td class="r">'+fN(a.comF)+'</td><td class="r"><b>'+fN(a.comV+a.comF)+'</b></td></tr>';});
+  h+='</tbody></table>';
+  // ventas de contado
+  h+='<h2>Ventas de contado incluidas ('+ventas.length+')</h2><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Ticket</th><th>Cliente</th><th>Almacén</th><th>Productos</th><th>Cobro</th><th class="r">Total USD</th><th class="c">%</th><th class="r">Com. USD</th></tr></thead><tbody>';
+  ventas.forEach(function(v){
+    var cobro=(v.pagos&&v.pagos.length)?v.pagos.map(function(p){return fN(p.m,dec(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + '):(v.mon||'');
+    h+='<tr><td>'+esc(fD(v.fecha))+(v.hora?' '+esc(v.hora):'')+'</td><td>'+esc(v.vend||'')+'</td><td>'+esc(v.ticket||'')+'</td><td>'+esc(v.cli||'Walk-in')+'</td><td>'+esc(v.alm||'')+'</td><td>'+esc(v.prods||'')+'</td><td>'+esc(cobro)+'</td><td class="r">'+fN(v.totalUSD||0)+'</td><td class="c">'+esc(v.comPct||0)+'%</td><td class="r">'+fN(v.comUSD||0)+'</td></tr>';
+  });
+  if(!ventas.length) h+='<tr><td colspan="10" class="c">Sin ventas de contado</td></tr>';
+  h+='<tr class="tot"><td colspan="7">Subtotal ventas de contado</td><td class="r">'+fN(ventas.reduce(function(a,v){return a+(v.totalUSD||0);},0))+'</td><td></td><td class="r">'+fN(totV)+'</td></tr></tbody></table>';
+  // cobros de folios
+  h+='<h2>Cobros de folios incluidos ('+coms.length+' abonos)</h2><table><thead><tr><th>Fecha</th><th>Vendedor</th><th>Cliente</th><th>Folio</th><th class="r">Abono</th><th>Caja</th><th class="r">Base USD</th><th class="c">%</th><th class="r">Com. USD</th></tr></thead><tbody>';
+  coms.slice().sort(function(a,b){return String(a.fecha).localeCompare(String(b.fecha));}).forEach(function(x){var m=x.moneda||'USD';
+    h+='<tr><td>'+esc(fD(x.fecha))+'</td><td>'+esc(x.vendedor||'')+'</td><td>'+esc(x.cliente||'')+'</td><td>'+esc(String(x.folio_id||'').replace(/^f-credito-/,'crédito '))+'</td><td class="r">'+fN(parseFloat(x.monto)||0,dec(m))+' '+esc(m)+'</td><td>'+esc(x.caja||'—')+'</td><td class="r">'+fN(parseFloat(x.base_usd)||0)+'</td><td class="c">'+fN(parseFloat(x.pct)||0,2)+'%</td><td class="r">'+fN(parseFloat(x.com_usd)||0)+'</td></tr>';
+  });
+  if(!coms.length) h+='<tr><td colspan="9" class="c">Sin cobros de folios</td></tr>';
+  h+='<tr class="tot"><td colspan="6">Subtotal cobros de folios</td><td class="r">'+fN(coms.reduce(function(a,x){return a+(parseFloat(x.base_usd)||0);},0))+'</td><td></td><td class="r">'+fN(totF)+'</td></tr></tbody></table>';
+  // totales
+  h+='<h2>Total</h2><table><tbody>'
+    +'<tr><td>Comisión ventas de contado</td><td class="r">'+fN(totV)+' USD</td></tr>'
+    +'<tr><td>Comisión cobros de folios</td><td class="r">'+fN(totF)+' USD</td></tr>'
+    +'<tr><td><b>Comisión total</b></td><td class="r"><b>'+fN(totV+totF)+' USD</b></td></tr>'
+    +(o.cuentaMon?'<tr><td class="warn">Cómo se paga: la comisión cobrada en '+esc(o.mon)+' se paga tal cual; el resto se convierte a la tasa</td><td class="r">'+esc(o.cuentaMon)+'</td></tr>':'')
+    +(o.ajuste?'<tr><td>Ajuste / redondeo</td><td class="r">'+fN(o.ajuste,dec(o.mon))+' '+esc(o.mon)+'</td></tr>':'')
+    +'<tr class="tot"><td class="big">TOTAL A PAGAR</td><td class="r big">'+fN((o.totalPago||0)+(o.ajuste||0),dec(o.mon))+' '+esc(o.mon)+'</td></tr></tbody></table>';
+  h+='<div class="firmas"><div>Entregado por (admin)</div><div>Recibido por (vendedor)</div></div>';
+  h+='<div style="margin-top:16px"><button onclick="window.print()">Imprimir / Guardar PDF</button></div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('\u26a0 El navegador bloque\u00f3 la ventana del PDF'); return; }
+  w.document.write(h); w.document.close(); setTimeout(function(){ try{ w.print(); }catch(e){} },500);
+}
+function exportLiqPDF(){
+  var o=window._liqActual; if(!o){ showToast('Genera primero la liquidaci\u00f3n'); return; }
+  o.ajuste=parseFloat(document.getElementById('liq-ajuste')?.value||0)||0;
+  _liqPDF(o);
+}
+function exportLiqPDFGuardada(i){
+  var l=liquidaciones[i]; if(!l) return;
+  var vs=(l.ventas||[]).map(function(id){return VENTAS.find(function(v){return String(v.supaId)===String(id)||v.id===id;});}).filter(Boolean);
+  var cs=(l.coms||[]).map(function(id){return (typeof COMS!=='undefined'?COMS:[]).find(function(x){return x.id===id;});}).filter(Boolean);
+  var det=l.comDetalle||{}; var mon=l.mon||'CUP';
+  var cuentaMon=Object.keys(det).filter(function(m){return Math.abs(det[m]||0)>0.005;}).map(function(m){var a=det[m]||0;return m+' '+fN(a,(m==='CUP'||m==='CUPT')?0:2);}).join(' + ');
+  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', tasa:null, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
+    ventas:vs, coms:cs, totalPago:parseFloat(l.totalCUP)||0, cuentaMon:cuentaMon });
 }
 function exportLiqCSV(){
   const desde=document.getElementById('l-desde').value;
@@ -11486,9 +11557,15 @@ async function delComRegla(id){
   }catch(e){showToast('Error: '+e.message);}
 }
 
+var _miComCargando=false;
 function renderMiComision(){
   var el=document.getElementById('liq-micomision-root');if(!el)return;
   var vend=S.user;
+  // Si las comisiones de folio aun no estan cargadas, traerlas y repintar
+  if((typeof COMS==='undefined'||!COMS.length)&&!_miComCargando&&typeof loadComisiones==='function'&&typeof _supaOnline!=='undefined'&&_supaOnline){
+    _miComCargando=true;
+    loadComisiones().then(function(){ _miComCargando=false; try{ renderMiComision(); if(typeof refreshLiqHist==='function') refreshLiqHist(); }catch(e){} }).catch(function(){ _miComCargando=false; });
+  }
   var misVentas=VENTAS.filter(function(v){return v.vend===vend&&v.estCom!=='No aplica';});
   var misComs=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){return x.vendedor===vend;});
   var pendiente=misVentas.filter(function(v){return v.estCom==='Pendiente';}).reduce(function(a,v){return a+v.comUSD;},0)
@@ -11515,6 +11592,23 @@ function renderMiComision(){
     +'</div>'
     +'</div>'
     +'</div>';
+  // ── Desglose: ventas de contado vs cobros de folios ──
+  var vPend=misVentas.filter(function(v){return v.estCom==='Pendiente';});
+  var fPend=misComs.filter(function(x){return x.estado==='Pendiente'||x.estado==='Liquidada (Pdte)';}).slice().sort(function(a,b){return String(b.fecha).localeCompare(String(a.fecha));});
+  var vPendCom=vPend.reduce(function(a,v){return a+(v.comUSD||0);},0);
+  var fPendCom=fPend.reduce(function(a,x){return a+(parseFloat(x.com_usd)||0);},0);
+  var h='<div class="card" style="margin:0 0 12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">Pendiente por origen</div>'
+    +'<div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px">'
+    +'<div>🧾 Ventas de contado: <b>'+fN(vPendCom)+' USD</b> <span style="color:var(--color-text-tertiary)">('+vPend.length+' ventas, ver Registro ventas)</span></div>'
+    +'<div>📄 Cobros de folios: <b>'+fN(fPendCom)+' USD</b> <span style="color:var(--color-text-tertiary)">('+fPend.length+' abonos)</span></div>'
+    +'</div></div>';
+  if(fPend.length){
+    h+='<div class="card" style="margin:0 0 12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">Cobros de folios pendientes de liquidar</div>'
+      +'<div style="overflow-x:auto"><table class="adm-table" style="font-size:11px;width:100%"><thead><tr><th style="text-align:left;padding:4px">Fecha</th><th style="text-align:left;padding:4px">Cliente</th><th style="text-align:left;padding:4px">Folio</th><th style="text-align:right;padding:4px">Abono</th><th style="text-align:center;padding:4px">%</th><th style="text-align:right;padding:4px">Comisión</th><th style="text-align:left;padding:4px">Estado</th></tr></thead><tbody>'
+      +fPend.map(function(x){var m=x.moneda||'USD';return '<tr><td style="padding:4px;white-space:nowrap">'+fD(x.fecha)+'</td><td style="padding:4px">'+(x.cliente||'')+'</td><td style="padding:4px;color:var(--color-text-tertiary)">'+String(x.folio_id||'').replace(/^f-credito-/,'crédito ')+'</td><td style="padding:4px;text-align:right;white-space:nowrap">'+fN(parseFloat(x.monto)||0,(m==='CUP'||m==='CUPT')?0:2)+' '+m+'</td><td style="padding:4px;text-align:center">'+fN(parseFloat(x.pct)||0,2)+'%</td><td style="padding:4px;text-align:right;color:var(--color-text-warning);font-weight:600">'+fN(parseFloat(x.com_usd)||0)+'</td><td style="padding:4px">'+(x.estado||'')+'</td></tr>';}).join('')
+      +'</tbody></table></div></div>';
+  }
+  el.innerHTML+=h;
 }
 
 
