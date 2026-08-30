@@ -6577,8 +6577,20 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
       ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{}),
       ...(window._liqAjusteOK!==false&&liq.ajuste?{ajuste:liq.ajuste}:{}),
       ...(window._liqLoteOK!==false&&liq.lote?{lote:liq.lote}:{})
-    }).then(function(r){ if(!r||!r.ok){ console.warn('liq sync fallo:', r&&r.status); showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube — ejecuta supabase_comisiones.sql'); } })
-      .catch(function(e){console.warn('liq sync:',e);});
+    }).then(function(r){
+      if(r&&r.ok) return;
+      // Si falla por una columna que no existe (tasa/ajuste/lote), reintentar sin ellas
+      var base={ id:liq.id, vend:liq.vend, desde:liq.desde||null, hasta:liq.hasta||null, semana:liq.semana, almacen:liq.alm, v_usd:liq.vUSD,
+        com_usd:liq.comUSD, com_cup:liq.totalCUP, mon:liq.mon||'', cuenta:liq.cuenta||'', com_detalle:liq.comDetalle||{},
+        estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[] };
+      window._liqTasaOK=false; window._liqAjusteOK=false; window._liqLoteOK=false;
+      return supaReq('POST','liquidaciones?on_conflict=id',base).then(function(r2){
+        if(r2&&r2.ok){ showToast('\u26a0 Liquidaci\u00f3n guardada sin tasa/ajuste/lote: ejecuta supabase_liquidaciones_tasa.sql'); return; }
+        console.warn('liq sync fallo:', r2&&r2.status);
+        try{ enqueue({method:'POST',path:'liquidaciones?on_conflict=id',body:base}); }catch(e){}
+        showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube (se reintentar\u00e1)');
+      });
+    }).catch(function(e){console.warn('liq sync:',e);});
   } else if(typeof enqueue==='function'){
     // Sin conexion: la liquidacion viaja por la cola offline
     enqueue({method:'POST',path:'liquidaciones?on_conflict=id',body:{
@@ -6599,9 +6611,13 @@ async function syncLoadLiquidaciones(){
     var r=await supaReq('GET','liquidaciones?select=*&order=fecha.desc&limit=300');
     if(!r.ok) return;
     var rows=await r.json()||[];
-    window._liqTasaOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'tasa') : window._liqTasaOK;
-    window._liqAjusteOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'ajuste') : window._liqAjusteOK;
-    window._liqLoteOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'lote') : window._liqLoteOK;
+    // ¿Existen las columnas nuevas? Consulta directa: 400 si no existe.
+    // (Antes se miraba la primera fila: con la tabla vacia no habia fila,
+    // se daban por existentes y el guardado fallaba.)
+    var _probar=async function(col){ try{ var rr=await supaReq('GET','liquidaciones?select='+col+'&limit=1'); return !!(rr&&rr.ok); }catch(e){ return false; } };
+    window._liqTasaOK = await _probar('tasa');
+    window._liqAjusteOK = await _probar('ajuste');
+    window._liqLoteOK = await _probar('lote');
     liquidaciones=rows.map(function(x){
       return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null), lote:x.lote||'',
         alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
