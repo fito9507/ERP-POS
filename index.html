@@ -5550,6 +5550,25 @@ function getSelIds(){
 // queda Pendiente a su nombre; si no comisiona, No aplica.
 // % de comision de una venta POS para un vendedor, ponderado por sus
 // lineas (respeta reglas por producto, p.ej. silicona 1,5%)
+// Desglose del % por producto de una venta segun las reglas: devuelve
+// {lineas:[{n,q,imp,pct}], pct (ponderado), com, mixto (hay varios %)}
+function _desglosePctVenta(v){
+  var out={lineas:[],pct:0,com:0,mixto:false};
+  if(!v) return out;
+  var base=0, acum=0, pcts={};
+  (typeof _lineasVenta==='function'?_lineasVenta(v):[]).forEach(function(l){
+    var pr=typeof PRODS!=='undefined'?PRODS.find(function(x){return x.n===l.n;}):null;
+    var precio=l.p!=null?l.p:(pr?(parseFloat(pr.maj)||parseFloat(pr.min)||0):0);
+    var imp=(l.q||0)*precio; if(!(imp>0)) return;
+    var pct=typeof getComPct==='function'?(parseFloat(getComPct(v.vend,l.n,pr?pr.cat:null,v.alm))||0):0;
+    out.lineas.push({n:l.n,q:l.q,imp:imp,pct:pct}); pcts[String(pct)]=1;
+    base+=imp; acum+=imp*pct;
+  });
+  out.pct=base>0?Math.round((acum/base)*10000)/10000:0;
+  out.com=Math.round(acum/100*100)/100;
+  out.mixto=Object.keys(pcts).length>1;
+  return out;
+}
 function _pctVentaLineas(vend, v){
   var base=0, acum=0;
   (typeof _lineasVenta==='function'?_lineasVenta(v):[]).forEach(function(l){
@@ -6266,7 +6285,20 @@ function renderLiq(){
               <td style="padding:6px;max-width:220px;white-space:normal" title="${String(v.prods||'').replace(/"/g,'&quot;')}">${String(v.prods||'').length>90?String(v.prods).slice(0,90)+'…':(v.prods||'')}</td>
               <td style="padding:6px;white-space:nowrap">${(v.pagos&&v.pagos.length)?v.pagos.map(function(p){return fN(p.m,(p.mon==='CUP'||p.mon==='CUPT')?0:2)+' '+p.mon+(p.caja?' <span style="color:var(--color-text-tertiary)">('+p.caja+')</span>':'');}).join(' + '):(v.mon||'')}</td>
               <td style="padding:6px;text-align:right">${fN(v.totalUSD)}</td>
-              <td style="padding:6px;text-align:center">${v.comPct}%</td>
+              <td style="padding:6px;text-align:center;white-space:nowrap">${(function(){
+                var d=_desglosePctVenta(v);
+                var h='';
+                if(d.mixto){
+                  // Ticket con varios %: se muestra producto a producto
+                  h='<div style="font-weight:600">'+fN(d.pct,2)+'% <span style="font-weight:400;color:var(--color-text-tertiary)">(mixto)</span></div>'
+                    +d.lineas.map(function(l){return '<div style="font-size:10px;color:var(--color-text-secondary);text-align:left">'+fN(l.pct,l.pct%1?1:0)+'% · '+String(l.n).slice(0,26)+'</div>';}).join('');
+                } else { h='<div>'+v.comPct+'%</div>'; }
+                var dif=Math.abs((d.com||0)-(v.comUSD||0));
+                if(d.lineas.length&&dif>0.05){
+                  h+='<div style="font-size:10px;color:#e6a23c;margin-top:2px" title="El % guardado en la venta no coincide con las reglas por producto">⚠ por reglas '+fN(d.pct,2)+'% = '+fN(d.com)+' <button class="btn-sm" style="font-size:9px;padding:1px 5px" onclick="updComPct('+v.id+','+d.pct+');renderLiq()">aplicar</button></div>';
+                }
+                return h;
+              })()}</td>
               <td style="padding:6px;text-align:right;color:var(--color-text-warning);font-weight:500">${fN(v.comUSD)}</td>
             </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;padding:8px">No hay ventas de contado pendientes en este rango</td></tr>'}
           </tbody>
