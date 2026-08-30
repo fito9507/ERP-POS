@@ -1142,7 +1142,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <input type="number" id="com-global" value="4" min="0" max="100" step="0.5" style="width:52px;font-size:11px;padding:3px 5px">
         <button class="btn-sm" onclick="aplicarComGlobal()">Aplicar</button>
       </div>
-      <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()">📥</button>
+      <button class="btn-sm" id="btn-export-csv" onclick="exportVentasCSV()" title="Exportar CSV">📥</button>
+      <button class="btn-sm" onclick="exportVentasPDF()" title="Exportar PDF (lo que ves filtrado)">🖨️ PDF</button>
       <button class="btn-sm" id="btn-retro-tickets" onclick="retroAsignarTickets()" title="Asignar tickets a ventas sin número">🎫</button>
     </div>
     <!-- Filtros en grid 2 cols -->
@@ -1238,6 +1239,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <select id="c-vend" onchange="renderCom()"><option value="">Todos</option><option>Keiler</option><option>Padre</option></select></div>
       <div class="ff"><label class="lbl">Almacén</label>
         <select id="c-alm" onchange="renderCom()"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
+      <div class="ff"><label class="lbl">Contenedor / Lote</label>
+        <select id="c-lote" onchange="renderCom()"><option value="">Todos</option></select></div>
       <button class="btn btn-p" style="align-self:flex-end" onclick="renderCom()">Filtrar</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeCom('semana')">Esta semana</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeCom('mes')">Este mes</button>
@@ -1284,6 +1287,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Hasta</label><input type="date" id="l-hasta" onchange="_liqGuardar()"></div>
       <div class="ff"><label class="lbl">Almacén</label>
         <select id="l-alm" onchange="_liqGuardar()"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
+      <div class="ff"><label class="lbl">Contenedor / Lote</label>
+        <select id="l-lote" onchange="_liqGuardar()"><option value="">Todos</option></select></div>
       <div class="ff"><label class="lbl">Tasa CUP/USD <span id="l-tasa-src" style="font-weight:400;color:var(--color-text-tertiary)"></span></label>
         <input type="number" id="l-tasa" value="512.88" step="0.0001" oninput="_liqTasaManual=true;_liqGuardar()" title="Por defecto la tasa de elToque; si la editas se respeta la tuya"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
@@ -5285,7 +5290,7 @@ var _liqTasaManual=false;
 function _liqGuardar(){
   var v=function(id){var e=document.getElementById(id);return e?e.value:'';};
   try{ localStorage.setItem('erp_liq_form',JSON.stringify({desde:v('l-desde'),hasta:v('l-hasta'),alm:v('l-alm'),
-    tasa:v('l-tasa'),tasaManual:!!_liqTasaManual,mon:v('l-mon-pago'),caja:v('l-caja-pago')})); }catch(e){}
+    tasa:v('l-tasa'),tasaManual:!!_liqTasaManual,mon:v('l-mon-pago'),caja:v('l-caja-pago'),lote:v('l-lote')})); }catch(e){}
 }
 // Tasa CUP/USD por defecto: la de elToque (RATES.CUP), salvo que el
 // usuario la haya editado a mano.
@@ -5301,6 +5306,7 @@ function _liqRestaurar(){
   if(!s) return false;
   var set=function(id,val){var e=document.getElementById(id);if(e&&val!=null&&val!=='')e.value=val;};
   set('l-desde',s.desde); set('l-hasta',s.hasta); set('l-alm',s.alm); set('l-mon-pago',s.mon);
+  _poblarSelectLotes(document.getElementById('l-lote')); set('l-lote',s.lote);
   _liqTasaManual=!!s.tasaManual;
   if(_liqTasaManual) set('l-tasa',s.tasa);
   if(typeof renderLiqCuentas==='function') try{ renderLiqCuentas(); }catch(e){}
@@ -5379,6 +5385,23 @@ function _ventaEnLote(v, lote){
     if(!p||!p.lotes||!p.lotes.length) return lote==='SIN LOTE';
     return p.lotes.some(function(le){ return (le.lote||'SIN LOTE')===lote && ((parseFloat(le.cantidad)||0)>0||(parseFloat(le.cantidad_inicial)||0)>0); });
   });
+}
+// ¿Pertenece una comision de cobro de folio a un contenedor/lote?
+function _comEnLote(x, lote){
+  if(!lote) return true;
+  var f=null;
+  (typeof CLIENTES!=='undefined'?CLIENTES:[]).some(function(cli){ f=(cli.folios||[]).find(function(y){return String(y.id)===String(x.folio_id);}); return !!f; });
+  return !!f && (f.contenedor||'SIN LOTE')===lote;
+}
+// Rellena un <select> con los contenedores existentes + SIN LOTE (conserva el valor)
+function _poblarSelectLotes(sel){
+  if(!sel) return;
+  var cur=sel.value;
+  var opts=(typeof CONTENEDORES!=='undefined'?CONTENEDORES:[]).map(function(x){return x.lote||x.ref||x.id;}).filter(Boolean);
+  opts=opts.filter(function(x,i,a){return a.indexOf(x)===i;}).sort(function(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true});});
+  opts.push('SIN LOTE');
+  sel.innerHTML='<option value="">Todos</option>'+opts.map(function(x){return '<option value="'+String(x).replace(/"/g,'&quot;')+'">'+String(x).replace(/</g,'&lt;')+'</option>';}).join('');
+  if(opts.indexOf(cur)>=0) sel.value=cur;
 }
 function filtrar_ven(){
   const desde=document.getElementById('f-desde').value;
@@ -5544,6 +5567,8 @@ function renderVentas(){
       +(_fpRes.desfase?'<br><span style="color:#e6a23c">\u26a0 Las filas de folio del registro suman '+fN(_puFilas,0)+' uds: quedaron desactualizadas al editar los folios ('+(_fpRes.desfase>0?'+':'')+fN(_fpRes.desfase,0)+'). Manda el folio.</span>':'')
       +'</div></div>');
   }
+  // Para exportVentasPDF(): lo que se esta viendo
+  window._ventasVista={data:data,totUSD:totUSD,comContado:totCom,comFolios:_cfTot,pdteContado:pdte,pdteFolios:_cfPdte,fp:_fpRes,isVend:_isVend};
   document.getElementById('v-count-lbl').textContent=`Ventas filtradas — ${data.length} resultados`;
 
   // tabla
@@ -5940,6 +5965,41 @@ function aplicarComGlobal(){
   renderVentas();
   showToast(`${pct}% aplicado a ${ids.length} ventas`);
 }
+// ── PDF del registro de ventas (ventana de impresion) ─────────────
+function exportVentasPDF(){
+  var V=window._ventasVista; if(!V){ showToast('Abre primero el registro de ventas'); return; }
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var val=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  var filtros=[];
+  if(val('f-desde')||val('f-hasta')) filtros.push('Periodo '+(val('f-desde')?fD(val('f-desde')):'…')+' – '+(val('f-hasta')?fD(val('f-hasta')):'…'));
+  [['f-vend','Vendedor'],['f-alm','Almacén'],['f-tipo','Tipo'],['f-mon','Moneda cobro'],['f-estcom','Est. comisión'],['f-caja','Cuenta'],['f-lote','Contenedor/Lote'],['f-prod','Producto']].forEach(function(p){ if(val(p[0])) filtros.push(p[1]+': '+val(p[0])); });
+  var dec=function(m){return (m==='CUP'||m==='CUPT')?0:2;};
+  var h='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Registro de ventas</title>'
+    +'<style>body{font-family:Segoe UI,Arial,sans-serif;font-size:10px;color:#111;margin:18px}h1{font-size:16px;margin:0 0 2px}.meta{color:#555;margin-bottom:8px}'
+    +'.cards{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}.card{border:1px solid #ccc;border-radius:6px;padding:6px 10px;min-width:120px}.card .l{font-size:9px;color:#666;text-transform:uppercase}.card .v{font-size:14px;font-weight:700}.card .s{font-size:9px;color:#666}'
+    +'table{width:100%;border-collapse:collapse}th,td{padding:3px 5px;border-bottom:1px solid #ddd;vertical-align:top}th{text-align:left;background:#f1f5f9;font-size:9px}.r{text-align:right;white-space:nowrap}.c{text-align:center}.tot td{font-weight:700;border-top:2px solid #333;background:#f8fafc}'
+    +'.prod{max-width:260px}@media print{button{display:none}@page{size:landscape;margin:10mm}}</style></head><body>';
+  h+='<h1>Registro de ventas</h1><div class="meta">'+(filtros.length?esc(filtros.join(' · ')):'Sin filtros')+' · '+V.data.length+' ventas · generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+  h+='<div class="cards"><div class="card"><div class="l">Venta total</div><div class="v">'+fN(V.totUSD)+' USD</div><div class="s">'+V.data.length+' ops</div></div>';
+  if(!V.isVend){
+    h+='<div class="card"><div class="l">Com. total</div><div class="v">'+fN(V.comContado+V.comFolios)+' USD</div><div class="s">contado '+fN(V.comContado)+' · folios '+fN(V.comFolios)+'</div></div>';
+    h+='<div class="card"><div class="l">Com. sin liquidar</div><div class="v">'+fN(V.pdteContado+V.pdteFolios)+' USD</div><div class="s">contado '+fN(V.pdteContado)+' · folios '+fN(V.pdteFolios)+'</div></div>';
+  }
+  if(V.fp) h+='<div class="card"><div class="l">'+esc(V.fp.nom)+'</div><div class="v">'+fN(V.fp.uds,0)+' uds</div><div class="s">POS '+fN(V.fp.pos,0)+' ('+V.fp.n+' tickets) · Folios '+fN(V.fp.fol,0)+' ('+(V.fp.nFol||0)+') · ≈ '+fN(V.fp.usd)+' USD</div></div>';
+  h+='</div>';
+  h+='<table><thead><tr><th>Fecha</th><th>Ticket</th><th>Vendedor</th><th>Almacén</th><th>Cliente</th><th>Tipo</th><th class="prod">Productos</th><th>Cobro</th><th class="r">Total USD</th>'+(V.isVend?'':'<th class="c">% Com.</th><th class="r">Com. USD</th><th>Estado</th>')+'<th>Nota</th></tr></thead><tbody>';
+  V.data.forEach(function(v){
+    var cobro=(v.pagos&&v.pagos.length)?v.pagos.map(function(p){return fN(p.m,dec(p.mon))+' '+p.mon+(p.caja?' ('+p.caja+')':'');}).join(' + '):(v.mon||'');
+    var esF=/Folio\s+\S/i.test(v.nota||'');
+    h+='<tr><td>'+esc(fD(v.fecha))+(v.hora?' '+esc(v.hora):'')+'</td><td>'+esc(v.ticket||'')+'</td><td>'+esc(v.vend||'')+'</td><td>'+esc(v.alm||'')+'</td><td>'+esc(v.cli||'Walk-in')+'</td><td>'+esc(v.tipo||'')+'</td><td class="prod">'+esc(v.prods||'')+'</td><td>'+esc(cobro)+'</td><td class="r">'+fN(v.totalUSD||0)+'</td>'
+      +(V.isVend?'':'<td class="c">'+(esF?'—':esc(v.comPct||0)+'%')+'</td><td class="r">'+(esF?'—':fN(v.comUSD||0))+'</td><td>'+esc(esF?'al cobrar':(v.estCom||''))+'</td>')
+      +'<td>'+esc(v.nota||'')+'</td></tr>';
+  });
+  h+='<tr class="tot"><td colspan="8">Total ('+V.data.length+' ventas)</td><td class="r">'+fN(V.totUSD)+'</td>'+(V.isVend?'':'<td></td><td class="r">'+fN(V.comContado)+'</td><td></td>')+'<td></td></tr></tbody></table>';
+  h+='<div style="margin-top:12px"><button onclick="window.print()">Imprimir / Guardar PDF</button></div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('\u26a0 El navegador bloque\u00f3 la ventana del PDF'); return; }
+  w.document.write(h); w.document.close(); setTimeout(function(){ try{ w.print(); }catch(e){} },500);
+}
 function exportVentasCSV(){
   const data=filtrar_ven();
   let csv='Fecha;Producto;Cantidad;Almacén;Tipo de Venta;Precio Unitario;Moneda;Total en Moneda\n';
@@ -6014,11 +6074,14 @@ function renderCom(){
   const hasta=document.getElementById('c-hasta').value;
   const vend=document.getElementById('c-vend').value;
   const alm=document.getElementById('c-alm').value;
+  _poblarSelectLotes(document.getElementById('c-lote'));
+  const cLote=document.getElementById('c-lote')?.value||'';
   const data=VENTAS.filter(v=>{
     if(desde&&v.fecha<desde)return false;
     if(hasta&&v.fecha>hasta)return false;
     if(vend&&v.vend!==vend)return false;
     if(alm&&v.alm!==alm)return false;
+    if(cLote&&!_ventaEnLote(v,cLote))return false;
     return true;
   }).filter(v=>v.estCom!=='No aplica');
   var comsF=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){
@@ -6026,6 +6089,7 @@ function renderCom(){
     if(hasta&&x.fecha>hasta)return false;
     if(vend&&x.vendedor!==vend)return false;
     if(alm&&x.almacen!==alm)return false;
+    if(cLote&&!_comEnLote(x,cLote))return false;
     return true;
   });
   var _comsPdteF=function(x){return x.estado==='Pendiente'||x.estado==='Liquidada (Pdte)';};
@@ -6222,14 +6286,17 @@ function renderLiq(){
   const cuentaPago=document.getElementById('l-caja-pago')?.value||'';
   const tasa=parseFloat(document.getElementById('l-tasa').value)||512.88;
   const oldAjuste=parseFloat(document.getElementById('liq-ajuste')?.value||0);
+  _poblarSelectLotes(document.getElementById('l-lote'));
+  const loteSel=document.getElementById('l-lote')?.value||'';
   const data=VENTAS.filter(v=>{
     if(desde&&v.fecha<desde)return false;
     if(hasta&&v.fecha>hasta)return false;
     if(alm&&v.alm!==alm)return false;
+    if(loteSel&&!_ventaEnLote(v,loteSel))return false;
     if(v.estCom==='No aplica')return false;
     return true;
   });
-  const semLabel=desde&&hasta?`${fD(desde)} – ${fD(hasta)}`:'(sin filtro)';
+  const semLabel=(desde&&hasta?`${fD(desde)} – ${fD(hasta)}`:'(sin filtro)')+(loteSel?' · '+loteSel:'');
   const almLabel=alm||'Todos';
   
   // isPdte — declare FIRST before any usage
@@ -6248,6 +6315,7 @@ function renderLiq(){
     if(desde&&x.fecha<desde)return false;
     if(hasta&&x.fecha>hasta)return false;
     if(alm&&x.almacen!==alm)return false;
+    if(loteSel&&!_comEnLote(x,loteSel))return false;
     return true;
   });
   var comsPdteUSD=comsPdte.reduce(function(a,x){return a+(parseFloat(x.com_usd)||0);},0);
@@ -6286,7 +6354,7 @@ function renderLiq(){
   var totalPago = Object.keys(comDetalleAcum).reduce(function(s,m){return s+toTgt(comDetalleAcum[m]||0,m);},0);
                
   // Datos de esta liquidacion para exportLiqPDF()
-  window._liqActual={ titulo:'Liquidación pendiente', desde:desde, hasta:hasta, alm:almLabel, tasa:tasa, mon:targetMon, cuenta:cuentaPago,
+  window._liqActual={ titulo:'Liquidación pendiente', desde:desde, hasta:hasta, alm:almLabel, lote:loteSel, tasa:tasa, mon:targetMon, cuenta:cuentaPago,
     ventas:data.filter(isPdte), coms:comsPdte, comVta:comVtaPdteUSD, comFol:comsPdteUSD, totalPago:totalPago,
     det:comDetalleAcum, eurusd:t_EURUSD };
   document.getElementById('liq-out').innerHTML=`
@@ -6466,9 +6534,10 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     fecha:today(),
     // ids REALES (supaId) para que sobrevivan a recargas y otros moviles;
     // 'Todos' = sin filtro de almacen (antes no casaba ninguna venta)
-    ventas: VENTAS.filter(v=>v.estCom==='Pendiente'&&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)&&(!alm||alm==='Todos'||v.alm===alm)).map(v=>v.supaId||v.id),
+    lote: (document.getElementById('l-lote')?.value||''),
+    ventas: VENTAS.filter(v=>v.estCom==='Pendiente'&&(!desde||v.fecha>=desde)&&(!hasta||v.fecha<=hasta)&&(!alm||alm==='Todos'||v.alm===alm)&&_ventaEnLote(v,document.getElementById('l-lote')?.value||'')).map(v=>v.supaId||v.id),
     coms: (typeof COMS!=='undefined'?COMS:[]).filter(function(x){
-      return x.estado==='Pendiente'&&(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta)&&(!alm||alm==='Todos'||x.almacen===alm);
+      return x.estado==='Pendiente'&&(!desde||x.fecha>=desde)&&(!hasta||x.fecha<=hasta)&&(!alm||alm==='Todos'||x.almacen===alm)&&_comEnLote(x,document.getElementById('l-lote')?.value||'');
     }).map(function(x){return x.id;})
   };
   
@@ -6909,7 +6978,7 @@ function _liqPDF(o){
     +'.meta{color:#555;margin-bottom:10px}table{width:100%;border-collapse:collapse;margin-bottom:6px}th,td{padding:4px 6px;border-bottom:1px solid #ddd;vertical-align:top}th{text-align:left;background:#f1f5f9;font-size:10px}'
     +'.r{text-align:right;white-space:nowrap}.c{text-align:center}.tot td{font-weight:700;border-top:2px solid #333;background:#f8fafc}.big{font-size:15px;font-weight:700}.warn{color:#b45309}'
     +'.firmas{display:flex;gap:40px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;color:#555}@media print{button{display:none}}</style></head><body>';
-  h+='<h1>'+esc(o.titulo)+'</h1><div class="meta">Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+  h+='<h1>'+esc(o.titulo)+'</h1><div class="meta">Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.lote?' · Contenedor <b>'+esc(o.lote)+'</b>':'')+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
   // resumen por vendedor
   h+='<h2>Resumen por vendedor</h2><table><thead><tr><th>Vendedor</th><th class="r">Ventas contado</th><th class="r">Com. contado</th><th class="r">Cobros folios</th><th class="r">Com. folios</th><th class="r">A pagar USD</th></tr></thead><tbody>';
   Object.keys(porV).forEach(function(n){var a=porV[n];h+='<tr><td><b>'+esc(n)+'</b></td><td class="r">'+fN(a.baseV)+' ('+a.nV+')</td><td class="r">'+fN(a.comV)+'</td><td class="r">'+fN(a.baseF)+' ('+a.nF+')</td><td class="r">'+fN(a.comF)+'</td><td class="r"><b>'+fN(a.comV+a.comF)+'</b></td></tr>';});
