@@ -3356,6 +3356,9 @@ async function syncSaveFolio(cliId, f){
     almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[],
     contenedor:f.contenedor||null};
   if(f.mon) body.moneda=f.mon;
+  // Vendedor del folio: solo se manda si la columna existe en la nube
+  // (supabase_folios_vendedor.sql); si no, un 400 tumbaria el guardado.
+  if(window._foliosVendedorOK!==false) body.vendedor=f.vend||null;
   if(!_supaOnline||typeof supaReq==='undefined'){
     enqueue({method:'POST',path:'folios?on_conflict=id',body:body});
     return;
@@ -3500,6 +3503,8 @@ async function syncLoadClientes(){
 
     var rf = await supaReq('GET','folios?select=*&order=fecha.asc');
     var foliosRows = rf.ok ? (await rf.json()||[]) : [];
+    // ¿Existe ya la columna vendedor? (select=* la trae si existe)
+    window._foliosVendedorOK = foliosRows.length ? Object.prototype.hasOwnProperty.call(foliosRows[0],'vendedor') : window._foliosVendedorOK;
 
     var ra = await supaReq('GET','abonos?select=*&order=fecha.asc');
     var abonosRows = ra.ok ? (await ra.json()||[]) : [];
@@ -3515,7 +3520,8 @@ async function syncLoadClientes(){
         });
         var tipo_res = (f.descripcion && (f.descripcion.toLowerCase().includes('preventa') || f.descripcion.toLowerCase().includes('prereserva'))) ? 'prereserva' : undefined;
         return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
-          desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||'',tipo_reserva:tipo_res};
+          desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||'',tipo_reserva:tipo_res,
+          vend:f.vendedor||''};
       });
       CLIENTES.push({
         id:row.id, nombre:row.nombre, tel:row.telefono||'',
@@ -5480,6 +5486,20 @@ function getSelIds(){
 // Reasignar el vendedor de una venta (solo admin). Si el nuevo vendedor
 // comisiona, se recalcula (respetando el % de la fila si ya lo tiene) y
 // queda Pendiente a su nombre; si no comisiona, No aplica.
+// % de comision de una venta POS para un vendedor, ponderado por sus
+// lineas (respeta reglas por producto, p.ej. silicona 1,5%)
+function _pctVentaLineas(vend, v){
+  var base=0, acum=0;
+  (typeof _lineasVenta==='function'?_lineasVenta(v):[]).forEach(function(l){
+    var pr=typeof PRODS!=='undefined'?PRODS.find(function(x){return x.n===l.n;}):null;
+    var precio=l.p!=null?l.p:(pr?(parseFloat(pr.maj)||parseFloat(pr.min)||0):0);
+    var imp=(l.q||0)*precio; if(!(imp>0)) return;
+    var pct=typeof getComPct==='function'?(parseFloat(getComPct(vend,l.n,pr?pr.cat:null,v.alm))||0):0;
+    base+=imp; acum+=imp*pct;
+  });
+  if(!(base>0)) return typeof getComPct==='function'?(parseFloat(getComPct(vend,null,null,v.alm))||0):0;
+  return Math.round((acum/base)*10000)/10000;
+}
 async function setVendVenta(id,vend){
   const v=VENTAS.find(x=>x.id===id);if(!v||v.vend===vend)return;
   v.vend=vend;
@@ -5489,8 +5509,9 @@ async function setVendVenta(id,vend){
   var esFolio=/Folio\s*\d/i.test(v.nota||'');
   var puede=USERS[vend]&&USERS[vend].aComision!==false&&!esFolio;
   if(puede){
-    var pct=parseFloat(v.comPct)||0;
-    if(!(pct>0))pct=typeof getComPct==='function'?(parseFloat(getComPct(vend,null,null,v.alm))||0):0;
+    // % ponderado por las lineas de la venta para el NUEVO vendedor.
+    // Antes se conservaba el % del anterior o se usaba el generico.
+    var pct=_pctVentaLineas(vend,v);
     v.comPct=pct;
     v.comUSD=parseFloat(((v.totalUSD||0)*pct/100).toFixed(2));
     if(v.estCom!=='Pagada')v.estCom=pct>0?'Pendiente':'No aplica';
@@ -9236,6 +9257,46 @@ function exportarReservasPDF(clienteId) {
   setTimeout(function() { w.print(); }, 500);
 }
 
+// ── Reasignar el vendedor de un folio (admin) ──────────────
+// Las comisiones PENDIENTES de sus abonos pasan al nuevo vendedor con
+// su % ponderado; las liquidadas/pagadas no se tocan. Si el nuevo no
+// comisiona, se quitan. Si el anterior no comisionaba, se generan.
+async function setVendFolio(cid, fid, vend){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var f=(c.folios||[]).find(function(x){return String(x.id)===String(fid);}); if(!f) return;
+  f.vend=vend||'';
+  if(typeof offlineSaveClientes==='function') try{ offlineSaveClientes(); }catch(e){}
+  if(window._foliosVendedorOK===false) showToast('\u26a0 El vendedor del folio no se guardar\u00e1 en la nube: ejecuta supabase_folios_vendedor.sql');
+  if(typeof syncSaveFolio==='function') try{ await syncSaveFolio(cid,f); }catch(e){}
+  var efectivo=f.vend||c.owner||'';
+  var puede=!!(efectivo&&USERS[efectivo]&&USERS[efectivo].aComision!==false);
+  var pct=puede?_pctFolio(efectivo,f,f.alm||c.alm||''):0;
+  var movidas=0, quitadas=0, nuevas=0;
+  (typeof COMS!=='undefined'?COMS:[]).filter(function(x){return String(x.folio_id)===String(fid)&&x.origen==='abono'&&x.estado==='Pendiente';}).forEach(function(x){
+    if(!(pct>0)){
+      quitadas++;
+      COMS=COMS.filter(function(y){return y.id!==x.id;});
+      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('DELETE','comisiones?id=eq.'+encodeURIComponent(x.id)).catch(function(e){});
+      else { try{ enqueue({method:'DELETE',path:'comisiones?id=eq.'+encodeURIComponent(x.id)}); }catch(e){} }
+      return;
+    }
+    x.vendedor=efectivo; x.pct=pct; x.com_usd=parseFloat(((parseFloat(x.base_usd)||0)*pct/100).toFixed(4));
+    movidas++;
+    var body={vendedor:x.vendedor,pct:x.pct,com_usd:x.com_usd};
+    if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','comisiones?id=eq.'+encodeURIComponent(x.id),body).catch(function(e){});
+    else { try{ enqueue({method:'PATCH',path:'comisiones?id=eq.'+encodeURIComponent(x.id),body:body}); }catch(e){} }
+  });
+  // Abonos sin comision (el vendedor anterior no comisionaba): generarla
+  if(pct>0){
+    (f.abonos||[]).forEach(function(ab){
+      if(!COMS.some(function(x){return x.id==='com-'+ab.id;})){ try{ _comisionDeAbono(cid,fid,ab); nuevas++; }catch(e){} }
+    });
+  }
+  showToast('\u2713 Folio '+fid+' \u2192 '+(efectivo||'sin vendedor')+(pct>0?' \u00b7 '+pct+'%':' \u00b7 sin comisi\u00f3n')+(movidas?' \u00b7 '+movidas+' comisi\u00f3n(es) reasignada(s)':'')+(nuevas?' \u00b7 '+nuevas+' generada(s)':'')+(quitadas?' \u00b7 '+quitadas+' quitada(s)':''));
+  try{ renderFichaFolios(c); }catch(e){}
+  if(typeof renderCom==='function') try{ renderCom(); }catch(e){}
+}
+
 // ── LISTA ─────────────────────────────────────────────────
 function renderLista(){
   const isAdminUser=(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin');
@@ -9397,6 +9458,9 @@ function renderFichaFolios(c){
               <span class="badge ${EC[est]}">${EL[est]}</span>
               ${f.tipo_reserva==='prereserva'?'<span class="badge ba" style="font-weight:600">🚢 PRERESERVA TRÁNSITO</span>':'<span class="badge bb">📦 STOCK FÍSICO</span>'}
               <span style="font-size:11px;color:var(--color-text-secondary)">${fD(f.fecha)} · ${f.alm}</span>
+              ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')
+                ?`<select class="est-sel" title="Vendedor que hizo la venta: sus abonos le comisionan" style="font-size:10px;max-width:110px" onclick="event.stopPropagation()" onchange="event.stopPropagation();setVendFolio('${c.id}','${f.id}',this.value)"><option value=""${f.vend?'':' selected'}>👤 dueño (${c.owner||'Admin'})</option>${Object.keys(USERS).filter(u=>USERS[u]&&USERS[u].activo!==false).map(u=>`<option${u===(f.vend||'')?' selected':''}>${u}</option>`).join('')}</select>`
+                :(f.vend?`<span style="font-size:10px;color:var(--color-text-tertiary)">👤 ${f.vend}</span>`:'')}
               <button style="border:none;background:none;cursor:pointer;font-size:13px;padding:0;color:var(--color-text-tertiary);opacity:.7" onclick="event.stopPropagation();renombrarFolio('${c.id}','${f.id}')" title="Renombrar folio">✏️</button>
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
@@ -10637,7 +10701,7 @@ function crearFolioCli(cid){
     return;
   }
 
-  var newFolio={id:fid,fecha,alm,mon,desc,contenedor:cnt,lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
+  var newFolio={id:fid,fecha,alm,mon,desc,contenedor:cnt,vend:(typeof S!=='undefined'&&S.user)||'',lineas:lineas.map(l=>({...l,qO:l.q,pO:l.precio})),abonos};
   c.folios.push(newFolio);
   // Discount stock
   lineas.forEach(function(l){
