@@ -1175,6 +1175,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
         <select id="f-caja" onchange="renderVentas()" style="width:100%">
           <option value="">Todas</option>
         </select></div>
+      <div><label class="lbl">Contenedor / Lote</label>
+        <select id="f-lote" onchange="renderVentas()" style="width:100%">
+          <option value="">Todos</option>
+        </select></div>
       <div><label class="lbl">Producto</label>
         <div style="position:relative">
         <input id="f-prod" placeholder="Buscar producto..." autocomplete="off" oninput="_fprodSugerir();_dRender(renderVentas)" onfocus="_fprodSugerir()" onblur="setTimeout(_fprodOcultar,180)" style="width:100%">
@@ -2425,7 +2429,7 @@ async function syncSaveVenta(v) {
     notas:        (v.ticket?'['+v.ticket+']':'')
                  +(v.hora?'['+v.hora+']':'')
                  +(v.nota?' '+v.nota:''),
-    cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[],comDetalle:v.comDetalle||{}}) : ''
+    cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[],comDetalle:v.comDetalle||{},lotes:v.lotes||{}}) : ''
   };
   // Sin supaId: intentar encontrar la fila real en la BD antes de crear
   // una nueva (un POST ciego duplica la venta y el cambio no se ve).
@@ -2553,7 +2557,8 @@ async function syncLoadVentas() {
         nota:     _nota,
         pagos:   (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.pagos||[]; }catch(e){return [];} })(),
         vueltos: (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.vueltos||[]; }catch(e){return [];} })(),
-        comDetalle: (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.comDetalle||{}; }catch(e){return {};} })()
+        comDetalle: (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.comDetalle||{}; }catch(e){return {};} })(),
+        lotes:   (function(){ try{ var c=JSON.parse(row.cobros_json||'{}'); return c.lotes||{}; }catch(e){return {};} })()
       });
     });
     if (typeof renderVentas === 'function') { try { renderVentas(); } catch(e) {} }
@@ -4849,7 +4854,9 @@ function confirmar(){
     comDetalle:estCom==='No aplica'?{}:comDetalle,
     estCom:estCom,nota:(S.tipo==='Preventa'?'[Pre-venta] ':'')+(document.getElementById('venta-nota')?.value||''),
     pagos:S.pagos.map(function(p){return {m:p.m,mon:p.mon,caja:p.caja||(p.mon+' '+S.alm)};}),
-    vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};})  
+    vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};}),
+    // lote del que salio cada linea (para filtrar ventas por contenedor)
+    lotes:(function(){var o={};S.cart.forEach(function(c){if(c.loteSeleccionado)o[c.n]=c.loteSeleccionado;});return o;})()  
   };
   VENTAS.unshift(venta);
   // Descontar stock — avisando si alguna linea supera las existencias.
@@ -5270,7 +5277,7 @@ function _liqRestaurar(){
 }
 function limpiarFiltros(){
   ['f-desde','f-hasta','f-prod'].forEach(id=>document.getElementById(id).value='');
-  ['f-vend','f-alm','f-tipo','f-mon','f-estcom','f-caja'].forEach(id=>{var e=document.getElementById(id);if(e)e.value='';});
+  ['f-vend','f-alm','f-tipo','f-mon','f-estcom','f-caja','f-lote'].forEach(id=>{var e=document.getElementById(id);if(e)e.value='';});
   renderVentas();
 }
 
@@ -5321,6 +5328,25 @@ function _fprodElegir(i){
   renderVentas();
 }
 function _fprodOcultar(){ var box=document.getElementById('f-prod-sug'); if(box) box.style.display='none'; }
+// ¿Pertenece una venta a un contenedor/lote?
+//  1) venta de folio -> el contenedor del folio
+//  2) ventas nuevas -> el lote guardado en cada linea
+//  3) ventas antiguas -> aproximacion: el producto existe en ese lote
+function _ventaEnLote(v, lote){
+  if(!lote) return true;
+  var mF=String(v.nota||'').match(/Folio\s+(\S+)/i);
+  if(mF){
+    var fid=mF[1].replace(/[—–-]+$/,''); var f=null;
+    (typeof CLIENTES!=='undefined'?CLIENTES:[]).some(function(cli){ f=(cli.folios||[]).find(function(x){return String(x.id)===String(fid);}); return !!f; });
+    if(f) return (f.contenedor||'SIN LOTE')===lote;
+  }
+  if(v.lotes&&Object.keys(v.lotes).length) return Object.keys(v.lotes).some(function(n){return (v.lotes[n]||'SIN LOTE')===lote;});
+  return (typeof _lineasVenta==='function'?_lineasVenta(v):[]).some(function(l){
+    var p=typeof PRODS!=='undefined'?PRODS.find(function(x){return x.n===l.n;}):null;
+    if(!p||!p.lotes||!p.lotes.length) return lote==='SIN LOTE';
+    return p.lotes.some(function(le){ return (le.lote||'SIN LOTE')===lote && ((parseFloat(le.cantidad)||0)>0||(parseFloat(le.cantidad_inicial)||0)>0); });
+  });
+}
 function filtrar_ven(){
   const desde=document.getElementById('f-desde').value;
   const hasta=document.getElementById('f-hasta').value;
@@ -5331,7 +5357,9 @@ function filtrar_ven(){
   const estcom=document.getElementById('f-estcom').value;
   const caja=(document.getElementById('f-caja')?.value||'');
   const prod=(document.getElementById('f-prod').value||'').toLowerCase();
+  const lote=(document.getElementById('f-lote')?.value||'');
   return VENTAS.filter(v=>{
+    if(lote&&!_ventaEnLote(v,lote))return false;
     if(desde&&v.fecha<desde)return false;
     if(hasta&&v.fecha>hasta)return false;
     if(vend&&v.vend!==vend)return false;
@@ -5358,6 +5386,16 @@ function renderVentas(){
   var _aComision=_isVend&&USERS[S.user]&&USERS[S.user].aComision!==false;
   var _showCom=!_isVend||_aComision;
 
+  // Filtro Contenedor/Lote: los contenedores existentes + SIN LOTE
+  var _flSel=document.getElementById('f-lote');
+  if(_flSel){
+    var _flCur=_flSel.value;
+    var _flOpts=(typeof CONTENEDORES!=='undefined'?CONTENEDORES:[]).map(function(x){return x.lote||x.ref||x.id;}).filter(Boolean);
+    _flOpts=_flOpts.filter(function(x,i,a){return a.indexOf(x)===i;}).sort(function(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true});});
+    _flOpts.push('SIN LOTE');
+    _flSel.innerHTML='<option value="">Todos</option>'+_flOpts.map(function(x){return '<option value="'+String(x).replace(/"/g,'&quot;')+'">'+String(x).replace(/</g,'&lt;')+'</option>';}).join('');
+    if(_flOpts.indexOf(_flCur)>=0) _flSel.value=_flCur;
+  }
   // Rebuild caja filter — from _cajasData or from ventas pagos
   var _fcSel=document.getElementById('f-caja');
   if(_fcSel){
