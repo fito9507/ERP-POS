@@ -5473,11 +5473,24 @@ function renderVentas(){
   const totUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totCom=conCom.reduce((a,v)=>a+v.comUSD,0);
   const pdte=conCom.filter(v=>v.estCom==='Pendiente').reduce((a,v)=>a+v.comUSD,0);
+  // Comisiones por cobros de folio que caen en los mismos filtros
+  var _cfD=document.getElementById('f-desde').value, _cfH=document.getElementById('f-hasta').value;
+  var _cfV=document.getElementById('f-vend').value, _cfA=document.getElementById('f-alm').value, _cfL=document.getElementById('f-lote')?.value||'';
+  var _cf=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){
+    var d=String(x.fecha||'').slice(0,10);
+    if(_cfD&&d<_cfD)return false; if(_cfH&&d>_cfH)return false;
+    if(_cfV&&x.vendedor!==_cfV)return false;
+    if(_cfA&&x.almacen&&x.almacen!==_cfA)return false;
+    if(_cfL){ var f=null; (typeof CLIENTES!=='undefined'?CLIENTES:[]).some(function(cli){ f=(cli.folios||[]).find(function(y){return String(y.id)===String(x.folio_id);}); return !!f; }); if(!f||(f.contenedor||'SIN LOTE')!==_cfL)return false; }
+    return true;
+  });
+  var _cfTot=_cf.reduce(function(a,x){return a+(parseFloat(x.com_usd)||0);},0);
+  var _cfPdte=_cf.filter(function(x){return x.estado==='Pendiente';}).reduce(function(a,x){return a+(parseFloat(x.com_usd)||0);},0);
   document.getElementById('v-metrics').innerHTML=`
     <div class="metric"><div class="lbl">Venta total USD</div><div class="val">${fN(totUSD)}</div><div class="sub">${data.length} ops</div></div>
     <div class="metric"><div class="lbl">Equiv. EUR</div><div class="val">${fN(fromUSD(totUSD,'EUR'))}</div><div class="sub">equiv.</div></div>
     <div class="metric"><div class="lbl">Equiv. CUP</div><div class="val">${fN(fromUSD(totUSD,'CUP'),0)}</div><div class="sub">equiv.</div></div>
-    ${_isVend?'':'<div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">'+(fN(totCom))+'</div><div class="sub">USD (con com.)</div></div><div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">'+fN(pdte)+'</div><div class="sub">USD sin liquidar</div></div>'}
+    ${_isVend?'':'<div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">'+fN(totCom+_cfTot)+'</div><div class="sub">contado '+fN(totCom)+' · folios '+fN(_cfTot)+'</div></div><div class="metric"><div class="lbl">Com. pendiente</div><div class="val" style="color:var(--color-text-danger)">'+fN(pdte+_cfPdte)+'</div><div class="sub">sin liquidar · contado '+fN(pdte)+' · folios '+fN(_cfPdte)+'</div></div>'}
   `;
 
   // Con el filtro Producto activo: unidades e importe de ESE producto en
