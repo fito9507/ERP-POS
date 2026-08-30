@@ -6217,15 +6217,40 @@ function renderLiq(){
     </div>
     <div style="text-align:right;font-size:14px;font-weight:600;margin-bottom:16px">Total a Pagar: <span id="liq-total-final" style="color:var(--color-text-danger)">${fN(totalPago + oldAjuste, targetMon==='CUP'?0:2)} ${targetMon}</span></div>
     
+    ${(function(){
+      // ── Resumen por vendedor: contado + folios = a pagar ──
+      var porV={};
+      var tocar=function(n){ n=n||'(sin vendedor)'; if(!porV[n]) porV[n]={nV:0,baseV:0,comV:0,nF:0,baseF:0,comF:0}; return porV[n]; };
+      data.filter(isPdte).forEach(function(v){ var a=tocar(v.vend); a.nV++; a.baseV+=v.totalUSD||0; a.comV+=v.comUSD||0; });
+      comsPdte.forEach(function(x){ var a=tocar(x.vendedor); a.nF++; a.baseF+=parseFloat(x.base_usd)||0; a.comF+=parseFloat(x.com_usd)||0; });
+      var noms=Object.keys(porV); if(!noms.length) return '';
+      return '<div class="liq-sec" style="margin-top:16px;border-top:1px solid var(--color-border-primary);padding-top:16px;">'
+        +'<div class="liq-sec-h" style="margin-bottom:8px">RESUMEN POR VENDEDOR (pendiente de liquidar)</div>'
+        +'<div style="overflow-x:auto"><table class="adm-table" style="font-size:11px;width:100%"><thead><tr>'
+        +'<th style="text-align:left;padding:6px">Vendedor</th><th style="text-align:right;padding:6px">Ventas contado</th><th style="text-align:right;padding:6px">Com. contado</th>'
+        +'<th style="text-align:right;padding:6px">Cobros folios</th><th style="text-align:right;padding:6px">Com. folios</th><th style="text-align:right;padding:6px">A PAGAR USD</th></tr></thead><tbody>'
+        +noms.map(function(n){ var a=porV[n]; return '<tr><td style="padding:6px;font-weight:600">'+n+'</td>'
+          +'<td style="padding:6px;text-align:right">'+fN(a.baseV)+' <span style="color:var(--color-text-tertiary)">('+a.nV+')</span></td>'
+          +'<td style="padding:6px;text-align:right;color:var(--color-text-warning)">'+fN(a.comV)+'</td>'
+          +'<td style="padding:6px;text-align:right">'+fN(a.baseF)+' <span style="color:var(--color-text-tertiary)">('+a.nF+')</span></td>'
+          +'<td style="padding:6px;text-align:right;color:var(--color-text-warning)">'+fN(a.comF)+'</td>'
+          +'<td style="padding:6px;text-align:right;font-weight:700;color:var(--color-text-danger)">'+fN(a.comV+a.comF)+'</td></tr>'; }).join('')
+        +'</tbody></table></div></div>';
+    })()}
+
     <div class="liq-sec" style="margin-top:16px;border-top:1px solid var(--color-border-primary);padding-top:16px;">
-      <div class="liq-sec-h" style="margin-bottom:8px">VENTAS INCLUIDAS EN ESTA LIQUIDACIÓN</div>
+      <div class="liq-sec-h" style="margin-bottom:8px">VENTAS DE CONTADO INCLUIDAS (${data.filter(isPdte).length})</div>
       <div style="overflow-x:auto">
         <table class="adm-table" style="font-size:11px;width:100%">
           <thead>
             <tr>
               <th style="text-align:left;padding:6px">Fecha</th>
+              <th style="text-align:left;padding:6px">Vendedor</th>
+              <th style="text-align:left;padding:6px">Ticket</th>
+              <th style="text-align:left;padding:6px">Cliente</th>
               <th style="text-align:left;padding:6px">Almacén</th>
               <th style="text-align:left;padding:6px">Productos</th>
+              <th style="text-align:left;padding:6px">Cobro</th>
               <th style="text-align:right;padding:6px">Total USD</th>
               <th style="text-align:center;padding:6px">% Com.</th>
               <th style="text-align:right;padding:6px">Com. USD</th>
@@ -6233,14 +6258,59 @@ function renderLiq(){
           </thead>
           <tbody>
             ${data.filter(isPdte).map(v => `<tr>
-              <td style="padding:6px;white-space:nowrap">${fD(v.fecha)}</td>
+              <td style="padding:6px;white-space:nowrap">${fD(v.fecha)}${v.hora?' <span style="color:var(--color-text-tertiary)">'+v.hora+'</span>':''}</td>
+              <td style="padding:6px">${v.vend||''}</td>
+              <td style="padding:6px;white-space:nowrap;color:var(--color-text-tertiary)">${v.ticket||'—'}</td>
+              <td style="padding:6px">${v.cli||'Walk-in'}</td>
               <td style="padding:6px">${v.alm}</td>
-              <td style="padding:6px;max-width:200px;white-space:normal">${v.prods}</td>
+              <td style="padding:6px;max-width:220px;white-space:normal" title="${String(v.prods||'').replace(/"/g,'&quot;')}">${String(v.prods||'').length>90?String(v.prods).slice(0,90)+'…':(v.prods||'')}</td>
+              <td style="padding:6px;white-space:nowrap">${(v.pagos&&v.pagos.length)?v.pagos.map(function(p){return fN(p.m,(p.mon==='CUP'||p.mon==='CUPT')?0:2)+' '+p.mon+(p.caja?' <span style="color:var(--color-text-tertiary)">('+p.caja+')</span>':'');}).join(' + '):(v.mon||'')}</td>
               <td style="padding:6px;text-align:right">${fN(v.totalUSD)}</td>
               <td style="padding:6px;text-align:center">${v.comPct}%</td>
               <td style="padding:6px;text-align:right;color:var(--color-text-warning);font-weight:500">${fN(v.comUSD)}</td>
-            </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:8px">No hay ventas pendientes en este rango</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;padding:8px">No hay ventas de contado pendientes en este rango</td></tr>'}
           </tbody>
+          ${data.filter(isPdte).length?`<tfoot><tr style="font-weight:700"><td colspan="7" style="padding:6px">Subtotal ventas de contado (${data.filter(isPdte).length})</td>
+            <td style="padding:6px;text-align:right">${fN(data.filter(isPdte).reduce(function(a,v){return a+(v.totalUSD||0);},0))}</td><td></td>
+            <td style="padding:6px;text-align:right;color:var(--color-text-warning)">${fN(data.filter(isPdte).reduce(function(a,v){return a+(v.comUSD||0);},0))}</td></tr></tfoot>`:''}
+        </table>
+      </div>
+    </div>
+
+    <div class="liq-sec" style="margin-top:16px;border-top:1px solid var(--color-border-primary);padding-top:16px;">
+      <div class="liq-sec-h" style="margin-bottom:8px">COBROS DE FOLIOS INCLUIDOS (${comsPdte.length} abonos)</div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:6px">Cada abono de un folio comisiona al vendedor del folio con su % (reglas o % propio del folio). Los traspasos entre folios y los ajustes no comisionan.</div>
+      <div style="overflow-x:auto">
+        <table class="adm-table" style="font-size:11px;width:100%">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px">Fecha</th>
+              <th style="text-align:left;padding:6px">Vendedor</th>
+              <th style="text-align:left;padding:6px">Cliente</th>
+              <th style="text-align:left;padding:6px">Folio</th>
+              <th style="text-align:right;padding:6px">Abono</th>
+              <th style="text-align:left;padding:6px">Caja</th>
+              <th style="text-align:right;padding:6px">Base USD</th>
+              <th style="text-align:center;padding:6px">% Com.</th>
+              <th style="text-align:right;padding:6px">Com. USD</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${comsPdte.slice().sort(function(a,b){return String(a.fecha).localeCompare(String(b.fecha));}).map(function(x){ var m=x.moneda||'USD'; return `<tr>
+              <td style="padding:6px;white-space:nowrap">${fD(x.fecha)}</td>
+              <td style="padding:6px">${x.vendedor||''}</td>
+              <td style="padding:6px">${x.cliente||''}</td>
+              <td style="padding:6px;white-space:nowrap;color:var(--color-text-tertiary)">${String(x.folio_id||'').replace(/^f-credito-/,'crédito ')}</td>
+              <td style="padding:6px;text-align:right;white-space:nowrap">${fN(parseFloat(x.monto)||0,(m==='CUP'||m==='CUPT')?0:2)} ${m}</td>
+              <td style="padding:6px">${x.caja||'—'}</td>
+              <td style="padding:6px;text-align:right">${fN(parseFloat(x.base_usd)||0)}</td>
+              <td style="padding:6px;text-align:center">${fN(parseFloat(x.pct)||0,2)}%</td>
+              <td style="padding:6px;text-align:right;color:var(--color-text-warning);font-weight:500">${fN(parseFloat(x.com_usd)||0)}</td>
+            </tr>`; }).join('') || '<tr><td colspan="9" style="text-align:center;padding:8px">No hay cobros de folios pendientes en este rango</td></tr>'}
+          </tbody>
+          ${comsPdte.length?`<tfoot><tr style="font-weight:700"><td colspan="6" style="padding:6px">Subtotal cobros de folios (${comsPdte.length})</td>
+            <td style="padding:6px;text-align:right">${fN(comsPdte.reduce(function(a,x){return a+(parseFloat(x.base_usd)||0);},0))}</td><td></td>
+            <td style="padding:6px;text-align:right;color:var(--color-text-warning)">${fN(comsPdteUSD)}</td></tr></tfoot>`:''}
         </table>
       </div>
     </div>
