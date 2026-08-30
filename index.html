@@ -4546,7 +4546,12 @@ function updResBadge(){
 }
 function openRes(noFetch){
   if(!noFetch && typeof syncLoadReservas==='function' && typeof _supaOnline!=='undefined' && _supaOnline){
-    syncLoadReservas().then(function(){ try{ openRes(true); }catch(e){} });
+    syncLoadReservas().then(function(){
+      // Repintar solo si el panel sigue abierto: si el usuario ya lo
+      // cerro (o paso a cobrar), no volver a abrirlo encima.
+      var ov=document.getElementById('res-overlay');
+      if(ov&&ov.style.display==='block') try{ openRes(true); }catch(e){}
+    });
   }
   var _isAdmRes = typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin';
   const act=S.reservas.filter(r=>r.activa&&(_isAdmRes||r.user===S.user));
@@ -4839,21 +4844,6 @@ function confirmar(){
     vueltos:S.vueltos.map(function(v){return {m:v.m,mon:v.mon,caja:v.caja||(v.mon+' '+S.alm)};})  
   };
   VENTAS.unshift(venta);
-  // Si esta venta cobra una reserva, ahora si se libera (local + lapida
-  // en la nube). Solo si el carrito sigue siendo el de esa reserva.
-  if(S.resCobrando!=null){
-    var _rid=S.resCobrando; S.resCobrando=null;
-    var _rr=S.reservas.find(function(x){return x.id===_rid;});
-    var _mismo=_rr&&(_rr.lineas||[]).some(function(l){return S.cart.some(function(cc){return cc.n===l.n;});});
-    if(_rr&&_mismo){
-      S.reservas=S.reservas.filter(function(x){return x.id!==_rid;});
-      _saveReservas();
-      if(typeof syncDelReserva==='function') try{ syncDelReserva(_rid); }catch(e){}
-      if(typeof syncReservasGlobal==='function') try{ syncReservasGlobal(); }catch(e){}
-      if(typeof recalcReservasGlobales==='function') try{ recalcReservasGlobales(); }catch(e){}
-      try{ updResBadge(); }catch(e){}
-    }
-  }
   // Descontar stock — avisando si alguna linea supera las existencias.
   // Antes se truncaba a cero en silencio y la diferencia desaparecia.
   var _faltantes = [];
@@ -4871,7 +4861,28 @@ function confirmar(){
     try{ showToast('\u26a0 Stock insuficiente en '+_faltantes.length+' producto(s): '+_faltantes[0]+(_faltantes.length>1?' (+'+(_faltantes.length-1)+' m\u00e1s)':'')); }catch(e){}
   }
   // Sync Supabase
-  if(typeof syncSaveVenta==='function') syncSaveVenta(venta);
+  // Si esta venta cobra una reserva, se libera cuando la venta YA esta
+  // guardada o encolada (local + lapida en la nube). Se captura ahora el
+  // id y los productos, por si el usuario empieza otra venta entretanto.
+  var _ridCobro=S.resCobrando; S.resCobrando=null;
+  var _cartNoms=S.cart.map(function(cc){return cc.n;});
+  var _liberarRes=function(){
+    if(_ridCobro==null) return;
+    var _rr=S.reservas.find(function(x){return x.id===_ridCobro;});
+    var _mismo=!_rr||(_rr.lineas||[]).some(function(l){return _cartNoms.indexOf(l.n)>=0;});
+    // Si la reserva ya no esta en la lista local (la quito un refresco
+    // desde la nube), la lapida se manda igualmente: en la nube sigue viva.
+    if(!_mismo) return;
+    S.reservas=S.reservas.filter(function(x){return x.id!==_ridCobro;});
+    _saveReservas();
+    if(typeof syncDelReserva==='function') try{ syncDelReserva(_ridCobro); }catch(e){}
+    if(typeof syncReservasGlobal==='function') try{ syncReservasGlobal(); }catch(e){}
+    if(typeof recalcReservasGlobales==='function') try{ recalcReservasGlobales(); }catch(e){}
+    try{ updResBadge(); }catch(e){}
+  };
+  if(typeof syncSaveVenta==='function'){
+    try{ Promise.resolve(syncSaveVenta(venta)).then(_liberarRes,_liberarRes); }catch(e){ _liberarRes(); }
+  } else { _liberarRes(); }
   if(typeof syncStockUpdate==='function') syncStockUpdate(S.cart.slice(), S.alm);
   if(typeof updateCajasFromVenta==='function') updateCajasFromVenta(S.pagos.slice(),S.vueltos.slice(),S.alm);
   // Save to offline cache immediately
@@ -5009,10 +5020,18 @@ function _pctFolio(vend, f, alm){
   return Math.round((acum / base) * 10000) / 10000;
 }
 
+// Un abono comisiona solo si es dinero que entra de verdad: los traspasos
+// entre folios ya comisionaron en el folio de origen, y los ajustes no
+// son cobros.
+function _abonoComisiona(ab){
+  var txt=String((ab&&(ab.desc||ab.descripcion))||'')+' '+String((ab&&ab.concepto)||'');
+  return !/traspaso|ajuste|redondeo/i.test(txt);
+}
 function _comisionDeAbono(cid, fid, ab){
   try{
     var base=parseFloat(ab&&(ab.equivUSD!=null?ab.equivUSD:ab.equiv_usd))||0;
     if(!(base>0)) return;
+    if(!_abonoComisiona(ab)) return;
     var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
     var _f0=(c.folios||[]).find(function(x){return String(x.id)===String(fid);});
     // Comisiona QUIEN HIZO LA VENTA (guardado en el folio). El dueno
@@ -5864,7 +5883,7 @@ function renderCom(){
     <div class="metric"><div class="lbl">Com. total</div><div class="val" style="color:var(--color-text-warning)">${fN(totCom)}</div><div class="sub">USD</div></div>
     <div class="metric"><div class="lbl">Pendiente</div><div class="val" style="color:var(--color-text-danger)">${fN(pdte)}</div><div class="sub">USD</div></div>
     <div class="metric"><div class="lbl">Pagada</div><div class="val" style="color:var(--color-text-success)">${fN(totCom-pdte)}</div><div class="sub">USD</div></div>
-    <div class="metric"><div class="lbl">Ventas totales</div><div class="val">${fN(data.reduce((a,v)=>a+v.totalUSD,0))}</div><div class="sub">USD</div></div>`;
+    <div class="metric"><div class="lbl">Ventas contado con comisión</div><div class="val">${fN(data.reduce((a,v)=>a+v.totalUSD,0))}</div><div class="sub">USD · base comisionable (los folios comisionan por sus cobros)</div></div>`;
   const grupos={};
   data.forEach(v=>{
     const k=v.vend+'|'+v.alm+'|'+(v.comPct||0);
@@ -6068,6 +6087,8 @@ function renderLiq(){
   const totVentaUSD=data.reduce((a,v)=>a+v.totalUSD,0);
   const totComUSD=data.reduce((a,v)=>a+v.comUSD,0);
   var totComPdteUSD=data.filter(isPdte).reduce(function(a,v){return a+v.comUSD;},0);
+  var comVtaPdteUSD=totComPdteUSD;                 // pendiente de ventas de contado
+  var comVtaPagadaUSD=totComUSD-comVtaPdteUSD;     // ya liquidada/pagada en el rango
   // Comisiones por cobros de folios pendientes en el rango
   var comsPdte=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){
     if(x.estado!=='Pendiente'&&x.estado!=='Liquidada (Pdte)')return false;
@@ -6139,8 +6160,9 @@ function renderLiq(){
     
     <div class="liq-sec">
       <div class="liq-sec-h" style="background:var(--color-background-secondary);color:var(--color-text-secondary)">TOTALES GENERALES</div>
-      <div class="liq-r"><span>Total ventas equiv. USD (Semana)</span><span style="font-weight:500">${fN(totVentaUSD)} USD</span></div>
-      <div class="liq-r"><span>Comisión total equiv. USD (Semana)</span><span style="color:var(--color-text-warning);font-weight:500">${fN(totComUSD)} USD</span></div>
+      <div class="liq-r"><span>Ventas de contado con comisión (base)</span><span style="font-weight:500">${fN(totVentaUSD)} USD</span></div>
+      <div class="liq-r"><span>Comisión pendiente ventas de contado</span><span style="color:var(--color-text-warning);font-weight:500">${fN(comVtaPdteUSD)} USD</span></div>
+      ${comVtaPagadaUSD>0.005?`<div class="liq-r" style="color:var(--color-text-tertiary)"><span>(ya pagadas en este periodo, no se incluyen)</span><span>${fN(comVtaPagadaUSD)} USD</span></div>`:''}
       ${comsPdte.length?`<div class="liq-r"><span>+ Comisiones por cobros de folios (${comsPdte.length} abonos)</span><span style="color:var(--color-text-warning);font-weight:500">${fN(comsPdteUSD)} USD</span></div>`:''}
       <div class="liq-r tot"><span>Pago a liquidar (Convertido a ${targetMon})</span><span style="color:var(--color-text-danger)">${fN(totalPago, targetMon==='CUP'?0:2)} ${targetMon}</span></div>
     </div>
