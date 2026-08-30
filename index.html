@@ -5321,22 +5321,47 @@ function renderVentas(){
   var _fp=(document.getElementById('f-prod').value||'').trim();
   var _fpRes=null;
   if(_fp){
-    var _pu=0,_puPos=0,_puFol=0,_pusd=0,_pn=0,_psin=0,_nom='';
+    var _pu=0,_puPos=0,_puFol=0,_puFilas=0,_pusd=0,_pn=0,_psin=0,_nom='';
+    // POS: por los tickets del registro. Las filas espejo de folio solo
+    // se miden para detectar desfase (son instantaneas de cuando se
+    // creo el folio y no se actualizan al editar sus lineas).
     data.forEach(function(v){
       var esFol=/Folio\s*[\w-]/i.test(v.nota||'');
       var hit=false;
       _lineasVenta(v).forEach(function(l){
         if(!_matchProdFiltro(l.n,_fp))return;
-        hit=true;_pu+=l.q; if(esFol)_puFol+=l.q; else _puPos+=l.q; if(!_nom)_nom=l.n;
+        if(!_nom)_nom=l.n;
+        if(esFol){ _puFilas+=l.q; return; }
+        hit=true;_pu+=l.q;_puPos+=l.q;
         if(l.p!=null){ _pusd+=l.q*l.p; }
         else { var pp=(typeof PRODS!=='undefined')?PRODS.find(function(p){return p.n===l.n;}):null; var pr=pp?(parseFloat(pp.maj)||parseFloat(pp.min)||0):0; if(pr)_pusd+=l.q*pr; else _psin+=l.q; }
       });
       if(hit)_pn++;
     });
-    _fpRes={nom:_nom||_fp,uds:_pu,pos:_puPos,fol:_puFol,usd:_pusd,n:_pn,sin:_psin};
+    // Folios: por sus LINEAS VIVAS (lo facturado de verdad), igual que
+    // Analytics. Respeta los filtros de fechas y almacen del registro.
+    var _fd=document.getElementById('f-desde').value, _fh=document.getElementById('f-hasta').value, _fa=document.getElementById('f-alm').value;
+    var _nFol=0;
+    (typeof CLIENTES!=='undefined'?CLIENTES:[]).forEach(function(cli){
+      (cli.folios||[]).forEach(function(f){
+        var ff=String(f.fecha||'').slice(0,10);
+        if(_fd&&ff&&ff<_fd)return; if(_fh&&ff&&ff>_fh)return;
+        if(_fa&&f.alm&&f.alm!==_fa)return;
+        var hitF=false;
+        (f.lineas||[]).forEach(function(l){
+          var nm=l.prod||l.n||''; if(!_matchProdFiltro(nm,_fp))return;
+          var q=parseFloat(l.q)||0, pr=parseFloat(l.precio!=null?l.precio:l.p)||0;
+          hitF=true;_pu+=q;_puFol+=q;_pusd+=q*pr; if(!_nom)_nom=nm;
+        });
+        if(hitF)_nFol++;
+      });
+    });
+    _fpRes={nom:_nom||_fp,uds:_pu,pos:_puPos,fol:_puFol,usd:_pusd,n:_pn,nFol:_nFol,sin:_psin,desfase:Math.round(_puFilas-_puFol)};
     var _nomH=String(_fpRes.nom).replace(/</g,'&lt;');
     document.getElementById('v-metrics').insertAdjacentHTML('afterbegin',
-      '<div class="metric" style="grid-column:1/-1;border:1px solid var(--color-primary)"><div class="lbl">\ud83d\udd0e '+_nomH+'</div><div class="val">'+fN(_pu,0)+' uds</div><div class="sub">POS '+fN(_puPos,0)+' \u00b7 Folios '+fN(_puFol,0)+' \u00b7 \u2248 $'+fN(_pusd)+' en '+_pn+' venta'+(_pn===1?'':'s')+(_psin?' \u00b7 '+fN(_psin,0)+' uds sin precio':'')+'</div></div>');
+      '<div class="metric" style="grid-column:1/-1;border:1px solid var(--color-primary)"><div class="lbl">\ud83d\udd0e '+_nomH+'</div><div class="val">'+fN(_pu,0)+' uds</div><div class="sub">POS '+fN(_puPos,0)+' ('+_pn+' ticket'+(_pn===1?'':'s')+') \u00b7 Folios '+fN(_puFol,0)+' ('+_nFol+' folio'+(_nFol===1?'':'s')+', l\u00edneas actuales) \u00b7 \u2248 $'+fN(_pusd)+(_psin?' \u00b7 '+fN(_psin,0)+' uds sin precio':'')
+      +(_fpRes.desfase?'<br><span style="color:#e6a23c">\u26a0 Las filas de folio del registro suman '+fN(_puFilas,0)+' uds: quedaron desactualizadas al editar los folios ('+(_fpRes.desfase>0?'+':'')+fN(_fpRes.desfase,0)+'). Manda el folio.</span>':'')
+      +'</div></div>');
   }
   document.getElementById('v-count-lbl').textContent=`Ventas filtradas — ${data.length} resultados`;
 
