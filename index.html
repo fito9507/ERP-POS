@@ -6388,7 +6388,12 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     if(liq.ventas.includes(v.supaId)||liq.ventas.includes(v.id)) {
       v.estCom = 'Liquidada (Pdte)';
       v.liqId = liq.id;
-      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','ventas?id=eq.'+v.supaId, {est_com: 'Liquidada (Pdte)'}).catch(e=>{});
+      // Con reintento: si no hay conexion o falla, a la cola offline
+      if(v.supaId){
+        var _pv={method:'PATCH',path:'ventas?id=eq.'+v.supaId,body:{est_com:'Liquidada (Pdte)'}};
+        if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH',_pv.path,_pv.body).then(function(r){ if(!r||!r.ok) enqueue(_pv); }).catch(function(){ enqueue(_pv); });
+        else if(typeof enqueue==='function') enqueue(_pv);
+      }
     }
   });
   if(typeof offlineSaveVentas==='function') offlineSaveVentas();
@@ -6396,7 +6401,9 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
   (typeof COMS!=='undefined'?COMS:[]).forEach(function(x){
     if(liq.coms&&liq.coms.indexOf(x.id)>=0){
       x.estado='Liquidada (Pdte)'; x.liq_id=liq.id;
-      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','comisiones?id=eq.'+encodeURIComponent(x.id),{estado:'Liquidada (Pdte)',liq_id:liq.id}).catch(function(e){});
+      var _pc={method:'PATCH',path:'comisiones?id=eq.'+encodeURIComponent(x.id),body:{estado:'Liquidada (Pdte)',liq_id:liq.id}};
+      if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH',_pc.path,_pc.body).then(function(r){ if(!r||!r.ok) enqueue(_pc); }).catch(function(){ enqueue(_pc); });
+      else if(typeof enqueue==='function') enqueue(_pc);
     }
   });
 
@@ -6412,6 +6419,13 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
       ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{})
     }).then(function(r){ if(!r||!r.ok){ console.warn('liq sync fallo:', r&&r.status); showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube — ejecuta supabase_comisiones.sql'); } })
       .catch(function(e){console.warn('liq sync:',e);});
+  } else if(typeof enqueue==='function'){
+    // Sin conexion: la liquidacion viaja por la cola offline
+    enqueue({method:'POST',path:'liquidaciones?on_conflict=id',body:{
+      id:liq.id, vend:liq.vend, desde:liq.desde||null, hasta:liq.hasta||null, semana:liq.semana, almacen:liq.alm, v_usd:liq.vUSD,
+      com_usd:liq.comUSD, com_cup:liq.totalCUP, mon:liq.mon||'', cuenta:liq.cuenta||'', com_detalle:liq.comDetalle||{},
+      estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[] }});
+    showToast('\u2601 Sin conexi\u00f3n: la liquidaci\u00f3n se subir\u00e1 al volver internet');
   }
   const hw=document.getElementById('liq-hist-wrap');if(hw)hw.style.display='block';
   refreshLiqHist();renderLiq();showToast('Liquidación guardada como Pendiente ✓');
@@ -11644,19 +11658,20 @@ function renderMiComision(){
     });
     var noms=Object.keys(porV).filter(function(n){var a=porV[n];return a.pV||a.pF||a.liq||a.pag;}).sort(function(a,b){return (porV[b].pV+porV[b].pF)-(porV[a].pV+porV[a].pF);});
     var totP=noms.reduce(function(s,n){return s+porV[n].pV+porV[n].pF;},0);
+    var totL=noms.reduce(function(s,n){return s+porV[n].liq;},0);
     el.innerHTML='<div style="padding:4px;margin-bottom:12px">'
-      +'<div style="font-size:16px;font-weight:700;margin-bottom:10px">\ud83c\udfc6 Comisiones por vendedor <span style="font-size:12px;font-weight:400;color:var(--color-text-tertiary)">pendiente total: <b style="color:var(--color-text-danger)">'+fN(totP)+' USD</b></span></div>'
+      +'<div style="font-size:16px;font-weight:700;margin-bottom:10px">\ud83c\udfc6 Comisiones por vendedor <span style="font-size:12px;font-weight:400;color:var(--color-text-tertiary)">se debe en total: <b style="color:var(--color-text-danger)">'+fN(totP+totL)+' USD</b>'+(totL>0.005?' (de ellos '+fN(totL)+' ya en una liquidaci\u00f3n pendiente de pago)':'')+'</span></div>'
       +'<div style="overflow-x:auto"><table class="adm-table" style="font-size:12px;width:100%"><thead><tr>'
-      +'<th style="text-align:left;padding:6px">Vendedor</th><th style="text-align:right;padding:6px">Pdte. contado</th><th style="text-align:right;padding:6px">Pdte. folios</th><th style="text-align:right;padding:6px">PENDIENTE</th><th style="text-align:right;padding:6px">En liquidaci\u00f3n</th><th style="text-align:right;padding:6px">Pagado</th></tr></thead><tbody>'
+      +'<th style="text-align:left;padding:6px">Vendedor</th><th style="text-align:right;padding:6px" title="Comisi\u00f3n de ventas de contado a\u00fan no incluida en ninguna liquidaci\u00f3n">Sin liquidar (contado)</th><th style="text-align:right;padding:6px" title="Comisi\u00f3n de cobros de folio a\u00fan no incluida en ninguna liquidaci\u00f3n">Sin liquidar (folios)</th><th style="text-align:right;padding:6px" title="Ya incluido en una liquidaci\u00f3n creada y pendiente de pagar">En liquidaci\u00f3n</th><th style="text-align:right;padding:6px" title="Sin liquidar + en liquidaci\u00f3n">TOTAL DEBIDO</th><th style="text-align:right;padding:6px">Pagado</th></tr></thead><tbody>'
       +(noms.length?noms.map(function(n){var a=porV[n];return '<tr><td style="padding:6px;font-weight:600">'+n+'</td>'
         +'<td style="padding:6px;text-align:right">'+fN(a.pV)+' <span style="color:var(--color-text-tertiary)">('+a.nV+')</span></td>'
         +'<td style="padding:6px;text-align:right">'+fN(a.pF)+' <span style="color:var(--color-text-tertiary)">('+a.nF+')</span></td>'
-        +'<td style="padding:6px;text-align:right;font-weight:700;color:var(--color-text-danger)">'+fN(a.pV+a.pF)+'</td>'
         +'<td style="padding:6px;text-align:right;color:var(--color-text-warning)">'+fN(a.liq)+'</td>'
+        +'<td style="padding:6px;text-align:right;font-weight:700;color:var(--color-text-danger)">'+fN(a.pV+a.pF+a.liq)+'</td>'
         +'<td style="padding:6px;text-align:right;color:var(--color-text-success)">'+fN(a.pag)+'</td></tr>';}).join('')
         :'<tr><td colspan="6" style="padding:8px;text-align:center;color:var(--color-text-tertiary)">Sin comisiones registradas</td></tr>')
       +'</tbody></table></div>'
-      +'<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">Genera abajo la liquidaci\u00f3n del periodo para pagar lo pendiente. "En liquidaci\u00f3n" = ya incluido en una liquidaci\u00f3n pendiente de pago.</div>'
+      +'<div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">"Sin liquidar" = a\u00fan no incluido en ninguna liquidaci\u00f3n (genera una abajo). "En liquidaci\u00f3n" = ya incluido en una liquidaci\u00f3n creada y pendiente de pagar (abajo, en Liquidaciones guardadas). TOTAL DEBIDO = lo que se le debe al vendedor hoy.</div>'
       +'</div>';
     return;
   }
