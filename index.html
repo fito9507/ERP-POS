@@ -3361,6 +3361,7 @@ async function syncSaveFolio(cliId, f){
   // Vendedor del folio: solo se manda si la columna existe en la nube
   // (supabase_folios_vendedor.sql); si no, un 400 tumbaria el guardado.
   if(window._foliosVendedorOK!==false) body.vendedor=f.vend||null;
+  if(window._foliosComPctOK!==false) body.com_pct=(f.comPct!=null&&f.comPct!==''&&!isNaN(parseFloat(f.comPct)))?parseFloat(f.comPct):null;
   if(!_supaOnline||typeof supaReq==='undefined'){
     enqueue({method:'POST',path:'folios?on_conflict=id',body:body});
     return;
@@ -3507,6 +3508,7 @@ async function syncLoadClientes(){
     var foliosRows = rf.ok ? (await rf.json()||[]) : [];
     // ¿Existe ya la columna vendedor? (select=* la trae si existe)
     window._foliosVendedorOK = foliosRows.length ? Object.prototype.hasOwnProperty.call(foliosRows[0],'vendedor') : window._foliosVendedorOK;
+    window._foliosComPctOK = foliosRows.length ? Object.prototype.hasOwnProperty.call(foliosRows[0],'com_pct') : window._foliosComPctOK;
 
     var ra = await supaReq('GET','abonos?select=*&order=fecha.asc');
     var abonosRows = ra.ok ? (await ra.json()||[]) : [];
@@ -3523,7 +3525,7 @@ async function syncLoadClientes(){
         var tipo_res = (f.descripcion && (f.descripcion.toLowerCase().includes('preventa') || f.descripcion.toLowerCase().includes('prereserva'))) ? 'prereserva' : undefined;
         return {id:f.id,fecha:f.fecha,alm:f.almacen,mon:f.moneda,
           desc:f.descripcion,lineas:lineas,abonos:abonos,contenedor:f.contenedor||'',tipo_reserva:tipo_res,
-          vend:f.vendedor||''};
+          vend:f.vendedor||'',comPct:(f.com_pct!=null&&f.com_pct!==''?parseFloat(f.com_pct):null)};
       });
       CLIENTES.push({
         id:row.id, nombre:row.nombre, tel:row.telefono||'',
@@ -5007,6 +5009,8 @@ async function loadComisiones(){
 // en las ventas a credito. Un abono es dinero y no sabe que se vendio,
 // asi que el porcentaje se hereda del folio que esta pagando.
 function _pctFolio(vend, f, alm){
+  // % propio del folio (campo en su tarjeta): anula las reglas
+  if(f && f.comPct!=null && f.comPct!=='' && !isNaN(parseFloat(f.comPct))) return parseFloat(f.comPct);
   var lineas = (f && f.lineas) || [];
   var base = 0, acum = 0;
   lineas.forEach(function(l){
@@ -9319,6 +9323,18 @@ function exportarReservasPDF(clienteId) {
   setTimeout(function() { w.print(); }, 500);
 }
 
+// ── % de comision propio de un folio (admin) ───────────────
+// Vacio = reglas del vendedor. Al cambiarlo, las comisiones PENDIENTES
+// de sus abonos se recalculan con el nuevo % (reutiliza setVendFolio).
+async function setComPctFolio(cid, fid, val){
+  var c=CLIENTES.find(function(x){return x.id===cid;}); if(!c) return;
+  var f=(c.folios||[]).find(function(x){return String(x.id)===String(fid);}); if(!f) return;
+  var v=String(val==null?'':val).trim().replace(',','.');
+  f.comPct=(v===''||isNaN(parseFloat(v)))?null:Math.max(0,Math.min(100,parseFloat(v)));
+  if(window._foliosComPctOK===false) showToast('\u26a0 El % del folio no se guardar\u00e1 en la nube: ejecuta supabase_folios_com_pct.sql');
+  await setVendFolio(cid, fid, f.vend||'');
+}
+
 // ── Reasignar el vendedor de un folio (admin) ──────────────
 // Las comisiones PENDIENTES de sus abonos pasan al nuevo vendedor con
 // su % ponderado; las liquidadas/pagadas no se tocan. Si el nuevo no
@@ -9523,6 +9539,9 @@ function renderFichaFolios(c){
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')
                 ?`<select class="est-sel" title="Vendedor que hizo la venta: sus abonos le comisionan" style="font-size:10px;max-width:110px" onclick="event.stopPropagation()" onchange="event.stopPropagation();setVendFolio('${c.id}','${f.id}',this.value)"><option value=""${f.vend?'':' selected'}>👤 dueño (${c.owner||'Admin'})</option>${Object.keys(USERS).filter(u=>USERS[u]&&USERS[u].activo!==false).map(u=>`<option${u===(f.vend||'')?' selected':''}>${u}</option>`).join('')}</select>`
                 :(f.vend?`<span style="font-size:10px;color:var(--color-text-tertiary)">👤 ${f.vend}</span>`:'')}
+              ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')
+                ?`<span style="font-size:10px;color:var(--color-text-tertiary);white-space:nowrap" onclick="event.stopPropagation()">% com <input type="number" step="0.1" min="0" max="100" value="${f.comPct!=null&&f.comPct!==''?f.comPct:''}" placeholder="${(function(){try{var v=f.vend||c.owner||'';return v?fN(_pctFolio(v,Object.assign({},f,{comPct:null}),f.alm||c.alm||''),2):'';}catch(e){return '';}})()}" title="% de comisión solo para este folio. Vacío = reglas del vendedor (el valor en gris es el que saldría por reglas)" style="width:58px;font-size:10px;padding:2px 4px" onchange="event.stopPropagation();setComPctFolio('${c.id}','${f.id}',this.value)"></span>`
+                :((f.comPct!=null&&f.comPct!=='')?`<span style="font-size:10px;color:var(--color-text-tertiary)">% com ${f.comPct}</span>`:'')}
               <button style="border:none;background:none;cursor:pointer;font-size:13px;padding:0;color:var(--color-text-tertiary);opacity:.7" onclick="event.stopPropagation();renombrarFolio('${c.id}','${f.id}')" title="Renombrar folio">✏️</button>
               ${(typeof S!=='undefined'&&S.user&&USERS[S.user]&&USERS[S.user].rol==='admin')?`<button style="border:none;background:none;cursor:pointer;font-size:15px;margin-left:auto;padding:0" onclick="event.stopPropagation();elimFolioCli('${c.id}','${f.id}')" title="Eliminar Folio y Venta">🗑️</button>`:''}
             </div>
