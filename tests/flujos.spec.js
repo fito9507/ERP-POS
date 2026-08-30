@@ -205,7 +205,8 @@ test('POS: venta a crédito → folio con vendedor + fila en ventas; abono → d
   const cliente = await (async function () {
     await page.goto('/index.html?nc=' + Date.now());
     await page.waitForSelector('.user-card', { timeout: 40000 });
-    await page.waitForTimeout(3000);
+    // esperar a que los clientes se hayan descargado de la nube
+    await page.waitForFunction(function () { return typeof CLIENTES !== 'undefined' && CLIENTES.length > 0; }, null, { timeout: 40000 });
     return page.evaluate(function () { var c = (CLIENTES || []).find(function (x) { return x.nombre !== 'Walk-in'; }); return c ? { id: c.id, nombre: c.nombre } : null; });
   })();
   expect(cliente, 'hay clientes').not.toBeNull();

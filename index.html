@@ -10792,10 +10792,15 @@ function registrarAbonoCli(cid){
     var igTipo = cajaTipo==='efectivo' ? 'Cobro cliente' : 'Compensación cliente';
     var igSentido = 'ingreso';
     var igCta = caja || (c.almacen ? 'USD '+c.almacen : 'USD Habana');
+    // Monto y moneda REALES del cobro (antes se grababa el equivalente
+    // en USD como si fuera el importe, y un cobro de 9.241.000 CUP
+    // aparecia como 13.296 USD en la cuenta CUP)
+    var igMon = mon || 'USD';
+    var igMonto = parseFloat(monto) || equivUSD;
     var igMov = {
       id: igNextId++, fecha: fecha, tipo: igTipo,
       desc: igTipo+' — '+c.nombre+' — '+desc,
-      monto: equivUSD, mon: 'USD', equivUSD: equivUSD,
+      monto: igMonto, mon: igMon, equivUSD: equivUSD,
       cta: igCta, sentido: igSentido, notas: '',
       vend: (typeof S!=='undefined'&&S.user)||''
     };
@@ -10803,7 +10808,7 @@ function registrarAbonoCli(cid){
     // Always write — _supaWrite handles online/offline queuing
     _supaWrite('POST','movimientos_ig',{
       fecha:fecha,tipo:igTipo,descripcion:igMov.desc,
-      monto:parseFloat(parseFloat(equivUSD).toFixed(4)),moneda:'USD',
+      monto:parseFloat(parseFloat(igMonto).toFixed(4)),moneda:igMon,
       equiv_usd:parseFloat(parseFloat(equivUSD).toFixed(4)),
       cuenta:igCta,vendedor:(typeof S!=='undefined'&&S.user)||'',notas:''
     });
