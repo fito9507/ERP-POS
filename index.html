@@ -1276,18 +1276,20 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div id="liq-micomision-root"></div>
   <div class="fbar">
     <div class="frow">
-      <div class="ff"><label class="lbl">Desde</label><input type="date" id="l-desde"></div>
-      <div class="ff"><label class="lbl">Hasta</label><input type="date" id="l-hasta"></div>
+      <div class="ff"><label class="lbl">Desde</label><input type="date" id="l-desde" onchange="_liqGuardar()"></div>
+      <div class="ff"><label class="lbl">Hasta</label><input type="date" id="l-hasta" onchange="_liqGuardar()"></div>
       <div class="ff"><label class="lbl">Almacén</label>
-        <select id="l-alm"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
-      <div class="ff"><label class="lbl">Tasa CUP/USD</label>
-        <input type="number" id="l-tasa" value="512.88" step="0.0001"></div>
+        <select id="l-alm" onchange="_liqGuardar()"><option value="">Todos</option><option>Habana</option><option>Placetas</option></select></div>
+      <div class="ff"><label class="lbl">Tasa CUP/USD <span id="l-tasa-src" style="font-weight:400;color:var(--color-text-tertiary)"></span></label>
+        <input type="number" id="l-tasa" value="512.88" step="0.0001" oninput="_liqTasaManual=true;_liqGuardar()" title="Por defecto la tasa de elToque; si la editas se respeta la tuya"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
-        <select id="l-mon-pago" onchange="renderLiqCuentas()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
+        <select id="l-mon-pago" onchange="renderLiqCuentas();_liqGuardar()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
       <div class="ff"><label class="lbl">Cuenta de pago</label>
-        <select id="l-caja-pago"></select></div>
+        <select id="l-caja-pago" onchange="_liqGuardar()"></select></div>
       <button class="btn btn-p" style="align-self:flex-end" onclick="renderLiq()">Generar</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiq();renderLiq()">Semana actual</button>
+      <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiqMes();renderLiq()">Mes actual</button>
+      <button class="btn-sm" style="align-self:flex-end" title="Volver a la tasa de elToque" onclick="_liqTasaManual=false;_liqTasaDefecto();_liqGuardar();renderLiq()">Tasa elToque</button>
     </div>
   </div>
   <div id="liq-out"></div>
@@ -5150,7 +5152,9 @@ function navTo_ven(pg,btn){
     if(fbar) fbar.style.display=(_isV&&_aCom)?'none':'';
     var out=document.getElementById('liq-out');
     if(out) out.style.display=(_isV&&_aCom)?'none':'';
-    setRangeLiq();renderLiq();refreshLiqHist();
+    if(!_liqRestaurar()) setRangeLiq();
+    _liqTasaDefecto();
+    renderLiq();refreshLiqHist();
     var hw=document.getElementById('liq-hist-wrap');if(hw&&liquidaciones.length)hw.style.display='block';
   }
   if(pg==='nueva'){document.getElementById('nv-fecha').value=today();updNvCom();}
@@ -5220,6 +5224,41 @@ function setRangeLiq(){
   const s=new Date(d);s.setDate(d.getDate()-((d.getDay()||7)-1));
   document.getElementById('l-desde').value=fmt(s);
   document.getElementById('l-hasta').value=fmt(d);
+  _liqGuardar();
+}
+function setRangeLiqMes(){
+  const d=new Date(),fmt=x=>x.toISOString().slice(0,10);
+  document.getElementById('l-desde').value=fmt(new Date(d.getFullYear(),d.getMonth(),1,12));
+  document.getElementById('l-hasta').value=fmt(d);
+  _liqGuardar();
+}
+// ── El formulario de liquidacion se recuerda entre secciones/sesiones ──
+var _liqTasaManual=false;
+function _liqGuardar(){
+  var v=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  try{ localStorage.setItem('erp_liq_form',JSON.stringify({desde:v('l-desde'),hasta:v('l-hasta'),alm:v('l-alm'),
+    tasa:v('l-tasa'),tasaManual:!!_liqTasaManual,mon:v('l-mon-pago'),caja:v('l-caja-pago')})); }catch(e){}
+}
+// Tasa CUP/USD por defecto: la de elToque (RATES.CUP), salvo que el
+// usuario la haya editado a mano.
+function _liqTasaDefecto(){
+  var e=document.getElementById('l-tasa'), s=document.getElementById('l-tasa-src');
+  if(!e) return;
+  if(_liqTasaManual){ if(s) s.textContent='(manual)'; return; }
+  if(typeof RATES!=='undefined'&&parseFloat(RATES.CUP)>10){ e.value=parseFloat(RATES.CUP); if(s) s.textContent='(elToque)'; }
+}
+// Devuelve true si habia un formulario guardado que restaurar
+function _liqRestaurar(){
+  var s=null; try{ s=JSON.parse(localStorage.getItem('erp_liq_form')||'null'); }catch(e){}
+  if(!s) return false;
+  var set=function(id,val){var e=document.getElementById(id);if(e&&val!=null&&val!=='')e.value=val;};
+  set('l-desde',s.desde); set('l-hasta',s.hasta); set('l-alm',s.alm); set('l-mon-pago',s.mon);
+  _liqTasaManual=!!s.tasaManual;
+  if(_liqTasaManual) set('l-tasa',s.tasa);
+  if(typeof renderLiqCuentas==='function') try{ renderLiqCuentas(); }catch(e){}
+  var cj=document.getElementById('l-caja-pago');
+  if(cj&&s.caja&&Array.prototype.some.call(cj.options,function(o){return o.value===s.caja;})) cj.value=s.caja;
+  return !!(s.desde&&s.hasta);
 }
 function limpiarFiltros(){
   ['f-desde','f-hasta','f-prod'].forEach(id=>document.getElementById(id).value='');
@@ -6621,7 +6660,8 @@ document.getElementById('f-desde').value='2025-01-01';
 document.getElementById('f-hasta').value='2026-12-31';
 document.getElementById('c-desde').value='2025-01-01';
 document.getElementById('c-hasta').value='2026-12-31';
-setRangeLiq();
+if(typeof _liqRestaurar!=='function'||!_liqRestaurar()) setRangeLiq();
+if(typeof _liqTasaDefecto==='function') try{ _liqTasaDefecto(); }catch(e){}
 initChkAll();
 renderVentas();
 
@@ -16220,6 +16260,7 @@ async function fetchElToqueAndSave(){
     try { localStorage.setItem('erp_rates', JSON.stringify({USD:1,EUR:RATES.EUR,CUP:RATES.CUP,CUPT:RATES.CUPT,DTO_PREVENTA:RATES.DTO_PREVENTA,WA_PLACETAS:RATES.WA_PLACETAS,ts:Date.now()})); } catch(e) {}
 
     showToast('✓ elToque: USD ' + fN(cup,0) + ' · EUR ' + fN(ecu,0) + ' · MLC ' + fN(cupt,0) + ' CUP');
+    if(typeof _liqTasaDefecto==='function') try{ _liqTasaDefecto(); }catch(e){}
     renderAdminTasas();
     return mkt;
   } catch(e) {
