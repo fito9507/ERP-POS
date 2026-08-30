@@ -3362,7 +3362,40 @@ async function syncSaveCliente(c){
   await _supaUpsert('clientes','id',c.id,body);
 }
 
+// La fila 'Folio N' del registro de ventas era una instantanea de cuando
+// se creo el folio: al editar sus lineas no se actualizaba. Ahora se
+// reescribe con las lineas vivas y el total real (una fila por folio).
+function _sincronizarFilaFolio(cliId, f){
+  if(!f||typeof VENTAS==='undefined') return;
+  var fid=String(f.id||'');
+  if(!fid) return;
+  var rx=new RegExp('^\\s*Folio\\s+'+fid.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?![\\w-])','i');
+  var filas=VENTAS.filter(function(v){ return rx.test(String(v.nota||'')); });
+  if(!filas.length) return;
+  // La mas antigua se queda; las demas (instantaneas de sesiones
+  // posteriores del mismo folio) se consolidan en ella
+  filas.sort(function(a,b){ return String(a.fecha).localeCompare(String(b.fecha)) || ((a.supaId||0)-(b.supaId||0)); });
+  var v=filas[0];
+  var lineas=(f.lineas||[]).filter(function(l){ return (parseFloat(l.q)||0)>0; });
+  var prods=lineas.map(function(l){ return (parseFloat(l.q)||0)+'\u00d7 '+(l.prod||l.n||''); }).join(', ');
+  var total=lineas.reduce(function(a,l){ return a+(parseFloat(l.q)||0)*(parseFloat(l.precio!=null?l.precio:l.p)||0); },0);
+  var cambia=(v.prods!==prods)||Math.abs((v.totalUSD||0)-total)>0.005||filas.length>1;
+  if(!cambia) return;
+  v.prods=prods; v.totalUSD=Math.round(total*100)/100;
+  if(f.alm) v.alm=f.alm;
+  if(typeof syncSaveVenta==='function') try{ syncSaveVenta(v); }catch(e){}
+  filas.slice(1).forEach(function(x){
+    VENTAS=VENTAS.filter(function(y){ return y!==x; });
+    var sid=x.supaId; if(!sid) return;
+    if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('DELETE','ventas?id=eq.'+sid).catch(function(){ try{ enqueue({method:'DELETE',path:'ventas?id=eq.'+sid}); }catch(e){} });
+    else { try{ enqueue({method:'DELETE',path:'ventas?id=eq.'+sid}); }catch(e){} }
+  });
+  if(typeof offlineSaveVentas==='function') try{ offlineSaveVentas(); }catch(e){}
+  if(document.getElementById('v-body')&&typeof renderVentas==='function') try{ renderVentas(); }catch(e){}
+  showToast('\u21bb Registro de ventas actualizado: folio '+fid+(filas.length>1?' ('+(filas.length-1)+' fila(s) consolidada(s))':''));
+}
 async function syncSaveFolio(cliId, f){
+  try{ _sincronizarFilaFolio(cliId, f); }catch(e){ console.warn('fila folio:', e); }
   var body={id:f.id, cliente_id:cliId, fecha:f.fecha,
     almacen:f.alm||'', descripcion:f.desc||'', lineas:f.lineas||[],
     contenedor:f.contenedor||null};
@@ -5473,12 +5506,15 @@ function renderVentas(){
     // Folios: por sus LINEAS VIVAS (lo facturado de verdad), igual que
     // Analytics. Respeta los filtros de fechas y almacen del registro.
     var _fd=document.getElementById('f-desde').value, _fh=document.getElementById('f-hasta').value, _fa=document.getElementById('f-alm').value;
+    var _flote=document.getElementById('f-lote')?.value||'', _fvend=document.getElementById('f-vend')?.value||'';
     var _nFol=0;
     (typeof CLIENTES!=='undefined'?CLIENTES:[]).forEach(function(cli){
       (cli.folios||[]).forEach(function(f){
         var ff=String(f.fecha||'').slice(0,10);
         if(_fd&&ff&&ff<_fd)return; if(_fh&&ff&&ff>_fh)return;
         if(_fa&&f.alm&&f.alm!==_fa)return;
+        if(_flote&&(f.contenedor||'SIN LOTE')!==_flote)return;
+        if(_fvend&&(f.vend||cli.owner||'')!==_fvend)return;
         var hitF=false;
         (f.lineas||[]).forEach(function(l){
           var nm=l.prod||l.n||''; if(!_matchProdFiltro(nm,_fp))return;
