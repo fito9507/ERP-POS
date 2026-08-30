@@ -6372,6 +6372,7 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
     semana:`${fD(desde)}–${fD(hasta)}`,
     desde,hasta,alm,vUSD,comUSD,totalCUP: totalPago, mon: mon, cuenta: cuentaPago||'',
     comDetalle: comDetalle,
+    tasa: parseFloat(document.getElementById('l-tasa')?.value)||null,
     vend: typeof S!=='undefined'?S.user:'',
     estado:'Pendiente',
     fecha:today(),
@@ -6407,7 +6408,8 @@ function guardarLiq(desde,hasta,alm,vUSD,comUSD,totalPagoBase,mon,comDetalle,cue
       semana:liq.semana, almacen:liq.alm, v_usd:liq.vUSD,
       com_usd:liq.comUSD, com_cup:liq.totalCUP, mon:liq.mon||'',
       cuenta:liq.cuenta||'', com_detalle:liq.comDetalle||{},
-      estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[]
+      estado:liq.estado, fecha:liq.fecha, ventas:liq.ventas||[], coms:liq.coms||[],
+      ...(window._liqTasaOK!==false&&liq.tasa?{tasa:liq.tasa}:{})
     }).then(function(r){ if(!r||!r.ok){ console.warn('liq sync fallo:', r&&r.status); showToast('\u26a0 La liquidaci\u00f3n NO se guard\u00f3 en la nube — ejecuta supabase_comisiones.sql'); } })
       .catch(function(e){console.warn('liq sync:',e);});
   }
@@ -6423,8 +6425,9 @@ async function syncLoadLiquidaciones(){
     var r=await supaReq('GET','liquidaciones?select=*&order=fecha.desc&limit=300');
     if(!r.ok) return;
     var rows=await r.json()||[];
+    window._liqTasaOK = rows.length ? Object.prototype.hasOwnProperty.call(rows[0],'tasa') : window._liqTasaOK;
     liquidaciones=rows.map(function(x){
-      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'',
+      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null),
         alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
         totalCUP:parseFloat(x.com_cup)||0, mon:x.mon||'', cuenta:x.cuenta||'',
         comDetalle:x.com_detalle||{}, estado:x.estado||'Pendiente', fecha:x.fecha||'',
@@ -6466,7 +6469,7 @@ function refreshLiqHist(){
     else subRows=`<tr class="liq-subrow-${i}" style="background:var(--color-bg-alt);font-size:11px;color:var(--color-text-tertiary);display:none"><td colspan="${_isV?6:7}" style="padding-left:20px;${bd}">${vs.length} venta(s) de contado · ${cs.length} cobro(s) de folio</td></tr>`+subRows;
 
     return `<tr onclick="var rows=document.querySelectorAll('.liq-subrow-${i}');var isHidden=rows[0]&&rows[0].style.display==='none';rows.forEach(r=>r.style.display=isHidden?'table-row':'none');var ic=this.querySelector('.toggle-ic');if(ic)ic.textContent=isHidden?'▼':'▶';" style="cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--color-bg-alt)'" onmouseout="this.style.background=''">
-    <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}</td><td>${l.alm}</td>
+    <td><span class="toggle-ic" style="display:inline-block;width:16px;font-size:10px;color:var(--color-text-secondary)">▶</span>${l.semana}${l.tasa?` <span style="font-size:10px;color:var(--color-text-tertiary)" title="Tasa CUP/USD de esta liquidación">· tasa ${fN(l.tasa,2)}</span>`:''}</td><td>${l.alm}</td>
     <td style="text-align:right;color:var(--color-text-warning);font-weight:bold">${fN(l.comUSD)} USD</td>
     <td style="text-align:right;font-weight:bold">${fN(l.totalCUP || l.comCUP || 0, l.mon==='CUP'?0:2)} ${l.mon||'CUP'}</td>
     <td style="font-size:11px;color:var(--color-text-secondary)">${l.cuenta&&!l.cuenta.startsWith('{')?l.cuenta:'—'}</td>
@@ -6827,8 +6830,9 @@ function exportLiqPDFGuardada(i){
   var cs=(l.coms||[]).map(function(id){return (typeof COMS!=='undefined'?COMS:[]).find(function(x){return x.id===id;});}).filter(Boolean);
   var det=l.comDetalle||{}; var mon=l.mon||'CUP';
   // La tasa no se guardaba: se deduce de los totales (pago = USD x tasa + nominales)
-  var tasaLiq=null;
-  if(mon==='CUP'&&(parseFloat(det.USD)||0)>0){
+  var tasaLiq=(l.tasa!=null&&parseFloat(l.tasa)>0)?parseFloat(l.tasa):null;
+  if(tasaLiq){ /* guardada con la liquidacion */ }
+  else if(mon==='CUP'&&(parseFloat(det.USD)||0)>0){
     var nominal=(parseFloat(det.CUP)||0)+(parseFloat(det.CUPT)||0)+(parseFloat(det.EUR)||0)*(typeof RATES_EURUSD!=='undefined'?RATES_EURUSD:1.08)*0;
     tasaLiq=Math.round(((parseFloat(l.totalCUP)||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
   } else if(typeof RATES!=='undefined'){ tasaLiq=parseFloat(RATES.CUP)||null; }
