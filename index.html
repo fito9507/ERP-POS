@@ -1176,8 +1176,10 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
           <option value="">Todas</option>
         </select></div>
       <div><label class="lbl">Producto</label>
-        <input id="f-prod" list="f-prod-list" placeholder="Buscar producto..." oninput="_dRender(renderVentas)" style="width:100%">
-        <datalist id="f-prod-list"></datalist></div>
+        <div style="position:relative">
+        <input id="f-prod" placeholder="Buscar producto..." autocomplete="off" oninput="_fprodSugerir();_dRender(renderVentas)" onfocus="_fprodSugerir()" onblur="setTimeout(_fprodOcultar,180)" style="width:100%">
+        <div id="f-prod-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:50;max-height:240px;overflow-y:auto;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:6px;box-shadow:0 6px 20px rgba(0,0,0,.35)"></div>
+        </div></div>
     </div>
   </div>
 
@@ -5222,6 +5224,31 @@ function _matchProdFiltro(nm, fp){
   var exacto=(typeof PRODS!=='undefined')&&PRODS.some(function(p){return String(p.n).toLowerCase()===b;});
   return exacto ? a===b : a.includes(b);
 }
+// ── Buscador del filtro Producto: solo activos, ordenado, sin acentos ──
+var _fprodLista=[];
+function _sinAcentos(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function _fprodSugerir(){
+  var inp=document.getElementById('f-prod'), box=document.getElementById('f-prod-sug');
+  if(!inp||!box||typeof PRODS==='undefined') return;
+  var q=_sinAcentos(inp.value.trim());
+  var noms=PRODS.filter(function(p){ return p&&p.n&&p.activo!==false; }).map(function(p){ return p.n; })
+    .sort(function(a,b){ return a.localeCompare(b,'es',{numeric:true,sensitivity:'base'}); });
+  // Si ya hay un producto exacto elegido, no molestar con la lista
+  if(q&&noms.some(function(n){ return _sinAcentos(n)===q; })){ box.style.display='none'; return; }
+  _fprodLista=noms.filter(function(n){ return !q||_sinAcentos(n).indexOf(q)>=0; }).slice(0,14);
+  if(!_fprodLista.length){ box.style.display='none'; return; }
+  box.innerHTML=_fprodLista.map(function(n,i){
+    return '<div onmousedown="_fprodElegir('+i+')" style="padding:8px 10px;font-size:12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05)" onmouseover="this.style.background=\'var(--color-background-secondary)\'" onmouseout="this.style.background=\'\'">'+n.replace(/</g,'&lt;')+'</div>';
+  }).join('');
+  box.style.display='block';
+}
+function _fprodElegir(i){
+  var inp=document.getElementById('f-prod'); if(!inp) return;
+  inp.value=_fprodLista[i]||'';
+  _fprodOcultar();
+  renderVentas();
+}
+function _fprodOcultar(){ var box=document.getElementById('f-prod-sug'); if(box) box.style.display='none'; }
 function filtrar_ven(){
   const desde=document.getElementById('f-desde').value;
   const hasta=document.getElementById('f-hasta').value;
@@ -5259,11 +5286,6 @@ function renderVentas(){
   var _aComision=_isVend&&USERS[S.user]&&USERS[S.user].aComision!==false;
   var _showCom=!_isVend||_aComision;
 
-  // Autocompletado del filtro Producto con el catalogo
-  var _dl=document.getElementById('f-prod-list');
-  if(_dl&&typeof PRODS!=='undefined'&&_dl.children.length!==PRODS.length){
-    _dl.innerHTML=PRODS.map(function(p){return '<option value="'+String(p.n).replace(/"/g,'&quot;')+'">';}).join('');
-  }
   // Rebuild caja filter — from _cajasData or from ventas pagos
   var _fcSel=document.getElementById('f-caja');
   if(_fcSel){
