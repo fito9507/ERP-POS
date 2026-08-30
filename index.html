@@ -6208,6 +6208,7 @@ function renderLiq(){
       ${comVtaPagadaUSD>0.005?`<div class="liq-r" style="color:var(--color-text-tertiary)"><span>(ya pagadas en este periodo, no se incluyen)</span><span>${fN(comVtaPagadaUSD)} USD</span></div>`:''}
       ${comsPdte.length?`<div class="liq-r"><span>+ Comisiones por cobros de folios (${comsPdte.length} abonos)</span><span style="color:var(--color-text-warning);font-weight:500">${fN(comsPdteUSD)} USD</span></div>`:''}
       <div class="liq-r tot"><span>Pago a liquidar (Convertido a ${targetMon})</span><span style="color:var(--color-text-danger)">${fN(totalPago, targetMon==='CUP'?0:2)} ${targetMon}</span></div>
+      <div class="liq-r" style="color:var(--color-text-tertiary);font-size:11px"><span>Cómo se calcula: la comisión cobrada en ${targetMon} se paga tal cual; el resto se convierte a la tasa de hoy</span><span>${Object.keys(comDetalleAcum).filter(function(m){return Math.abs(comDetalleAcum[m]||0)>0.005;}).map(function(m){var a=comDetalleAcum[m]||0;var dec=(m==='CUP'||m==='CUPT')?0:2;return m===targetMon?(m+' '+fN(a,dec)):(m+' '+fN(a,dec)+' → '+fN(toTgt(a,m),targetMon==='CUP'?0:2)+' '+targetMon);}).join(' + ')}</span></div>
     </div>
     <div class="sep"></div>
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:8px">
