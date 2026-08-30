@@ -16518,6 +16518,34 @@ function buildReceiptHtml(v){
     ck.forEach(function(k){h+='<div class="res-line"><span style="font-size:11px">'+k+'</span><span style="font-size:11px">'+cajaMap[k].join(' &middot; ')+'</span></div>';});
     h+='</div>';
   }
+  // Venta de folio: los cobros entran por los abonos del folio — se
+  // muestran aqui con su caja, total abonado y pendiente
+  var _mF=String(v.nota||'').match(/Folio\s+(\S+)/i);
+  if(_mF){
+    var _fid=_mF[1]; var _f=null;
+    (typeof CLIENTES!=='undefined'?CLIENTES:[]).some(function(cli){ var x=(cli.folios||[]).find(function(y){return String(y.id)===String(_fid);}); if(x)_f=x; return !!x; });
+    if(_f){
+      var _abs=_f.abonos||[];
+      var _tot=typeof totF==='function'?totF(_f):0;
+      var _pag=typeof pagF==='function'?pagF(_f):_abs.reduce(function(a,ab){return a+(parseFloat(ab.equivUSD)||0);},0);
+      h+='<div style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px">';
+      h+='<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.5px">ABONOS DEL FOLIO '+_fid+' ('+_abs.length+')</div>';
+      if(_abs.length){
+        _abs.forEach(function(ab){
+          var m=ab.mon||'USD';
+          h+='<div class="res-line"><span style="font-size:11px">'+fD(ab.fecha)+' · '+String(ab.desc||ab.concepto||'').slice(0,24)
+            +(ab.caja?' <span style="color:var(--color-text-info)">→ '+ab.caja+'</span>':' <span style="color:var(--color-text-tertiary)">(sin caja)</span>')+'</span>'
+            +'<span style="font-size:11px;white-space:nowrap">'+fN(parseFloat(ab.monto)||0,dFor(m))+' '+m
+            +(m!=='USD'?' <span style="color:var(--color-text-tertiary)">≈'+fN(parseFloat(ab.equivUSD)||0)+' USD</span>':'')+'</span></div>';
+        });
+      } else {
+        h+='<div style="font-size:11px;color:var(--color-text-tertiary)">Sin abonos todavía: el dinero entrará cuando el cliente abone al folio</div>';
+      }
+      h+='<div class="res-line" style="margin-top:4px"><span style="font-size:11px;font-weight:600">Abonado</span><span style="font-size:11px;font-weight:600;color:var(--color-text-success)">'+fN(_pag)+' USD</span></div>';
+      h+='<div class="res-line"><span style="font-size:11px;font-weight:600">Pendiente del folio</span><span style="font-size:11px;font-weight:600;color:var(--color-text-danger)">'+fN(Math.max(0,_tot-_pag))+' USD</span></div>';
+      h+='</div>';
+    }
+  }
   if(v.nota) h+='<div class="res-line" style="border-top:.5px solid var(--color-border-tertiary);margin-top:8px;padding-top:8px"><span style="color:var(--color-text-tertiary)">&#128203;</span><span style="font-size:12px">'+v.nota+'</span></div>';
   return h;
 }
