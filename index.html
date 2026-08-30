@@ -1439,7 +1439,8 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <h3 style="margin:0">Movimientos</h3>
-      <span id="l-count" style="font-size:11px;color:var(--color-text-secondary)"></span>
+      <span style="display:flex;align-items:center;gap:8px"><span id="l-count" style="font-size:11px;color:var(--color-text-secondary)"></span>
+      <button class="btn-sm" onclick="exportLibroPDF()" title="Exportar PDF (lo que ves filtrado)">🖨️ PDF</button></span>
     </div>
     <div id="l-movs"></div>
   </div>
@@ -7436,6 +7437,41 @@ function _detalleMov(m){
 function _sinOp(t){ return String(t||'').replace(/\s*\[OP:[A-Za-z0-9]+\]/g,'').trim(); }
 
 // ── RENDER LIBRO ──────────────────────────────────────────
+// ── PDF del libro I/G (ventana de impresion) ──────────────────────
+function exportLibroPDF(){
+  var V=window._libroVista; if(!V){ showToast('Abre primero el libro I/G'); return; }
+  var esc=function(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
+  var val=function(id){var e=document.getElementById(id);return e?e.value:'';};
+  var dec=function(m){return (m==='CUP'||m==='CUPT')?0:2;};
+  var filtros=[];
+  if(val('ig-desde')||val('ig-hasta')) filtros.push('Periodo '+(val('ig-desde')?fD(val('ig-desde')):'…')+' – '+(val('ig-hasta')?fD(val('ig-hasta')):'…'));
+  [['l-tipo','Tipo'],['l-cta','Cuenta'],['l-sentido','Sentido'],['l-q','Busca']].forEach(function(p){ if(val(p[0])) filtros.push(p[1]+': '+val(p[0])); });
+  var neto=V.ing-V.gas;
+  var h='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Libro I/G</title>'
+    +'<style>body{font-family:Segoe UI,Arial,sans-serif;font-size:10px;color:#111;margin:18px}h1{font-size:16px;margin:0 0 2px}.meta{color:#555;margin-bottom:8px}'
+    +'.cards{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}.card{border:1px solid #ccc;border-radius:6px;padding:6px 10px;min-width:130px}.card .l{font-size:9px;color:#666;text-transform:uppercase}.card .v{font-size:14px;font-weight:700}.card .s{font-size:9px;color:#666}'
+    +'table{width:100%;border-collapse:collapse}th,td{padding:3px 5px;border-bottom:1px solid #ddd;vertical-align:top}th{text-align:left;background:#f1f5f9;font-size:9px}.r{text-align:right;white-space:nowrap}.g{color:#b91c1c}.i{color:#15803d}.tot td{font-weight:700;border-top:2px solid #333;background:#f8fafc}'
+    +'@media print{button{display:none}@page{margin:10mm}}</style></head><body>';
+  h+='<h1>Libro de ingresos y gastos</h1><div class="meta">'+(filtros.length?esc(filtros.join(' · ')):'Sin filtros')+' · '+V.data.length+' movimientos · generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+  h+='<div class="cards"><div class="card"><div class="l">Ingresos</div><div class="v i">'+fN(V.ing)+' USD</div><div class="s">equiv.</div></div>'
+    +'<div class="card"><div class="l">Gastos</div><div class="v g">'+fN(V.gas)+' USD</div><div class="s">equiv.</div></div>'
+    +'<div class="card"><div class="l">Neto</div><div class="v '+(neto>=0?'i':'g')+'">'+(neto>=0?'+':'')+fN(neto)+' USD</div><div class="s">equiv.</div></div></div>';
+  // totales por cuenta (en su moneda)
+  var xcta={};
+  V.data.forEach(function(m){ var k=m.cta||'(sin cuenta)'; if(!xcta[k]) xcta[k]={mon:m.mon||'USD',ing:0,gas:0}; if(m.sentido==='gasto') xcta[k].gas+=(m.monto||0); else xcta[k].ing+=(m.monto||0); });
+  var ctas=Object.keys(xcta).sort();
+  if(ctas.length){ h+='<table style="margin-bottom:12px"><thead><tr><th>Cuenta</th><th class="r">Entradas</th><th class="r">Salidas</th><th class="r">Neto</th></tr></thead><tbody>'
+    +ctas.map(function(k){var x=xcta[k];return '<tr><td>'+esc(k)+'</td><td class="r i">'+fN(x.ing,dec(x.mon))+' '+esc(x.mon)+'</td><td class="r g">'+fN(x.gas,dec(x.mon))+' '+esc(x.mon)+'</td><td class="r">'+fN(x.ing-x.gas,dec(x.mon))+' '+esc(x.mon)+'</td></tr>';}).join('')+'</tbody></table>'; }
+  h+='<table><thead><tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Cuenta</th><th class="r">Importe</th><th class="r">Equiv. USD</th><th>Usuario</th><th>Notas</th></tr></thead><tbody>';
+  V.data.slice().sort(function(a,b){return String(a.fecha).localeCompare(String(b.fecha))||((a.id||0)-(b.id||0));}).forEach(function(m){
+    var g=m.sentido==='gasto'; var sg=g?'−':'+';
+    h+='<tr><td>'+esc(fD(m.fecha))+'</td><td>'+esc(m.tipo||'')+'</td><td>'+esc(m.desc||'')+'</td><td>'+esc(m.cta||'')+'</td><td class="r '+(g?'g':'i')+'">'+sg+fN(m.monto||0,dec(m.mon))+' '+esc(m.mon||'')+'</td><td class="r">'+sg+fN(m.equivUSD||0)+'</td><td>'+esc(m.vend||'')+'</td><td>'+esc(m.notas||'')+'</td></tr>';
+  });
+  h+='<tr class="tot"><td colspan="5">Total ('+V.data.length+' movimientos)</td><td class="r">'+(neto>=0?'+':'')+fN(neto)+' USD</td><td colspan="2"></td></tr></tbody></table>';
+  h+='<div style="margin-top:12px"><button onclick="window.print()">Imprimir / Guardar PDF</button></div></body></html>';
+  var w=window.open('','_blank'); if(!w){ showToast('\u26a0 El navegador bloque\u00f3 la ventana del PDF'); return; }
+  w.document.write(h); w.document.close(); setTimeout(function(){ try{ w.print(); }catch(e){} },500);
+}
 function renderLibro(){
   _opsVistas = {};   // el detalle de cada operacion se pinta una sola vez
   // Sort and group transfer pairs together
@@ -7461,6 +7497,7 @@ function renderLibro(){
   });
   const ing=data.filter(m=>m.sentido==='ingreso').reduce((a,m)=>a+m.equivUSD,0);
   const gas=data.filter(m=>m.sentido==='gasto').reduce((a,m)=>a+m.equivUSD,0);
+  window._libroVista={data:data,ing:ing,gas:gas}; // para exportLibroPDF()
   const neto=ing-gas;
   document.getElementById('l-metrics').innerHTML=`
     <div class="metric"><div class="lbl">Ingresos período</div><div class="val" style="color:var(--color-text-success)">${fN(ing)}</div><div class="sub">USD equiv.</div></div>
