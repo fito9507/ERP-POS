@@ -4706,7 +4706,7 @@ function renderPago(){
     return `<div class="prow">
       <span style="font-size:11px;color:var(--color-text-secondary);min-width:50px">Pago ${i+1}</span>
       <input type="number" id="pi-${p.id}" value="${p.m||''}" step="${dFor(p.mon)?'1':'0.01'}" style="flex:1;min-width:70px" oninput="S.pagos[${i}].m=parseFloat(this.value)||0;renderPagoTotalsOnly()">
-      <select style="width:74px" onchange="S.pagos[${i}].mon=this.value;fillP('${p.id}')">
+      <select style="width:74px;min-width:74px;flex:0 0 74px" onchange="S.pagos[${i}].mon=this.value;fillP('${p.id}')">
         ${MONEDAS.map(m=>`<option ${m===p.mon?'selected':''}>${m}</option>`).join('')}
       </select>
       <button class="bf" onclick="fillP('${p.id}')">${fN(fq,dFor(p.mon))} ${p.mon}</button>
@@ -4735,7 +4735,7 @@ function renderPago(){
       return `<div class="vrow">
         <span style="font-size:11px;color:var(--color-text-secondary);min-width:54px">Vuelto ${i+1}</span>
         <input type="number" id="vi-${v.id}" value="${v.m||''}" step="${dFor(v.mon)?'1':'0.01'}" style="flex:1;min-width:70px" oninput="S.vueltos[${i}].m=parseFloat(this.value)||0;renderPagoTotalsOnly()">
-        <select style="width:74px" onchange="S.vueltos[${i}].mon=this.value;fillV('${v.id}')">
+        <select style="width:74px;min-width:74px;flex:0 0 74px" onchange="S.vueltos[${i}].mon=this.value;fillV('${v.id}')">
           ${MONEDAS.map(m=>`<option ${m===v.mon?'selected':''}>${m}</option>`).join('')}
         </select>
         <button class="bf" onclick="fillV('${v.id}')">${fN(fq,dFor(v.mon))} ${v.mon}</button>
