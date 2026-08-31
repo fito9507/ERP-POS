@@ -4847,10 +4847,22 @@ function confirmar(){
     try{renderPago();}catch(e){}
     return;
   }
-  if(getPendVuelto()>0.005||getPendVuelto()<-0.005){
-    showToast('\u26a0 El vuelto no cuadra: revisa antes de confirmar');
+  var _pv=getPendVuelto();
+  if(_pv<-0.005){
+    // Se estaria entregando MAS vuelto del que toca: eso si se bloquea
+    showToast('\u26a0 El vuelto entregado supera lo que corresponde: revisa antes de confirmar');
     try{renderPago();}catch(e){}
     return;
+  }
+  if(_pv>0.005){
+    // El cliente deja el vuelto (redondeo/propina): confirmar y seguir.
+    // El exceso se queda en la caja y queda anotado en la venta.
+    if(!confirm('Queda un vuelto de '+fN(_pv)+' USD sin entregar.\n\n\u00bfEl cliente NO quiere el vuelto? (se queda en caja y se anota en la venta)')){
+      try{renderPago();}catch(e){}
+      return;
+    }
+    var _ne=document.getElementById('venta-nota');
+    if(_ne) _ne.value=((_ne.value||'')+' [vuelto no entregado: '+fN(_pv)+' USD]').trim();
   }
   var prods=S.cart.map(function(c){return c.q+'× '+c.n+' @ $'+fN(c.precioUSD||0);}).join(', ');
   var cobDesc=S.pagos.map(function(p){return fN(p.m,dFor(p.mon))+' '+p.mon;}).join(' + ');
