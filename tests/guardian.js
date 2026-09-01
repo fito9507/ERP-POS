@@ -119,6 +119,9 @@ async function login(page, usuario, pin) {
     await page.click('.pin-pad .pin-btn:text-is("' + d + '")');
   }
   await page.waitForSelector('#pg-alm.act', { timeout: 10000 });
+  // El menú lateral debe quedar construido tras el login (se rompió una vez
+  // al hacer el login asíncrono: el menú se quedaba vacío).
+  await page.waitForSelector('#sb-nav .sb-item', { timeout: 10000 });
 }
 
 async function toasts(page) {

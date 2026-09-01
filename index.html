@@ -4075,6 +4075,10 @@ function pinKey(k){
         err.textContent='';
         pendingUser='';
         S.user=_quien;S.alm='';S.cart=[];
+        // Construir el menú lateral: antes lo hacía un envoltorio de pinKey
+        // justo tras pulsar la tecla, pero ahora el login es asíncrono y en
+        // ese momento S.user aún no estaba puesto (el menú no salía).
+        try{ var _u=USERS[_quien]; if(_u && typeof erpSetUser==='function'){ erpSetUser(_quien,_u.color,_u.tc); if(typeof adminInit==='function') adminInit(); } }catch(e){}
         document.getElementById('pin-wrap').style.display='none';
         document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
         goStep('pg-alm',1);
