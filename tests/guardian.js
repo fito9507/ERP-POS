@@ -69,6 +69,14 @@ async function armar(page) {
     if (esSupa && lectura && (url.pathname.startsWith('/rest/v1/') || url.pathname.startsWith('/storage/'))) {
       return route.continue();
     }
+    // Login del ERP: debe pasar de verdad (comprueba el PIN y abre la
+    // sesión con la que la app lee la base de datos). Solo se deja pasar
+    // lo que no escribe datos: guardar_usuario se sigue capturando.
+    if (esSupa && url.pathname.endsWith('/functions/v1/erp-auth')) {
+      let accion = '';
+      try { accion = (JSON.parse(req.postData() || '{}').action || 'list'); } catch (e) { accion = 'list'; }
+      if (['list', 'login', 'verificar', 'refresh'].includes(accion)) return route.continue();
+    }
 
     // Todo lo demás es escritura o servicio externo: capturar, no enviar
     let body = null;

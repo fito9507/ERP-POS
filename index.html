@@ -1799,7 +1799,7 @@ const TG_VENTAS  = { Habana:'-1003851284058', Placetas:'-1003866260307', Xportpr
 const TG_PEDIDOS = { Habana:'-5253654121', Placetas:'-5209909669', Xportprise:'-5577773442', General:'-5577773442' };
 function _tgApi(tgMethod, payload, isForm){
   var url=SUPA_URL+'/functions/v1/tg-send';
-  var hdrs={'Authorization':'Bearer '+SUPA_KEY,'apikey':SUPA_KEY};
+  var hdrs={'Authorization':'Bearer '+_authTok(),'apikey':SUPA_KEY};
   var opts;
   if(isForm){
     payload.append('tg_method',tgMethod);
@@ -1872,7 +1872,7 @@ function supaReq(method, path, body) {
   var isUpsert = method === 'POST' && path.indexOf('on_conflict') >= 0;
   var headers = {
     'apikey': SUPA_KEY,
-    'Authorization': 'Bearer ' + SUPA_KEY,
+    'Authorization': 'Bearer ' + _authTok(),
     'Content-Type': 'application/json',
     'Prefer': isUpsert ? 'resolution=merge-duplicates,return=representation' : (method === 'POST' ? 'return=representation' : 'return=minimal')
   };
@@ -1883,12 +1883,81 @@ function supaReq(method, path, body) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// SESIÓN DEL ERP
+// El PIN ya no se comprueba en el navegador (cualquiera podía
+// bajarse los hashes con la clave pública y sacarlos en segundos).
+// Ahora lo valida la función erp-auth y devuelve una sesión; ese
+// token es el que abre la base de datos. Sin sesión se usa la clave
+// pública, para que nada deje de funcionar durante la transición.
+// ══════════════════════════════════════════════════════════════
+var _sesion = (function(){ try{ return JSON.parse(localStorage.getItem('erp_sesion')||'null'); }catch(e){ return null; } })();
+function _sesionViva(){ return !!(_sesion && _sesion.access_token && (_sesion.expires_at||0) > (Date.now()/1000)+60); }
+function _authTok(){ return _sesionViva() ? _sesion.access_token : SUPA_KEY; }
+function _sesionGuardar(s, usuario){
+  if(s && s.access_token){
+    _sesion = { access_token:s.access_token, refresh_token:s.refresh_token||'', expires_at:s.expires_at||0, usuario:usuario||(_sesion&&_sesion.usuario)||'' };
+    try{ localStorage.setItem('erp_sesion', JSON.stringify(_sesion)); }catch(e){}
+  } else {
+    _sesion = null;
+    try{ localStorage.removeItem('erp_sesion'); }catch(e){}
+  }
+  try{ _idbGuardarCfg(); }catch(e){}
+}
+// Lo que necesita el trabajador de fondo para vaciar la cola sin la app abierta
+function _idbGuardarCfg(){
+  try{
+    if(typeof _idbOp!=='function') return;
+    _idbOp('cfg', 'readwrite', function(st){
+      return st.put({ k:'supa', url:SUPA_URL, key:SUPA_KEY,
+        token:(_sesion&&_sesion.access_token)||'', refresh:(_sesion&&_sesion.refresh_token)||'', exp:(_sesion&&_sesion.expires_at)||0 });
+    });
+  }catch(e){}
+}
+async function erpAuth(cuerpo){
+  var r = await fetch(SUPA_URL + '/functions/v1/erp-auth', {
+    method:'POST',
+    headers:{ 'apikey':SUPA_KEY, 'Authorization':'Bearer '+_authTok(), 'Content-Type':'application/json' },
+    body: JSON.stringify(cuerpo)
+  });
+  var j=null; try{ j = await r.json(); }catch(e){}
+  return { status:r.status, ok:r.ok, data:(j||{}) };
+}
+// Renovar la sesión sin pedir el PIN otra vez
+async function _sesionRefrescar(){
+  if(!_sesion || !_sesion.refresh_token) return false;
+  try{
+    var r = await erpAuth({ action:'refresh', refresh_token:_sesion.refresh_token });
+    if(r.ok && r.data.access_token){ _sesionGuardar(r.data, _sesion.usuario); return true; }
+    if(r.status===401) _sesionGuardar(null);   // caducada del todo
+  }catch(e){}
+  return false;
+}
+// Si el token está a punto de caducar, renovarlo antes de trabajar
+async function _sesionAsegurar(){
+  if(!_sesion) return false;
+  if(_sesionViva()) return true;
+  return await _sesionRefrescar();
+}
+// ── PIN recordado en ESTE dispositivo (para entrar sin internet) ──
+function _pinDevSal(){
+  var s=null; try{ s=localStorage.getItem('erp_dev_salt'); }catch(e){}
+  if(!s){ s = String(Date.now())+Math.random().toString(36).slice(2); try{ localStorage.setItem('erp_dev_salt', s); }catch(e){} }
+  return s;
+}
+function _pinLocalGuardar(usuario, pin){
+  try{ var m=JSON.parse(localStorage.getItem('erp_pin_local')||'{}'); m[usuario]=_sha256h(_pinDevSal()+':'+usuario+':'+pin); localStorage.setItem('erp_pin_local', JSON.stringify(m)); }catch(e){}
+}
+function _pinLocalOk(usuario, pin){
+  try{ var m=JSON.parse(localStorage.getItem('erp_pin_local')||'{}'); return !!m[usuario] && m[usuario]===_sha256h(_pinDevSal()+':'+usuario+':'+pin); }catch(e){ return false; }
+}
+
 // ── Test desde consola: supaTest() ──────────────────────────
 window.supaTest = async function() {
   try {
     showSyncStatus('Probando conexión...');
     const r = await fetch(SUPA_URL + '/rest/v1/ventas?limit=1', {
-      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+      headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + _authTok() }
     });
     const text = await r.text();
     console.log('Supabase status:', r.status, r.statusText);
@@ -2253,7 +2322,7 @@ function _idbTodasOps() { return _idbOp('queue', 'readonly', function(st) { retu
 // despierte cuando vuelva la conexion.
 function _pedirSyncFondo() {
   try {
-    _idbOp('cfg', 'readwrite', function(st) { return st.put({ k: 'supa', url: SUPA_URL, key: SUPA_KEY }); });
+    _idbGuardarCfg();
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready.then(function(reg) {
         if (reg.sync && reg.sync.register) reg.sync.register('erp-flush').catch(function(){});
@@ -3277,8 +3346,17 @@ function renderLoginCards(){
 }
 function saveUsers(){try{localStorage.setItem('erp_users_cache',JSON.stringify(USERS));}catch(e){}}
 async function syncSaveUser(n,u){
-  if(typeof supaReq==='undefined'||!_supaOnline){try{enqueue({method:'POST',path:'usuarios?on_conflict=nombre',body:{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false,a_comision:u.aComision!==false}});}catch(e){}return;}
-  try{await supaReq('POST','usuarios?on_conflict=nombre',{nombre:n,pin:u.pin,rol:u.rol||'vendedor',almacen:u.almacen||'',color:u.color||'',tc:u.tc||'',modulos:u.modulos||[],activo:u.activo!==false,puede_vender:u.puedeVender!==false,a_comision:u.aComision!==false});}catch(e){console.warn(e);}
+  // Los usuarios se guardan por el servidor: la tabla ya no se toca
+  // desde el navegador y el PIN nuevo viaja en claro solo hasta ahí,
+  // donde se guarda con sal.
+  var datos = { nombre:n, rol:u.rol||'vendedor', almacen:u.almacen||'', color:u.color||'', tc:u.tc||'',
+    modulos:u.modulos||[], activo:u.activo!==false, puede_vender:u.puedeVender!==false, a_comision:u.aComision!==false };
+  if(u.pinNuevo) datos.pin_nuevo = u.pinNuevo;
+  if(!_supaOnline){ showToast('\u26a0 Sin conexi\u00f3n: el usuario se guardará cuando vuelva internet'); return; }
+  try{
+    var r = await erpAuth({ action:'guardar_usuario', usuario_datos:datos });
+    if(!r.ok) showToast('\u26a0 No se pudo guardar el usuario: '+((r.data&&r.data.error)||r.status));
+  }catch(e){ console.warn('guardar usuario:', e); }
 }
 async function syncDeleteUser(n){
   // Use activo=false to preserve FK references from ventas table
@@ -3307,11 +3385,11 @@ async function syncDeleteUser(n){
 })();
 
 async function syncLoadUsers(){
-  if(typeof supaReq==='undefined'||!_supaOnline)return;
+  if(!_supaOnline)return;
   try{
-    var r=await supaReq('GET','usuarios?select=*&activo=eq.true');
-    if(!r.ok)return;
-    var rows=await r.json();
+    // La ficha llega SIN el PIN: lo guarda y lo comprueba el servidor
+    var res=await erpAuth({action:'list'});
+    var rows=(res.ok && res.data && res.data.usuarios) ? res.data.usuarios : null;
     if(!rows||!rows.length)return;
     // Clear all non-hardcoded users first, then rebuild from Supabase
     var hardcoded=['Keiler','Admin'];
@@ -3323,7 +3401,7 @@ async function syncLoadUsers(){
       // Vendedores always get ig access (almacen-filtered view)
       if((row.rol||'vendedor')==='vendedor' && mods.indexOf('ig')<0) mods.push('ig');
       USERS[row.nombre]={
-        pin:row.pin,rol:row.rol||'vendedor',almacen:row.almacen||'',
+        rol:row.rol||'vendedor',almacen:row.almacen||'',
         color:row.color||'',tc:row.tc||'',
         modulos:mods,
         activo:row.activo!==false,puedeVender:row.puede_vender!==false,
@@ -3986,16 +4064,71 @@ function pinKey(k){
   if(pinBuf.length>=4)return;
   pinBuf+=k;updPinDots();
   if(pinBuf.length===4){
-    if(USERS[pendingUser]&&_pinOk(pinBuf,USERS[pendingUser].pin)){
-      S.user=pendingUser;S.alm='';S.cart=[];
-      pinBuf='';pendingUser='';updPinDots();
-      document.getElementById('pin-wrap').style.display='none';
-      document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
-      goStep('pg-alm',1);
-      if(typeof updIAFab==='function')updIAFab();
-    } else {err.textContent='PIN incorrecto';pinBuf='';pendingUser='';updPinDots();
-      setTimeout(function(){document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});document.getElementById('pin-wrap').style.display='none';err.textContent='';},1500);}
+    var _pin=pinBuf, _quien=pendingUser;
+    pinBuf=''; updPinDots();
+    err.style.color=''; err.textContent='Comprobando\u2026';
+    _validarPin(_quien,_pin).then(function(res){
+      if(res && res.ok){
+        err.textContent='';
+        pendingUser='';
+        S.user=_quien;S.alm='';S.cart=[];
+        document.getElementById('pin-wrap').style.display='none';
+        document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});
+        goStep('pg-alm',1);
+        if(typeof updIAFab==='function')updIAFab();
+        if(res.sinConexion) showToast('\u26a0 Sin conexi\u00f3n: has entrado con el PIN guardado en este equipo');
+      } else {
+        err.textContent=(res&&res.mensaje)||'PIN incorrecto';
+        pendingUser=''; updPinDots();
+        setTimeout(function(){document.querySelectorAll('.user-card').forEach(function(c){c.classList.remove('sel');});document.getElementById('pin-wrap').style.display='none';err.textContent='';},2200);
+      }
+    });
   }
+}
+// Comprueba el PIN: primero contra el servidor (que abre la sesión) y,
+// si no hay internet, contra el PIN recordado en este dispositivo.
+async function _validarPin(usuario, pin){
+  if(typeof navigator==='undefined' || navigator.onLine!==false){
+    try{
+      var r = await erpAuth({ action:'login', usuario:usuario, pin:pin });
+      if(r.ok && r.data.access_token){
+        _sesionGuardar(r.data, usuario);
+        _pinLocalGuardar(usuario, pin);
+        var p = r.data.perfil;
+        if(p){
+          var mods = Array.isArray(p.modulos)?p.modulos:[];
+          if((p.rol||'vendedor')==='vendedor' && mods.indexOf('ig')<0) mods.push('ig');
+          USERS[usuario]={ rol:p.rol||'vendedor', almacen:p.almacen||'', color:p.color||'', tc:p.tc||'',
+            modulos:mods, activo:p.activo!==false, puedeVender:p.puede_vender!==false, aComision:p.a_comision!==false };
+          if(typeof saveUsers==='function') saveUsers();
+        }
+        return { ok:true };
+      }
+      if(r.status===429) return { ok:false, mensaje:(r.data.error||'Demasiados intentos') };
+      if(r.status===401) return { ok:false, mensaje:'PIN incorrecto' };
+    }catch(e){ /* sin red: se prueba el respaldo local */ }
+  }
+  if(_pinLocalOk(usuario, pin)) return { ok:true, sinConexion:true };
+  // Respaldo de versiones anteriores (caché con el hash del PIN)
+  if(USERS[usuario] && USERS[usuario].pin && _pinOk(pin, USERS[usuario].pin)) return { ok:true, sinConexion:true };
+  return { ok:false, mensaje:'PIN incorrecto' };
+}
+// Autorización con PIN de administrador (p. ej. dejar stock negativo)
+async function _pinAdminOk(pin){
+  if(!pin) return false;
+  if(typeof navigator==='undefined' || navigator.onLine!==false){
+    try{
+      var r = await erpAuth({ action:'verificar', pin:pin, rol:'admin' });
+      if(r.ok && r.data.ok) return true;
+      if(r.status===401 || r.status===429) return false;
+    }catch(e){ /* sin red: respaldo local */ }
+  }
+  var admins = Object.keys(USERS).filter(function(k){ return USERS[k] && USERS[k].rol==='admin'; });
+  for(var i=0;i<admins.length;i++){
+    if(_pinLocalOk(admins[i], pin)) return true;
+    if(USERS[admins[i]].pin && _pinOk(pin, USERS[admins[i]].pin)) return true;
+  }
+  return false;
 }
 function logout(){
   try{sessionStorage.removeItem('erp_S');}catch(e){}
@@ -4335,7 +4468,7 @@ function renderCart(){
     .map(x=>`<span class="total-alt">${fN(fromUSD(totUSD,x,S.alm),dFor(x))} ${x}</span>`).join('');
 }
 
-function ventaCreditoPOS() {
+async function ventaCreditoPOS() {
   if(!S.cart.length){alert('Añade productos al carrito primero.');return;}
   if(!S.cli || S.cli==='Walk-in'){alert('⚠️ Selecciona un cliente válido arriba a la izquierda para poder darle crédito.\n\n(No puedes dar crédito a "Walk-in")');return;}
   var c = CLIENTES.find(x => x.nombre === S.cli);
@@ -4404,10 +4537,8 @@ function ventaCreditoPOS() {
     if(isAdm) {
       if(!confirm(stockError + '\n\nComo administrador, ¿deseas FORZAR esta venta y poner el stock en negativo?')) return;
     } else {
-      var adminUser = Object.values(USERS).find(function(u){return u.rol==='admin';});
-      var adminPin = adminUser ? adminUser.pin : '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0';
       var pin = prompt(stockError + '\n\nEsta venta dejará el inventario en negativo.\nIngrese PIN de Administrador para autorizar:');
-      if(!_pinOk(pin, adminPin)) {
+      if(!(await _pinAdminOk(pin))) {
          alert('Autorización denegada.');
          return;
       }
@@ -11228,7 +11359,7 @@ function updNFTotCli(cid){
   if(prev&&tot>0){prev.style.display='block';prev.style.background='var(--color-background-info)';prev.style.color='var(--color-text-info)';prev.textContent=`Venta: ${fN(tot)} USD${ini>0?` · Abono inicial: ${fN(ini,dFor(iniMon))} ${iniMon}`:''} · Deuda pdte: ${fN(pdt)} USD`;}
   else if(prev)prev.style.display='none';
 }
-function crearFolioCli(cid){
+async function crearFolioCli(cid){
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
   const lineas=window['nfl_'+cid]||[];
   if(!lineas.length){alert('Añade al menos un producto');return;}
@@ -11257,10 +11388,8 @@ function crearFolioCli(cid){
     if(isAdm) {
       if(!confirm(stockError + '\n\nComo administrador, ¿deseas FORZAR esta venta y poner el stock en negativo?')) return;
     } else {
-      var adminUser = Object.values(USERS).find(function(u){return u.rol==='admin';});
-      var adminPin = adminUser ? adminUser.pin : '9af15b336e6a9619928537df30b2e6a2376569fcf9d7e773eccede65606529a0';
       var pin = prompt(stockError + '\n\nEsta venta dejará el inventario en negativo.\nIngrese PIN de Administrador para autorizar:');
-      if(!_pinOk(pin, adminPin)) {
+      if(!(await _pinAdminOk(pin))) {
          alert('Autorización denegada.');
          return;
       }
@@ -12411,7 +12540,7 @@ async function admUploadImg(input, idx){
       method:'POST',
       headers:{
         'apikey': SUPA_KEY,
-        'Authorization': 'Bearer '+SUPA_KEY,
+        'Authorization': 'Bearer '+_authTok(),
         'Content-Type': file.type,
         'x-upsert': 'true'
       },
@@ -14212,7 +14341,7 @@ async function _bancoSync(cfg) {
     var r = await fetch(SUPA_URL + '/functions/v1/' + cfg.endpoint, {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Authorization': 'Bearer ' + _authTok(),
         'apikey': SUPA_KEY,
         'Content-Type': 'application/json'
       }
@@ -14596,7 +14725,7 @@ async function abancaMapear() {
   try {
     var r = await fetch(SUPA_URL + '/functions/v1/enablebanking-sync', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + SUPA_KEY, 'apikey': SUPA_KEY, 'Content-Type': 'application/json' }
+      headers: { 'Authorization': 'Bearer ' + _authTok(), 'apikey': SUPA_KEY, 'Content-Type': 'application/json' }
     });
     var data = await r.json();
     if (!r.ok || data.error) { alert('Abanca: ' + (data.error || r.status)); return; }
@@ -16803,7 +16932,7 @@ async function fetchElToqueAndSave(){
       var r1 = await fetch(SUPA_URL + '/functions/v1/update-tasas', {
         method: 'GET',
         headers: {
-          'Authorization': 'Bearer ' + SUPA_KEY,
+          'Authorization': 'Bearer ' + _authTok(),
           'Content-Type': 'application/json'
         }
       });
@@ -19683,7 +19812,7 @@ async function iaEnviar() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Authorization': 'Bearer ' + _authTok(),
         'apikey': SUPA_KEY
       },
       body: JSON.stringify({

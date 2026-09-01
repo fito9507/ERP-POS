@@ -14,7 +14,7 @@
 // cada cambio del ERP; solo subir CACHE si algún día cambia la lógica
 // del propio service worker.
 
-const CACHE = 'erp-v2';
+const CACHE = 'erp-v3-auth';
 const CORE = [
   './',
   './index.html',
@@ -147,6 +147,31 @@ async function vaciarCola() {
   const ops = await idbTodo(db, 'queue').catch(() => []);
   if (!ops.length) return 0;
 
+  // La app trabaja con una sesion (el PIN se valida en el servidor). Aqui
+  // se usa ese mismo token; si esta a punto de caducar, se renueva. Sin
+  // token valido se cae a la clave publica, que seguira valiendo mientras
+  // las tablas no esten cerradas del todo.
+  let auth = cfg.key;
+  if (cfg.token && (cfg.exp || 0) > Date.now() / 1000 + 60) {
+    auth = cfg.token;
+  } else if (cfg.refresh) {
+    try {
+      const rr = await fetch(cfg.url + '/functions/v1/erp-auth', {
+        method: 'POST',
+        headers: { apikey: cfg.key, Authorization: 'Bearer ' + cfg.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh', refresh_token: cfg.refresh }),
+      });
+      if (rr.ok) {
+        const s = await rr.json();
+        if (s && s.access_token) {
+          auth = s.access_token;
+          cfg.token = s.access_token; cfg.refresh = s.refresh_token || cfg.refresh; cfg.exp = s.expires_at || 0;
+          await idbGuardar(db, 'cfg', cfg);
+        }
+      }
+    } catch (e) { /* sin red: se intenta igualmente con lo que haya */ }
+  }
+
   const ahora = Date.now();
   let enviadas = 0;
 
@@ -162,7 +187,7 @@ async function vaciarCola() {
         method: op.method,
         headers: {
           apikey: cfg.key,
-          Authorization: 'Bearer ' + cfg.key,
+          Authorization: 'Bearer ' + auth,
           'Content-Type': 'application/json',
           Prefer: esUpsert ? 'resolution=merge-duplicates,return=minimal' : 'return=minimal',
         },
