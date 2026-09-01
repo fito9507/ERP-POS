@@ -84,16 +84,30 @@ create policy catalogo_publico on public.tasas_almacen for select to anon using 
 --     tabla de folios al público —que llevaría clientes y precios—, se
 --     publica solo el total por producto.
 create or replace view public.comprometido_publico as
-  select f.almacen,
-         (coalesce(f.tipo_reserva,'') = 'prereserva') as en_transito,
+with lineas as (
+  select f.id,
+         f.almacen,
+         -- la app marca la preventa en la descripción del folio
+         (coalesce(f.descripcion,'') ilike '%preventa%'
+          or coalesce(f.descripcion,'') ilike '%prereserva%') as en_transito,
          coalesce(l->>'prod', l->>'producto', l->>'n') as producto,
-         sum(coalesce((l->>'q')::numeric, 0)) as cantidad
+         case when (l->>'q') ~ '^-?[0-9]+(\.[0-9]+)?$' then (l->>'q')::numeric else 0 end as q,
+         case when (l->>'q') ~ '^-?[0-9]+(\.[0-9]+)?$' then (l->>'q')::numeric else 0 end
+           * case when coalesce(l->>'precio', l->>'p', '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+                  then coalesce(l->>'precio', l->>'p')::numeric else 0 end as importe
     from public.folios f
     cross join lateral jsonb_array_elements(
       case jsonb_typeof(to_jsonb(f.lineas)) when 'array' then to_jsonb(f.lineas) else '[]'::jsonb end) l
-   where coalesce(f.estado,'') not in ('pagado','Pagado')
-     and coalesce(l->>'prod', l->>'producto', l->>'n') is not null
-   group by 1,2,3;
+),
+totales as (select id, sum(importe) as total from lineas group by id),
+pagado as (select folio_id, sum(coalesce(equiv_usd,0)) as cobrado from public.abonos group by folio_id)
+select l.almacen, l.en_transito, l.producto, sum(l.q) as cantidad
+  from lineas l
+  join totales t on t.id = l.id
+  left join pagado p on p.folio_id = l.id
+ where l.producto is not null
+   and coalesce(p.cobrado, 0) < t.total - 0.01     -- folios aún no cobrados del todo
+ group by 1, 2, 3;
 
 grant select on public.comprometido_publico to anon, authenticated;
 
