@@ -2975,6 +2975,9 @@ async function syncSaveProducto(p) {
 // ── INIT ──────────────────────────────────────────────────────
 async function supaInit() {
   loadQueue();
+  // Con las tablas cerradas, leer requiere sesión: si hay una guardada
+  // se renueva antes de pedir nada.
+  try{ if(typeof _sesionAsegurar==='function') await _sesionAsegurar(); }catch(e){}
   // Always try cache first so ventas show immediately
   offlineLoadVentas();
   offlineLoadProds();
@@ -4077,6 +4080,7 @@ function pinKey(k){
         goStep('pg-alm',1);
         if(typeof updIAFab==='function')updIAFab();
         if(res.sinConexion) showToast('\u26a0 Sin conexi\u00f3n: has entrado con el PIN guardado en este equipo');
+        else _cargarConSesion();   // los datos se piden ya con la sesión abierta
       } else {
         err.textContent=(res&&res.mensaje)||'PIN incorrecto';
         pendingUser=''; updPinDots();
@@ -4084,6 +4088,27 @@ function pinKey(k){
       }
     });
   }
+}
+// Trae los datos con la sesión ya abierta. Hace falta porque la base de
+// datos deja de responder a quien no ha entrado con su PIN.
+var _cargandoSesion = false;
+async function _cargarConSesion(){
+  if(_cargandoSesion || !_supaOnline) return;
+  _cargandoSesion = true;
+  try{
+    var tareas = ['syncLoadVentas','syncLoadClientes','syncLoadPrestamos','syncLoadContenedores',
+                  'syncLoadMovsIG','syncLoadStockMovs','syncLoadReservas','syncLoadLiquidaciones',
+                  'loadComisiones','loadComReglas','loadCajasData'];
+    for(var i=0;i<tareas.length;i++){
+      var f = window[tareas[i]];
+      if(typeof f==='function'){ try{ await f(); }catch(e){ console.warn(tareas[i]+':', e); } }
+    }
+    if(typeof syncLoadProds==='function'){ try{ await syncLoadProds(); }catch(e){} }
+    ['renderVentas','renderStock','renderProds','renderLibro','renderCajas'].forEach(function(n){
+      if(typeof window[n]==='function') try{ window[n](); }catch(e){}
+    });
+    if(typeof flushQueue==='function') try{ await flushQueue(); }catch(e){}
+  } finally { _cargandoSesion = false; }
 }
 // Comprueba el PIN: primero contra el servidor (que abre la sesión) y,
 // si no hay internet, contra el PIN recordado en este dispositivo.
