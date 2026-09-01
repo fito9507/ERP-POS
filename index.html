@@ -4111,7 +4111,7 @@ async function _cargarConSesion(){
       var f = window[tareas[i]];
       if(typeof f==='function'){ try{ await f(); }catch(e){ console.warn(tareas[i]+':', e); } }
     }
-    if(typeof syncLoadProds==='function'){ try{ await syncLoadProds(); }catch(e){} }
+    if(typeof syncLoadProductos==='function'){ try{ await syncLoadProductos(); }catch(e){} }
     ['renderVentas','renderStock','renderProds','renderLibro','renderCajas'].forEach(function(n){
       if(typeof window[n]==='function') try{ window[n](); }catch(e){}
     });
