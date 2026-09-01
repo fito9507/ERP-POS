@@ -775,9 +775,18 @@ function getLoteActivo(prod, almacen) {
 // ── FILTERS & RESERVATIONS ────────────────────────────────
 let MODO = 'stock'; // 'stock' | 'transit' | 'import'
 let FOLIOS = [];
+let COMPROMETIDO = null;   // totales por producto desde la vista publica
 
 async function loadFoliosRes(){
   try {
+    // Vista publica agregada (sin clientes ni precios). Si no existe
+    // todavia, se cae a la tabla de folios como antes.
+    var vRows = await supa('comprometido_publico?select=*').catch(function(){ return null; });
+    if (Array.isArray(vRows) && vRows.length) {
+      COMPROMETIDO = vRows;
+      FOLIOS = [];
+      return;
+    }
     var fRows = await supa('folios?select=almacen,tipo_reserva,lineas,estado');
     if (Array.isArray(fRows)) FOLIOS = fRows;
   } catch(e){ FOLIOS = []; }
@@ -785,6 +794,15 @@ async function loadFoliosRes(){
 
 function getCommittedFoliosQty(prodName, alm, isTransit) {
   var total = 0;
+  if (COMPROMETIDO) {
+    COMPROMETIDO.forEach(function(r){
+      if (r.producto !== prodName) return;
+      if (r.almacen && alm && r.almacen !== alm) return;
+      if (!!r.en_transito !== !!isTransit) return;
+      total += parseFloat(r.cantidad) || 0;
+    });
+    return total;
+  }
   (FOLIOS || []).forEach(function(f){
     if (f.estado === 'pagado' || f.estado === 'Pagado') return;
     var fAlm = f.almacen || f.alm;

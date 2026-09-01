@@ -79,6 +79,24 @@ create policy catalogo_publico on public.contenedores  for select to anon using 
 create policy catalogo_publico on public.tasas         for select to anon using (true);
 create policy catalogo_publico on public.tasas_almacen for select to anon using (true);
 
+-- 3.b El catálogo necesita saber cuántas unidades hay comprometidas en
+--     folios (para no vender dos veces lo mismo). En vez de abrir la
+--     tabla de folios al público —que llevaría clientes y precios—, se
+--     publica solo el total por producto.
+create or replace view public.comprometido_publico as
+  select f.almacen,
+         (coalesce(f.tipo_reserva,'') = 'prereserva') as en_transito,
+         coalesce(l->>'prod', l->>'producto', l->>'n') as producto,
+         sum(coalesce((l->>'q')::numeric, 0)) as cantidad
+    from public.folios f
+    cross join lateral jsonb_array_elements(
+      case jsonb_typeof(to_jsonb(f.lineas)) when 'array' then to_jsonb(f.lineas) else '[]'::jsonb end) l
+   where coalesce(f.estado,'') not in ('pagado','Pagado')
+     and coalesce(l->>'prod', l->>'producto', l->>'n') is not null
+   group by 1,2,3;
+
+grant select on public.comprometido_publico to anon, authenticated;
+
 -- 4. Usuarios: ni siquiera con sesión se leen los PIN desde el navegador.
 --    (la función erp-auth los usa con la clave de servicio)
 revoke all on public.usuarios from anon, authenticated;

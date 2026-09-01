@@ -4093,7 +4093,11 @@ function pinKey(k){
 // datos deja de responder a quien no ha entrado con su PIN.
 var _cargandoSesion = false;
 async function _cargarConSesion(){
-  if(_cargandoSesion || !_supaOnline) return;
+  if(_cargandoSesion) return;
+  // Si el servidor acaba de validar el PIN es que hay internet: puede que
+  // la prueba de conexion del arranque fallara por estar la base cerrada
+  // a quien no ha entrado.
+  if(!_supaOnline){ _supaOnline = true; try{ updOnlineDot(); }catch(e){} }
   _cargandoSesion = true;
   try{
     var tareas = ['syncLoadVentas','syncLoadClientes','syncLoadPrestamos','syncLoadContenedores',
