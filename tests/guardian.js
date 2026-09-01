@@ -166,4 +166,19 @@ function resumen(st, ts) {
   return lineas.join('\n');
 }
 
-module.exports = { armar, login, toasts, resumen, cerrarModales, vigilarDialogos, SUPA_HOST };
+// Token de sesión para verificar la base DESDE FUERA del navegador: la
+// base está cerrada al público, así que las comprobaciones ya no pueden
+// leer con la clave pública. Entra como Tester (igual que las pruebas).
+async function tokenSesion(url, key) {
+  try {
+    const r = await fetch(url + '/functions/v1/erp-auth', {
+      method: 'POST',
+      headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', usuario: 'Tester', pin: '1995' }),
+    });
+    const j = await r.json();
+    return (j && j.access_token) || key;
+  } catch (e) { return key; }
+}
+
+module.exports = { armar, login, toasts, resumen, cerrarModales, vigilarDialogos, tokenSesion, SUPA_HOST };

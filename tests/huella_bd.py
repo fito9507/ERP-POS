@@ -21,8 +21,23 @@ U = re.search(r"const SUPA_URL = '([^']+)'", src).group(1)
 K = re.search(r"const SUPA_KEY = '([^']+)'", src).group(1)
 
 
+# La base está cerrada al público: para leerla hay que tener sesión. El
+# robot entra como Tester (igual que las pruebas) y usa ese token.
+def _token():
+    try:
+        body = json.dumps({'action': 'login', 'usuario': 'Tester', 'pin': '1995'}).encode()
+        rq = urllib.request.Request(U + '/functions/v1/erp-auth', data=body,
+                                    headers={'apikey': K, 'Authorization': 'Bearer ' + K, 'Content-Type': 'application/json'}, method='POST')
+        return json.load(urllib.request.urlopen(rq)).get('access_token') or K
+    except Exception:
+        return K
+
+
+TOK = _token()
+
+
 def get(p):
-    rq = urllib.request.Request(U + '/rest/v1/' + p, headers={'apikey': K, 'Authorization': 'Bearer ' + K})
+    rq = urllib.request.Request(U + '/rest/v1/' + p, headers={'apikey': K, 'Authorization': 'Bearer ' + TOK})
     return json.load(urllib.request.urlopen(rq))
 
 
@@ -41,7 +56,6 @@ TABLAS = {
     'comisiones': ['com_usd', 'base_usd'],
     'liquidaciones': [],
     'contenedores': [],
-    'usuarios': [],
     'com_reglas': ['pct'],
 }
 

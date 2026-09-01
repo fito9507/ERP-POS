@@ -6,10 +6,16 @@
 // abono con su depósito y sin comisión para quien no comisiona...
 // Nada llega a la base de datos (tests/guardian.js).
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const G = require('./guardian');
 
 const USUARIO = process.env.ERP_TEST_USER || 'Tester';
 const PIN = process.env.ERP_TEST_PIN || '1995';
+
+const _src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const SUPA_URL = (_src.match(/const SUPA_URL = '([^']+)'/) || [])[1];
+const SUPA_KEY = (_src.match(/const SUPA_KEY = '([^']+)'/) || [])[1];
 
 // ── utilidades ──────────────────────────────────────────────
 function cuerpo(e) { try { return JSON.parse(e.cuerpo || 'null'); } catch (x) { return null; } }
@@ -20,13 +26,24 @@ function aprox(a, b, tol) { return Math.abs((+a || 0) - (+b || 0)) <= (tol == nu
 
 async function entrarYAlmacen(page, alm, cliente) {
   await G.login(page, USUARIO, PIN);
-  await page.waitForTimeout(3500); // carga inicial (Supabase, reservas, recálculos)
+  // Los datos se cargan tras el login (la base está cerrada al público).
+  // Esperar a que estén, en vez de un tiempo fijo.
+  await page.waitForFunction(function () {
+    return typeof PRODS !== 'undefined' && PRODS.length > 0 && typeof CLIENTES !== 'undefined' && CLIENTES.length > 0;
+  }, null, { timeout: 40000 });
   await page.click('.alm-card:has-text("' + alm + '")');
   if (cliente) {
+    // Esperar a que el cliente esté en el desplegable del POS (se repuebla
+    // cuando terminan de cargar los datos tras el login).
+    await page.waitForFunction(function (nombre) {
+      var c = (typeof CLIENTES !== 'undefined' ? CLIENTES : []).find(function (x) { return x.nombre === nombre; });
+      var sel = document.getElementById('s-cli');
+      return c && sel && !!sel.querySelector('option[value="' + c.id + '"]');
+    }, cliente, { timeout: 20000 });
     await page.evaluate(function (nombre) {
       var sel = document.getElementById('s-cli');
       var c = (CLIENTES || []).find(function (x) { return x.nombre === nombre; });
-      if (sel && c) sel.value = c.id;
+      if (sel && c) { sel.value = c.id; sel.dispatchEvent(new Event('change')); }
     }, cliente);
   }
   await page.click('button:has-text("Continuar")');
@@ -203,11 +220,14 @@ test('POS: venta a crédito → folio con vendedor + fila en ventas; abono → d
     return d.accept();
   });
   const cliente = await (async function () {
-    await page.goto('/index.html?nc=' + Date.now());
-    await page.waitForSelector('.user-card', { timeout: 40000 });
-    // esperar a que los clientes se hayan descargado de la nube
-    await page.waitForFunction(function () { return typeof CLIENTES !== 'undefined' && CLIENTES.length > 0; }, null, { timeout: 40000 });
-    return page.evaluate(function () { var c = (CLIENTES || []).find(function (x) { return x.nombre !== 'Walk-in'; }); return c ? { id: c.id, nombre: c.nombre } : null; });
+    // La base está cerrada al público: los clientes ya no se pueden leer
+    // antes de entrar. Se elige uno con sesión (dentro de la app se cargan
+    // tras el login, que es cuando entrarYAlmacen lo selecciona).
+    const tok = await G.tokenSesion(SUPA_URL, SUPA_KEY);
+    const r = await fetch(SUPA_URL + '/rest/v1/clientes?select=id,nombre&limit=100', { headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + tok } });
+    const arr = await r.json();
+    const c = (Array.isArray(arr) ? arr : []).find(function (x) { return x.nombre !== 'Walk-in'; });
+    return c ? { id: c.id, nombre: c.nombre } : null;
   })();
   expect(cliente, 'hay clientes').not.toBeNull();
 

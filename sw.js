@@ -14,7 +14,7 @@
 // cada cambio del ERP; solo subir CACHE si algún día cambia la lógica
 // del propio service worker.
 
-const CACHE = 'erp-v3-auth';
+const CACHE = 'erp-v4-offline';
 const CORE = [
   './',
   './index.html',
@@ -193,8 +193,15 @@ async function vaciarCola() {
         },
         body: op.body === undefined ? undefined : JSON.stringify(op.body),
       });
-      if (r.ok || (r.status >= 400 && r.status < 500)) {
-        // 4xx = error permanente: reintentarlo eternamente envenena la cola
+      if (r.status === 401 || r.status === 403) {
+        // NO es error de datos: es la sesión (caducada o sin renovar). Ahora
+        // que la base está cerrada al público, descartar aquí perdería la
+        // venta. Se conserva y se reintenta cuando la sesión se pueda renovar.
+        op.enviando = 0;
+        await idbGuardar(db, 'queue', op);
+        break; // sin sesión válida, el resto tampoco pasará: no machacar
+      } else if (r.ok || (r.status >= 400 && r.status < 500)) {
+        // 4xx (de datos) = error permanente: reintentarlo eternamente envenena la cola
         await idbBorrar(db, 'queue', op.qid);
         if (r.ok) enviadas++;
       } else {

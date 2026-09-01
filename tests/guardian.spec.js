@@ -11,15 +11,17 @@ const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const SUPA_URL = (src.match(/const SUPA_URL = '([^']+)'/) || [])[1];
 const SUPA_KEY = (src.match(/const SUPA_KEY = '([^']+)'/) || [])[1];
 
+let TOK = SUPA_KEY;
 async function leerProducto950() {
   const r = await fetch(SUPA_URL + '/rest/v1/productos?select=id,badge_texto,qty_reservada,updated_at&id=eq.950', {
-    headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY },
+    headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + TOK },
   });
   return (await r.json())[0];
 }
 
 test('guardián: las escrituras del navegador NO llegan a la base de datos', async ({ page }) => {
   const st = await G.armar(page);
+  TOK = await G.tokenSesion(SUPA_URL, SUPA_KEY);   // la base está cerrada: verificar con sesión
   const antes = await leerProducto950();
 
   await page.goto('/index.html?nc=' + Date.now());
@@ -53,7 +55,7 @@ test('guardián: las escrituras del navegador NO llegan a la base de datos', asy
   const despues = await leerProducto950();
   expect(despues.badge_texto).toBe(antes.badge_texto);
   expect(despues.updated_at).toBe(antes.updated_at);
-  const rr = await fetch(SUPA_URL + '/rest/v1/reservas?select=id&id=eq.robot-prueba', { headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY } });
+  const rr = await fetch(SUPA_URL + '/rest/v1/reservas?select=id&id=eq.robot-prueba', { headers: { apikey: SUPA_KEY, Authorization: 'Bearer ' + TOK } });
   expect((await rr.json()).length).toBe(0);
   console.log('Verificado desde fuera: producto 950 intacto y sin reserva robot-prueba en la nube.');
 });

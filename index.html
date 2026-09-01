@@ -2384,6 +2384,10 @@ function loadQueue() {
 
 async function flushQueue() {
   if (!_supaOnline || _syncQueue.length === 0) return;
+  // La base está cerrada al público: para vaciar la cola hace falta sesión
+  // válida. Se renueva antes de empezar (si no, cada envío iría con la clave
+  // pública y daría 401).
+  try{ if(typeof _sesionAsegurar==='function') await _sesionAsegurar(); }catch(e){}
   var toProcess = _syncQueue.splice(0);
   localStorage.removeItem('erp_queue');
   updOnlineDot();
@@ -2411,7 +2415,12 @@ async function flushQueue() {
         var _errBody = '';
         try { _errBody = await r.clone().text(); } catch(e2) {}
         console.warn('Queue op failed:', r.status, op.path, _errBody);
-        if (r.status >= 400 && r.status < 500) {
+        if (r.status === 401 || r.status === 403) {
+          // Sesión caducada, NO error de datos: conservar y reintentar tras
+          // renovarla. Descartar aquí perdería una venta hecha sin conexión.
+          _syncQueue.push(op);
+          try{ await _sesionRefrescar(); }catch(e){}
+        } else if (r.status >= 400 && r.status < 500) {
           if (op.qid) _idbBorrarOp(op.qid);
           // Error PERMANENTE: reintentarlo eternamente envenena la cola.
           var _colM = _errBody.match(/Could not find the '([A-Za-z_]+)' column/);
@@ -4103,19 +4112,25 @@ async function _cargarConSesion(){
   // a quien no ha entrado.
   if(!_supaOnline){ _supaOnline = true; try{ updOnlineDot(); }catch(e){} }
   _cargandoSesion = true;
+  var _correr = function(n){ var f=window[n]; return (typeof f==='function') ? Promise.resolve().then(f).catch(function(e){ console.warn(n+':', e); }) : Promise.resolve(); };
   try{
-    var tareas = ['syncLoadVentas','syncLoadClientes','syncLoadPrestamos','syncLoadContenedores',
-                  'syncLoadMovsIG','syncLoadStockMovs','syncLoadReservas','syncLoadLiquidaciones',
-                  'loadComisiones','loadComReglas','loadCajasData'];
-    for(var i=0;i<tareas.length;i++){
-      var f = window[tareas[i]];
-      if(typeof f==='function'){ try{ await f(); }catch(e){ console.warn(tareas[i]+':', e); } }
-    }
-    if(typeof syncLoadProductos==='function'){ try{ await syncLoadProductos(); }catch(e){} }
-    ['renderVentas','renderStock','renderProds','renderLibro','renderCajas'].forEach(function(n){
+    // Lo IMPRESCINDIBLE para vender, en paralelo y primero (antes se cargaba
+    // todo antes del login; ahora va después, así que no puede ir en serie o
+    // el POS tardaría en tener clientes/productos).
+    await Promise.all(['syncLoadProductos','syncLoadClientes','syncLoadVentas','syncLoadContenedores'].map(_correr));
+    // Reservas después de clientes (las recalcula sobre ellos)
+    await _correr('syncLoadReservas');
+    // Repoblar lo que se dibujó vacío al entrar (el desplegable de clientes
+    // del POS se construye en goStep('pg-alm'), antes de que carguen).
+    ['renderVentas','renderStock','renderProds','renderLibro','_poblarClientesPOS'].forEach(function(n){
       if(typeof window[n]==='function') try{ window[n](); }catch(e){}
     });
-    if(typeof flushQueue==='function') try{ await flushQueue(); }catch(e){}
+    // El resto (finanzas, histórico) sin bloquear la venta
+    Promise.all(['syncLoadPrestamos','syncLoadMovsIG','syncLoadStockMovs','syncLoadLiquidaciones',
+                 'loadComisiones','loadComReglas','loadCajasData'].map(_correr)).then(function(){
+      if(typeof renderCajas==='function') try{ renderCajas(); }catch(e){}
+      if(typeof flushQueue==='function') try{ flushQueue(); }catch(e){}
+    });
   } finally { _cargandoSesion = false; }
 }
 // Comprueba el PIN: primero contra el servidor (que abre la sesión) y,
