@@ -1066,28 +1066,34 @@ function cardHTML(p){
       var avail = (typeof getAvailableStock === 'function') ? getAvailableStock(p, ALM, 'stock') : ts;
       if(avail <= 0) return ''; // Let stkLabel handle 'Sin stock'
       
-      var sold = p.vendidos || 0;
-      var pct = (avail + sold) > 0 ? Math.round((sold / (avail + sold)) * 100) : 0;
+      // % REAL vendido del lote: lo que entro menos lo que queda, sobre
+      // los lotes del almacen que se esta mirando.
+      var ini = 0, act = 0;
+      (p.lotes || []).forEach(function(l){
+        if (ALM && l.almacen && l.almacen !== ALM) return;
+        var ca = parseFloat(l.cantidad) || 0;
+        var ci = parseFloat(l.cantidad_inicial) || 0;
+        ini += Math.max(ci, ca);   // si falta el inicial, al menos lo que queda
+        act += ca;
+      });
+      if (ini <= 0) return '';                 // sin dato de entrada: no inventar barra
+      var pct = Math.round((ini - act) / ini * 100);
+      if (pct < 0) pct = 0;
+      if (pct > 100) pct = 100;
+      if (pct < 15 && avail > 20) return '';   // poco vendido: no hay urgencia que mostrar
       
-      // Asegurar que la barra siempre tenga algo de movimiento visual para animar la vista (30% min)
-      if (pct < 30) pct = 30 + (p.n.length % 35);
+      var text;
+      if (avail <= 20 || pct >= 95) text = '⚡ ¡Últimas ' + fN(avail,0) + ' unidades!';
+      else if (pct >= 90) text = '🔥 Queda el ' + (100 - pct) + '% del lote';
+      else if (pct >= 70) text = '🔥 Alta demanda · ' + pct + '% vendido';
+      else text = '🔥 Vendiendo rápido · ' + pct + '% vendido';
       
-      // Si quedan muy pocas unidades, forzar urgencia alta
-      if (avail <= 50) pct = Math.max(pct, 85);
-      if (avail <= 10) pct = Math.max(pct, 92);
-      
-      if (pct >= 100) pct = 96; 
-      
-      var text = '🔥 Vendiendo rápido';
-      if (avail <= 20) text = '⚡ ¡Últimas ' + avail + ' unidades!';
-      else if (avail <= 100) text = '⚡ Pocas unidades disponibles';
-      else if (pct > 75) text = '🔥 Alta demanda';
-      
+      var pctBar = Math.max(pct, 3);           // que la barra se vea aunque sea poco
       var barBg='rgba(108,113,196,.15)', barFg=pct>70?'linear-gradient(90deg,#cb4b16,#dc322f)':'linear-gradient(90deg,#cb4b16,#6c71c4)';
       return '<div style="margin:2px 0">'
         +'<div style="font-size:10px;color:#b58900;font-weight:600;margin-bottom:3px">'+text+'</div>'
         +'<div style="height:6px;border-radius:3px;background:'+barBg+';overflow:hidden">'
-        +'<div style="width:'+pct+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
+        +'<div style="width:'+pctBar+'%;height:100%;border-radius:3px;background:'+barFg+';transition:width .5s"></div>'
         +'</div></div>';
     }())
     +'<div class="prices">'
