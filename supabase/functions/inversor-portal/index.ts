@@ -45,23 +45,33 @@ Deno.serve(async (req) => {
   const rs = await db(`inversor_snapshot?select=*&inversor_id=eq.${inv.id}&order=actualizado.desc`);
   const snaps = rs.ok ? await rs.json() : [];
 
-  // limpiar: nunca devolver el inversor_id ni ids internos
-  const contenedores = (snaps as Record<string, unknown>[]).map((s) => ({
-    contenedor: s.contenedor_nombre || s.contenedor_ref,
-    estado: s.estado,
-    unidades_total: Number(s.unidades_total || 0),
-    unidades_vendidas: Number(s.unidades_vendidas || 0),
-    pct_colocado: Number(s.pct_colocado || 0),
-    stock_restante: Number(s.stock_restante || 0),
-    ritmo_7d: Number(s.ritmo_7d || 0),
-    fecha_estim_fin: s.fecha_estim_fin || null,
-    revenue_cobrado: Number(s.revenue_cobrado || 0),
-    aporte_usd: Number(s.aporte_usd || 0),
-    recuperado_usd: Number(s.recuperado_usd || 0),
-    retorno_usd: Number(s.retorno_usd || 0),
-    retorno_proy_usd: Number(s.retorno_proy_usd || 0),
-    actualizado: s.actualizado || null,
-  }));
+  // El ERP ya curó el bloque `datos`; se devuelve tal cual. Si una foto
+  // vieja aún no lo tiene, se arma desde los campos sueltos (compatibilidad).
+  const contenedores = (snaps as Record<string, unknown>[]).map((s) => {
+    if (s.datos && typeof s.datos === 'object') {
+      return { ...(s.datos as Record<string, unknown>), actualizado: s.actualizado || null };
+    }
+    return {
+      contenedor: s.contenedor_nombre || s.contenedor_ref,
+      estado: s.estado,
+      ver_detalle: false,
+      resumen: {
+        unidades_total: Number(s.unidades_total || 0),
+        unidades_vendidas: Number(s.unidades_vendidas || 0),
+        unidades_restantes: Number(s.stock_restante || 0),
+        pct_colocado: Number(s.pct_colocado || 0),
+        ritmo_7d: Number(s.ritmo_7d || 0),
+      },
+      finanzas: {
+        aporte: Number(s.aporte_usd || 0),
+        ingresos_cobrados: Number(s.revenue_cobrado || 0),
+        recuperado: Number(s.recuperado_usd || 0),
+        retorno_usd: Number(s.retorno_usd || 0),
+        retorno_proy_usd: Number(s.retorno_proy_usd || 0),
+      },
+      actualizado: s.actualizado || null,
+    };
+  });
 
   return J({ ok: true, inversor: inv.nombre, contenedores });
 });

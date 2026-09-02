@@ -43,6 +43,17 @@
   .kpi .k{font-size:11px;color:var(--fg2)}
   .kpi .v{font-size:19px;font-weight:800;margin-top:2px}
   .v.ok{color:#a8bf3a}.v.acc{color:var(--acc)}.v.warn{color:#d9b74a}
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:10px}
+  .tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:340px}
+  .tbl th{text-align:right;color:var(--fg2);font-weight:600;font-size:10.5px;
+    text-transform:uppercase;letter-spacing:.04em;padding:0 0 8px;border-bottom:1px solid var(--bd)}
+  .tbl th:first-child{text-align:left}
+  .tbl td{padding:9px 0;border-bottom:1px solid rgba(14,79,95,.5);text-align:right;white-space:nowrap}
+  .tbl td:first-child{text-align:left;white-space:normal;padding-right:10px}
+  .tbl tr:last-child td{border-bottom:none}
+  .pn{font-weight:600}
+  .minibar{height:4px;border-radius:3px;background:rgba(147,161,161,.16);margin-top:4px;max-width:150px}
+  .minibar>div{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
   .foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;
     margin-top:14px;color:var(--mut);font-size:12px}
   .msg{text-align:center;padding:60px 20px;color:var(--fg2)}
@@ -81,35 +92,68 @@ function haceCuanto(ts){
   return 'hace '+Math.floor(d/1440)+' d';
 }
 
+function money(n){ return '$'+fN(n); }
+function kpi(k,v,cls){ return '<div class="kpi"><div class="k">'+k+'</div><div class="v '+(cls||'')+'">'+v+'</div></div>'; }
+
 function tarjeta(c){
-  var pct=Math.max(0,Math.min(100,Math.round(c.pct_colocado||0)));
-  var recPct=c.aporte_usd>0?Math.max(0,Math.min(100,Math.round(c.recuperado_usd/c.aporte_usd*100))):0;
-  var falta=Math.max(0,(c.aporte_usd||0)-(c.recuperado_usd||0));
-  var rent=c.aporte_usd>0?(c.retorno_proy_usd/c.aporte_usd*100):0;
-  var rentStr=(rent>=0?'+':'')+fN(rent,1)+'%';
-  return '<div class="card">'
-    +'<div class="ctitle"><span class="cname">'+esc(c.contenedor)+'</span>'
-      +'<span class="badge '+badgeCls(c.estado)+'">'+esc(c.estado||'—')+'</span></div>'
-    +'<div class="rev">'+fN(c.unidades_vendidas)+' de '+fN(c.unidades_total)+' unidades vendidas'
-      +(c.revenue_cobrado>0?' · ingresos cobrados $'+fN(c.revenue_cobrado):'')+'</div>'
-    +'<div class="pctrow"><span class="pctbig">'+pct+'%</span><span class="pctlbl">del contenedor colocado</span></div>'
-    +'<div class="bar"><div style="width:'+Math.max(pct,2)+'%"></div></div>'
-    +'<div class="barsub"><span>Quedan '+fN(c.stock_restante)+' uds por vender</span>'
-      +'<span>'+(c.ritmo_7d>0?'~'+fN(c.ritmo_7d,1)+' uds/día':'')+'</span></div>'
-    +'<div class="sec"><div class="seclbl">Tu inversión</div>'
-      +'<div class="grid">'
-        +'<div class="kpi"><div class="k">Pusiste</div><div class="v">$'+fN(c.aporte_usd)+'</div></div>'
-        +'<div class="kpi"><div class="k">Recuperado</div><div class="v acc">$'+fN(c.recuperado_usd)+'</div></div>'
-        +'<div class="kpi"><div class="k">Falta por recuperar</div><div class="v">$'+fN(falta)+'</div></div>'
-        +'<div class="kpi"><div class="k">Ganancia hasta ahora</div><div class="v ok">$'+fN(c.retorno_usd)+'</div></div>'
-        +'<div class="kpi"><div class="k">Ganancia proyectada</div><div class="v warn">$'+fN(c.retorno_proy_usd)+'</div></div>'
-        +'<div class="kpi"><div class="k">Rentabilidad proyectada</div><div class="v ok">'+rentStr+'</div></div>'
-      +'</div>'
-      +'<div class="bar" style="margin-top:12px"><div style="width:'+Math.max(recPct,2)+'%;background:linear-gradient(90deg,#2aa198,#859900)"></div></div>'
-      +'<div class="barsub"><span>Capital recuperado</span><span>'+recPct+'%</span></div>'
-    +'</div>'
-    +'<div class="foot"><span></span><span>Actualizado '+haceCuanto(c.actualizado)+'</span></div>'
-  +'</div>';
+  var rz=c.resumen||{}, fz=c.finanzas||{}, prods=c.productos||[];
+  var pct=Math.max(0,Math.min(100,Math.round(rz.pct_colocado||0)));
+  var recPct=fz.aporte>0?Math.max(0,Math.min(100,Math.round((fz.recuperado||0)/fz.aporte*100))):0;
+  var falta=Math.max(0,(fz.aporte||0)-(fz.recuperado||0));
+  var rent=(fz.rentabilidad_pct!=null)?fz.rentabilidad_pct:(fz.aporte>0?((fz.retorno_proy_usd||0)/fz.aporte*100):0);
+  var h='<div class="card">';
+  h+='<div class="ctitle"><span class="cname">'+esc(c.contenedor)+'</span>'
+    +'<span class="badge '+badgeCls(c.estado)+'">'+esc(c.estado||'—')+'</span></div>';
+  h+='<div class="rev">'+fN(rz.unidades_vendidas)+' de '+fN(rz.unidades_total)+' unidades vendidas'
+    +(fz.ingresos_cobrados>0?' · cobrado '+money(fz.ingresos_cobrados):'')+'</div>';
+  h+='<div class="pctrow"><span class="pctbig">'+pct+'%</span><span class="pctlbl">del contenedor colocado</span></div>';
+  h+='<div class="bar"><div style="width:'+Math.max(pct,2)+'%"></div></div>';
+  h+='<div class="barsub"><span>Quedan '+fN(rz.unidades_restantes)+' uds por vender</span>'
+    +'<span>'+(rz.ritmo_7d>0?'~'+fN(rz.ritmo_7d,1)+' uds/día':'')+'</span></div>';
+
+  // Lista de materiales del contenedor (vendido / restante / precio actual)
+  if(prods.length){
+    h+='<div class="sec"><div class="seclbl">Materiales del contenedor</div>';
+    h+='<div class="tbl-wrap"><table class="tbl"><thead><tr>'
+      +'<th>Producto</th><th>Vendidas</th><th>Restan</th><th>PVP</th><th>Ingreso</th></tr></thead><tbody>';
+    prods.forEach(function(p){
+      var pp=p.total>0?Math.round((p.vendidas||0)/p.total*100):0;
+      h+='<tr><td class="pn">'+esc(p.nombre)
+        +'<div class="minibar"><div style="width:'+Math.max(pp,2)+'%"></div></div></td>'
+        +'<td>'+fN(p.vendidas)+' / '+fN(p.total)+'</td><td>'+fN(p.restantes)+'</td>'
+        +'<td>'+(p.pvp?money(p.pvp):'—')+'</td><td>'+(p.ingreso?money(p.ingreso):'—')+'</td></tr>';
+    });
+    h+='</tbody></table></div></div>';
+  }
+
+  // Tu inversión
+  h+='<div class="sec"><div class="seclbl">Tu inversión</div><div class="grid">';
+  h+=kpi('Pusiste',money(fz.aporte));
+  h+=kpi('Recuperado',money(fz.recuperado),'acc');
+  h+=kpi('Falta por recuperar',money(falta));
+  h+=kpi('Ganancia hasta ahora',money(fz.retorno_usd),'ok');
+  h+=kpi('Ganancia proyectada',money(fz.retorno_proy_usd),'warn');
+  h+=kpi('Rentabilidad proyectada',(rent>=0?'+':'')+fN(rent,1)+'%','ok');
+  h+='</div>';
+  h+='<div class="bar" style="margin-top:12px"><div style="width:'+Math.max(recPct,2)+'%;background:linear-gradient(90deg,#2aa198,#859900)"></div></div>';
+  h+='<div class="barsub"><span>Capital recuperado</span><span>'+recPct+'%</span></div></div>';
+
+  // Finanzas del contenedor (solo si el inversor puede ver el detalle)
+  if(c.ver_detalle){
+    h+='<div class="sec"><div class="seclbl">Contenedor · finanzas</div><div class="grid">';
+    h+=kpi('Ingresos cobrados',money(fz.ingresos_cobrados));
+    if(fz.por_cobrar!=null) h+=kpi('Por cobrar (folios)',money(fz.por_cobrar));
+    if(fz.valor_restante!=null) h+=kpi('Inventario por vender',money(fz.valor_restante));
+    if(fz.ingreso_esperado!=null) h+=kpi('Ingreso total esperado',money(fz.ingreso_esperado),'acc');
+    if(fz.coste!=null) h+=kpi('Coste del contenedor',money(fz.coste));
+    if(fz.margen_esperado!=null) h+=kpi('Margen esperado',money(fz.margen_esperado),'ok');
+    if(fz.margen_actual!=null) h+=kpi('Margen actual',money(fz.margen_actual),'acc');
+    if(fz.margen_pct!=null) h+=kpi('Margen %',fN(fz.margen_pct,1)+'%','warn');
+    h+='</div></div>';
+  }
+
+  h+='<div class="foot"><span></span><span>Actualizado '+haceCuanto(c.actualizado)+'</span></div></div>';
+  return h;
 }
 
 async function cargar(){
