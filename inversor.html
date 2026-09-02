@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Mi inversión · Xportprise</title>
+<style>
+  :root{
+    --bg:#002b36; --bg2:#073642; --card:#083f4d; --bd:#0e4f5f;
+    --fg:#fdf6e3; --fg2:#93a1a1; --mut:#657b83;
+    --acc:#2aa198; --acc2:#268bd2; --warn:#b58900; --ok:#859900; --dang:#dc322f; --viol:#6c71c4;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    font-size:15px;line-height:1.5;padding:0 0 40px}
+  .wrap{max-width:640px;margin:0 auto;padding:0 16px}
+  header{padding:22px 16px 12px;text-align:center}
+  .logo{font-size:13px;letter-spacing:.14em;color:var(--acc);font-weight:700;text-transform:uppercase}
+  h1{font-size:22px;margin:4px 0 2px;font-weight:600}
+  .sub{color:var(--fg2);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;
+    padding:18px;margin:16px 0;box-shadow:0 4px 18px rgba(0,0,0,.25)}
+  .ctitle{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:2px}
+  .cname{font-size:17px;font-weight:700}
+  .badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;
+    padding:3px 9px;border-radius:20px;white-space:nowrap}
+  .b-prep{background:rgba(181,137,0,.22);color:#d9b74a}
+  .b-transito{background:rgba(38,139,210,.22);color:#5aa9e6}
+  .b-recibido{background:rgba(133,153,0,.22);color:#a8bf3a}
+  .b-cerrado{background:rgba(101,123,131,.22);color:#93a1a1}
+  .pctrow{display:flex;align-items:baseline;gap:8px;margin:14px 0 6px}
+  .pctbig{font-size:34px;font-weight:800;line-height:1}
+  .pctlbl{color:var(--fg2);font-size:13px}
+  .bar{height:10px;border-radius:6px;background:rgba(147,161,161,.16);overflow:hidden;margin:6px 0 4px}
+  .bar>div{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--acc),var(--acc2));transition:width .6s}
+  .barsub{display:flex;justify-content:space-between;color:var(--fg2);font-size:12px}
+  .sec{margin-top:16px;border-top:1px solid var(--bd);padding-top:14px}
+  .seclbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--viol);font-weight:700;margin-bottom:10px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .kpi{background:var(--bg2);border-radius:12px;padding:11px 13px}
+  .kpi .k{font-size:11px;color:var(--fg2)}
+  .kpi .v{font-size:19px;font-weight:800;margin-top:2px}
+  .v.ok{color:#a8bf3a}.v.acc{color:var(--acc)}.v.warn{color:#d9b74a}
+  .foot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;
+    margin-top:14px;color:var(--mut);font-size:12px}
+  .msg{text-align:center;padding:60px 20px;color:var(--fg2)}
+  .msg .big{font-size:40px;margin-bottom:10px}
+  .rev{color:var(--fg2);font-size:13px;margin-top:4px}
+  .disc{color:var(--mut);font-size:11px;text-align:center;margin-top:22px;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Xportprise</div>
+  <h1 id="saludo">Mi inversión</h1>
+  <div class="sub" id="sub"></div>
+</header>
+<div class="wrap" id="cont"></div>
+
+<script>
+const SUPA_URL = 'https://gpkslaqfqfdeoleiayng.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwa3NsYXFmcWZkZW9sZWlheW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2Nzk0MzQsImV4cCI6MjA4OTI1NTQzNH0.iTMO4obXaYC2O1QkAgkaRjygMvjkFnCFuVBVO35DmRk';
+
+function fN(n,d){ n=parseFloat(n)||0; return n.toLocaleString('es-ES',{minimumFractionDigits:d||0,maximumFractionDigits:d||0}); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function badgeCls(e){ e=(e||'').toLowerCase();
+  if(e.indexOf('transit')>=0||e.indexOf('camino')>=0) return 'b-transito';
+  if(e.indexOf('recib')>=0||e.indexOf('lleg')>=0) return 'b-recibido';
+  if(e.indexOf('cerr')>=0||e.indexOf('final')>=0) return 'b-cerrado';
+  return 'b-prep';
+}
+function haceCuanto(ts){
+  if(!ts) return '';
+  var d=Math.floor((Date.now()-new Date(ts).getTime())/60000);
+  if(isNaN(d)) return '';
+  if(d<1) return 'hace un momento';
+  if(d<60) return 'hace '+d+' min';
+  if(d<1440) return 'hace '+Math.floor(d/60)+' h';
+  return 'hace '+Math.floor(d/1440)+' d';
+}
+
+function tarjeta(c){
+  var pct=Math.max(0,Math.min(100,Math.round(c.pct_colocado||0)));
+  var recPct=c.aporte_usd>0?Math.max(0,Math.min(100,Math.round(c.recuperado_usd/c.aporte_usd*100))):0;
+  var estim=c.fecha_estim_fin?new Date(c.fecha_estim_fin).toLocaleDateString('es-ES',{day:'2-digit',month:'short',year:'numeric'}):'—';
+  return '<div class="card">'
+    +'<div class="ctitle"><span class="cname">'+esc(c.contenedor)+'</span>'
+      +'<span class="badge '+badgeCls(c.estado)+'">'+esc(c.estado||'—')+'</span></div>'
+    +'<div class="rev">'+fN(c.unidades_vendidas)+' de '+fN(c.unidades_total)+' unidades vendidas'
+      +(c.revenue_cobrado>0?' · ingresos cobrados $'+fN(c.revenue_cobrado):'')+'</div>'
+    +'<div class="pctrow"><span class="pctbig">'+pct+'%</span><span class="pctlbl">del contenedor colocado</span></div>'
+    +'<div class="bar"><div style="width:'+Math.max(pct,2)+'%"></div></div>'
+    +'<div class="barsub"><span>Quedan '+fN(c.stock_restante)+' uds</span>'
+      +'<span>'+(c.ritmo_7d>0?'~'+fN(c.ritmo_7d,1)+' uds/día':'')+'</span></div>'
+    +'<div class="sec"><div class="seclbl">Tu inversión</div>'
+      +'<div class="grid">'
+        +'<div class="kpi"><div class="k">Pusiste</div><div class="v">$'+fN(c.aporte_usd)+'</div></div>'
+        +'<div class="kpi"><div class="k">Recuperado</div><div class="v acc">$'+fN(c.recuperado_usd)+'</div></div>'
+        +'<div class="kpi"><div class="k">Ganancia hasta ahora</div><div class="v ok">$'+fN(c.retorno_usd)+'</div></div>'
+        +'<div class="kpi"><div class="k">Ganancia proyectada</div><div class="v warn">$'+fN(c.retorno_proy_usd)+'</div></div>'
+      +'</div>'
+      +'<div class="bar" style="margin-top:12px"><div style="width:'+Math.max(recPct,2)+'%;background:linear-gradient(90deg,#2aa198,#859900)"></div></div>'
+      +'<div class="barsub"><span>Capital recuperado</span><span>'+recPct+'%</span></div>'
+    +'</div>'
+    +'<div class="foot"><span>Venta total estimada: '+estim+'</span><span>Actualizado '+haceCuanto(c.actualizado)+'</span></div>'
+  +'</div>';
+}
+
+async function cargar(){
+  var cont=document.getElementById('cont');
+  var token=new URLSearchParams(location.search).get('t')||'';
+  if(!token){ cont.innerHTML='<div class="msg"><div class="big">🔗</div>Enlace incompleto.<br>Pide a Xportprise tu enlace privado.</div>'; return; }
+  try{
+    var r=await fetch(SUPA_URL+'/functions/v1/inversor-portal',{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({token:token})
+    });
+    var d=await r.json();
+    if(!r.ok||!d.ok){ cont.innerHTML='<div class="msg"><div class="big">🔒</div>'+esc(d.error||'Enlace no válido.')+'</div>'; return; }
+    document.getElementById('saludo').textContent='Hola, '+d.inversor;
+    var cs=d.contenedores||[];
+    document.getElementById('sub').textContent=cs.length?(cs.length+' contenedor'+(cs.length>1?'es':'')):'';
+    if(!cs.length){ cont.innerHTML='<div class="msg"><div class="big">📦</div>Aún no hay datos de tu contenedor.<br>En cuanto empiecen las ventas los verás aquí.</div>'; return; }
+    cont.innerHTML=cs.map(tarjeta).join('')
+      +'<div class="disc">Cifras informativas de seguimiento de tu inversión, actualizadas por Xportprise S.L. No incluyen costes de operación ni de terceros.</div>';
+  }catch(e){
+    cont.innerHTML='<div class="msg"><div class="big">📡</div>No se pudo cargar. Revisa tu conexión e inténtalo de nuevo.</div>';
+  }
+}
+cargar();
+setInterval(cargar, 180000); // refresca cada 3 min
+</script>
+</body>
+</html>
