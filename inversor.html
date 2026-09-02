@@ -126,17 +126,25 @@ function tarjeta(c){
     h+='</tbody></table></div></div>';
   }
 
-  // Tu inversión
-  h+='<div class="sec"><div class="seclbl">Tu inversión</div><div class="grid">';
-  h+=kpi('Pusiste',money(fz.aporte));
-  h+=kpi('Recuperado',money(fz.recuperado),'acc');
-  h+=kpi('Falta por recuperar',money(falta));
-  h+=kpi('Ganancia hasta ahora',money(fz.retorno_usd),'ok');
-  h+=kpi('Ganancia proyectada',money(fz.retorno_proy_usd),'warn');
-  h+=kpi('Rentabilidad proyectada',(rent>=0?'+':'')+fN(rent,1)+'%','ok');
-  h+='</div>';
-  h+='<div class="bar" style="margin-top:12px"><div style="width:'+Math.max(recPct,2)+'%;background:linear-gradient(90deg,#2aa198,#859900)"></div></div>';
-  h+='<div class="barsub"><span>Capital recuperado</span><span>'+recPct+'%</span></div></div>';
+  // Tu inversión (si puso capital) o Tu participación (solo reparto de ganancia)
+  if((fz.aporte||0)>0){
+    h+='<div class="sec"><div class="seclbl">Tu inversión</div><div class="grid">';
+    h+=kpi('Pusiste',money(fz.aporte));
+    h+=kpi('Recuperado',money(fz.recuperado),'acc');
+    h+=kpi('Falta por recuperar',money(falta));
+    h+=kpi('Ganancia hasta ahora',money(fz.retorno_usd),'ok');
+    h+=kpi('Ganancia proyectada',money(fz.retorno_proy_usd),'warn');
+    h+=kpi('Rentabilidad proyectada',(rent>=0?'+':'')+fN(rent,1)+'%','ok');
+    h+='</div>';
+    h+='<div class="bar" style="margin-top:12px"><div style="width:'+Math.max(recPct,2)+'%;background:linear-gradient(90deg,#2aa198,#859900)"></div></div>';
+    h+='<div class="barsub"><span>Capital recuperado</span><span>'+recPct+'%</span></div></div>';
+  } else {
+    h+='<div class="sec"><div class="seclbl">Tu participación</div><div class="grid">';
+    if(fz.participacion_pct!=null) h+=kpi('Tu parte de la ganancia',fN(fz.participacion_pct,1)+'%','acc');
+    h+=kpi('Ganancia hasta ahora',money(fz.retorno_usd),'ok');
+    h+=kpi('Ganancia proyectada',money(fz.retorno_proy_usd),'warn');
+    h+='</div></div>';
+  }
 
   // Finanzas del contenedor (solo si el inversor puede ver el detalle)
   if(c.ver_detalle){

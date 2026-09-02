@@ -47,9 +47,18 @@ Deno.serve(async (req) => {
 
   // El ERP ya curó el bloque `datos`; se devuelve tal cual. Si una foto
   // vieja aún no lo tiene, se arma desde los campos sueltos (compatibilidad).
+  // Campos sensibles: NUNCA salen si ver_detalle no está activo (red de
+  // seguridad, aunque la foto se hubiera sembrado con ellos por error).
+  const SENSIBLE = ['coste', 'margen_esperado', 'margen_actual', 'margen_pct'];
   const contenedores = (snaps as Record<string, unknown>[]).map((s) => {
     if (s.datos && typeof s.datos === 'object') {
-      return { ...(s.datos as Record<string, unknown>), actualizado: s.actualizado || null };
+      const d = { ...(s.datos as Record<string, unknown>) };
+      if (!d.ver_detalle && d.finanzas && typeof d.finanzas === 'object') {
+        const fin = { ...(d.finanzas as Record<string, unknown>) };
+        for (const k of SENSIBLE) delete fin[k];
+        d.finanzas = fin;
+      }
+      return { ...d, actualizado: s.actualizado || null };
     }
     return {
       contenedor: s.contenedor_nombre || s.contenedor_ref,
