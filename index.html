@@ -7902,6 +7902,14 @@ function registrar(){
   if(!monto){alert('Introduce el monto');return;}
   const meta=TIPO_META[tipo]||{sentido:'gasto'};
   // Validate saldo disponible
+  if(tipo==='Transferencia entre cuentas'){
+    var _c2b=document.getElementById('n-cta2')?document.getElementById('n-cta2').value:'';
+    var _bo=_esCajaBanco(cta), _bd=_esCajaBanco(_c2b);
+    if(_bo||_bd){
+      var _cual=(_bo&&_bd)?'Las dos cuentas se sincronizan':((_bo?cta:_c2b)+' se sincroniza');
+      if(!confirm('⚠ '+_cual+' con el banco.\n\nEse lado lo traerá el banco SOLO en 1-2 días; si lo registras también aquí, saldrá DUPLICADO.\n\nRecomendado: registra solo el lado que NO es del banco (un depósito o retiro normal).\n\n¿Registrar el traspaso completo de todas formas?')) return;
+    }
+  }
   if((meta.sentido==='gasto'||tipo==='Transferencia entre cuentas')&&typeof _getSaldoCaja==='function'){
     var _saldoCheck=_getSaldoCaja(cta);
     if(_saldoCheck>=0&&monto>_saldoCheck){
@@ -14454,6 +14462,21 @@ async function _bancoSync(cfg) {
       });
     }
 
+    // Aviso de posibles duplicados con apuntes MANUALES ya metidos.
+    var _sosp = [];
+    pendientes.forEach(function(pp){
+      var mm = _movManualParecido(pp.caja, Math.abs(pp.t.importe), pp.t.fecha);
+      if (mm) _sosp.push({ p: pp, m: mm });
+    });
+    if (_sosp.length) {
+      var _lst = _sosp.map(function(s){ return '• ' + fN(Math.abs(s.p.t.importe),2) + ' ' + s.p.t.moneda + ' en ' + s.p.caja + ' (' + s.p.t.fecha + ')'; }).join('\n');
+      var _imp = confirm('⚠ ' + cfg.nombre + ': ' + _sosp.length + ' movimiento(s) del banco YA parecen estar metidos a mano:\n\n' + _lst + '\n\nAceptar = importarlos igual (puede duplicar)\nCancelar = saltarlos para NO duplicar');
+      if (!_imp) {
+        var _sk = _sosp.map(function(s){ return s.p; });
+        pendientes = pendientes.filter(function(pp){ return _sk.indexOf(pp) < 0; });
+      }
+    }
+
     if (!pendientes.length) {
       if (sinCaja) showToast('\u26a0 ' + cfg.nombre + ': ' + sinCaja + ' movimientos SALTADOS por no tener caja (detalle en consola). Revisa el mapeo (clic derecho en el bot\u00f3n).');
       showToast('✅ Todo al día en ' + cfg.nombre + '.' +
@@ -20017,10 +20040,49 @@ function iaDescartarPropuesta() {
   showToast('Propuesta descartada');
 }
 
+// ¿Esta caja se sincroniza sola con el banco? (ABANCA, REVOLUT, WISE)
+function _esCajaBanco(nombre){ return /ABANCA|REVOLUT|WISE/.test(String(nombre||'').toUpperCase()); }
+
+// Busca un apunte MANUAL en mov_cajas parecido a un movimiento del banco
+// (misma caja, mismo importe ±0,5, fecha ±5 días) que NO sea ya un apunte
+// importado del banco. Sirve para no duplicar al sincronizar.
+function _movManualParecido(caja, importe, fechaStr){
+  if (typeof _cajasMovs === 'undefined' || !caja) return null;
+  var f = new Date(fechaStr); if (isNaN(f)) return null;
+  for (var i=0;i<_cajasMovs.length;i++){
+    var m = _cajasMovs[i];
+    if (/[A-Z]{2,}_ID:/.test(m.notas||'')) continue;   // ya es del banco
+    if (!(m.caja_origen===caja || m.caja_destino===caja)) continue;
+    var amt = Math.abs(parseFloat(m.monto_origen||m.monto_destino||0));
+    if (Math.abs(amt - importe) > 0.5) continue;
+    var mf = new Date(m.fecha); if (isNaN(mf)) continue;
+    if (Math.abs((mf - f)/86400000) > 5) continue;
+    return m;
+  }
+  return null;
+}
+
 // ── EXECUTE PROPOSAL ──────────────────────────────────────────
 async function iaEjecutarPropuesta() {
   if (!_iaProposal || _iaProposal.length === 0) return;
-  if (!confirm('¿Ejecutar los ' + _iaProposal.length + ' movimientos propuestos?')) return;
+  // Freno de dinero: mostrar CADA apunte, avisar de repetidos y de
+  // cuentas de banco (que el banco trae solo) antes de tocar la caja.
+  var _resumen = [], _claves = {}, _bancos = [];
+  for (var _k=0; _k<_iaProposal.length; _k++){
+    var _pp = _iaProposal[_k];
+    var _cajas = _pp.accion==='transferencia' ? [_pp.caja_origen, _pp.caja_destino] : [_pp.caja];
+    _cajas = _cajas.filter(Boolean);
+    _resumen.push((_k+1)+') '+(_pp.accion||'?')+' '+fN(_pp.monto||0,2)+' '+(_pp.moneda||'USD')+'  '+_cajas.join(' → '));
+    var _key = (_pp.accion||'')+'|'+_cajas.join('|')+'|'+(_pp.monto||0);
+    _claves[_key] = (_claves[_key]||0)+1;
+    _cajas.forEach(function(cc){ if(_esCajaBanco(cc)) _bancos.push(cc); });
+  }
+  var _hayDup = Object.keys(_claves).some(function(k){ return _claves[k]>1; });
+  var _txt = 'La IA va a registrar estos movimientos de DINERO:\n\n' + _resumen.join('\n');
+  if (_hayDup) _txt += '\n\n⚠ HAY MOVIMIENTOS REPETIDOS (mismo importe y caja). Si no es a propósito, CANCELA.';
+  if (_bancos.length) _txt += '\n\n⚠ Toca cuentas de banco (' + _bancos.filter(function(v,i,a){return a.indexOf(v)===i;}).join(', ') + '): ese lado lo trae el banco SOLO y puede DUPLICARSE. Cancela si dudas.';
+  _txt += '\n\n¿Confirmas y registras TODO esto?';
+  if (!confirm(_txt)) return;
 
   var errors = [];
   var success = 0;
