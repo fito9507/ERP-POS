@@ -20131,7 +20131,7 @@ async function iaEnviar() {
         fd.append('model', 'whisper-1');
         var wRes = await fetch(IA_PROXY + '?endpoint=transcriptions', {
           method: 'POST',
-          headers: { 'Authorization': 'Bearer ' + apiKey },
+          headers: { 'Authorization': 'Bearer ' + _authTok(), 'apikey': SUPA_KEY },
           body: fd
         });
         if (wRes.ok) {
@@ -20263,7 +20263,7 @@ async function iaEnviar() {
     var loadEl = document.getElementById('ia-loading');
     if (loadEl) loadEl.remove();
 
-    _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nVerifica que tu API Key sea correcta y que tengas saldo en tu cuenta de OpenAI.' });
+    _iaChatHistory.push({ role: 'assistant', content: '❌ Error al contactar con la IA: ' + err.message + '\n\nSi el problema persiste, avísame.' });
     _iaSaveChat();
     renderIAAssistant();
   }
