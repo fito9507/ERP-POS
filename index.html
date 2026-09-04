@@ -2344,10 +2344,19 @@ function enqueue(op) {
 
 // Write to Supabase if online, otherwise enqueue for later
 function _supaWrite(method, path, body) {
+  // Sello anti-duplicado: la operación conserva su op_id aunque se reintente
+  // (cola offline, respuesta perdida, doble toque). El índice único del
+  // servidor rechaza cualquier segunda copia con el mismo sello.
+  if (body && method === 'POST' && (path === 'mov_cajas' || path === 'movimientos_ig') && !body.op_id) {
+    body.op_id = 'op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  }
   if (_supaOnline && typeof supaReq === 'function') {
     return supaReq(method, path, body).then(function(r){
       if(!r.ok) r.text().then(function(t){
         console.warn('supaWrite error',path,t);
+        if (r.status === 409) return; // ya existe (mismo sello): NO reencolar
+        // Si la columna op_id aún no está creada en la base, quitar el sello
+        if (r.status === 400 && /op_id/.test(t) && body && body.op_id) delete body.op_id;
         // If it failed, enqueue for retry
         enqueue({method:method, path:path, body:body});
       });
@@ -11150,6 +11159,9 @@ function updCajaExplicaCli(cid){
   }
 }
 function registrarAbonoCli(cid){
+  // Anti doble-toque: mientras un abono está en curso se ignoran los reclics
+  if (window._abonoLock) { console.warn('Abono ignorado: hay un registro en curso'); return; }
+  window._abonoLock = true; setTimeout(function(){ window._abonoLock = false; }, 4000);
   const c=CLIENTES.find(x=>x.id===cid);if(!c)return;
   const fid=document.getElementById('a-folio-'+cid).value;
   const fecha=document.getElementById('a-fecha-'+cid).value||today();
@@ -13747,6 +13759,9 @@ function _onMcDestManual() {
 }
 
 async function admRegistrarMovCaja() {
+  // Anti doble-toque: ignora reclics mientras hay un registro en curso
+  if (window._movCajaLock) { console.warn('Movimiento ignorado: registro en curso'); return; }
+  window._movCajaLock = true; setTimeout(function(){ window._movCajaLock = false; }, 4000);
   var tipo=document.getElementById('mc-tipo')?.value;
   var orig=document.getElementById('mc-origen')?.value;
   var dest=document.getElementById('mc-destino')?.value;
