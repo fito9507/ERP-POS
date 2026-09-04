@@ -11922,6 +11922,21 @@ async function invActualizarFotos(soloRef) {
       if (r.ok) hechos.push(part); else fallos.push(part.contenedor_ref+' (HTTP '+r.status+')');
     } catch(e) { fallos.push(part.contenedor_ref+' ('+e.message+')'); }
   }
+  // Auto-limpieza: cualquier foto sin participación viva se borra (el portal
+  // solo debe enseñar lo asignado ahora mismo).
+  try {
+    var rsn = await supaReq('GET', 'inversor_snapshot?select=id,inversor_id,contenedor_ref');
+    if (rsn.ok) {
+      var snaps = await rsn.json();
+      for (var q = 0; q < snaps.length; q++) {
+        var sn = snaps[q];
+        var viva = INV_PART.some(function(p){
+          return String(p.inversor_id) === String(sn.inversor_id) && p.contenedor_ref === sn.contenedor_ref;
+        });
+        if (!viva) await supaReq('DELETE', 'inversor_snapshot?id=eq.' + encodeURIComponent(sn.id));
+      }
+    }
+  } catch(e) { console.warn('limpieza de fotos huérfanas:', e); }
   return { hechos: hechos.length, fallos: fallos };
 }
 /* ── UI del módulo Inversores (pestaña de Administración) ─────────── */
@@ -11998,11 +12013,15 @@ async function invAssign(invId){
 }
 
 async function invDelPart(partId){
-  if (!confirm('¿Quitar esta participación? (no borra ventas ni al inversor)')) return;
+  if (!confirm('¿Quitar esta participación? Se borra también su foto del portal.\n(No borra ventas ni al inversor.)')) return;
   try {
+    var pt = INV_PART.find(function(x){ return String(x.id)===String(partId); });
     var r = await supaReq('DELETE', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId));
     if (!r.ok) { showToast('Error (HTTP '+r.status+')'); return; }
-    showToast('✓ Quitada'); await syncLoadInversores(); renderAdminInversores();
+    // la foto es derivada: sin participación no debe seguir en el portal
+    if (pt) await supaReq('DELETE', 'inversor_snapshot?inversor_id=eq.'+encodeURIComponent(pt.inversor_id)
+                          +'&contenedor_ref=eq.'+encodeURIComponent(pt.contenedor_ref));
+    showToast('✓ Quitada (línea y foto)'); await syncLoadInversores(); renderAdminInversores();
   } catch(e){ showToast('Error: '+e.message); }
 }
 
