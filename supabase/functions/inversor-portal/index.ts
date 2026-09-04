@@ -18,28 +18,66 @@ function J(o: unknown, s = 200) {
   return new Response(JSON.stringify(o), { status: s, headers: { ...cors, 'Content-Type': 'application/json' } });
 }
 
-function db(path: string) {
+function db(path: string, method = 'GET', body?: unknown) {
   return fetch(`${SB}/rest/v1/${path}`, {
-    headers: { apikey: SRK, Authorization: `Bearer ${SRK}` },
+    method,
+    headers: {
+      apikey: SRK,
+      Authorization: `Bearer ${SRK}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+async function sha256Hex(s: string): Promise<string> {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (!SB || !SRK) return J({ error: 'Falta configuración del servidor' }, 500);
 
-  // token por querystring (?t=) o por cuerpo JSON
+  // token por querystring (?t=) o por cuerpo JSON; PIN solo por cuerpo
   let token = new URL(req.url).searchParams.get('t') || '';
-  if (!token && req.method === 'POST') {
-    try { token = String((await req.json()).token || ''); } catch { /* sin cuerpo */ }
+  let pin = '';
+  if (req.method === 'POST') {
+    try {
+      const b = await req.json();
+      if (!token) token = String(b.token || '');
+      pin = String(b.pin || '').trim();
+    } catch { /* sin cuerpo */ }
   }
   token = token.trim();
   if (!token) return J({ error: 'Falta el token' }, 400);
 
-  // ¿de quién es este token?
-  const ri = await db(`inversores?select=id,nombre,activo&token=eq.${encodeURIComponent(token)}&limit=1`);
+  // ¿de quién es este token? (select=* tolera que las columnas de PIN aún no existan)
+  const ri = await db(`inversores?select=*&token=eq.${encodeURIComponent(token)}&limit=1`);
   const inv = ri.ok ? (await ri.json())[0] : null;
   if (!inv || inv.activo === false) return J({ error: 'Enlace no válido' }, 401);
+
+  // ── Segunda llave opcional: PIN del inversor ──
+  // Hash con sal = sha256(token + ':' + pin). 5 fallos → 15 min de bloqueo.
+  if (inv.pin_hash) {
+    if (inv.pin_bloqueado_hasta && new Date(inv.pin_bloqueado_hasta) > new Date()) {
+      return J({ requiere_pin: true, bloqueado: true, error: 'Demasiados intentos fallidos. Espera 15 minutos.' }, 429);
+    }
+    if (!pin) return J({ requiere_pin: true, error: '' }, 401);
+    const h = await sha256Hex(`${token}:${pin}`);
+    if (h !== inv.pin_hash) {
+      const fallos = (Number(inv.pin_fallos) || 0) + 1;
+      const patch: Record<string, unknown> = fallos >= 5
+        ? { pin_fallos: 0, pin_bloqueado_hasta: new Date(Date.now() + 15 * 60000).toISOString() }
+        : { pin_fallos: fallos };
+      await db(`inversores?id=eq.${inv.id}`, 'PATCH', patch);
+      return J({ requiere_pin: true, error: 'PIN incorrecto' }, 401);
+    }
+    if (Number(inv.pin_fallos) > 0) {
+      await db(`inversores?id=eq.${inv.id}`, 'PATCH', { pin_fallos: 0 });
+    }
+  }
 
   // sus fotos curadas (una por contenedor), más recientes primero
   const rs = await db(`inversor_snapshot?select=*&inversor_id=eq.${inv.id}&order=actualizado.desc`);

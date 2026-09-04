@@ -11939,6 +11939,26 @@ function invCopyLink(token){
   } else { window.prompt('Copia el enlace:', url); }
 }
 
+// PIN del inversor (segunda llave del portal). Nunca viaja ni se guarda en
+// claro: se guarda sha256(token + ':' + pin), lo mismo que valida la función.
+async function invPonPin(invId, token){
+  var pin = prompt('PIN para este inversor (4 a 6 dígitos).\nDéjalo vacío para QUITAR el PIN.');
+  if (pin === null) return;
+  pin = pin.trim();
+  if (pin && !/^\d{4,6}$/.test(pin)) { showToast('El PIN debe ser de 4 a 6 dígitos'); return; }
+  var body = { pin_hash: null, pin_fallos: 0, pin_bloqueado_hasta: null };
+  if (pin) {
+    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token + ':' + pin));
+    body.pin_hash = Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+  }
+  try {
+    var r = await supaReq('PATCH', 'inversores?id=eq.'+encodeURIComponent(invId), body);
+    if (!r.ok) { showToast('Error al guardar el PIN (¿ejecutaste supabase_inversores_pin.sql?)'); return; }
+    showToast(pin ? '✓ PIN puesto — el portal lo pedirá' : '✓ PIN quitado');
+    await syncLoadInversores(); renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
 async function invAddInversor(){
   var inp = document.getElementById('inv-nuevo-nombre');
   var nombre = inp ? inp.value.trim() : '';
@@ -12038,7 +12058,10 @@ function renderAdminInversores(){
     h += '<div class="adm-card" style="margin-bottom:12px;border:1px solid var(--color-border-secondary)">';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
        + '<div style="font-weight:700;font-size:13px">'+(inv.nombre||'—')+(inv.activo===false?' <span style="color:var(--color-text-danger);font-size:10px">(inactivo)</span>':'')+'</div>'
+       + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
        + '<button class="adm-tab" onclick="invCopyLink(\''+inv.token+'\')">🔗 Copiar enlace</button>'
+       + '<button class="adm-tab" title="Segunda llave: el portal pedirá este PIN antes de enseñar nada" onclick="invPonPin(\''+inv.id+'\',\''+inv.token+'\')">'+(inv.pin_hash?'🔒 PIN puesto':'🔓 Poner PIN')+'</button>'
+       + '</div>'
        + '</div>';
 
     // participaciones

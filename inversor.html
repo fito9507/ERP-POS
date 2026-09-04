@@ -164,18 +164,43 @@ function tarjeta(c){
   return h;
 }
 
+var _pinDado=null; // PIN escrito en esta visita (aún sin confirmar)
+
+function pedirPin(d){
+  var cont=document.getElementById('cont');
+  cont.innerHTML='<div class="msg"><div class="big">🔐</div>'
+    +'<div style="font-weight:700;margin-bottom:4px">Acceso con PIN</div>'
+    +'<div style="font-size:12px;opacity:.8;margin-bottom:14px">Introduce el PIN que te dio Xportprise.</div>'
+    +(d&&d.error?'<div style="color:#dc322f;font-size:12px;margin-bottom:10px">'+esc(d.error)+'</div>':'')
+    +'<input id="pin-inp" type="password" inputmode="numeric" maxlength="6" autocomplete="off" '
+    +'style="font-size:22px;letter-spacing:8px;text-align:center;width:170px;padding:10px;border:1px solid #93a1a1;'
+    +'border-radius:10px;background:transparent;color:inherit" placeholder="••••">'
+    +'<br><button id="pin-btn" style="margin-top:14px;padding:10px 26px;border:none;border-radius:10px;'
+    +'background:#268bd2;color:#fff;font-size:14px;font-weight:700;cursor:pointer">Entrar</button></div>';
+  var inp=document.getElementById('pin-inp');
+  var go=function(){ var v=(inp.value||'').trim(); if(!v) return; _pinDado=v; cargar(); };
+  document.getElementById('pin-btn').onclick=go;
+  inp.onkeydown=function(e){ if(e.key==='Enter') go(); };
+  if(!(d&&d.bloqueado)) inp.focus();
+}
+
 async function cargar(){
   var cont=document.getElementById('cont');
   var token=new URLSearchParams(location.search).get('t')||'';
   if(!token){ cont.innerHTML='<div class="msg"><div class="big">🔗</div>Enlace incompleto.<br>Pide a Xportprise tu enlace privado.</div>'; return; }
+  var pin=_pinDado;
+  if(pin==null){ try{ pin=localStorage.getItem('inv_pin_'+token)||''; }catch(e){ pin=''; } }
   try{
     var r=await fetch(SUPA_URL+'/functions/v1/inversor-portal',{
       method:'POST',
       headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify({token:token})
+      body:JSON.stringify(pin?{token:token,pin:pin}:{token:token})
     });
     var d=await r.json();
-    if(!r.ok||!d.ok){ cont.innerHTML='<div class="msg"><div class="big">🔒</div>'+esc(d.error||'Enlace no válido.')+'</div>'; return; }
+    if(!r.ok||!d.ok){
+      if(d&&d.requiere_pin){ _pinDado=null; pedirPin(d); return; }
+      cont.innerHTML='<div class="msg"><div class="big">🔒</div>'+esc(d.error||'Enlace no válido.')+'</div>'; return; }
+    if(pin){ try{ localStorage.setItem('inv_pin_'+token,pin); }catch(e){} } // recordar en este aparato
     document.getElementById('saludo').textContent='Hola, '+d.inversor;
     var cs=d.contenedores||[];
     document.getElementById('sub').textContent=cs.length?(cs.length+' contenedor'+(cs.length>1?'es':'')):'';
