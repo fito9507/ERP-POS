@@ -4559,7 +4559,7 @@ async function ventaCreditoPOS() {
   var alm = S.alm;
   var mon = 'USD';
   var fecha = today();
-  var abonos = ini>0?[{id:'a'+(nextAid++),fecha:fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:'USD',tasa:null,equivUSD:ini,enCaja:false,caja:null,cajaTipo:null}]:[];
+  var abonos = ini>0?[{id:_nuevoAbonoId(),fecha:fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:'USD',tasa:null,equivUSD:ini,enCaja:false,caja:null,cajaTipo:null}]:[];
   var fid = String(nextFid++);
   
   // stock check — same logic as stkDisp but exclude the current folio being created
@@ -9811,6 +9811,12 @@ let CLIENTES=[];
   }catch(e){}
 })();;
 let nextCid=1,nextFid=1,nextAid=1;
+// Id de abono a prueba de colisiones entre dispositivos. Antes era 'a'+n
+// secuencial: el PC y el móvil podían generar el MISMO id y, como el abono
+// se sube con upsert por id, el segundo PISABA al primero en silencio (así
+// se perdió el abono de Yudiel del 03/09/2026). El número se conserva al
+// principio para que la inicialización de nextAid (parseInt) siga valiendo.
+function _nuevoAbonoId(){ return 'a'+(nextAid++)+'-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 let colorSel='info';
 let activoCli=null; // id cliente activo
 let nfLineas=[];
@@ -10740,7 +10746,7 @@ function cruzarSaldoFolio(cid, fid) {
     const monto = Math.min(pdt, disp);
     
     const negAb = {
-      id: 'a'+(nextAid++), fecha: today(), concepto: 'efectivo',
+      id: _nuevoAbonoId(), fecha: today(), concepto: 'efectivo',
       desc: 'Traspaso hacia Folio '+fid,
       monto: -monto, mon: 'USD', tasa: null, equivUSD: -monto,
       enCaja: false, caja: null, cajaTipo: null
@@ -10748,7 +10754,7 @@ function cruzarSaldoFolio(cid, fid) {
     fOver.abonos.push(negAb);
     
     const posAb = {
-      id: 'a'+(nextAid++), fecha: today(), concepto: 'efectivo',
+      id: _nuevoAbonoId(), fecha: today(), concepto: 'efectivo',
       desc: 'Traspaso desde Folio '+fOver.id,
       monto: monto, mon: 'USD', tasa: null, equivUSD: monto,
       enCaja: false, caja: null, cajaTipo: null
@@ -11205,7 +11211,7 @@ function registrarAbonoCli(cid){
     }
   }
   const _tasaEf=mon==='USD'?null:(tasaManual||(equivUSD>0?(mon==='EUR'?equivUSD/monto:monto/equivUSD):null));
-  const abono={id:'a'+(nextAid++),fecha,concepto,desc,monto,mon,tasa:_tasaEf?parseFloat(parseFloat(_tasaEf).toFixed(4)):null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
+  const abono={id:_nuevoAbonoId(),fecha,concepto,desc,monto,mon,tasa:_tasaEf?parseFloat(parseFloat(_tasaEf).toFixed(4)):null,equivUSD:parseFloat(equivUSD.toFixed(4)),enCaja,caja,cajaTipo};
   let target=fid?c.folios.find(f=>f.id===fid):c.folios.find(f=>estF(f)!=='pagado');
   if(!target&&c.folios.length)target=c.folios[0];
   var _isNewFolio = false;
@@ -11441,7 +11447,7 @@ async function crearFolioCli(cid){
   const ini=parseFloat(document.getElementById('nf-ini-'+cid)?.value)||0;
   const iniMon=document.getElementById('nf-imon-'+cid)?.value||'USD';
   const cnt=(document.getElementById('nf-cnt-'+cid)||{}).value||'';
-  const abonos=ini>0?[{id:'a'+(nextAid++),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
+  const abonos=ini>0?[{id:_nuevoAbonoId(),fecha,concepto:'efectivo',desc:'Abono inicial',monto:ini,mon:iniMon,tasa:null,equivUSD:parseFloat(toUSD(ini,iniMon).toFixed(2)),enCaja:false,caja:null,cajaTipo:null}]:[];
   const fid=String(nextFid++);
   // Validate stock before creating
   var stockError = null;
@@ -20143,7 +20149,7 @@ async function iaEjecutarPropuesta() {
             if (typeof nextAid === 'undefined') window.nextAid = 1;
             var eqAb = typeof toUSD === 'function' ? parseFloat(toUSD(p.monto, p.moneda || 'USD').toFixed(4)) : p.monto;
             (fAb.abonos = fAb.abonos || []).push({
-              id: 'a' + (nextAid++), fecha: p.fecha || today(), concepto: 'efectivo',
+              id: _nuevoAbonoId(), fecha: p.fecha || today(), concepto: 'efectivo',
               desc: (p.descripcion || 'Abono') + ' (Asistente IA)', monto: p.monto, mon: p.moneda || 'USD',
               tasa: null, equivUSD: eqAb, enCaja: !!p.caja, caja: p.caja || null, cajaTipo: null
             });
