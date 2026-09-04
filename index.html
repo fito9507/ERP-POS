@@ -12006,6 +12006,33 @@ async function invDelPart(partId){
   } catch(e){ showToast('Error: '+e.message); }
 }
 
+// Editar en línea una participación (capital o % de reparto)
+async function invEditPart(partId, campo, valor){
+  var v = parseFloat(String(valor).replace(',','.')) || 0;
+  var body = {}; body[campo] = v;
+  try {
+    var r = await supaReq('PATCH', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId), body);
+    if (!r.ok) { showToast('Error al guardar (HTTP '+r.status+')'); return; }
+    var pt = INV_PART.find(function(x){ return String(x.id)===String(partId); });
+    if (pt) { pt[campo] = v; await invActualizarFotos(pt.contenedor_ref); }
+    showToast('✓ Guardado y foto actualizada');
+    renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
+// Eliminar un inversor entero (participaciones y fotos caen en cascada)
+async function invDelInversor(invId){
+  var inv = INVERSORES.find(function(x){ return String(x.id)===String(invId); });
+  var nombre = inv ? inv.nombre : 'este inversor';
+  if (!confirm('¿Eliminar a "'+nombre+'"?\n\nSe borran sus participaciones y su foto, y su enlace/PIN dejan de funcionar.\nNO toca ventas, cajas ni contenedores.')) return;
+  try {
+    var r = await supaReq('DELETE', 'inversores?id=eq.'+encodeURIComponent(invId));
+    if (!r.ok) { showToast('Error (HTTP '+r.status+')'); return; }
+    showToast('✓ Inversor eliminado');
+    await syncLoadInversores(); renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
 async function invToggleVer(partId, val){
   try {
     var r = await supaReq('PATCH', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId), { ver_detalle: val });
@@ -12070,6 +12097,7 @@ function renderAdminInversores(){
        + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
        + '<button class="adm-tab" onclick="invCopyLink(\''+inv.token+'\')">🔗 Copiar enlace</button>'
        + '<button class="adm-tab" title="Segunda llave: el portal pedirá este PIN antes de enseñar nada" onclick="invPonPin(\''+inv.id+'\',\''+inv.token+'\')">'+(inv.pin_hash?'🔒 PIN puesto':'🔓 Poner PIN')+'</button>'
+       + '<button class="adm-tab" style="color:var(--color-text-danger)" title="Eliminar inversor (borra sus participaciones y su acceso; no toca ventas ni cajas)" onclick="invDelInversor(\''+inv.id+'\')">🗑</button>'
        + '</div>'
        + '</div>';
 
@@ -12086,8 +12114,8 @@ function renderAdminInversores(){
         var avisa = Math.abs(sum-100)>0.5;
         h += '<tr style="border-top:1px solid var(--color-border-tertiary)">'
            + '<td style="padding:4px">'+p.contenedor_ref+(avisa?' <span title="Los % de este contenedor suman '+_invFmt(sum)+'%, no 100" style="color:var(--color-text-warning)">⚠ '+_invFmt(sum)+'%</span>':'')+'</td>'
-           + '<td style="padding:4px;text-align:right">$'+_invFmt(parseFloat(p.aporte_usd)||0)+'</td>'
-           + '<td style="padding:4px;text-align:right">'+_invFmt(parseFloat(p.participacion_pct)||0)+'%</td>'
+           + '<td style="padding:4px;text-align:right"><input type="number" step="0.01" value="'+(parseFloat(p.aporte_usd)||0)+'" onchange="invEditPart(\''+p.id+'\',\'aporte_usd\',this.value)" title="Capital que puso (se guarda al salir del campo)" style=\"width:86px;padding:3px 6px;text-align:right;border:1px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px\"></td>'
+           + '<td style="padding:4px;text-align:right"><input type="number" step="0.01" value="'+(parseFloat(p.participacion_pct)||0)+'" onchange="invEditPart(\''+p.id+'\',\'participacion_pct\',this.value)" title="Su % de la ganancia (se guarda al salir del campo)" style=\"width:86px;padding:3px 6px;text-align:right;border:1px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px\"></td>'
            + '<td style="padding:4px;text-align:right">'+(proy!=null?'$'+_invFmt(proy):'—')+'</td>'
            + '<td style="padding:4px;text-align:center"><input type="checkbox" '+(p.ver_detalle?'checked':'')+' onchange="invToggleVer(\''+p.id+'\',this.checked)"></td>'
            + '<td style="padding:4px;text-align:right"><span onclick="invDelPart(\''+p.id+'\')" style="cursor:pointer;color:var(--color-text-danger)">✕</span></td>'
