@@ -25,7 +25,7 @@ function db(path: string, method = 'GET', body?: unknown) {
       apikey: SRK,
       Authorization: `Bearer ${SRK}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -51,33 +51,67 @@ Deno.serve(async (req) => {
     } catch { /* sin cuerpo */ }
   }
   token = token.trim();
-  if (!token) return J({ error: 'Falta el token' }, 400);
+  if (!token && !pin) return J({ error: 'Falta el PIN' }, 400);
 
-  // ¿de quién es este token? (select=* tolera que las columnas de PIN aún no existan)
-  const ri = await db(`inversores?select=*&token=eq.${encodeURIComponent(token)}&limit=1`);
-  const inv = ri.ok ? (await ri.json())[0] : null;
-  if (!inv || inv.activo === false) return J({ error: 'Enlace no válido' }, 401);
+  let inv: Record<string, unknown> | null = null;
 
-  // ── Segunda llave opcional: PIN del inversor ──
-  // Hash con sal = sha256(token + ':' + pin). 5 fallos → 15 min de bloqueo.
-  if (inv.pin_hash) {
-    if (inv.pin_bloqueado_hasta && new Date(inv.pin_bloqueado_hasta) > new Date()) {
-      return J({ requiere_pin: true, bloqueado: true, error: 'Demasiados intentos fallidos. Espera 15 minutos.' }, 429);
+  if (token) {
+    // ── Vía 1: enlace con token (compatible con los enlaces ya repartidos) ──
+    const ri = await db(`inversores?select=*&token=eq.${encodeURIComponent(token)}&limit=1`);
+    inv = ri.ok ? (await ri.json())[0] : null;
+    if (!inv || inv.activo === false) return J({ error: 'Enlace no válido' }, 401);
+
+    // Segunda llave opcional sobre el enlace: sha256(token+':'+pin)
+    if (inv.pin_hash) {
+      if (inv.pin_bloqueado_hasta && new Date(inv.pin_bloqueado_hasta as string) > new Date()) {
+        return J({ requiere_pin: true, bloqueado: true, error: 'Demasiados intentos fallidos. Espera 15 minutos.' }, 429);
+      }
+      if (!pin) return J({ requiere_pin: true, error: '' }, 401);
+      const h = await sha256Hex(`${token}:${pin}`);
+      if (h !== inv.pin_hash) {
+        const fallos = (Number(inv.pin_fallos) || 0) + 1;
+        const patch: Record<string, unknown> = fallos >= 5
+          ? { pin_fallos: 0, pin_bloqueado_hasta: new Date(Date.now() + 15 * 60000).toISOString() }
+          : { pin_fallos: fallos };
+        await db(`inversores?id=eq.${inv.id}`, 'PATCH', patch);
+        return J({ requiere_pin: true, error: 'PIN incorrecto' }, 401);
+      }
+      if (Number(inv.pin_fallos) > 0) {
+        await db(`inversores?id=eq.${inv.id}`, 'PATCH', { pin_fallos: 0 });
+      }
     }
-    if (!pin) return J({ requiere_pin: true, error: '' }, 401);
-    const h = await sha256Hex(`${token}:${pin}`);
-    if (h !== inv.pin_hash) {
-      const fallos = (Number(inv.pin_fallos) || 0) + 1;
-      const patch: Record<string, unknown> = fallos >= 5
-        ? { pin_fallos: 0, pin_bloqueado_hasta: new Date(Date.now() + 15 * 60000).toISOString() }
-        : { pin_fallos: fallos };
-      await db(`inversores?id=eq.${inv.id}`, 'PATCH', patch);
-      return J({ requiere_pin: true, error: 'PIN incorrecto' }, 401);
+  } else {
+    // ── Vía 2: portal común (marinmetal.com/investment) — entra SOLO con PIN ──
+    // El PIN identifica al inversor: se prueba sha256(token_i+':'+pin) contra
+    // cada hash guardado (tabla pequeña). Límite por IP: 5 fallos → 15 min.
+    const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconocida';
+    let rlRow: Record<string, unknown> | null = null;
+    try {
+      const rl = await db(`portal_intentos?ip=eq.${encodeURIComponent(ip)}&select=*&limit=1`);
+      if (rl.ok) rlRow = (await rl.json())[0] || null;
+    } catch { /* tabla aún no creada: sin límite, pero se avisa en el SQL */ }
+    if (rlRow?.bloqueado_hasta && new Date(rlRow.bloqueado_hasta as string) > new Date()) {
+      return J({ login_pin: true, bloqueado: true, error: 'Demasiados intentos. Espera 15 minutos.' }, 429);
     }
-    if (Number(inv.pin_fallos) > 0) {
-      await db(`inversores?id=eq.${inv.id}`, 'PATCH', { pin_fallos: 0 });
+
+    const ri = await db(`inversores?select=*&pin_hash=not.is.null`);
+    const cands = ri.ok ? await ri.json() : [];
+    for (const c of cands as Record<string, unknown>[]) {
+      if (c.activo === false) continue;
+      if (await sha256Hex(`${c.token}:${pin}`) === c.pin_hash) { inv = c; break; }
     }
+
+    if (!inv) {
+      const fallos = (Number(rlRow?.fallos) || 0) + 1;
+      const fila: Record<string, unknown> = { ip, fallos, actualizado: new Date().toISOString() };
+      if (fallos >= 5) { fila.fallos = 0; fila.bloqueado_hasta = new Date(Date.now() + 15 * 60000).toISOString(); }
+      try { await db('portal_intentos?on_conflict=ip', 'POST', fila); } catch { /* sin tabla */ }
+      return J({ login_pin: true, error: 'PIN incorrecto' }, 401);
+    }
+    if (rlRow) { try { await db(`portal_intentos?ip=eq.${encodeURIComponent(ip)}`, 'DELETE'); } catch { /* nada */ } }
   }
+
+  if (!inv) return J({ error: 'Acceso no válido' }, 401);
 
   // sus fotos curadas (una por contenedor), más recientes primero
   const rs = await db(`inversor_snapshot?select=*&inversor_id=eq.${inv.id}&order=actualizado.desc`);

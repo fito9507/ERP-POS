@@ -11942,12 +11942,21 @@ function invCopyLink(token){
 // PIN del inversor (segunda llave del portal). Nunca viaja ni se guarda en
 // claro: se guarda sha256(token + ':' + pin), lo mismo que valida la función.
 async function invPonPin(invId, token){
-  var pin = prompt('PIN para este inversor (4 a 6 dígitos).\nDéjalo vacío para QUITAR el PIN.');
+  var pin = prompt('PIN para este inversor (4 a 6 dígitos).\nCon él entra en marinmetal.com/investment.\nDéjalo vacío para QUITAR el PIN.');
   if (pin === null) return;
   pin = pin.trim();
   if (pin && !/^\d{4,6}$/.test(pin)) { showToast('El PIN debe ser de 4 a 6 dígitos'); return; }
   var body = { pin_hash: null, pin_fallos: 0, pin_bloqueado_hasta: null };
   if (pin) {
+    // En el portal común el PIN identifica al inversor: no puede repetirse,
+    // o uno vería los números de otro.
+    for (var k = 0; k < INVERSORES.length; k++) {
+      var otro = INVERSORES[k];
+      if (String(otro.id) === String(invId) || !otro.pin_hash) continue;
+      var b2 = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(otro.token + ':' + pin));
+      var h2 = Array.prototype.map.call(new Uint8Array(b2), function(x){ return x.toString(16).padStart(2,'0'); }).join('');
+      if (h2 === otro.pin_hash) { showToast('⚠ Ese PIN ya lo usa ' + (otro.nombre||'otro inversor') + ' — elige otro'); return; }
+    }
     var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token + ':' + pin));
     body.pin_hash = Array.prototype.map.call(new Uint8Array(buf), function(b){ return b.toString(16).padStart(2,'0'); }).join('');
   }

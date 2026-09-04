@@ -184,29 +184,44 @@ function pedirPin(d){
   if(!(d&&d.bloqueado)) inp.focus();
 }
 
+function salir(){
+  try{ localStorage.removeItem('inv_pin_login'); }catch(e){}
+  _pinDado=null;
+  pedirPin(null);
+}
+
 async function cargar(){
   var cont=document.getElementById('cont');
   var token=new URLSearchParams(location.search).get('t')||'';
-  if(!token){ cont.innerHTML='<div class="msg"><div class="big">🔗</div>Enlace incompleto.<br>Pide a Xportprise tu enlace privado.</div>'; return; }
+  var pinKey=token?('inv_pin_'+token):'inv_pin_login';
   var pin=_pinDado;
-  if(pin==null){ try{ pin=localStorage.getItem('inv_pin_'+token)||''; }catch(e){ pin=''; } }
+  if(pin==null){ try{ pin=localStorage.getItem(pinKey)||''; }catch(e){ pin=''; } }
+  if(!token&&!pin){
+    if(!document.getElementById('pin-inp')) pedirPin(null); // no pisar lo que esté tecleando
+    return;
+  }
   try{
     var r=await fetch(SUPA_URL+'/functions/v1/inversor-portal',{
       method:'POST',
       headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-      body:JSON.stringify(pin?{token:token,pin:pin}:{token:token})
+      body:JSON.stringify(token?(pin?{token:token,pin:pin}:{token:token}):{pin:pin})
     });
     var d=await r.json();
     if(!r.ok||!d.ok){
-      if(d&&d.requiere_pin){ _pinDado=null; pedirPin(d); return; }
+      if(d&&(d.requiere_pin||d.login_pin)){
+        _pinDado=null;
+        if(!token){ try{ localStorage.removeItem('inv_pin_login'); }catch(e){} }
+        pedirPin(d); return;
+      }
       cont.innerHTML='<div class="msg"><div class="big">🔒</div>'+esc(d.error||'Enlace no válido.')+'</div>'; return; }
-    if(pin){ try{ localStorage.setItem('inv_pin_'+token,pin); }catch(e){} } // recordar en este aparato
+    if(pin){ try{ localStorage.setItem(pinKey,pin); }catch(e){} } // recordar en este aparato
     document.getElementById('saludo').textContent='Hola, '+d.inversor;
     var cs=d.contenedores||[];
     document.getElementById('sub').textContent=cs.length?(cs.length+' contenedor'+(cs.length>1?'es':'')):'';
     if(!cs.length){ cont.innerHTML='<div class="msg"><div class="big">📦</div>Aún no hay datos de tu contenedor.<br>En cuanto empiecen las ventas los verás aquí.</div>'; return; }
     cont.innerHTML=cs.map(tarjeta).join('')
-      +'<div class="disc">Cifras informativas de seguimiento de tu inversión, actualizadas por Xportprise S.L. No incluyen costes de operación ni de terceros.</div>';
+      +'<div class="disc">Cifras informativas de seguimiento de tu inversión, actualizadas por Xportprise S.L. No incluyen costes de operación ni de terceros.</div>'
+      +(!token?'<div style="text-align:center;margin-top:12px"><a href="#" onclick="salir();return false" style="color:#93a1a1;font-size:11px;text-decoration:underline">Cerrar sesión</a></div>':'');
   }catch(e){
     cont.innerHTML='<div class="msg"><div class="big">📡</div>No se pudo cargar. Revisa tu conexión e inténtalo de nuevo.</div>';
   }
