@@ -4136,7 +4136,7 @@ async function _cargarConSesion(){
     });
     // El resto (finanzas, histórico) sin bloquear la venta
     Promise.all(['syncLoadPrestamos','syncLoadMovsIG','syncLoadStockMovs','syncLoadLiquidaciones',
-                 'loadComisiones','loadComReglas','loadCajasData'].map(_correr)).then(function(){
+                 'loadComisiones','loadComReglas','loadCajasData','syncLoadInversores'].map(_correr)).then(function(){
       if(typeof renderCajas==='function') try{ renderCajas(); }catch(e){}
       if(typeof flushQueue==='function') try{ flushQueue(); }catch(e){}
     });
@@ -11760,6 +11760,328 @@ function isAdmin() {
   return typeof S !== 'undefined' && S.user && USERS[S.user] && USERS[S.user].rol === 'admin';
 }
 
+/* ===== MÓDULO INVERSORES (inicio) ===== */
+/* ══════════════════════════════════════════════════════════════════
+   MÓDULO INVERSORES (lado ERP) — carga, cálculo de la foto y UI.
+   La foto se calcula con _cntCompute (misma fórmula que Analytics) y se
+   escribe curada en inversor_snapshot. El inversor solo la lee por token.
+   ══════════════════════════════════════════════════════════════════ */
+var INVERSORES = [];      // personas
+var INV_PART   = [];      // participaciones (inversor_contenedor)
+
+async function syncLoadInversores() {
+  if (!(_supaOnline && typeof supaReq === 'function')) return;
+  try {
+    var r1 = await supaReq('GET', 'inversores?select=*&order=created_at');
+    if (r1.ok) INVERSORES = await r1.json();
+    var r2 = await supaReq('GET', 'inversor_contenedor?select=*&order=created_at');
+    if (r2.ok) INV_PART = await r2.json();
+  } catch (e) { console.warn('syncLoadInversores', e); }
+}
+
+// Contexto histórico completo (sin filtro de periodo) para _cntCompute.
+function _invSalesCtx() {
+  var ventas = (typeof VENTAS !== 'undefined' && Array.isArray(VENTAS)) ? VENTAS : [];
+  var prods  = (typeof PRODS  !== 'undefined' && Array.isArray(PRODS))  ? PRODS  : [];
+  var clientes = (typeof CLIENTES !== 'undefined' && Array.isArray(CLIENTES)) ? CLIENTES : [];
+  var prodSales = {}, posSalesAll = {}, posVentaDet = [];
+  var _re = /^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/;
+  var _split = /,\s*(?=[\d.]+\s*[×x]\s)/;
+  var _num = function(x){ return parseFloat(String(x).replace(/\.(?=\d{3}(\D|$))/g,'').replace(',','.')) || 0; };
+  ventas.forEach(function(v){
+    if (!(v.prods && typeof v.prods === 'string')) return;
+    var espejo = v.nota && /Folio\s*[\w-]/i.test(v.nota);
+    v.prods.split(_split).forEach(function(seg){
+      var m = seg.trim().match(_re); if (!m) return;
+      var qty = parseInt(String(m[1]).replace(/\./g,''),10) || 0;
+      var name = m[2].trim();
+      var price = m[3] ? _num(m[3]) : 0;
+      // prodSales: histórico para coste/precio medio de respaldo
+      if (!prodSales[name]) prodSales[name] = { qty:0, pricedQty:0, revenue:0, cost:0 };
+      prodSales[name].qty += qty;
+      if (m[3]) { prodSales[name].pricedQty += qty; prodSales[name].revenue += qty*price; }
+      var prod = prods.find(function(p){ return p.n === name; });
+      var uc = prod ? (parseFloat(prod.ddp)||parseFloat(prod.cif)||0) : 0;
+      prodSales[name].cost += qty*uc;
+      // posSalesAll / posVentaDet: solo POS real (excluye espejos de folio)
+      if (!espejo) {
+        if (!posSalesAll[name]) posSalesAll[name] = { qty:0, pricedQty:0, revenue:0 };
+        posSalesAll[name].qty += qty;
+        if (m[3]) {
+          posSalesAll[name].pricedQty += qty; posSalesAll[name].revenue += qty*price;
+          posVentaDet.push({ n:name, fecha:v.fecha, cli:v.cli||'Walk-in', usd:qty*price });
+        }
+      }
+    });
+  });
+  return { prods:prods, prodSales:prodSales, posSalesAll:posSalesAll, posVentaDet:posVentaDet, clientes:clientes };
+}
+
+// Localiza un contenedor por su ref (o id/lote de respaldo).
+function _cntPorRef(ref) {
+  var cs = (typeof CONTENEDORES !== 'undefined' && Array.isArray(CONTENEDORES)) ? CONTENEDORES : [];
+  return cs.find(function(c){ return c.ref===ref || c.lote===ref || c.id===ref; }) || null;
+}
+
+// Construye el bloque `datos` CURADO para una participación concreta.
+function _invDatosPara(cd, c, part, cx) {
+  var totalCap = INV_PART.filter(function(x){ return x.contenedor_ref===part.contenedor_ref; })
+                         .reduce(function(a,x){ return a+(parseFloat(x.aporte_usd)||0); }, 0);
+  var pct = parseFloat(part.participacion_pct) || 0;
+  var aporte = parseFloat(part.aporte_usd) || 0;
+  var cobrado = cd.dash ? (cd.dash.cobrado||0) : 0;
+
+  // reparto de la ganancia — BASE DE CAJA (coherente: la ganancia realizada
+  // nunca supera la proyectada). Primero se recupera todo el coste; lo que
+  // entra por encima es ganancia.
+  var margenEsp   = cd.expectedMargin || 0;                 // proyectada (todo vendido)
+  var costeTotal  = cd.totalCost || 0;
+  var gananciaCaja= cobrado - costeTotal;                   // realizada en caja (puede ser <0 si aún recupera)
+  var retornoProy = Math.round(margenEsp * pct/100);
+  var retorno     = gananciaCaja > 0 ? Math.round(gananciaCaja * pct/100) : 0;
+  // recuperación de capital: la caja cobrada recupera aportes en proporción
+  var recuperado  = (aporte>0 && totalCap>0) ? Math.min(aporte, Math.round(cobrado * aporte/totalCap)) : 0;
+
+  // ritmo en uds/día (aprox: $/día ÷ precio medio)
+  var pMedio = cd.unitsSold>0 ? (cd.revenue/cd.unitsSold) : 0;
+  var ritmo = (cd.dash && cd.dash.rate>0 && pMedio>0) ? (cd.dash.rate/pMedio) : 0;
+
+  var resumen = {
+    unidades_total: Math.round(cd.totalUnits||0),
+    unidades_vendidas: Math.round(cd.unitsSold||0),
+    unidades_restantes: Math.max(0, Math.round((cd.totalUnits||0)-(cd.unitsSold||0))),
+    pct_colocado: Math.round(cd.soldPct||0),
+    ritmo_7d: Math.round(ritmo*10)/10
+  };
+
+  var productos = (cd.prodsDetail||[]).map(function(pd){
+    var pvp = pd.qCurrent>0 ? (pd.pExpectedExtra/pd.qCurrent) : (pd.qSold>0 ? pd.pRev/pd.qSold : 0);
+    return {
+      nombre: pd.n,
+      total: Math.round(pd.qOriginal||0),
+      vendidas: Math.round(pd.qSold||0),
+      restantes: Math.round(pd.qCurrent||0),
+      pvp: Math.round(pvp*100)/100,
+      ingreso: Math.round((pd.pRev||0))
+    };
+  }).sort(function(a,b){ return b.ingreso-a.ingreso; });
+
+  var fin = {
+    aporte: aporte,
+    recuperado: recuperado,
+    retorno_usd: retorno,
+    retorno_proy_usd: retornoProy,
+    participacion_pct: pct,
+    ingresos_cobrados: Math.round(cobrado)
+  };
+  if (aporte>0) fin.rentabilidad_pct = Math.round((retornoProy/aporte*100)*10)/10;
+
+  var ver = part.ver_detalle === true;
+  if (ver) {   // detalle del contenedor: coste y márgenes (solo quien lo financia)
+    fin.por_cobrar      = Math.round(cd.dash ? (cd.dash.pendiente||0) : 0);
+    fin.valor_restante  = Math.round(cd.dash ? (cd.dash.porVender||0) : 0);
+    fin.ingreso_esperado= Math.round(cd.expectedRevenue||0);
+    fin.coste           = Math.round(costeTotal);
+    fin.margen_esperado = Math.round(margenEsp);
+    fin.margen_actual   = Math.round(gananciaCaja);        // caja: cobrado − coste (misma base que el retorno)
+    fin.margen_pct      = Math.round((cd.expectedMarginPct||0)*10)/10;
+  }
+
+  return {
+    contenedor: c.ref || c.id,
+    estado: c.estado || 'preparando',
+    ver_detalle: ver,
+    resumen: resumen,
+    productos: productos,
+    finanzas: fin
+  };
+}
+
+// Recalcula y guarda las fotos de todos los participantes de un contenedor
+// (o de todos si no se pasa ref). Devuelve un resumen para la UI.
+async function invActualizarFotos(soloRef) {
+  var cx = _invSalesCtx();
+  var parts = INV_PART.filter(function(p){ return !soloRef || p.contenedor_ref===soloRef; });
+  var hechos = [], fallos = [];
+  for (var k=0; k<parts.length; k++) {
+    var part = parts[k];
+    var c = _cntPorRef(part.contenedor_ref);
+    if (!c) { fallos.push(part.contenedor_ref+' (contenedor no encontrado)'); continue; }
+    var cd = _cntCompute(c, cx);
+    var datos = _invDatosPara(cd, c, part, cx);
+    var row = {
+      inversor_id: part.inversor_id,
+      contenedor_ref: part.contenedor_ref,
+      contenedor_nombre: c.ref || c.id,
+      estado: c.estado || null,
+      datos: datos,
+      actualizado: new Date().toISOString()
+    };
+    try {
+      var r = await supaReq('POST', 'inversor_snapshot?on_conflict=inversor_id,contenedor_ref', row);
+      if (r.ok) hechos.push(part); else fallos.push(part.contenedor_ref+' (HTTP '+r.status+')');
+    } catch(e) { fallos.push(part.contenedor_ref+' ('+e.message+')'); }
+  }
+  return { hechos: hechos.length, fallos: fallos };
+}
+/* ── UI del módulo Inversores (pestaña de Administración) ─────────── */
+function _invLinkBase() {
+  // el ERP vive en .../ERP-POS/index.html ; el portal en .../ERP-POS/inversor.html
+  var path = location.pathname.replace(/[^/]*$/, '');
+  return location.origin + path + 'inversor.html?t=';
+}
+function _invFmt(n){ try { return (typeof fN==='function') ? fN(n) : (Math.round(n)).toLocaleString('es-ES'); } catch(e){ return n; } }
+
+function invCopyLink(token){
+  var url = _invLinkBase() + token;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(function(){ showToast('✓ Enlace copiado'); });
+  } else { window.prompt('Copia el enlace:', url); }
+}
+
+async function invAddInversor(){
+  var inp = document.getElementById('inv-nuevo-nombre');
+  var nombre = inp ? inp.value.trim() : '';
+  if (!nombre) { showToast('Escribe un nombre'); return; }
+  try {
+    var r = await supaReq('POST', 'inversores', { nombre: nombre, activo: true });
+    if (!r.ok) { showToast('Error al crear (HTTP '+r.status+')'); return; }
+    showToast('✓ Inversor creado');
+    await syncLoadInversores(); renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
+async function invAssign(invId){
+  var ref = (document.getElementById('inv-as-cont-'+invId)||{}).value || '';
+  var ap  = parseFloat((document.getElementById('inv-as-aporte-'+invId)||{}).value) || 0;
+  var pct = parseFloat((document.getElementById('inv-as-pct-'+invId)||{}).value) || 0;
+  var ver = !!(document.getElementById('inv-as-ver-'+invId)||{}).checked;
+  if (!ref) { showToast('Elige un contenedor'); return; }
+  var row = { inversor_id: invId, contenedor_ref: ref, aporte_usd: ap, modelo:'pct_ganancia', participacion_pct: pct, ver_detalle: ver };
+  try {
+    var r = await supaReq('POST', 'inversor_contenedor?on_conflict=inversor_id,contenedor_ref', row);
+    if (!r.ok) { showToast('Error al asignar (HTTP '+r.status+')'); return; }
+    showToast('✓ Asignado. Actualizando foto…');
+    await syncLoadInversores();
+    await invActualizarFotos(ref);
+    renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
+async function invDelPart(partId){
+  if (!confirm('¿Quitar esta participación? (no borra ventas ni al inversor)')) return;
+  try {
+    var r = await supaReq('DELETE', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId));
+    if (!r.ok) { showToast('Error (HTTP '+r.status+')'); return; }
+    showToast('✓ Quitada'); await syncLoadInversores(); renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
+async function invToggleVer(partId, val){
+  try {
+    var r = await supaReq('PATCH', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId), { ver_detalle: val });
+    if (!r.ok) { showToast('Error (HTTP '+r.status+')'); return; }
+    var p = INV_PART.find(function(x){ return String(x.id)===String(partId); });
+    if (p) { p.ver_detalle = val; await invActualizarFotos(p.contenedor_ref); }
+    showToast(val?'✓ Verá coste y margen':'✓ Oculto coste y margen');
+    renderAdminInversores();
+  } catch(e){ showToast('Error: '+e.message); }
+}
+
+async function invRefreshFotos(ref){
+  showToast('Recalculando fotos…');
+  var res = await invActualizarFotos(ref || null);
+  if (res.fallos.length) showToast('Hechas '+res.hechos+', fallos: '+res.fallos.join('; '));
+  else showToast('✓ '+res.hechos+' foto(s) actualizada(s)');
+  renderAdminInversores();
+}
+
+function renderAdminInversores(){
+  var el = document.getElementById('admin-content'); if (!el) return;
+  var conts = (typeof CONTENEDORES!=='undefined' && Array.isArray(CONTENEDORES)) ? CONTENEDORES : [];
+
+  // cálculo en vivo para previsualizar el retorno de cada participación
+  var cx=null, cdCache={};
+  function _cd(ref){
+    if (cdCache[ref]!==undefined) return cdCache[ref];
+    var c=_cntPorRef(ref); if(!c){ cdCache[ref]=null; return null; }
+    if(!cx) cx=_invSalesCtx();
+    try { cdCache[ref]=_cntCompute(c,cx); } catch(e){ cdCache[ref]=null; }
+    return cdCache[ref];
+  }
+  // suma de % por contenedor (para el aviso de 100)
+  var pctPorCont={};
+  INV_PART.forEach(function(p){ pctPorCont[p.contenedor_ref]=(pctPorCont[p.contenedor_ref]||0)+(parseFloat(p.participacion_pct)||0); });
+
+  var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+    + '<div style="font-size:14px;font-weight:700">💹 Inversores</div>'
+    + '<button class="adm-tab" onclick="invRefreshFotos()">🔄 Actualizar todas las fotos</button>'
+    + '</div>';
+  h += '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:14px;line-height:1.5">'
+    + 'Cada inversor ve su avance y su retorno por un enlace privado. El <b>capital</b> y el <b>% de reparto</b> son independientes. '
+    + 'Marca <b>«ve coste/margen»</b> solo a quien financia el contenedor. Las fotos se calculan desde las ventas reales; recálculalas tras vender.'
+    + '</div>';
+
+  // alta de inversor
+  h += '<div class="adm-card" style="margin-bottom:14px"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+    + '<input id="inv-nuevo-nombre" placeholder="Nombre del inversor (o «Fito», «Socio»…)" style="flex:1;min-width:180px;padding:8px;border:1px solid var(--color-border-secondary);border-radius:8px;background:var(--color-background-secondary);color:var(--color-text-primary)">'
+    + '<button class="adm-tab act" onclick="invAddInversor()">＋ Añadir inversor</button>'
+    + '</div></div>';
+
+  if (!INVERSORES.length) {
+    h += '<div style="text-align:center;padding:24px;color:var(--color-text-tertiary);font-size:12px">Aún no hay inversores. Añade el primero arriba.</div>';
+    el.innerHTML = h; return;
+  }
+
+  INVERSORES.forEach(function(inv){
+    var parts = INV_PART.filter(function(p){ return String(p.inversor_id)===String(inv.id); });
+    h += '<div class="adm-card" style="margin-bottom:12px;border:1px solid var(--color-border-secondary)">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+       + '<div style="font-weight:700;font-size:13px">'+(inv.nombre||'—')+(inv.activo===false?' <span style="color:var(--color-text-danger);font-size:10px">(inactivo)</span>':'')+'</div>'
+       + '<button class="adm-tab" onclick="invCopyLink(\''+inv.token+'\')">🔗 Copiar enlace</button>'
+       + '</div>';
+
+    // participaciones
+    if (parts.length){
+      h += '<table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px">'
+         + '<thead><tr style="color:var(--color-text-tertiary);text-align:left">'
+         + '<th style="padding:4px">Contenedor</th><th style="padding:4px;text-align:right">Capital</th><th style="padding:4px;text-align:right">% reparto</th>'
+         + '<th style="padding:4px;text-align:right">Retorno proy.</th><th style="padding:4px;text-align:center">Ve coste/margen</th><th></th></tr></thead><tbody>';
+      parts.forEach(function(p){
+        var cd=_cd(p.contenedor_ref);
+        var proy = cd ? Math.round((cd.expectedMargin||0)*(parseFloat(p.participacion_pct)||0)/100) : null;
+        var sum = pctPorCont[p.contenedor_ref]||0;
+        var avisa = Math.abs(sum-100)>0.5;
+        h += '<tr style="border-top:1px solid var(--color-border-tertiary)">'
+           + '<td style="padding:4px">'+p.contenedor_ref+(avisa?' <span title="Los % de este contenedor suman '+_invFmt(sum)+'%, no 100" style="color:var(--color-text-warning)">⚠ '+_invFmt(sum)+'%</span>':'')+'</td>'
+           + '<td style="padding:4px;text-align:right">$'+_invFmt(parseFloat(p.aporte_usd)||0)+'</td>'
+           + '<td style="padding:4px;text-align:right">'+_invFmt(parseFloat(p.participacion_pct)||0)+'%</td>'
+           + '<td style="padding:4px;text-align:right">'+(proy!=null?'$'+_invFmt(proy):'—')+'</td>'
+           + '<td style="padding:4px;text-align:center"><input type="checkbox" '+(p.ver_detalle?'checked':'')+' onchange="invToggleVer(\''+p.id+'\',this.checked)"></td>'
+           + '<td style="padding:4px;text-align:right"><span onclick="invDelPart(\''+p.id+'\')" style="cursor:pointer;color:var(--color-text-danger)">✕</span></td>'
+           + '</tr>';
+      });
+      h += '</tbody></table>';
+    } else {
+      h += '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:8px">Sin contenedores asignados.</div>';
+    }
+
+    // asignar a contenedor
+    var opts = conts.map(function(c){ return '<option value="'+(c.ref||c.id).replace(/"/g,'&quot;')+'">'+(c.ref||c.id)+'</option>'; }).join('');
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:var(--color-background-secondary);padding:8px;border-radius:8px">'
+       + '<select id="inv-as-cont-'+inv.id+'" style="flex:1;min-width:140px;padding:6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:11px"><option value="">Contenedor…</option>'+opts+'</select>'
+       + '<input id="inv-as-aporte-'+inv.id+'" type="number" placeholder="Capital $" style="width:90px;padding:6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:11px">'
+       + '<input id="inv-as-pct-'+inv.id+'" type="number" step="0.01" placeholder="% reparto" style="width:80px;padding:6px;border:1px solid var(--color-border-secondary);border-radius:6px;background:var(--color-background-primary);color:var(--color-text-primary);font-size:11px">'
+       + '<label style="font-size:11px;display:flex;align-items:center;gap:4px;color:var(--color-text-secondary)"><input id="inv-as-ver-'+inv.id+'" type="checkbox">ve coste/margen</label>'
+       + '<button class="adm-tab" onclick="invAssign(\''+inv.id+'\')">Asignar</button>'
+       + '</div>';
+    h += '</div>';
+  });
+
+  el.innerHTML = h;
+}
+/* ===== MÓDULO INVERSORES (fin) ===== */
+
 function renderAdmin() {
   var el = document.getElementById('admin-root');
   if (!el) { console.warn('admin-root not found'); return; }
@@ -11781,6 +12103,7 @@ function renderAdmin() {
     + '<button class="adm-tab' + (adminTab === 'cajas'  ? ' act' : '') + '" onclick="setAdminTab(\'cajas\')">💰 Cajas</button>'
     + '<button class="adm-tab' + (adminTab === 'comisiones' ? ' act' : '') + '" onclick="setAdminTab(\'comisiones\')">🏆 Comisiones</button>'
     + '<button class="adm-tab' + (adminTab === 'analytics' ? ' act' : '') + '" onclick="setAdminTab(\'analytics\')">📊 Analytics</button>'
+    + '<button class="adm-tab' + (adminTab === 'inversores' ? ' act' : '') + '" onclick="setAdminTab(\'inversores\')">💹 Inversores</button>'
     + '</div>'
     + '<div id="admin-content"></div>';
 
@@ -11808,6 +12131,7 @@ function renderAdminContent() {
     renderCatManager();
   }
   else if (adminTab === 'analytics') renderAdminAnalytics();
+  else if (adminTab === 'inversores') renderAdminInversores();
 }
 
 // ── ADMIN CONTENEDORES ────────────────────────────────────────
@@ -18399,108 +18723,12 @@ function eliminarPagoCnt(cntId, gId, pgId) {
 
 var _anaPeriod = 'all';
 
-function renderAdminAnalytics() {
-  var el = document.getElementById('admin-content');
-  if (!el) return;
-
-  // ── Gather data ──────────────────────────────────────────
-  var ventas = (typeof VENTAS !== 'undefined' && Array.isArray(VENTAS)) ? VENTAS : [];
-  var prods  = (typeof PRODS  !== 'undefined' && Array.isArray(PRODS))  ? PRODS  : [];
-  var conts  = (typeof CONTENEDORES !== 'undefined' && Array.isArray(CONTENEDORES)) ? CONTENEDORES : [];
-  var clientes = (typeof CLIENTES !== 'undefined' && Array.isArray(CLIENTES)) ? CLIENTES : [];
-
-  // ── Period filter ────────────────────────────────────────
-  var now = new Date();
-  var cutoff = null;
-  if (_anaPeriod === '7d')  cutoff = new Date(now - 7  * 86400000);
-  if (_anaPeriod === '30d') cutoff = new Date(now - 30 * 86400000);
-  if (_anaPeriod === '90d') cutoff = new Date(now - 90 * 86400000);
-
-  var filteredVentas = ventas;
-  if (cutoff) {
-    filteredVentas = ventas.filter(function(v) {
-      try { return new Date(v.fecha) >= cutoff; } catch(e) { return true; }
-    });
-  }
-
-  // ── Parse ventas to extract product-level detail ─────────
-  var prodSales = {};   // {prodName: {qty, revenue, cost}}
-  var clientSales = {}; // {clientName: {total, ops}}
-  var totalRevenue = 0;
-  var totalCost = 0;
-
-  filteredVentas.forEach(function(v) {
-    totalRevenue += (v.totalUSD || 0);
-    // Track client
-    var cli = v.cli || 'Walk-in';
-    if (!clientSales[cli]) clientSales[cli] = { total: 0, ops: 0 };
-    clientSales[cli].total += (v.totalUSD || 0);
-    clientSales[cli].ops++;
-
-    // Parse prods string: "10× Chapa galv. 2000x1000x1 @ $31.00, 5× Cuadrado S275JR 16 @ $20.00"
-    if (v.prods && typeof v.prods === 'string') {
-      // Separar SOLO donde empieza otra linea de producto ("1234x "):
-      // partir por toda coma troceaba los precios decimales ($0,1092)
-      // y el ingreso de esos productos se contaba como 0.
-      v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
-        seg = seg.trim();
-        // Regex soporta ventas normales (10× Prod @ $10,00) y folios/reservas (10× Prod)
-        var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
-        if (m) {
-          var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
-          var name = m[2].trim();
-          // precio en es-ES: '1.234,56' -> 1234.56 ; '0,1092' -> 0.1092
-          var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
-          if (!prodSales[name]) prodSales[name] = { qty: 0, pricedQty: 0, revenue: 0, cost: 0 };
-          prodSales[name].qty += qty;
-          if (m[3]) {
-            prodSales[name].pricedQty += qty;
-            prodSales[name].revenue += qty * price;
-          }
-          // Find product cost
-          var prod = prods.find(function(p) { return p.n === name; });
-          var unitCost = prod ? (prod.ddp || prod.cif || 0) : 0;
-          prodSales[name].cost += qty * unitCost;
-        }
-      });
-    }
-  });
-
-  // Calculate total cost from product-level
-  Object.keys(prodSales).forEach(function(k) { totalCost += prodSales[k].cost; });
-
-  // ── Ventas POS reales por producto (HISTORICO completo, sin filtro de
-  // periodo y sin las filas espejo de folios, que ya cuentan por sus
-  // lineas de folio). Es la fuente del "Vendido" del ciclo contenedor:
-  // antes se derivaba de inicial - stock y un stock corrupto falseaba
-  // la fila sin avisar.
-  var posSalesAll = {}; // {prodName: {qty, pricedQty, revenue}}
-  var posVentaDet = []; // {n, fecha, cli, usd} por linea de ticket (dashboard por contenedor)
-  ventas.forEach(function(v) {
-    if (v.nota && /Folio\s*[\w-]/i.test(v.nota)) return; // espejo de folio
-    if (!(v.prods && typeof v.prods === 'string')) return;
-    v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
-      seg = seg.trim();
-      var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
-      if (!m) return;
-      var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
-      var name = m[2].trim();
-      var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
-      if (!posSalesAll[name]) posSalesAll[name] = { qty: 0, pricedQty: 0, revenue: 0 };
-      posSalesAll[name].qty += qty;
-      if (m[3]) {
-        posSalesAll[name].pricedQty += qty;
-        posSalesAll[name].revenue += qty * price;
-        posVentaDet.push({ n: name, fecha: v.fecha, cli: v.cli || 'Walk-in', usd: qty * price });
-      }
-    });
-  });
-
-  var grossMargin = totalRevenue - totalCost;
-  var marginPct = totalRevenue > 0 ? (grossMargin / totalRevenue * 100) : 0;
-
-  // ── Container profitability ──────────────────────────────
-  var contData = conts.map(function(c) {
+// ── Cálculo por contenedor (coste, ingresos, unidades, margen esperado/actual,
+// desglose por producto). FUENTE ÚNICA: la usan Analytics y el módulo de
+// Inversores, para que la foto del inversor no diverja de los números reales.
+// cx = { prods, prodSales, posSalesAll, posVentaDet, clientes } (histórico ya preparado).
+function _cntCompute(c, cx) {
+  var prods = cx.prods, prodSales = cx.prodSales, posSalesAll = cx.posSalesAll, posVentaDet = cx.posVentaDet, clientes = cx.clientes;
     // Gastos del contenedor: separar las FACTURAS DE MERCANCIA (el costo
     // real pagado al proveedor) del resto (flete, aranceles, estiba...).
     // Antes se sumaba todo como "logistica" y ADEMAS la mercancia otra vez
@@ -18722,7 +18950,111 @@ function renderAdminAnalytics() {
       prodsDetail: prodsDetail,
       dash: _dash
     };
+}
+
+function renderAdminAnalytics() {
+  var el = document.getElementById('admin-content');
+  if (!el) return;
+
+  // ── Gather data ──────────────────────────────────────────
+  var ventas = (typeof VENTAS !== 'undefined' && Array.isArray(VENTAS)) ? VENTAS : [];
+  var prods  = (typeof PRODS  !== 'undefined' && Array.isArray(PRODS))  ? PRODS  : [];
+  var conts  = (typeof CONTENEDORES !== 'undefined' && Array.isArray(CONTENEDORES)) ? CONTENEDORES : [];
+  var clientes = (typeof CLIENTES !== 'undefined' && Array.isArray(CLIENTES)) ? CLIENTES : [];
+
+  // ── Period filter ────────────────────────────────────────
+  var now = new Date();
+  var cutoff = null;
+  if (_anaPeriod === '7d')  cutoff = new Date(now - 7  * 86400000);
+  if (_anaPeriod === '30d') cutoff = new Date(now - 30 * 86400000);
+  if (_anaPeriod === '90d') cutoff = new Date(now - 90 * 86400000);
+
+  var filteredVentas = ventas;
+  if (cutoff) {
+    filteredVentas = ventas.filter(function(v) {
+      try { return new Date(v.fecha) >= cutoff; } catch(e) { return true; }
+    });
+  }
+
+  // ── Parse ventas to extract product-level detail ─────────
+  var prodSales = {};   // {prodName: {qty, revenue, cost}}
+  var clientSales = {}; // {clientName: {total, ops}}
+  var totalRevenue = 0;
+  var totalCost = 0;
+
+  filteredVentas.forEach(function(v) {
+    totalRevenue += (v.totalUSD || 0);
+    // Track client
+    var cli = v.cli || 'Walk-in';
+    if (!clientSales[cli]) clientSales[cli] = { total: 0, ops: 0 };
+    clientSales[cli].total += (v.totalUSD || 0);
+    clientSales[cli].ops++;
+
+    // Parse prods string: "10× Chapa galv. 2000x1000x1 @ $31.00, 5× Cuadrado S275JR 16 @ $20.00"
+    if (v.prods && typeof v.prods === 'string') {
+      // Separar SOLO donde empieza otra linea de producto ("1234x "):
+      // partir por toda coma troceaba los precios decimales ($0,1092)
+      // y el ingreso de esos productos se contaba como 0.
+      v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
+        seg = seg.trim();
+        // Regex soporta ventas normales (10× Prod @ $10,00) y folios/reservas (10× Prod)
+        var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
+        if (m) {
+          var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
+          var name = m[2].trim();
+          // precio en es-ES: '1.234,56' -> 1234.56 ; '0,1092' -> 0.1092
+          var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
+          if (!prodSales[name]) prodSales[name] = { qty: 0, pricedQty: 0, revenue: 0, cost: 0 };
+          prodSales[name].qty += qty;
+          if (m[3]) {
+            prodSales[name].pricedQty += qty;
+            prodSales[name].revenue += qty * price;
+          }
+          // Find product cost
+          var prod = prods.find(function(p) { return p.n === name; });
+          var unitCost = prod ? (prod.ddp || prod.cif || 0) : 0;
+          prodSales[name].cost += qty * unitCost;
+        }
+      });
+    }
   });
+
+  // Calculate total cost from product-level
+  Object.keys(prodSales).forEach(function(k) { totalCost += prodSales[k].cost; });
+
+  // ── Ventas POS reales por producto (HISTORICO completo, sin filtro de
+  // periodo y sin las filas espejo de folios, que ya cuentan por sus
+  // lineas de folio). Es la fuente del "Vendido" del ciclo contenedor:
+  // antes se derivaba de inicial - stock y un stock corrupto falseaba
+  // la fila sin avisar.
+  var posSalesAll = {}; // {prodName: {qty, pricedQty, revenue}}
+  var posVentaDet = []; // {n, fecha, cli, usd} por linea de ticket (dashboard por contenedor)
+  ventas.forEach(function(v) {
+    if (v.nota && /Folio\s*[\w-]/i.test(v.nota)) return; // espejo de folio
+    if (!(v.prods && typeof v.prods === 'string')) return;
+    v.prods.split(/,\s*(?=[\d.]+\s*[×x]\s)/).forEach(function(seg) {
+      seg = seg.trim();
+      var m = seg.match(/^([\d.]+)\s*×\s+(.+?)(?:\s+@\s+\$?([\d.,]+))?$/);
+      if (!m) return;
+      var qty = parseInt(String(m[1]).replace(/\./g, ''), 10) || 0;
+      var name = m[2].trim();
+      var price = m[3] ? (parseFloat(String(m[3]).replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0) : 0;
+      if (!posSalesAll[name]) posSalesAll[name] = { qty: 0, pricedQty: 0, revenue: 0 };
+      posSalesAll[name].qty += qty;
+      if (m[3]) {
+        posSalesAll[name].pricedQty += qty;
+        posSalesAll[name].revenue += qty * price;
+        posVentaDet.push({ n: name, fecha: v.fecha, cli: v.cli || 'Walk-in', usd: qty * price });
+      }
+    });
+  });
+
+  var grossMargin = totalRevenue - totalCost;
+  var marginPct = totalRevenue > 0 ? (grossMargin / totalRevenue * 100) : 0;
+
+  // ── Container profitability ──────────────────────────────
+  var _anaCx = { prods: prods, prodSales: prodSales, posSalesAll: posSalesAll, posVentaDet: posVentaDet, clientes: clientes };
+  var contData = conts.map(function(c) { return _cntCompute(c, _anaCx); });
 
   // Sort by revenue descending
   contData.sort(function(a, b) { return b.revenue - a.revenue; });
