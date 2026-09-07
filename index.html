@@ -11995,12 +11995,35 @@ async function invAddInversor(){
   } catch(e){ showToast('Error: '+e.message); }
 }
 
+// Coste actual del contenedor (misma fórmula que Analytics)
+function _invCosteCont(ref){
+  try {
+    var c = _cntPorRef(ref); if (!c) return null;
+    var cd = _cntCompute(c, _invSalesCtx());
+    return cd ? (cd.totalCost || 0) : null;
+  } catch(e){ return null; }
+}
+// Aviso si el capital total de los inversores superaría el coste del contenedor.
+// Es aviso y no bloqueo: el coste crece según se van metiendo gastos.
+function _invAvisoCapital(ref, nuevoTotal){
+  var coste = _invCosteCont(ref);
+  if (coste != null && coste > 0 && nuevoTotal > coste + 0.5) {
+    return confirm('⚠ El capital total de los inversores en "'+ref+'" quedaría en $'+_invFmt(nuevoTotal)
+      +', por ENCIMA del coste actual del contenedor ($'+_invFmt(coste)+').\n\n'
+      +'Lo normal es que los aportes no superen el coste (revisa si faltan gastos por meter o sobra capital).\n¿Continuar igual?');
+  }
+  return true;
+}
+
 async function invAssign(invId){
   var ref = (document.getElementById('inv-as-cont-'+invId)||{}).value || '';
   var ap  = parseFloat((document.getElementById('inv-as-aporte-'+invId)||{}).value) || 0;
   var pct = parseFloat((document.getElementById('inv-as-pct-'+invId)||{}).value) || 0;
   var ver = !!(document.getElementById('inv-as-ver-'+invId)||{}).checked;
   if (!ref) { showToast('Elige un contenedor'); return; }
+  var _otros = INV_PART.filter(function(x){ return x.contenedor_ref===ref && String(x.inversor_id)!==String(invId); })
+                       .reduce(function(a,x){ return a+(parseFloat(x.aporte_usd)||0); }, 0);
+  if (!_invAvisoCapital(ref, _otros + ap)) return;
   var row = { inversor_id: invId, contenedor_ref: ref, aporte_usd: ap, modelo:'pct_ganancia', participacion_pct: pct, ver_detalle: ver };
   try {
     var r = await supaReq('POST', 'inversor_contenedor?on_conflict=inversor_id,contenedor_ref', row);
@@ -12028,6 +12051,14 @@ async function invDelPart(partId){
 // Editar en línea una participación (capital o % de reparto)
 async function invEditPart(partId, campo, valor){
   var v = parseFloat(String(valor).replace(',','.')) || 0;
+  if (campo === 'aporte_usd') {
+    var pt0 = INV_PART.find(function(x){ return String(x.id)===String(partId); });
+    if (pt0) {
+      var _otros = INV_PART.filter(function(x){ return x.contenedor_ref===pt0.contenedor_ref && String(x.id)!==String(partId); })
+                           .reduce(function(a,x){ return a+(parseFloat(x.aporte_usd)||0); }, 0);
+      if (!_invAvisoCapital(pt0.contenedor_ref, _otros + v)) { renderAdminInversores(); return; }
+    }
+  }
   var body = {}; body[campo] = v;
   try {
     var r = await supaReq('PATCH', 'inversor_contenedor?id=eq.'+encodeURIComponent(partId), body);
@@ -12085,8 +12116,11 @@ function renderAdminInversores(){
     return cdCache[ref];
   }
   // suma de % por contenedor (para el aviso de 100)
-  var pctPorCont={};
-  INV_PART.forEach(function(p){ pctPorCont[p.contenedor_ref]=(pctPorCont[p.contenedor_ref]||0)+(parseFloat(p.participacion_pct)||0); });
+  var pctPorCont={}, aportePorCont={};
+  INV_PART.forEach(function(p){
+    pctPorCont[p.contenedor_ref]=(pctPorCont[p.contenedor_ref]||0)+(parseFloat(p.participacion_pct)||0);
+    aportePorCont[p.contenedor_ref]=(aportePorCont[p.contenedor_ref]||0)+(parseFloat(p.aporte_usd)||0);
+  });
 
   var h = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
     + '<div style="font-size:14px;font-weight:700">💹 Inversores</div>'
@@ -12132,7 +12166,15 @@ function renderAdminInversores(){
         var sum = pctPorCont[p.contenedor_ref]||0;
         var avisa = Math.abs(sum-100)>0.5;
         h += '<tr style="border-top:1px solid var(--color-border-tertiary)">'
-           + '<td style="padding:4px">'+p.contenedor_ref+(avisa?' <span title="Los % de este contenedor suman '+_invFmt(sum)+'%, no 100" style="color:var(--color-text-warning)">⚠ '+_invFmt(sum)+'%</span>':'')+'</td>'
+           + '<td style="padding:4px">'+p.contenedor_ref
+           +(avisa?' <span title="Los % de este contenedor suman '+_invFmt(sum)+'%, no 100" style="color:var(--color-text-warning)">⚠ '+_invFmt(sum)+'%</span>':'')
+           +(function(){
+              var coste=cd?(cd.totalCost||0):0; if(!(coste>0)) return '';
+              var fin=Math.round((aportePorCont[p.contenedor_ref]||0)/coste*100);
+              var sobre=fin>100;
+              return ' <span title="Capital de los inversores ÷ coste actual del contenedor ($'+_invFmt(coste)+')" style="font-size:10px;color:var(--color-text-'+(sobre?'warning':'tertiary')+')">'+(sobre?'⚠ ':'')+'fin. '+fin+'%</span>';
+            })()
+           +'</td>'
            + '<td style="padding:4px;text-align:right"><input type="number" step="0.01" value="'+(parseFloat(p.aporte_usd)||0)+'" onchange="invEditPart(\''+p.id+'\',\'aporte_usd\',this.value)" title="Capital que puso (se guarda al salir del campo)" style=\"width:86px;padding:3px 6px;text-align:right;border:1px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px\"></td>'
            + '<td style="padding:4px;text-align:right"><input type="number" step="0.01" value="'+(parseFloat(p.participacion_pct)||0)+'" onchange="invEditPart(\''+p.id+'\',\'participacion_pct\',this.value)" title="Su % de la ganancia (se guarda al salir del campo)" style=\"width:86px;padding:3px 6px;text-align:right;border:1px solid var(--color-border-tertiary);border-radius:6px;background:var(--color-background-secondary);color:var(--color-text-primary);font-size:11px\"></td>'
            + '<td style="padding:4px;text-align:right">'+(proy!=null?'$'+_invFmt(proy):'—')+'</td>'
