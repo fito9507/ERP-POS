@@ -20145,6 +20145,36 @@ function _iaBuildContext() {
     });
   }
 
+  // ── Analytics REAL por contenedor: la misma fórmula única (_cntCompute)
+  // que usan la pestaña Analytics y el portal de inversores. Sin esto, la IA
+  // sumaba los 12 tickets recientes y daba totales cortos (p.ej. respondió
+  // $4.157 de facturado del #13 cuando lo real eran ~$43.800).
+  var contenedoresDetalle = [];
+  try {
+    if (typeof _cntCompute === 'function' && typeof _invSalesCtx === 'function' && typeof CONTENEDORES !== 'undefined') {
+      var _cxIA = _invSalesCtx();
+      CONTENEDORES.forEach(function(ct) {
+        try {
+          var cd = _cntCompute(ct, _cxIA);
+          contenedoresDetalle.push({
+            ref: cd.ref, estado: cd.estado,
+            unidades_total: Math.round(cd.totalUnits || 0),
+            unidades_vendidas: Math.round(cd.unitsSold || 0),
+            pct_vendido: Math.round(cd.soldPct || 0),
+            facturado_usd: Math.round((cd.revenue || 0) * 100) / 100,
+            cobrado_usd: cd.dash ? Math.round(cd.dash.cobrado || 0) : null,
+            pendiente_cobro_usd: cd.dash ? Math.round(cd.dash.pendiente || 0) : null,
+            coste_total_usd: Math.round(cd.totalCost || 0),
+            margen_actual_usd: Math.round(cd.margin || 0),
+            ingreso_esperado_usd: Math.round(cd.expectedRevenue || 0),
+            margen_esperado_usd: Math.round(cd.expectedMargin || 0),
+            por_recuperar_usd: Math.round(cd.porRecuperar || 0)
+          });
+        } catch (e) { /* contenedor sin datos: fuera */ }
+      });
+    }
+  } catch (e) { console.warn('IA contenedores detalle:', e); }
+
   return {
     cajas: cajas,
     folios_pendientes: foliosPendientes.slice(0, 30),
@@ -20153,6 +20183,7 @@ function _iaBuildContext() {
     catalogo: catalogo,
     almacenes: almacenes,
     contenedores: listaContenedores,
+    contenedores_detalle: contenedoresDetalle,
     ventas_recientes: ventasRecientes,
     reservas_activas: reservasActivas,
     clientes: listaClientes,
@@ -20193,6 +20224,7 @@ function _iaBuildSystemPrompt(context) {
     + '### Últimas ventas:\n' + JSON.stringify(context.ventas_recientes, null, 1) + '\n\n'
     + '### Reservas activas (stock apartado, pendiente de cobrar):\n' + JSON.stringify(context.reservas_activas, null, 1) + '\n\n'
     + '### Contenedores de importaci\u00f3n:\n' + JSON.stringify(context.contenedores, null, 1) + '\n\n'
+    + '### ANALYTICS POR CONTENEDOR (facturado, cobrado, coste y margen REALES de cada contenedor; cruza folios + tickets POS por lote con la misma f\u00f3rmula de la pesta\u00f1a Analytics. Para CUALQUIER pregunta de cifras de un contenedor usa ESTA secci\u00f3n. OJO: ventas_recientes son solo los 12 \u00faltimos tickets y NUNCA sirven para calcular totales):\n' + JSON.stringify(context.contenedores_detalle, null, 1) + '\n\n'
     + '### Resumen financiero (USD):\n' + JSON.stringify(context.resumen_financiero, null, 1) + '\n\n'
     + '### Deudas y pr\u00e9stamos:\n' + JSON.stringify(context.deudas_y_prestamos, null, 1) + '\n\n'
     + '### \u00daltimos movimientos de ingresos y gastos:\n' + JSON.stringify(context.movimientos_recientes, null, 1) + '\n\n'
