@@ -14110,7 +14110,9 @@ function _calcMcDestino() {
   var _pctEl=document.getElementById('mc-com-pct');
   var _impEl=document.getElementById('mc-comision');
   var _pct=parseFloat(_pctEl?_pctEl.value:0)||0;
-  if(_comOn&&_comOn.checked&&_pct>0&&_impEl&&montoDest>0){
+  // Solo recalcular el importe desde el % cuando el usuario NO está tecleando
+  // en el importe: si no, el % redondeado (4 decimales) le pisaba lo escrito.
+  if(_comOn&&_comOn.checked&&_pct>0&&_impEl&&montoDest>0&&document.activeElement!==_impEl){
     _impEl.value=parseFloat((montoDest*_pct/100).toFixed(2));
   }
   var com=(_comOn&&_comOn.checked)?(parseFloat(_impEl?_impEl.value:0)||0):0;
