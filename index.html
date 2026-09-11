@@ -14271,7 +14271,7 @@ async function admRegistrarMovCaja() {
     caja_origen:  cajaOrig,
     caja_destino: cajaDest,
     monto_origen:  monto,
-    monto_destino: (tipo==='transferencia')?monto:(tipo==='cambio'?montoDest:monto),
+    monto_destino: (tipo==='transferencia'||tipo==='cambio')?montoDest:monto,   // ya sin la comisión
     tasa_usada: tasa
   };
 
@@ -14491,6 +14491,13 @@ function _getHistorialListHtml() {
           + '<div style="font-size:13px;font-weight:600;color:'+(tipoColor[m.tipo]||'')+'">'+m.tipo.charAt(0).toUpperCase()+m.tipo.slice(1)+'</div>'
           + '<div style="font-size:11px;color:var(--color-text-secondary)">'+(m.caja_origen||'—')+(m.caja_destino?' → '+m.caja_destino:'')+'</div>'
           + (m.notas?'<div style="font-size:11px;color:var(--color-text-tertiary)">'+m.notas+'</div>':'')
+          + (function(){
+              if (!(_esCajaBanco(m.caja_origen) || _esCajaBanco(m.caja_destino))) return '';
+              var n = m.notas || '';
+              if (/conciliado/i.test(n)) return '<div style="font-size:10px;font-weight:700;color:var(--color-text-success)">✓ conciliado con banco</div>';
+              if (/[A-Z]{2,}_ID:/.test(n)) return '';
+              return '<div style="font-size:10px;font-weight:700;color:var(--color-text-warning)">⏳ pendiente de banco</div>';
+            })()
           + '</div></div>'
           + rightCol
           + '</div></div>';
@@ -14831,6 +14838,11 @@ async function _bancoIdsImportados(prefijo) {
       return null;
     }
     var filas = await r.json() || [];
+    // Los apuntes manuales conciliados llevan el id del banco en mov_cajas
+    try {
+      var r2 = await supaReq('GET', 'mov_cajas?select=notas&notas=like.*' + encodeURIComponent(prefijo + ':') + '*&limit=10000');
+      if (r2.ok) filas = filas.concat(await r2.json() || []);
+    } catch (e) { console.warn('_bancoIdsImportados mov_cajas:', e); }
     var re = new RegExp(prefijo + ':([A-Za-z0-9_-]+)');
     var vistos = {};
     for (var i = 0; i < filas.length; i++) {
@@ -14868,6 +14880,50 @@ async function _bancoInsertar(mov, movCaja) {
     }
   }
   return false;
+}
+
+// Concilia un movimiento del banco con un apunte manual ya existente:
+// 1) marca el apunte de caja (y sus apuntes del libro I/G, que comparten
+//    [OP:...]) con el id del banco, para que cuente como importado;
+// 2) la diferencia entre lo anotado y lo que el banco abonó se registra
+//    como comisión (o abono extra) con su propio sello anti-duplicado.
+async function _bancoConciliar(cfg, pp, mm, rates) {
+  var tx = pp.t, caja = pp.caja;
+  var marca = cfg.prefijo + ':' + tx.id;
+  var entra = mm.caja_destino === caja;
+  var mAmt = Math.abs(parseFloat(entra ? mm.monto_destino : mm.monto_origen) || 0);
+  var bAmt = Math.abs(tx.importe);
+  var dif = parseFloat((mAmt - bAmt).toFixed(4));   // >0: el banco abonó menos (comisión)
+  var sel = mm.id != null ? 'id=eq.' + encodeURIComponent(mm.id)
+          : (mm.op_id ? 'op_id=eq.' + encodeURIComponent(mm.op_id) : null);
+  if (!sel) { console.warn('conciliar: apunte manual sin id', mm); return false; }
+  var notasNuevas = (mm.notas || '') + ' (conciliado ' + marca + ')';
+  var r1 = await supaReq('PATCH', 'mov_cajas?' + sel, { notas: notasNuevas });
+  if (!r1.ok) { console.error('conciliar mov_cajas:', r1.status, await r1.text()); return false; }
+  mm.notas = notasNuevas;
+  var mOp = notasNuevas.match(/\[OP:([A-Za-z0-9]+)\]/);
+  if (mOp) {
+    try {
+      var rq = await supaReq('GET', 'movimientos_ig?select=id,notas&notas=like.*' + encodeURIComponent('[OP:' + mOp[1] + ']') + '*&cuenta=eq.' + encodeURIComponent(caja));
+      var igs = rq.ok ? (await rq.json() || []) : [];
+      for (var i = 0; i < igs.length; i++) {
+        await supaReq('PATCH', 'movimientos_ig?id=eq.' + encodeURIComponent(igs[i].id), { notas: (igs[i].notas || '') + ' ' + marca });
+      }
+    } catch (e) { console.warn('conciliar ig:', e); }
+  }
+  if (Math.abs(dif) >= 0.01) {
+    var esGasto = dif > 0;
+    var amt = Math.abs(dif);
+    var desc = (esGasto ? 'Comisión bancaria' : 'Abono extra del banco') + ' · conciliación ' + cfg.nombre + (tx.concepto ? ' (' + tx.concepto + ')' : '');
+    var mov = { fecha: tx.fecha, tipo: esGasto ? 'Gasto operativo' : 'Ingreso no-venta', descripcion: desc,
+      monto: amt, moneda: tx.moneda, equiv_usd: parseFloat((amt * (rates[tx.moneda] || 1)).toFixed(4)),
+      cuenta: caja, vendedor: 'Sistema', notas: marca + '-dif', op_id: marca + ':dif:ig' };
+    var movCaja = { fecha: tx.fecha, tipo: esGasto ? 'retiro' : 'deposito',
+      caja_origen: esGasto ? caja : null, caja_destino: esGasto ? null : caja,
+      monto_origen: amt, monto_destino: amt, notas: desc + ' (' + marca + '-dif)', usuario: 'Sistema', op_id: marca + ':dif' };
+    await _bancoInsertar(mov, movCaja);
+  }
+  return true;
 }
 
 // cfg: { nombre, prefijo, endpoint, cajaClave, normalizar, cajaPara?, alFinal? }
@@ -14950,18 +15006,35 @@ async function _bancoSync(cfg) {
       });
     }
 
-    // Aviso de posibles duplicados con apuntes MANUALES ya metidos.
+    // Conciliación con apuntes MANUALES: si un movimiento del banco casa con
+    // uno metido a mano (misma caja, mismo sentido, ±7 días, importe a ±3 %),
+    // NO se importa como nuevo: se adopta el manual (queda confirmado por el
+    // banco) y la diferencia se apunta sola como comisión.
     var _sosp = [];
     pendientes.forEach(function(pp){
-      var mm = _movManualParecido(pp.caja, Math.abs(pp.t.importe), pp.t.fecha);
-      if (mm) _sosp.push({ p: pp, m: mm });
+      var mm = _movManualParecido(pp.caja, Math.abs(pp.t.importe), pp.t.fecha,
+                 { tolPct: 0.03, dias: 7, signo: pp.t.importe > 0 ? 1 : -1 });
+      if (mm && !_sosp.some(function(x){ return x.m === mm; })) _sosp.push({ p: pp, m: mm });
     });
     if (_sosp.length) {
-      var _lst = _sosp.map(function(s){ return '• ' + fN(Math.abs(s.p.t.importe),2) + ' ' + s.p.t.moneda + ' en ' + s.p.caja + ' (' + s.p.t.fecha + ')'; }).join('\n');
-      var _imp = confirm('⚠ ' + cfg.nombre + ': ' + _sosp.length + ' movimiento(s) del banco YA parecen estar metidos a mano:\n\n' + _lst + '\n\nAceptar = importarlos igual (puede duplicar)\nCancelar = saltarlos para NO duplicar');
-      if (!_imp) {
-        var _sk = _sosp.map(function(s){ return s.p; });
-        pendientes = pendientes.filter(function(pp){ return _sk.indexOf(pp) < 0; });
+      var _lst = _sosp.map(function(s){
+        var entra = s.m.caja_destino === s.p.caja;
+        var mAmt = Math.abs(parseFloat(entra ? s.m.monto_destino : s.m.monto_origen) || 0);
+        var dif = parseFloat((mAmt - Math.abs(s.p.t.importe)).toFixed(2));
+        return '• ' + fN(Math.abs(s.p.t.importe),2) + ' ' + s.p.t.moneda + ' en ' + s.p.caja + ' (' + s.p.t.fecha + ')'
+          + ' ↔ manual ' + fN(mAmt,2) + (Math.abs(dif) >= 0.01 ? ' · diferencia ' + fN(dif,2) + ' (se apunta como comisión)' : ' · exacto');
+      }).join('\n');
+      var _conc = confirm('🏦 ' + cfg.nombre + ': ' + _sosp.length + ' movimiento(s) del banco coinciden con apuntes metidos a mano:\n\n' + _lst
+        + '\n\nAceptar = CONCILIAR (el apunte manual queda confirmado por el banco; no se duplica)\nCancelar = importarlos como movimientos nuevos (duplicaría el saldo)');
+      if (_conc) {
+        var _hechas = 0;
+        for (var _c = 0; _c < _sosp.length; _c++) {
+          try { if (await _bancoConciliar(cfg, _sosp[_c].p, _sosp[_c].m, _rates)) _hechas++; }
+          catch (e) { console.warn('conciliar:', e); }
+        }
+        var _skc = _sosp.map(function(s){ return s.p; });
+        pendientes = pendientes.filter(function(pp){ return _skc.indexOf(pp) < 0; });
+        if (_hechas) showToast('✓ ' + _hechas + ' apunte(s) conciliado(s) con ' + cfg.nombre);
       }
     }
 
@@ -15081,6 +15154,39 @@ async function _cuadrarCajaReal(cObj, realAmt, currency, banco, etiqueta) {
   var diff = parseFloat((realAmt - erp).toFixed(2));
   if (Math.abs(diff) < 0.01) return;
 
+  // Movimientos EN VUELO: apuntes manuales recientes (sin marca del banco)
+  // que el ERP ya cuenta pero el banco aún no refleja. Explican el descuadre
+  // sin que haya nada que ajustar (el sync los conciliará cuando lleguen).
+  var _avisoVuelo = '';
+  try {
+    var enc2 = encodeURIComponent(cObj.nombre);
+    var desde = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10);
+    var rv = await supaReq('GET', 'mov_cajas?select=id,fecha,tipo,caja_origen,caja_destino,monto_origen,monto_destino,notas'
+      + '&or=(caja_origen.eq.' + enc2 + ',caja_destino.eq.' + enc2 + ')&fecha=gte.' + desde + '&limit=500');
+    var filasV = rv.ok ? (await rv.json() || []) : [];
+    var enVuelo = [], enVueloNeto = 0;
+    filasV.forEach(function(m) {
+      if (/[A-Z]{2,}_ID:/.test(m.notas || '')) return;
+      var v = 0;
+      if (m.caja_destino === cObj.nombre) v += parseFloat(m.monto_destino || 0);
+      if (m.caja_origen === cObj.nombre)  v -= parseFloat(m.monto_origen || 0);
+      if (!v) return;
+      enVuelo.push({ m: m, v: v }); enVueloNeto += v;
+    });
+    if (enVuelo.length) {
+      var lstV = enVuelo.map(function(x){ return '• ' + x.m.fecha + ' ' + (x.v > 0 ? '+' : '') + fN(x.v, 2) + ' ' + currency + ' · ' + String(x.m.notas || x.m.tipo).replace(/\s*\[OP:[^\]]+\]/, ''); }).join('\n');
+      var residual = parseFloat((diff + enVueloNeto).toFixed(2));
+      if (Math.abs(residual) < 0.01) {
+        alert('✓ ' + cObj.nombre + ' cuadra con ' + banco + '.\n\nLa diferencia de ' + (diff > 0 ? '+' : '') + diff + ' ' + currency
+          + ' son ' + enVuelo.length + ' movimiento(s) EN VUELO (anotados en el ERP, aún no reflejados en el banco):\n\n' + lstV
+          + '\n\nNo hay nada que ajustar. Cuando el banco los refleje, el sync los conciliará solo.');
+        return;
+      }
+      diff = residual;   // solo lo que queda sin explicar se propone como ajuste
+      _avisoVuelo = '\n\n(Ya descontados ' + enVuelo.length + ' movimiento(s) en vuelo:\n' + lstV + ')';
+    }
+  } catch (e) { console.warn('cuadre en vuelo:', e); }
+
   // ¿rechazado hace <24h el mismo descuadre? -> solo avisar
   var snoozeKey = 'erp_cuadre_no';
   var snooze = {};
@@ -15093,7 +15199,7 @@ async function _cuadrarCajaReal(cObj, realAmt, currency, banco, etiqueta) {
 
   if (!confirm('La caja "' + cObj.nombre + '" tiene ' + erp + ' ' + currency
       + ' seg\u00fan la base de datos, pero el saldo real en ' + banco + (etiqueta ? ' (' + etiqueta + ')' : '') + ' es ' + realAmt + ' ' + currency + '.\n\n'
-      + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + currency + ' para cuadrarla?')) {
+      + '\u00bfCrear un ajuste de ' + (diff > 0 ? '+' : '') + diff + ' ' + currency + ' para cuadrarla?' + _avisoVuelo)) {
     snooze[cObj.nombre] = { diff: diff, ts: Date.now() };
     try { localStorage.setItem(snoozeKey, JSON.stringify(snooze)); } catch (e) {}
     showToast('Sin ajustar. No se volver\u00e1 a preguntar por este descuadre en 24h.');
@@ -20574,20 +20680,32 @@ function _esCajaBanco(nombre){ return /ABANCA|REVOLUT|WISE/.test(String(nombre||
 // Busca un apunte MANUAL en mov_cajas parecido a un movimiento del banco
 // (misma caja, mismo importe ±0,5, fecha ±5 días) que NO sea ya un apunte
 // importado del banco. Sirve para no duplicar al sincronizar.
-function _movManualParecido(caja, importe, fechaStr){
+function _movManualParecido(caja, importe, fechaStr, opts){
+  // opts: { tolAbs (0.5), tolPct (0), dias (5), signo (+1 entra en la caja, -1 sale, 0 cualquiera) }
+  opts = opts || {};
+  var tolAbs = opts.tolAbs != null ? opts.tolAbs : 0.5;
+  var tolPct = opts.tolPct || 0;
+  var dias   = opts.dias || 5;
+  var signo  = opts.signo || 0;
   if (typeof _cajasMovs === 'undefined' || !caja) return null;
   var f = new Date(fechaStr); if (isNaN(f)) return null;
+  var tol = Math.max(tolAbs, importe * tolPct);
+  var mejor = null, mejorDif = Infinity;
   for (var i=0;i<_cajasMovs.length;i++){
     var m = _cajasMovs[i];
-    if (/[A-Z]{2,}_ID:/.test(m.notas||'')) continue;   // ya es del banco
-    if (!(m.caja_origen===caja || m.caja_destino===caja)) continue;
-    var amt = Math.abs(parseFloat(m.monto_origen||m.monto_destino||0));
-    if (Math.abs(amt - importe) > 0.5) continue;
+    if (/[A-Z]{2,}_ID:/.test(m.notas||'')) continue;   // ya es del banco (o conciliado)
+    var entra = m.caja_destino===caja, sale = m.caja_origen===caja;
+    if (!entra && !sale) continue;
+    if (signo>0 && !entra) continue;
+    if (signo<0 && !sale) continue;
+    var amt = Math.abs(parseFloat(entra ? m.monto_destino : m.monto_origen) || 0);
+    var dif = Math.abs(amt - importe);
+    if (dif > tol) continue;
     var mf = new Date(m.fecha); if (isNaN(mf)) continue;
-    if (Math.abs((mf - f)/86400000) > 5) continue;
-    return m;
+    if (Math.abs((mf - f)/86400000) > dias) continue;
+    if (dif < mejorDif) { mejor = m; mejorDif = dif; }
   }
-  return null;
+  return mejor;
 }
 
 // ── EXECUTE PROPOSAL ──────────────────────────────────────────
