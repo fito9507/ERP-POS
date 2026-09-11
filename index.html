@@ -13933,7 +13933,7 @@ function _renderNuevoMovCaja() {
     + '</div></div>'
     // Resultado destino
     + '<div id="mc-dest-wrap" style="display:none">'
-    + '<label class="adm-lbl-f">Resultado <span id="mc-mon-dest-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
+    + '<label class="adm-lbl-f"><span id="mc-dest-lbl-txt">Resultado</span> <span id="mc-mon-dest-lbl" style="color:var(--color-text-success);font-weight:700"></span></label>'
     + '<input class="adm-inp" type="number" id="mc-monto-dest" step="0.01" placeholder="0.00" oninput="_onMcDestManual()" style="font-size:20px;font-weight:600;height:46px">'
     + '</div>'
     // Comision de la operacion (banco / cambista): se descuenta del destino
@@ -14058,7 +14058,7 @@ function _toggleMcCom(){
 // El % manda: se calcula el importe sobre lo que llegaria al destino
 function _onMcComPct(){
   var pct=parseFloat(document.getElementById('mc-com-pct')?.value)||0;
-  var bruto=parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var bruto=(document.getElementById('mc-tipo')?.value==='cambio') ? (parseFloat(document.getElementById('mc-monto-dest')?.value)||0) : (parseFloat(document.getElementById('mc-monto')?.value)||0);
   var impEl=document.getElementById('mc-comision');
   if(impEl) impEl.value = (pct>0&&bruto>0) ? parseFloat((bruto*pct/100).toFixed(2)) : '';
   _calcMcDestino();
@@ -14067,10 +14067,28 @@ function _onMcComPct(){
 // El importe manda: se deduce el % que representa
 function _onMcComImp(){
   var imp=parseFloat(document.getElementById('mc-comision')?.value)||0;
-  var bruto=parseFloat(document.getElementById('mc-monto-dest')?.value)||0;
+  var bruto=(document.getElementById('mc-tipo')?.value==='cambio') ? (parseFloat(document.getElementById('mc-monto-dest')?.value)||0) : (parseFloat(document.getElementById('mc-monto')?.value)||0);
   var pctEl=document.getElementById('mc-com-pct');
   if(pctEl) pctEl.value = (imp>0&&bruto>0) ? parseFloat((imp/bruto*100).toFixed(4)) : '';
   _calcMcDestino();
+}
+
+// Comisión vigente del formulario sobre una base (bruto). Si hay % fijado y
+// el usuario NO está tecleando el importe, el importe se deriva del %.
+function _mcComision(bruto){
+  var on=document.getElementById('mc-com-on'); if(!(on&&on.checked)) return 0;
+  var pctEl=document.getElementById('mc-com-pct'), impEl=document.getElementById('mc-comision');
+  var pct=parseFloat(pctEl?pctEl.value:0)||0;
+  if(pct>0&&impEl&&bruto>0&&document.activeElement!==impEl) impEl.value=parseFloat((bruto*pct/100).toFixed(2));
+  return parseFloat(impEl?impEl.value:0)||0;
+}
+function _mcPintarNeto(dest, monD, bruto, com){
+  var netoEl=document.getElementById('mc-com-neto'); if(!netoEl) return;
+  var neto=bruto-com;
+  netoEl.textContent = com>0
+    ? ('Entra en ' + (dest||'destino') + ': ' + fN(neto,2) + ' ' + monD + '  (' + fN(bruto,2) + ' \u2212 ' + fN(com,2) + ' de comisi\u00f3n)')
+    : '';
+  netoEl.style.color = neto<0 ? 'var(--color-text-danger)' : 'var(--color-text-secondary)';
 }
 
 function _calcMcDestino() {
@@ -14094,38 +14112,31 @@ function _calcMcDestino() {
 
   if (!destEl) return;
   var montoDest = monto;
-  // OJO: es un <input type="number">, hay que darle el numero crudo.
-  // Con fN() llegaba "7.352,94" (formato es-ES), el navegador lo
-  // rechazaba y el campo se quedaba vacio mostrando 0.00.
-  if (tipo==='transferencia') {
-    destEl.value = monto ? parseFloat(monto.toFixed(2)) : '';
-  } else if (tipo==='cambio') {
+  // OJO: es un <input type="number">, hay que darle el numero crudo (con
+  // fN() llegaba "7.352,94" y el navegador lo rechazaba).
+  if (tipo==='cambio') {
     if (divOp && tasa>0) montoDest = monto/tasa;
     else montoDest = monto*tasa;
     destEl.value = montoDest ? parseFloat(montoDest.toFixed(2)) : '';
   }
-  // La comision se la queda el banco/cambista: al destino llega menos.
-  // Si se fijo un %, el importe se recalcula al cambiar monto o tasa.
-  var _comOn=document.getElementById('mc-com-on');
-  var _pctEl=document.getElementById('mc-com-pct');
-  var _impEl=document.getElementById('mc-comision');
-  var _pct=parseFloat(_pctEl?_pctEl.value:0)||0;
-  // Solo recalcular el importe desde el % cuando el usuario NO está tecleando
-  // en el importe: si no, el % redondeado (4 decimales) le pisaba lo escrito.
-  if(_comOn&&_comOn.checked&&_pct>0&&_impEl&&montoDest>0&&document.activeElement!==_impEl){
-    _impEl.value=parseFloat((montoDest*_pct/100).toFixed(2));
-  }
-  var com=(_comOn&&_comOn.checked)?(parseFloat(_impEl?_impEl.value:0)||0):0;
+  // UNA sola lógica:
+  //   transferencia: entra = Monto − comisión  (el "Resultado" no se edita: es lo que entra)
+  //   cambio:        entra = Resultado del cambio − comisión  (el Resultado sí se edita)
+  var bruto = (tipo==='cambio') ? (parseFloat(destEl.value)||0) : monto;
+  var com = _mcComision(bruto);
   var cmEl=document.getElementById('mc-com-mon');
   if(cmEl) cmEl.textContent=monD?('('+monD+')'):'';
-  var netoEl=document.getElementById('mc-com-neto');
-  var neto=montoDest-com;
-  if(netoEl){
-    netoEl.textContent = com>0
-      ? ('Entra en ' + (dest||'destino') + ': ' + fN(neto,2) + ' ' + monD + '  (' + fN(montoDest,2) + ' \u2212 ' + fN(com,2) + ' de comisi\u00f3n)')
-      : '';
-    netoEl.style.color = neto<0 ? 'var(--color-text-danger)' : 'var(--color-text-secondary)';
+  var neto = bruto - com;
+  var lbl=document.getElementById('mc-dest-lbl-txt');
+  if (tipo==='transferencia') {
+    destEl.value = monto ? parseFloat(neto.toFixed(2)) : '';
+    destEl.readOnly = true; destEl.style.opacity = '0.7';
+    if (lbl) lbl.textContent = com>0 ? 'Entra en destino (monto \u2212 comisi\u00f3n)' : 'Entra en destino';
+  } else {
+    destEl.readOnly = false; destEl.style.opacity = '';
+    if (lbl) lbl.textContent = (tipo==='cambio') ? 'Resultado del cambio (antes de comisi\u00f3n)' : 'Resultado';
   }
+  _mcPintarNeto(dest, monD, bruto, com);
   // Update balance preview (con lo que realmente entra)
   _updateBalancePreview(tipo, orig, dest, monto, neto, monO, monD);
 }
@@ -14223,7 +14234,9 @@ function _onMcDestManual() {
     // que acaba de teclear el usuario (antes se quedaba con el viejo).
     if (typeof _updateBalancePreview === 'function') {
       var _tipo = document.getElementById('mc-tipo') ? document.getElementById('mc-tipo').value : 'cambio';
-      try { _updateBalancePreview(_tipo, orig, dc, monto, dest, monO, monD); } catch(e) {}
+      var _com = _mcComision(dest);
+      _mcPintarNeto(dc, monD, dest, _com);
+      try { _updateBalancePreview(_tipo, orig, dc, monto, dest - _com, monO, monD); } catch(e) {}
     }
   }
 }
@@ -14236,7 +14249,8 @@ async function admRegistrarMovCaja() {
   var orig=document.getElementById('mc-origen')?.value;
   var dest=document.getElementById('mc-destino')?.value;
   var monto=parseFloat(document.getElementById('mc-monto')?.value)||0;
-  var montoDest=parseFloat(document.getElementById('mc-monto-dest')?.value)||monto;
+  // transferencia: base = monto (el campo Resultado ya muestra el neto); cambio: base = Resultado
+  var montoDest=(tipo==='cambio') ? (parseFloat(document.getElementById('mc-monto-dest')?.value)||monto) : monto;
   var _comSw=document.getElementById('mc-com-on');
   var comOp=(_comSw&&_comSw.checked)?(parseFloat(document.getElementById('mc-comision')?.value)||0):0;
   // Lo que de verdad entra en la caja destino, ya sin la comision
