@@ -14175,7 +14175,7 @@ function _updateBalancePreview(tipo, orig, dest, monto, montoDest, monO, monD) {
   } else {
     // transferencia or cambio
     var nuevoOrig = saldoOrig - monto;
-    var nuevoDest = saldoDest + (tipo==='transferencia' ? monto : montoDest);
+    var nuevoDest = saldoDest + montoDest;   // lo que realmente entra (ya sin comisión)
     excede = nuevoOrig < -0.005;
     balOrig.innerHTML = '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:2px">📤 ' + orig + '</div>'
       + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
