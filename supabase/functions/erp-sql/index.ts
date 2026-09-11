@@ -51,7 +51,8 @@ Deno.serve(async (req) => {
 
   const sql = postgres(DB_URL, { prepare: false, max: 1 });
   try {
-    const out = await sql.begin(async (tx) => await tx.unsafe(texto));
+    // deno-lint-ignore no-explicit-any
+    const out = await sql.begin(async (tx: any) => await tx.unsafe(texto));
     // una sentencia → array de filas; varias → array de arrays de filas
     const lista: unknown[] = (Array.isArray(out) && out.length && Array.isArray(out[0])) ? out : [out];
     const resultados = lista.map((r) => {
