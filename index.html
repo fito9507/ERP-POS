@@ -13799,7 +13799,7 @@ async function renderAdminCajas() {
   var tabDefs = [
     {k:'resumen',    l:'📊 Resumen'},
     {k:'movimiento', l:'➕ Movimiento'},
-    {k:'historial',  l:'📋 Historial'},
+    {k:'historial',  l:'📋 Historial'+((typeof _cajasMovs!=='undefined'&&_cajasMovs.length)?' <span style="opacity:.7">('+_cajasMovs.length+')</span>':'')},
     {k:'gestionar',  l:'⚙️ Gestionar'},
   ];
   var tabs = '<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
@@ -13817,7 +13817,13 @@ async function renderAdminCajas() {
   el.innerHTML = tabs + content;
   // El formulario nace con un tipo ya seleccionado: evaluar qué campos
   // aplican (la casilla de comisión nacía oculta hasta cambiar el tipo).
-  if (_cajasTab === 'movimiento' && typeof _onMcTipoChange === 'function') { try { _onMcTipoChange(); } catch(e) {} }
+  if (_cajasTab === 'movimiento' && typeof _onMcTipoChange === 'function') {
+    try {
+      // Caja preseleccionada desde el botón "➕ Mover" del resumen
+      if (window._cajasMovPre) { var _o=document.getElementById('mc-origen'); if (_o) _o.value = window._cajasMovPre; window._cajasMovPre = null; }
+      _onMcTipoChange();
+    } catch(e) {}
+  }
 }
 
 function _setCajasTab(tab) { _cajasTab = tab; renderAdminCajas(); }
@@ -13828,33 +13834,101 @@ function _getMonedaFromCaja(nombre) {
 }
 
 // ── RESUMEN ─────────────────────────────────────────────────
+// Valor en USD de un saldo (misma tabla de tasas que usa el libro I/G)
+function _cajaUsd(moneda, saldo){
+  var r = (typeof RATES!=='undefined' && RATES[moneda]) ? RATES[moneda] : 1;
+  return moneda==='USD' ? saldo : (r>0 ? saldo/r : 0);
+}
+// Accesos rápidos desde el resumen
+function _cajasIrMovimiento(nombre){ window._cajasMovPre = nombre; _cajasTab='movimiento'; renderAdminCajas(); }
+function _cajasIrHistorial(nombre){ _cajasHistCajaSel = nombre; _cajasTab='historial'; renderAdminCajas(); }
+
 function _renderResumenCajas() {
   if (!_cajasData.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin cajas — crea una en ⚙️ Gestionar</div>';
 
-  // Group by almacen
-  var byAlm = {};
+  var monCol  = {USD:'#2aa198', EUR:'#268bd2', CUP:'#b58900', CUPT:'#6c71c4'};
+  var monSym  = {USD:'$', EUR:'€', CUP:'₱', CUPT:'₱'};
+  var hoyMs   = Date.now();
+  var movs    = (typeof _cajasMovs!=='undefined' && Array.isArray(_cajasMovs)) ? _cajasMovs : [];
+
+  // ── Totales generales ──
+  var totUsd=0, efectivoUsd=0, bancosUsd=0, negativas=0;
+  var porAlm = {};
   _cajasData.forEach(function(c){
-    if (!byAlm[c.almacen]) byAlm[c.almacen] = [];
-    byAlm[c.almacen].push(c);
+    var saldo = _getSaldoCaja(c.nombre);
+    var usd = _cajaUsd(c.moneda, saldo);
+    totUsd += usd;
+    if (_esCajaBanco(c.nombre)) bancosUsd += usd; else efectivoUsd += usd;
+    if (saldo < -0.005) negativas++;
+    (porAlm[c.almacen||'General'] = porAlm[c.almacen||'General'] || []).push({c:c, saldo:saldo, usd:usd});
+  });
+  // ── En vuelo: manual a/desde banco, sin confirmar, últimos 20 días ──
+  var vuelo = [], vueloUsd = 0;
+  movs.forEach(function(m){
+    var cajaB = _esCajaBanco(m.caja_destino) ? m.caja_destino : (_esCajaBanco(m.caja_origen) ? m.caja_origen : null);
+    if (!cajaB || /[A-Z]{2,}_ID:/.test(m.notas||'')) return;
+    var f = new Date(m.fecha).getTime(); if (!isFinite(f) || hoyMs - f > 20*86400000) return;
+    var mon = _getMonedaFromCaja(cajaB);
+    var v = (m.caja_destino===cajaB ? parseFloat(m.monto_destino||0) : -parseFloat(m.monto_origen||0)) || 0;
+    vuelo.push(m); vueloUsd += _cajaUsd(mon, v);
   });
 
-  var html = '';
-  Object.keys(byAlm).forEach(function(alm){
-    html += '<div style="font-size:12px;font-weight:600;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px;margin:16px 0 8px">'+alm+'</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:8px">';
-    byAlm[alm].forEach(function(c){
-      var saldo = _getSaldoCaja(c.nombre);
-      var color = saldo >= 0 ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'\u20b1'}[c.moneda]||'';
-      html += '<div class="card" style="text-align:center;padding:14px 10px">'
-        + '<div style="font-size:11px;color:var(--color-text-tertiary);margin-bottom:4px">'+c.nombre+'</div>'
-        + '<div style="font-size:11px;font-weight:600;color:var(--color-text-secondary);margin-bottom:8px">'+monIcon+' '+c.moneda+'</div>'
-        + '<div style="font-size:clamp(13px,3vw,20px);font-weight:800;color:'+color+';word-break:break-all;line-height:1.2">'+fN(saldo,2)+'</div>'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">saldo actual</div>'
+  function kpi(lbl, val, sub, col){
+    return '<div class="card" style="margin:0;padding:12px 14px;border-left:3px solid '+(col||'var(--color-border-secondary)')+'">'
+      + '<div style="font-size:10px;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:.6px">'+lbl+'</div>'
+      + '<div style="font-size:clamp(16px,3.2vw,22px);font-weight:800;line-height:1.2;margin-top:2px;color:'+(col||'inherit')+'">'+val+'</div>'
+      + (sub?'<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">'+sub+'</div>':'')
+      + '</div>';
+  }
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">'
+    + kpi('Total (equiv. USD)', '$'+fN(totUsd,0), _cajasData.length+' cajas'+(negativas?' · <span style="color:var(--color-text-danger)">'+negativas+' en negativo</span>':''), '#2aa198')
+    + kpi('Efectivo', '$'+fN(efectivoUsd,0), 'cajas físicas', '#859900')
+    + kpi('Bancos', '$'+fN(bancosUsd,0), 'ABANCA · Revolut · Wise', '#268bd2')
+    + kpi('En vuelo', (vuelo.length?'$'+fN(vueloUsd,0):'—'), vuelo.length?vuelo.length+' mov. pendiente(s) de banco':'nada pendiente de banco', vuelo.length?'#b58900':'var(--color-border-secondary)')
+    + '</div>';
+
+  // ── Por almacén ──
+  var ordenAlm = Object.keys(porAlm).sort(function(a,b){
+    var sa = porAlm[a].reduce(function(x,y){return x+y.usd;},0), sb = porAlm[b].reduce(function(x,y){return x+y.usd;},0);
+    return sb - sa;
+  });
+  ordenAlm.forEach(function(alm){
+    var lista = porAlm[alm].slice().sort(function(x,y){ return y.usd - x.usd; });
+    var sub = lista.reduce(function(x,y){return x+y.usd;},0);
+    html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 8px;padding-bottom:4px;border-bottom:.5px solid var(--color-border-tertiary)">'
+      + '<div style="font-size:12px;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:1px">'+alm+'</div>'
+      + '<div style="font-size:11px;color:var(--color-text-tertiary)">≈ <b style="color:var(--color-text-primary)">$'+fN(sub,0)+'</b> · '+lista.length+' caja'+(lista.length!==1?'s':'')+'</div>'
+      + '</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
+    lista.forEach(function(x){
+      var c=x.c, saldo=x.saldo;
+      var col = monCol[c.moneda] || 'var(--color-border-secondary)';
+      var banco = _esCajaBanco(c.nombre);
+      var ult = null;
+      for (var i=0;i<movs.length;i++){ var m=movs[i]; if (m.caja_origen===c.nombre||m.caja_destino===c.nombre){ ult=m; break; } }
+      var pend = vuelo.filter(function(m){ return m.caja_origen===c.nombre||m.caja_destino===c.nombre; }).length;
+      var colSaldo = saldo < -0.005 ? 'var(--color-text-danger)' : (Math.abs(saldo)<0.005 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)');
+      var nom = c.nombre.replace(/^(USD|EUR|CUPT|CUP)\s+/,'');
+      html += '<div class="card" style="margin:0;padding:12px 14px;border-left:3px solid '+col+';display:flex;flex-direction:column;gap:6px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
+        +   '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(banco?'🏦 ':'💵 ')+nom+'</div>'
+        +   '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:100px;color:#fff;background:'+col+'">'+c.moneda+'</span>'
+        + '</div>'
+        + '<div style="font-size:clamp(18px,3.4vw,24px);font-weight:800;color:'+colSaldo+';line-height:1.15;word-break:break-all">'+(monSym[c.moneda]||'')+fN(saldo,2)+'</div>'
+        + '<div style="font-size:10px;color:var(--color-text-tertiary);display:flex;justify-content:space-between;gap:6px">'
+        +   '<span>'+(c.moneda!=='USD'?'≈ $'+fN(x.usd,0):'&nbsp;')+'</span>'
+        +   '<span>'+(ult?'últ. '+String(ult.fecha||'').slice(5).replace('-','/'):'sin movimientos')+'</span>'
+        + '</div>'
+        + (pend?'<div style="font-size:10px;font-weight:700;color:var(--color-text-warning)">⏳ '+pend+' pendiente'+(pend>1?'s':'')+' de banco</div>':'')
+        + '<div style="display:flex;gap:6px;margin-top:2px">'
+        +   '<button class="adm-tab" style="flex:1;padding:5px 8px;font-size:11px" onclick="_cajasIrMovimiento(\''+c.nombre.replace(/'/g,"\\'")+'\')">➕ Mover</button>'
+        +   '<button class="adm-tab" style="flex:1;padding:5px 8px;font-size:11px" onclick="_cajasIrHistorial(\''+c.nombre.replace(/'/g,"\\'")+'\')">📋 Historial</button>'
+        + '</div>'
         + '</div>';
     });
     html += '</div>';
   });
+  html += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:14px">Equivalencias en USD con las tasas vigentes del ERP. Los saldos salen de los movimientos de caja registrados (no del libro I/G).</div>';
   return html;
 }
 
@@ -14469,7 +14543,14 @@ function _renderHistorialMovCajas() {
   var filtroHtml = '<div style="margin-bottom:12px">'
     + selCaja
     + '<input type="text" class="adm-inp" placeholder="🔍 Buscar por concepto, fecha o usuario..." value="'+_cajasHistFiltro+'" oninput="updCajasHistFiltro(this.value)" style="width:100%;background:var(--color-background-primary)"></div>';
-  return filtroHtml + '<div id="cajas-hist-list">' + _getHistorialListHtml() + '</div>';
+  var tipoSel = window._cajasHistTipo || '';
+  var chips = [['','Todos'],['transferencia','🔄 Transferencias'],['cambio','💱 Cambios'],['deposito','📥 Depósitos'],['retiro','📤 Retiros'],['pendiente','⏳ Pendientes de banco']];
+  var chipsHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+    + chips.map(function(ch){
+        return '<button class="adm-tab'+(tipoSel===ch[0]?' act':'')+'" style="padding:4px 10px;font-size:11px" onclick="window._cajasHistTipo=\''+ch[0]+'\';renderAdminCajas()">'+ch[1]+'</button>';
+      }).join('')
+    + '</div>';
+  return filtroHtml + chipsHtml + '<div id="cajas-hist-list">' + _getHistorialListHtml() + '</div>';
 }
 
 function _getHistorialListHtml() {
@@ -14529,6 +14610,15 @@ function _getHistorialListHtml() {
     });
   }
 
+  var _tipoF = window._cajasHistTipo || '';
+  if (_tipoF) {
+    processedMovs = processedMovs.filter(function(m){
+      if (_tipoF === 'pendiente') {
+        return (_esCajaBanco(m.caja_origen) || _esCajaBanco(m.caja_destino)) && !/[A-Z]{2,}_ID:/.test(m.notas||'');
+      }
+      return m.tipo === _tipoF;
+    });
+  }
   if (!processedMovs.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin movimientos que coincidan</div>';
   
   return '<div style="display:flex;flex-direction:column;gap:8px">'
