@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
             const mAmt = Math.abs(parseFloat(String(entra ? m.monto_destino : m.monto_origen)) || 0);
             if (Math.abs(mAmt - amt) > tol) continue;
             const mf = new Date(String(m.fecha)).getTime(); if (!isFinite(mf)) continue;
-            if (Math.abs(mf - f) > 7 * 86400000) continue;
+            if (Math.abs(mf - f) > 15 * 86400000) continue;
             return m;
           }
           return null;

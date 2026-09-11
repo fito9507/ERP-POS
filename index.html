@@ -14305,7 +14305,7 @@ async function admRegistrarMovCaja() {
       var _mAmt = Math.abs(parseFloat(_mEntra ? _m.monto_destino : _m.monto_origen) || 0);
       if (Math.abs(_mAmt - _ladoBanco.amt) > _tol) continue;
       var _mf = new Date(_m.fecha).getTime();
-      if (!isFinite(_mf) || !isFinite(_fRef) || Math.abs(_mf - _fRef) > 7 * 86400000) continue;
+      if (!isFinite(_mf) || !isFinite(_fRef) || Math.abs(_mf - _fRef) > 30 * 86400000) continue;   // el abono puede llevar semanas en el banco
       _prevEnlace = { m: _m, marca: _mk[1], amt: _mAmt }; break;
     }
     if (_prevEnlace) {
@@ -15065,7 +15065,7 @@ async function _bancoSync(cfg) {
     var _sosp = [];
     pendientes.forEach(function(pp){
       var mm = _movManualParecido(pp.caja, Math.abs(pp.t.importe), pp.t.fecha,
-                 { tolPct: 0.03, dias: 7, signo: pp.t.importe > 0 ? 1 : -1 });
+                 { tolPct: 0.03, dias: 15, signo: pp.t.importe > 0 ? 1 : -1 });
       if (mm && !_sosp.some(function(x){ return x.m === mm; })) _sosp.push({ p: pp, m: mm });
     });
     if (_sosp.length) {
