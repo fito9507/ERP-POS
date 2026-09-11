@@ -2524,6 +2524,18 @@ async function syncSaveVenta(v) {
                  +(v.nota?' '+v.nota:''),
     cobros_json:  v.pagos   ? JSON.stringify({pagos:v.pagos,vueltos:v.vueltos||[],comDetalle:v.comDetalle||{},lotes:v.lotes||{}}) : ''
   };
+  // Sello anti-duplicado: la venta conserva su op_id para siempre; si una
+  // cola (la de la app o la del service worker) reenvía el POST, el índice
+  // único de la base rechaza la copia. (Así se triplicó HAB09-006 el 09/09:
+  // reenvíos a +18s y +2h de las dos colas.)
+  if (!v.supaId) {
+    if (!v.op_id) {
+      v.op_id = 'v-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+      try { if (typeof offlineSaveVentas === 'function') offlineSaveVentas(); } catch(e) {}
+    }
+    row.op_id = v.op_id;
+  }
+
   // Sin supaId: intentar encontrar la fila real en la BD antes de crear
   // una nueva (un POST ciego duplica la venta y el cambio no se ve).
   if(!v.supaId && _supaOnline && typeof supaReq!=='undefined'){
@@ -2561,6 +2573,8 @@ async function syncSaveVenta(v) {
       } else {
         var errText = await r.text();
         console.error('syncSaveVenta error:', r.status, errText);
+        if (r.status === 409 && row.op_id) { showSyncStatus('✓ Guardado'); return true; } // ya estaba (sello)
+        if (r.status === 400 && /op_id/.test(errText)) delete row.op_id; // columna aún sin crear en la base
         // Queue for retry
         enqueue({ method: method, path: path, body: row });
       }
