@@ -14283,12 +14283,62 @@ async function admRegistrarMovCaja() {
   // segunda copia de esta misma operación (otra pestaña, otro aparato,
   // reenvío de la cola). El candado de arriba solo protege UNA pestaña.
   row.op_id = _opId;
+
+  // ¿El banco YA importó este mismo movimiento? (el abono/cargo llegó antes
+  // de anotarlo a mano). Si casa (misma caja de banco, mismo sentido, ±7 días,
+  // ±3 %), se ENLAZA: esta operación se queda con el id del banco y se retira
+  // el apunte suelto que importó el sync, para no contar el dinero dos veces.
+  var _marcaBanco = '', _prevEnlace = null;
+  var _ladoBanco = (cajaDest && _esCajaBanco(cajaDest)) ? { caja: cajaDest, entra: true,  amt: parseFloat(row.monto_destino) || 0 }
+                 : (cajaOrig && _esCajaBanco(cajaOrig)) ? { caja: cajaOrig, entra: false, amt: parseFloat(row.monto_origen)  || 0 } : null;
+  if (_ladoBanco && _supaOnline && typeof _cajasMovs !== 'undefined') {
+    var _fRef = new Date(fecha).getTime();
+    var _tol = Math.max(0.5, _ladoBanco.amt * 0.03);
+    for (var _i = 0; _i < _cajasMovs.length; _i++) {
+      var _m = _cajasMovs[_i];
+      var _mk = String(_m.notas || '').match(/([A-Z]{2,}_ID:[A-Za-z0-9_-]+)/);
+      if (!_mk || /\[OP:|conciliado/.test(_m.notas || '')) continue;   // solo importados sueltos del banco
+      var _mEntra = _m.caja_destino === _ladoBanco.caja, _mSale = _m.caja_origen === _ladoBanco.caja;
+      if (_ladoBanco.entra ? !_mEntra : !_mSale) continue;
+      var _mAmt = Math.abs(parseFloat(_mEntra ? _m.monto_destino : _m.monto_origen) || 0);
+      if (Math.abs(_mAmt - _ladoBanco.amt) > _tol) continue;
+      var _mf = new Date(_m.fecha).getTime();
+      if (!isFinite(_mf) || !isFinite(_fRef) || Math.abs(_mf - _fRef) > 7 * 86400000) continue;
+      _prevEnlace = { m: _m, marca: _mk[1], amt: _mAmt }; break;
+    }
+    if (_prevEnlace) {
+      var _dif = parseFloat((_ladoBanco.amt - _prevEnlace.amt).toFixed(2));
+      var _desc = String(_prevEnlace.m.notas || '').replace(/\s*\(?[A-Z]{2,}_ID:[^)\s]+\)?/, '').trim();
+      if (confirm('\ud83c\udfe6 El banco ya registr\u00f3 este movimiento en ' + _ladoBanco.caja + ' el ' + _prevEnlace.m.fecha
+          + ' (' + (_ladoBanco.entra ? '+' : '-') + fN(_prevEnlace.amt, 2) + (_desc ? ' \u00b7 ' + _desc : '') + ').'
+          + (Math.abs(_dif) >= 0.01 ? '\n\nOjo: tu importe (' + fN(_ladoBanco.amt, 2) + ') difiere ' + fN(_dif, 2) + ' del banco.' : '')
+          + '\n\nAceptar = ENLAZAR: se guarda esta operaci\u00f3n completa (salida de la otra caja, comisi\u00f3n, entrada) y se retira el apunte suelto del banco, para no contar el dinero dos veces.'
+          + '\nCancelar = registrar aparte (DUPLICAR\u00cdA el saldo de ' + _ladoBanco.caja + ')')) {
+        _marcaBanco = _prevEnlace.marca;
+        row.notas += ' (conciliado ' + _marcaBanco + ')';
+      } else { _prevEnlace = null; }
+    }
+  }
+  var _nb = function(c){ return (_marcaBanco && c === _ladoBanco.caja) ? ' ' + _marcaBanco : ''; };
+
   if (_supaOnline) {
     var r=await supaReq('POST','mov_cajas',row);
     if (r.status === 409) { showToast('Ya estaba registrado (copia evitada)'); return; }
     if (r.ok) {
       showToast('\u2713 Movimiento registrado');
       _cajasMovs.unshift(row);
+      if (_prevEnlace) {
+        // La operación ya está guardada con el id del banco: ahora sí se
+        // retira el ingreso/cargo suelto que había importado el sync.
+        try {
+          var _rd = _prevEnlace.m.id != null ? await supaReq('DELETE', 'mov_cajas?id=eq.' + encodeURIComponent(_prevEnlace.m.id)) : { ok: false };
+          if (_rd.ok) {
+            await supaReq('DELETE', 'movimientos_ig?notas=eq.' + encodeURIComponent(_prevEnlace.marca));
+            _cajasMovs = _cajasMovs.filter(function(x){ return x !== _prevEnlace.m; });
+            showToast('\u2713 Enlazado con el banco (apunte suelto retirado)');
+          } else { showToast('\u26a0 No se pudo retirar el apunte suelto del banco: revisa ' + _ladoBanco.caja); }
+        } catch (e) { console.warn('enlazar banco:', e); }
+      }
 
       // --- Also write to movimientos_ig so it shows in Libro I/G ---
       var _monO = _getMonedaFromCaja(orig||dest);
@@ -14302,7 +14352,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Depósito externo') + ' → ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':dep'
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca + _nb(orig), op_id: _opId+':dep'
         }).catch(function(e){console.warn('ig deposito:',e);});
       } else if (tipo === 'retiro') {
         // Gasto desde la caja
@@ -14311,7 +14361,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas||'Retiro') + ' ← ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ret'
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca + _nb(orig), op_id: _opId+':ret'
         }).catch(function(e){console.warn('ig retiro:',e);});
       } else if (tipo === 'transferencia') {
         // Salida de origen
@@ -14320,7 +14370,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida)',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ts'
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca + _nb(orig), op_id: _opId+':ts'
         }).catch(function(e){console.warn('ig transferencia salida:',e);});
         // Entrada a destino
         _supaWrite('POST','movimientos_ig',{
@@ -14328,7 +14378,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada)',
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':te'
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca + _nb(dest), op_id: _opId+':te'
         }).catch(function(e){console.warn('ig transferencia entrada:',e);});
       } else if (tipo === 'cambio') {
         // Cambio de divisa: salida en moneda origen
@@ -14337,7 +14387,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida ' + _monO + ')',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':cs'
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca + _nb(orig), op_id: _opId+':cs'
         }).catch(function(e){console.warn('ig cambio salida:',e);});
         // Entrada en moneda destino
         _supaWrite('POST','movimientos_ig',{
@@ -14345,7 +14395,7 @@ async function admRegistrarMovCaja() {
           descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada ' + _monD + ')',
           monto: montoDest, moneda: _monD,
           equiv_usd: parseFloat((montoDest*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ce'
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca + _nb(dest), op_id: _opId+':ce'
         }).catch(function(e){console.warn('ig cambio entrada:',e);});
       }
       // La comision de la operacion, como gasto (para que se vea el coste)
