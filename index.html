@@ -13815,6 +13815,9 @@ async function renderAdminCajas() {
   else                                  content = _renderGestionarCajas();
 
   el.innerHTML = tabs + content;
+  // El formulario nace con un tipo ya seleccionado: evaluar qué campos
+  // aplican (la casilla de comisión nacía oculta hasta cambiar el tipo).
+  if (_cajasTab === 'movimiento' && typeof _onMcTipoChange === 'function') { try { _onMcTipoChange(); } catch(e) {} }
 }
 
 function _setCajasTab(tab) { _cajasTab = tab; renderAdminCajas(); }
