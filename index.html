@@ -14276,8 +14276,13 @@ async function admRegistrarMovCaja() {
   var _opId = 'OP' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   var _marca = ' [OP:' + _opId + ']';
   row.notas = (row.notas || '') + _marca;
+  // Sello anti-duplicado: el índice único de la base rechaza cualquier
+  // segunda copia de esta misma operación (otra pestaña, otro aparato,
+  // reenvío de la cola). El candado de arriba solo protege UNA pestaña.
+  row.op_id = _opId;
   if (_supaOnline) {
     var r=await supaReq('POST','mov_cajas',row);
+    if (r.status === 409) { showToast('Ya estaba registrado (copia evitada)'); return; }
     if (r.ok) {
       showToast('\u2713 Movimiento registrado');
       _cajasMovs.unshift(row);
@@ -14289,65 +14294,65 @@ async function admRegistrarMovCaja() {
 
       if (tipo === 'deposito') {
         // Ingreso a la caja
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Ingreso no-venta',
           descripcion: (notas||'Depósito externo') + ' → ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':dep'
         }).catch(function(e){console.warn('ig deposito:',e);});
       } else if (tipo === 'retiro') {
         // Gasto desde la caja
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Gasto operativo',
           descripcion: (notas||'Retiro') + ' ← ' + orig,
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ret'
         }).catch(function(e){console.warn('ig retiro:',e);});
       } else if (tipo === 'transferencia') {
         // Salida de origen
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
           descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida)',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ts'
         }).catch(function(e){console.warn('ig transferencia salida:',e);});
         // Entrada a destino
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
           descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada)',
           monto: monto, moneda: _monD,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':te'
         }).catch(function(e){console.warn('ig transferencia entrada:',e);});
       } else if (tipo === 'cambio') {
         // Cambio de divisa: salida en moneda origen
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
           descripcion: (notas?notas+': ':'') + orig + ' → ' + dest + ' (salida ' + _monO + ')',
           monto: monto, moneda: _monO,
           equiv_usd: parseFloat((monto*(_RATES_USD[_monO]||1)).toFixed(4)),
-          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: orig, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':cs'
         }).catch(function(e){console.warn('ig cambio salida:',e);});
         // Entrada en moneda destino
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Transferencia entre cuentas',
           descripcion: (notas?notas+': ':'') + dest + ' ← ' + orig + ' (entrada ' + _monD + ')',
           monto: montoDest, moneda: _monD,
           equiv_usd: parseFloat((montoDest*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':ce'
         }).catch(function(e){console.warn('ig cambio entrada:',e);});
       }
       // La comision de la operacion, como gasto (para que se vea el coste)
       if(comOp>0){
-        supaReq('POST','movimientos_ig',{
+        _supaWrite('POST','movimientos_ig',{
           fecha:fecha, tipo:'Gasto operativo',
           descripcion:'Comisi\u00f3n ' + (tipo==='cambio'?'de cambio':'de transferencia') + ' ' + orig + ' \u2192 ' + dest,
           monto: comOp, moneda: _monD,
           equiv_usd: parseFloat((comOp*(_RATES_USD[_monD]||1)).toFixed(4)),
-          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca
+          cuenta: dest, vendedor: usuario, notas: (notas||'') + _marca, op_id: _opId+':com'
         }).catch(function(e){console.warn('ig comision op:',e);});
       }
       // Reload I/G if visible
