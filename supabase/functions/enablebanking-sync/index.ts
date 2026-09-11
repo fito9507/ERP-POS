@@ -145,6 +145,7 @@ Deno.serve(async (req) => {
     // mov_cajas. El cliente sigue recibiendo transactions/balances y su
     // dedup verá los marcadores, así que nunca duplica.
     let insertadas = 0;
+    let porConciliar = 0;
     const detalles: string[] = [];
     const SB = Deno.env.get('SUPABASE_URL');
     const SRK = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -168,6 +169,39 @@ Deno.serve(async (req) => {
           const m = String(f?.notas ?? '').match(/ABANCA_ID:([A-Za-z0-9_-]+)/);
           if (m) vistos.add(m[1]);
         }
+        // Los apuntes manuales CONCILIADOS desde la app llevan el marcador en mov_cajas
+        try {
+          const rv2 = await db('GET', 'mov_cajas?select=notas&notas=like.*ABANCA_ID*&limit=10000');
+          if (rv2.ok) for (const f of await rv2.json()) {
+            const m = String(f?.notas ?? '').match(/ABANCA_ID:([A-Za-z0-9_-]+)/);
+            if (m) vistos.add(m[1]);
+          }
+        } catch { /* sin acceso a mov_cajas: se sigue con los del libro */ }
+
+        // Apuntes MANUALES recientes (sin marca de banco): si un movimiento
+        // del banco casa con uno (misma caja, mismo sentido, ±7 días, ±3 %),
+        // NO se inserta aquí: la app lo concilia con el usuario delante
+        // (adopta el manual y apunta la diferencia como comisión).
+        let manuales: Record<string, unknown>[] = [];
+        try {
+          const desde = new Date(Date.now() - 25 * 86400000).toISOString().slice(0, 10);
+          const rm = await db('GET', `mov_cajas?select=id,fecha,caja_origen,caja_destino,monto_origen,monto_destino,notas&fecha=gte.${desde}&limit=2000`);
+          if (rm.ok) manuales = (await rm.json()).filter((m: Record<string, unknown>) => !/[A-Z]{2,}_ID:/.test(String(m.notas ?? '')));
+        } catch { /* sin candidatos */ }
+        const hayManual = (caja: string, esIng: boolean, amt: number, fecha: string) => {
+          const f = new Date(fecha).getTime(); if (!isFinite(f)) return null;
+          const tol = Math.max(0.5, amt * 0.03);
+          for (const m of manuales) {
+            const entra = m.caja_destino === caja, sale = m.caja_origen === caja;
+            if (esIng ? !entra : !sale) continue;
+            const mAmt = Math.abs(parseFloat(String(entra ? m.monto_destino : m.monto_origen)) || 0);
+            if (Math.abs(mAmt - amt) > tol) continue;
+            const mf = new Date(String(m.fecha)).getTime(); if (!isFinite(mf)) continue;
+            if (Math.abs(mf - f) > 7 * 86400000) continue;
+            return m;
+          }
+          return null;
+        };
         // tasa para equiv_usd de los EUR (misma fila que usa el ERP)
         let eurusd = 0.89;
         try {
@@ -187,6 +221,12 @@ Deno.serve(async (req) => {
           const equiv = t.currency === 'USD' ? amt : (t.currency === 'EUR' ? amt / eurusd : amt);
           const marca = 'ABANCA_ID:' + t.id;
           const fecha = t.created_at || new Date().toISOString().slice(0, 10);
+          const man = hayManual(caja, esIng, amt, fecha);
+          if (man) {
+            porConciliar++;
+            avisos.push(`por conciliar en la app: ${caja} ${esIng ? '+' : '-'}${amt} ${t.currency} ↔ apunte manual #${man.id} (${String(man.notas ?? '').slice(0, 40)})`);
+            continue;
+          }
           const r1 = await db('POST', 'movimientos_ig', {
             fecha, tipo: esIng ? 'Ingreso no-venta' : 'Gasto operativo',
             descripcion: t.reference, monto: amt, moneda: t.currency,
@@ -212,7 +252,7 @@ Deno.serve(async (req) => {
       } catch (e: any) { avisos.push(`cuadre servidor: ${e.message}`); }
     } else { avisos.push('cuadre servidor desactivado: falta SERVICE_ROLE_KEY'); }
 
-    return J({ transactions, balances, avisos, cuentas: uids.length, insertadas, detalles });
+    return J({ transactions, balances, avisos, cuentas: uids.length, insertadas, detalles, por_conciliar: porConciliar });
   } catch (e: any) {
     return J({ error: e.message }, 400);
   }
