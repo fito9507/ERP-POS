@@ -740,6 +740,14 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
   #admin-content [style*="grid-template-columns:repeat(auto-fill"]{
     grid-template-columns:1fr 1fr!important;
   }
+  /* Tarjetas de caja (admin ▸ Resumen y I/G ▸ Cajas): 2 columnas compactas */
+  .cajas-cards{grid-template-columns:1fr 1fr!important;gap:8px!important}
+  .cajas-cards>.card{padding:10px 10px!important}
+  .cajas-cards .cc-btn{padding:5px 4px!important;font-size:10px!important}
+  .cajas-cards .cc-emo{display:none}
+  .cajas-cards .cc-nom{font-size:12px!important}
+  /* La página Cajas del I/G arrastra 3 capas de relleno (módulo+wrap+page): sin el de la página caben las tarjetas */
+  #mod-ig #cajas.page{padding:4px 0!important}
   /* Historial mov_cajas table */
   #admin-content .adm-table-wrap{overflow-x:auto}
 
@@ -8181,88 +8189,31 @@ async function renderCajas(){
     });
   }
 
-  // Order almacenes
+  // Orden de almacenes para la tabla de detalle
   var almOrder = ['Habana','Placetas','Xportprise','España','USA','General'];
-  var almLabel = {};
   var byAlm = {};
   cajas.forEach(function(c){
     if(!byAlm[c.almacen]) byAlm[c.almacen]=[];
     byAlm[c.almacen].push(c);
   });
 
-  var monIcon = {USD:'$',EUR:'€',CUP:'₱',CUPT:'\u20b1'};
-  var totUSD = cajas.reduce(function(a,c){return a+c.equivUSD;},0);
-  // exactamente 2 decimales (fN alarga hasta 4 y salian "8561,935")
-  var _f2 = function(n){ return (parseFloat(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}); };
-
   var html = '';
-  // Header con totales y refresh
+  // Cabecera con refresh
   html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
-    + '<div>'
     + '<div style="font-size:12px;color:var(--color-text-secondary)">Saldos en tiempo real desde Supabase · ventas POS incluidas</div>'
-    + '</div>'
     + '<button class="adm-btn" onclick="renderCajas()" style="font-size:11px;padding:5px 12px">🔄 Actualizar</button>'
     + '</div>';
 
-  almOrder.concat(Object.keys(byAlm).filter(function(a){return almOrder.indexOf(a)<0;})).forEach(function(alm){
-    if (!byAlm[alm] || !byAlm[alm].length) return;
-    var almCajas = byAlm[alm];
-    var almTot = almCajas.reduce(function(a,c){return a+c.equivUSD;},0);
-    // Las cajas sin saldo no merecen tarjeta: chips al pie de la seccion.
-    var conSaldo = almCajas.filter(function(c){ return Math.abs(c.saldo) >= 0.005; });
-    var vacias   = almCajas.filter(function(c){ return Math.abs(c.saldo) <  0.005; });
-    var _nomCorto = function(c){
-      var _cf = (c.cta||'').toUpperCase();
-      var _mp = (c.mon||'').toUpperCase()+' ';
-      var _as = (alm||'').toUpperCase();
-      var _cs = _cf.startsWith(_mp) ? _cf.slice(_mp.length) : _cf;
-      if(_cs === _as) _cs = '';
-      return _cs;
-    };
-    html += '<div style="margin-bottom:20px">'
-      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;padding:0 2px">'
-      + '<div style="font-size:11px;font-weight:700;color:var(--color-text-tertiary);text-transform:uppercase;letter-spacing:1px">'+(almLabel[alm]||alm)
-      + ' <span style="font-weight:500;letter-spacing:0;text-transform:none">· '+conSaldo.length+' caja'+(conSaldo.length===1?'':'s')+'</span></div>'
-      + '<div style="font-size:12px;color:var(--color-text-secondary)">Total: <b style="color:var(--color-text-primary);font-size:14px">'+_f2(almTot)+' USD</b></div>'
-      + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">';
-    conSaldo.forEach(function(c){
-      var pos = c.saldo >= 0;
-      var icon = monIcon[c.mon]||'';
-      var color = pos ? 'var(--color-text-success)' : 'var(--color-text-danger)';
-      var dec = (c.mon==='CUP'||c.mon==='CUPT') ? 0 : 2;
-      var _cs = _nomCorto(c);
-      var _sl = _cs.length > 0;
-      var txt = fN(c.saldo,dec);
-      // fuente adaptativa: la cifra nunca se parte de linea
-      var fs = txt.length > 12 ? 14 : (txt.length > 9 ? 16 : 19);
-      html += '<div class="card" style="padding:12px;border-color:'+(pos?'var(--color-border-tertiary)':'rgba(220,50,47,.35)')+'">'
-        + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-bottom:5px;font-weight:600;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+c.mon+(_sl?' · '+_cs:'')+'</div>'
-        + '<div style="font-size:'+fs+'px;font-weight:800;color:'+color+';line-height:1.15;white-space:nowrap" title="'+icon+' '+txt+'">'+icon+' '+txt+'</div>'
-        + (c.mon!=='USD' ? '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:4px">≈ '+_f2(c.equivUSD)+' USD</div>' : '')
-        + '</div>';
+  // Mismo dibujo que Administración ▸ Cajas ▸ Resumen (KPIs, almacén ▸ moneda ▸ tarjeta)
+  if (!cajas.length) {
+    html += '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin cajas</div>';
+  } else if (typeof _renderCajasResumenHTML === 'function') {
+    var items = cajas.map(function(c){
+      return {c:{nombre:c.cta, moneda:c.mon, almacen:c.almacen}, saldo:c.saldo, usd:c.equivUSD};
     });
-    if(!conSaldo.length){
-      html += '<div style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);padding:6px 2px">Sin saldos en este almacén</div>';
-    }
-    html += '</div>';
-    if(vacias.length){
-      html += '<div style="margin-top:6px;font-size:10px;color:var(--color-text-tertiary);display:flex;flex-wrap:wrap;gap:4px;align-items:center">'
-        + '<span style="opacity:.7">Vacías:</span>'
-        + vacias.map(function(c){
-            var _cs=_nomCorto(c);
-            return '<span style="border:.5px solid var(--color-border-tertiary);border-radius:10px;padding:1px 8px;white-space:nowrap">'+c.mon+(_cs?' '+_cs:'')+'</span>';
-          }).join('')
-        + '</div>';
-    }
-    html += '</div>';
-  });
-
-  // Total general
-  html += '<div style="border-top:1px solid var(--color-border-secondary);padding-top:14px;display:flex;justify-content:space-between;align-items:center;margin-top:4px">'
-    + '<span style="font-size:13px;color:var(--color-text-secondary);font-weight:500">Total general</span>'
-    + '<span style="font-size:22px;font-weight:800;color:var(--color-text-success)">'+_f2(totUSD)+' USD</span>'
-    + '</div>';
+    // Los botones Mover/Historial llevan a Administración ▸ Cajas: solo para admin
+    html += _renderCajasResumenHTML(items, isAdmin ? {fnMover:'_cajasIgIrMovimiento', fnHist:'_cajasIgIrHistorial'} : {});
+  }
 
   if (elGrid) elGrid.innerHTML = html;
 
@@ -8271,7 +8222,14 @@ async function renderCajas(){
   var tfoot = document.getElementById('cajas-foot');
   if (tbody) {
     var totIngV=0,totIngIG=0,totGasIG=0,totSaldo=0,totEqUSD=0;
-    tbody.innerHTML = cajas.map(function(c){
+    var _mo = ['USD','EUR','CUP','CUPT'];
+    var _ao = almOrder.concat(Object.keys(byAlm).filter(function(a){return almOrder.indexOf(a)<0;}));
+    var cajasOrd = cajas.slice().sort(function(a,b){
+      var da=_ao.indexOf(a.almacen), db=_ao.indexOf(b.almacen); if(da<0)da=99; if(db<0)db=99;
+      var ma=_mo.indexOf(a.mon), mb=_mo.indexOf(b.mon); if(ma<0)ma=99; if(mb<0)mb=99;
+      return da-db || ma-mb || (b.saldo-a.saldo);
+    });
+    tbody.innerHTML = cajasOrd.map(function(c){
       // Count POS ventas into this caja
       var posIng = _cajasMovs.filter(function(m){
         return m.caja_destino===c.cta && m.notas==='Venta POS';
@@ -13842,10 +13800,35 @@ function _cajaUsd(moneda, saldo){
 // Accesos rápidos desde el resumen
 function _cajasIrMovimiento(nombre){ window._cajasMovPre = nombre; _cajasTab='movimiento'; renderAdminCajas(); }
 function _cajasIrHistorial(nombre){ _cajasHistCajaSel = nombre; _cajasTab='historial'; renderAdminCajas(); }
+// Desde la página Cajas del módulo I/G: abrir Administración ▸ Cajas en la pestaña pedida
+function _cajasIgIr(nombre, tab){
+  if (typeof isAdmin==='function' && !isAdmin()) return;
+  if (tab==='movimiento') window._cajasMovPre = nombre; else _cajasHistCajaSel = nombre;
+  _cajasTab = tab; adminTab = 'cajas';
+  // goMod pinta el admin entero con adminTab='cajas' (un solo render: dos seguidos
+  // perderían la caja preseleccionada, que se consume en el primero)
+  var sb = null;
+  try { sb = Array.prototype.find.call(document.querySelectorAll('.sb-item'), function(b){ return /mod-admin/.test(b.getAttribute('onclick')||''); }) || null; } catch(e){}
+  if (typeof goMod==='function') goMod('mod-admin','Administración', sb);
+  else renderAdminCajas();
+}
+function _cajasIgIrMovimiento(nombre){ _cajasIgIr(nombre,'movimiento'); }
+function _cajasIgIrHistorial(nombre){ _cajasIgIr(nombre,'historial'); }
 
 function _renderResumenCajas() {
   if (!_cajasData.length) return '<div style="text-align:center;padding:40px;color:var(--color-text-tertiary)">Sin cajas — crea una en ⚙️ Gestionar</div>';
+  var items = _cajasData.map(function(c){
+    var saldo = _getSaldoCaja(c.nombre);
+    return {c:c, saldo:saldo, usd:_cajaUsd(c.moneda, saldo)};
+  });
+  return _renderCajasResumenHTML(items, {fnMover:'_cajasIrMovimiento', fnHist:'_cajasIrHistorial'});
+}
 
+// Dibujo compartido del resumen de cajas (admin ▸ Cajas ▸ Resumen y módulo I/G ▸ Cajas).
+// items = [{c:{nombre,moneda,almacen}, saldo, usd}] · opts.fnMover / opts.fnHist = nombre de la
+// función global que reciben los botones de la tarjeta (sin ellos no se pintan los botones).
+function _renderCajasResumenHTML(items, opts) {
+  opts = opts || {};
   var monCol  = {USD:'#2aa198', EUR:'#268bd2', CUP:'#b58900', CUPT:'#6c71c4'};
   var monSym  = {USD:'$', EUR:'€', CUP:'₱', CUPT:'₱'};
   var hoyMs   = Date.now();
@@ -13854,13 +13837,12 @@ function _renderResumenCajas() {
   // ── Totales generales ──
   var totUsd=0, efectivoUsd=0, bancosUsd=0, negativas=0;
   var porAlm = {};
-  _cajasData.forEach(function(c){
-    var saldo = _getSaldoCaja(c.nombre);
-    var usd = _cajaUsd(c.moneda, saldo);
-    totUsd += usd;
-    if (_esCajaBanco(c.nombre)) bancosUsd += usd; else efectivoUsd += usd;
-    if (saldo < -0.005) negativas++;
-    (porAlm[c.almacen||'General'] = porAlm[c.almacen||'General'] || []).push({c:c, saldo:saldo, usd:usd});
+  items.forEach(function(x){
+    var c = x.c;
+    totUsd += x.usd;
+    if (_esCajaBanco(c.nombre)) bancosUsd += x.usd; else efectivoUsd += x.usd;
+    if (x.saldo < -0.005) negativas++;
+    (porAlm[c.almacen||'General'] = porAlm[c.almacen||'General'] || []).push(x);
   });
   // ── En vuelo: manual a/desde banco, sin confirmar, últimos 20 días ──
   var vuelo = [], vueloUsd = 0;
@@ -13880,8 +13862,9 @@ function _renderResumenCajas() {
       + (sub?'<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:2px">'+sub+'</div>':'')
       + '</div>';
   }
-  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px">'
-    + kpi('Total (equiv. USD)', '$'+fN(totUsd,0), _cajasData.length+' cajas'+(negativas?' · <span style="color:var(--color-text-danger)">'+negativas+' en negativo</span>':''), '#2aa198')
+  // minmax 135: en un móvil de 360 px caben 2 columnas (con 150 se apilaban de uno en uno)
+  var html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px;margin-bottom:18px">'
+    + kpi('Total (equiv. USD)', '$'+fN(totUsd,0), items.length+' cajas'+(negativas?' · <span style="color:var(--color-text-danger)">'+negativas+' en negativo</span>':''), '#2aa198')
     + kpi('Efectivo', '$'+fN(efectivoUsd,0), 'cajas físicas', '#859900')
     + kpi('Bancos', '$'+fN(bancosUsd,0), 'ABANCA · Revolut · Wise', '#268bd2')
     + kpi('En vuelo', (vuelo.length?'$'+fN(vueloUsd,0):'—'), vuelo.length?vuelo.length+' mov. pendiente(s) de banco':'nada pendiente de banco', vuelo.length?'#b58900':'var(--color-border-secondary)')
@@ -13892,6 +13875,7 @@ function _renderResumenCajas() {
     var sa = porAlm[a].reduce(function(x,y){return x+y.usd;},0), sb = porAlm[b].reduce(function(x,y){return x+y.usd;},0);
     return sb - sa;
   });
+  var monOrden = ['USD','EUR','CUP','CUPT'];
   ordenAlm.forEach(function(alm){
     var lista = porAlm[alm].slice().sort(function(x,y){ return y.usd - x.usd; });
     var sub = lista.reduce(function(x,y){return x+y.usd;},0);
@@ -13899,8 +13883,25 @@ function _renderResumenCajas() {
       + '<div style="font-size:12px;font-weight:700;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:1px">'+alm+'</div>'
       + '<div style="font-size:11px;color:var(--color-text-tertiary)">≈ <b style="color:var(--color-text-primary)">$'+fN(sub,0)+'</b> · '+lista.length+' caja'+(lista.length!==1?'s':'')+'</div>'
       + '</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
-    lista.forEach(function(x){
+    // Dentro del almacén, un bloque por moneda (orden fijo; monedas nuevas al final)
+    var porMon = {};
+    lista.forEach(function(x){ (porMon[x.c.moneda] = porMon[x.c.moneda] || []).push(x); });
+    var mons = monOrden.filter(function(m){return porMon[m];})
+      .concat(Object.keys(porMon).filter(function(m){return monOrden.indexOf(m)<0;}).sort());
+    mons.forEach(function(mon){
+    var lm = porMon[mon];
+    var subMon = lm.reduce(function(x,y){return x+y.saldo;},0);
+    var subMonUsd = lm.reduce(function(x,y){return x+y.usd;},0);
+    var colMon = monCol[mon] || 'var(--color-border-secondary)';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin:8px 0 6px">'
+      + '<div style="display:flex;align-items:center;gap:6px">'
+      +   '<span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:100px;color:#fff;background:'+colMon+'">'+mon+'</span>'
+      +   '<span style="font-size:10px;color:var(--color-text-tertiary)">'+lm.length+' caja'+(lm.length!==1?'s':'')+'</span>'
+      + '</div>'
+      + '<div style="font-size:11px;color:var(--color-text-tertiary)"><b style="color:'+(subMon < -0.005?'var(--color-text-danger)':'var(--color-text-primary)')+'">'+(monSym[mon]||'')+fN(subMon,2)+'</b>'+(mon!=='USD'?' · ≈ $'+fN(subMonUsd,0):'')+'</div>'
+      + '</div>';
+    html += '<div class="cajas-cards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">';
+    lm.forEach(function(x){
       var c=x.c, saldo=x.saldo;
       var col = monCol[c.moneda] || 'var(--color-border-secondary)';
       var banco = _esCajaBanco(c.nombre);
@@ -13909,9 +13910,10 @@ function _renderResumenCajas() {
       var pend = vuelo.filter(function(m){ return m.caja_origen===c.nombre||m.caja_destino===c.nombre; }).length;
       var colSaldo = saldo < -0.005 ? 'var(--color-text-danger)' : (Math.abs(saldo)<0.005 ? 'var(--color-text-tertiary)' : 'var(--color-text-primary)');
       var nom = c.nombre.replace(/^(USD|EUR|CUPT|CUP)\s+/,'');
-      html += '<div class="card" style="margin:0;padding:12px 14px;border-left:3px solid '+col+';display:flex;flex-direction:column;gap:6px">'
+      // min-width:0 → el nombre (nowrap) no ensancha la columna de la cuadrícula: se recorta con puntos suspensivos
+      html += '<div class="card" style="margin:0;padding:12px 14px;border-left:3px solid '+col+';display:flex;flex-direction:column;gap:6px;min-width:0">'
         + '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px">'
-        +   '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+(banco?'🏦 ':'💵 ')+nom+'</div>'
+        +   '<div class="cc-nom" style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+c.nombre.replace(/"/g,'&quot;')+'">'+(banco?'🏦 ':'💵 ')+nom+'</div>'
         +   '<span style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:100px;color:#fff;background:'+col+'">'+c.moneda+'</span>'
         + '</div>'
         + '<div style="font-size:clamp(18px,3.4vw,24px);font-weight:800;color:'+colSaldo+';line-height:1.15;word-break:break-all">'+(monSym[c.moneda]||'')+fN(saldo,2)+'</div>'
@@ -13920,13 +13922,16 @@ function _renderResumenCajas() {
         +   '<span>'+(ult?'últ. '+String(ult.fecha||'').slice(5).replace('-','/'):'sin movimientos')+'</span>'
         + '</div>'
         + (pend?'<div style="font-size:10px;font-weight:700;color:var(--color-text-warning)">⏳ '+pend+' pendiente'+(pend>1?'s':'')+' de banco</div>':'')
-        + '<div style="display:flex;gap:6px;margin-top:2px">'
-        +   '<button class="adm-tab" style="flex:1;padding:5px 8px;font-size:11px" onclick="_cajasIrMovimiento(\''+c.nombre.replace(/'/g,"\\'")+'\')">➕ Mover</button>'
-        +   '<button class="adm-tab" style="flex:1;padding:5px 8px;font-size:11px" onclick="_cajasIrHistorial(\''+c.nombre.replace(/'/g,"\\'")+'\')">📋 Historial</button>'
-        + '</div>'
+        + ((opts.fnMover||opts.fnHist)
+          ? '<div style="display:flex;gap:6px;margin-top:2px">'
+            + (opts.fnMover ? '<button class="adm-tab cc-btn" style="flex:1;padding:5px 8px;font-size:11px" onclick="'+opts.fnMover+'(\''+c.nombre.replace(/'/g,"\\'")+'\')"><span class="cc-emo">➕ </span>Mover</button>' : '')
+            + (opts.fnHist  ? '<button class="adm-tab cc-btn" style="flex:1;padding:5px 8px;font-size:11px" onclick="'+opts.fnHist+'(\''+c.nombre.replace(/'/g,"\\'")+'\')"><span class="cc-emo">📋 </span>Historial</button>' : '')
+            + '</div>'
+          : '')
         + '</div>';
     });
     html += '</div>';
+    });
   });
   html += '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:14px">Equivalencias en USD con las tasas vigentes del ERP. Los saldos salen de los movimientos de caja registrados (no del libro I/G).</div>';
   return html;

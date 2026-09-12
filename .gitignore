@@ -31,3 +31,6 @@ node_modules/
 test-results/
 playwright-report/
 tests/_huella_antes.json
+.claude/settings.local.json
+
+tests/_capturas/
