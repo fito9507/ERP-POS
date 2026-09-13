@@ -6923,6 +6923,9 @@ function _pliqDec(mon){ return (mon==='CUP'||mon==='CUPT')?0:2; }
 function _pliqTol(){ var c=_pliqCtx; return Math.max((c.mon==='CUP'||c.mon==='CUPT')?1:0.01, Math.abs(c.monto)*0.005); }
 var _pliqCtx=null; // {i, liq, mon, monto, cajas, lineas:[{caja,monto}]}
 
+function _pliqSaldo(nombre){ return typeof _getSaldoCaja==='function' ? (_getSaldoCaja(nombre)||0) : 0; }
+// Una línea "se pasa" si pide más de lo que hay en esa caja (con margen de redondeo)
+function _pliqExcede(l){ var m=parseFloat(l.monto)||0; return m > _pliqSaldo(l.caja) + 0.005; }
 function _pliqMonCaja(nombre){
   var c=(_pliqCtx&&_pliqCtx.cajas||[]).find(function(x){return x.nombre===nombre;});
   if(c) return c.moneda||'USD';
@@ -6997,9 +7000,15 @@ function _pliqRender(){
       +(ctx.lineas.length>1?'<button class="btn-sm" type="button" style="color:var(--color-text-danger)" title="Quitar esta caja" onclick="_pliqDelLinea('+k+')">✕</button>':'')
       +'</div>'
       +'<div id="pliq-eq-'+k+'" style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);min-height:1em">'+_pliqEqTxt(k)+'</div>'
+      +'<div id="pliq-sal-'+k+'" style="grid-column:1/-1;font-size:11px">'+_pliqSaldoTxt(k)+'</div>'
       +'</div>';
   }).join('');
   _pliqResumen();
+}
+function _pliqSaldoTxt(k){
+  var l=_pliqCtx.lineas[k], mc=_pliqMonCaja(l.caja), sal=_pliqSaldo(l.caja), d=_pliqDec(mc);
+  if(_pliqExcede(l)) return '<span style="color:var(--color-text-danger);font-weight:700">⛔ En caja solo hay '+fN(sal,d)+' '+mc+' · faltan '+fN((parseFloat(l.monto)||0)-sal,d)+' '+mc+'</span>';
+  return '<span style="color:var(--color-text-tertiary)">En caja: '+fN(sal,d)+' '+mc+' · quedarían '+fN(sal-(parseFloat(l.monto)||0),d)+' '+mc+'</span>';
 }
 function _pliqTotalPagado(){
   var ctx=_pliqCtx;
@@ -7008,9 +7017,12 @@ function _pliqTotalPagado(){
 function _pliqResumen(){
   var ctx=_pliqCtx; if(!ctx) return;
   var el=document.getElementById('pliq-resumen'); if(!el) return;
-  var pag=_pliqTotalPagado(), dif=ctx.monto-pag, d=_pliqDec(ctx.mon), ok=Math.abs(dif)<=_pliqTol();
+  var pag=_pliqTotalPagado(), dif=ctx.monto-pag, d=_pliqDec(ctx.mon), cuadra=Math.abs(dif)<=_pliqTol();
+  var excede=ctx.lineas.some(_pliqExcede);
+  var ok=cuadra&&!excede;
   el.innerHTML='<div style="display:flex;justify-content:space-between"><span>Suma de las cajas</span><b>'+fN(pag,d)+' '+ctx.mon+'</b></div>'
-    +'<div style="display:flex;justify-content:space-between;margin-top:4px;color:'+(ok?'var(--color-text-success)':'var(--color-text-danger)')+'"><span>'+(ok?'Cuadra con el total':(dif>0?'Falta':'Sobra'))+'</span><b>'+(ok?'✓':fN(Math.abs(dif),d)+' '+ctx.mon)+'</b></div>';
+    +'<div style="display:flex;justify-content:space-between;margin-top:4px;color:'+(cuadra?'var(--color-text-success)':'var(--color-text-danger)')+'"><span>'+(cuadra?'Cuadra con el total':(dif>0?'Falta':'Sobra'))+'</span><b>'+(cuadra?'✓':fN(Math.abs(dif),d)+' '+ctx.mon)+'</b></div>'
+    +(excede?'<div style="margin-top:4px;color:var(--color-text-danger);font-weight:700">⛔ Alguna caja no tiene saldo suficiente: reparte el pago entre otras cajas</div>':'');
   var b=document.getElementById('pliq-ok'); if(b){ b.disabled=!ok; b.style.opacity=ok?'1':'.5'; }
 }
 function _pliqSetCaja(k,v){
@@ -7021,6 +7033,7 @@ function _pliqSetCaja(k,v){
 function _pliqSetMonto(k,v){
   _pliqCtx.lineas[k].monto=parseFloat(v)||0;
   var e=document.getElementById('pliq-eq-'+k); if(e) e.textContent=_pliqEqTxt(k);
+  var sl=document.getElementById('pliq-sal-'+k); if(sl) sl.innerHTML=_pliqSaldoTxt(k);
   _pliqResumen();
 }
 function _pliqResto(k){
@@ -7052,6 +7065,8 @@ function confirmarPagarLiq(i, btn) {
   if(!lineas.length){ showToast('Indica al menos una caja con importe','error'); return; }
   var pag=lineas.reduce(function(a,l){return a+l.equiv;},0);
   if(Math.abs(monto-pag)>_pliqTol()){ showToast('El reparto no cuadra con el total','error'); return; }
+  var sinSaldo=lineas.filter(function(l){ return l.monto > _pliqSaldo(l.caja)+0.005; });
+  if(sinSaldo.length){ showToast('Sin saldo suficiente en '+sinSaldo.map(function(l){return l.caja;}).join(', '),'error'); return; }
   // Cerrojo: un solo pago por liquidación (el 25/05/26 una se registró 7 veces)
   if(window._pliqLock) return; window._pliqLock=true; setTimeout(function(){ window._pliqLock=false; },4000);
   var ov=document.getElementById('pliq-overlay'); if(ov) ov.remove(); _pliqCtx=null;

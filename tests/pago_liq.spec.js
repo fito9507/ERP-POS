@@ -55,18 +55,31 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     expect(hayPendiente, 'hace falta una liquidación pendiente para probar').not.toBeNull();
 
     await page.waitForSelector('#pliq-overlay', { timeout: 5000 });
-    // Línea 1: 100 en la moneda de la caja preseleccionada; línea 2: otra caja en otra moneda con el resto
-    await page.fill('#pliq-lineas input', '100');
-    await page.click('#pliq-overlay button:has-text("Añadir otra caja")');
+    // No se puede pagar más de lo que hay en caja: con el total en una caja sin saldo, Confirmar queda bloqueado
+    const bloqueo = await page.evaluate(function () {
+      var vacia = _pliqCtx.cajas.find(function (x) { return _pliqSaldo(x.nombre) < 1; });
+      if (!vacia) return null;
+      _pliqSetCaja(0, vacia.nombre); _pliqResto(0);
+      return { caja: vacia.nombre, monto: _pliqCtx.lineas[0].monto, ok: !document.getElementById('pliq-ok').disabled, resumen: document.getElementById('pliq-resumen').textContent, saldoTxt: document.getElementById('pliq-sal-0').textContent };
+    });
+    console.log('Sin saldo: ' + JSON.stringify(bloqueo));
+    if (bloqueo) { expect(bloqueo.ok, 'no debe dejar confirmar sin saldo').toBe(false); expect(bloqueo.saldoTxt).toContain('solo hay'); }
+
+    // Reparto válido: línea 1 = 100 en una caja de la moneda de la liquidación con saldo; línea 2 = otra moneda con saldo para el resto
     const cajaOtra = await page.evaluate(function () {
-      var l0 = _pliqCtx.lineas[0]; var m0 = _pliqMonCaja(l0.caja);
-      var c = _pliqCtx.cajas.find(function (x) { return (x.moneda || 'USD') !== m0 && x.nombre !== l0.caja; });
-      if (!c) return null;
-      _pliqSetCaja(1, c.nombre); _pliqResto(1);
-      return { caja: c.nombre, mon: c.moneda, lineas: _pliqCtx.lineas, resumen: document.getElementById('pliq-resumen').textContent };
+      var ctx = _pliqCtx;
+      var c1 = ctx.cajas.find(function (x) { return (x.moneda || 'USD') === ctx.mon && _pliqSaldo(x.nombre) >= 100; });
+      if (!c1) return null;
+      _pliqSetCaja(0, c1.nombre); _pliqSetMonto(0, '100');
+      _pliqAddLinea();
+      var resto = ctx.monto - 100;
+      var c2 = ctx.cajas.find(function (x) { var m = x.moneda || 'USD'; return m !== ctx.mon && x.nombre !== c1.nombre && _pliqSaldo(x.nombre) >= _pliqConv(resto, ctx.mon, m, ctx.liq); });
+      if (!c2) return null;
+      _pliqSetCaja(1, c2.nombre); _pliqResto(1);
+      return { caja: c2.nombre, mon: c2.moneda, lineas: ctx.lineas, resumen: document.getElementById('pliq-resumen').textContent };
     });
     console.log('Reparto: ' + JSON.stringify(cajaOtra));
-    expect(cajaOtra, 'hace falta una segunda caja en otra moneda').not.toBeNull();
+    expect(cajaOtra, 'hacen falta dos cajas con saldo en monedas distintas').not.toBeNull();
     expect(cajaOtra.resumen).toContain('Cuadra');
     await page.screenshot({ path: path.join(OUT, 'pago-liq-' + vp.n + '.png') });
 
