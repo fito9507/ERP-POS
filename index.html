@@ -6943,7 +6943,10 @@ function pagarLiq(i) {
   var pre = (liq.cuenta && cajas.some(function(c){return c.nombre===liq.cuenta;})) ? liq.cuenta : '';
   if(!pre){ var c0 = cajas.find(function(c){return (c.moneda||'')===mon;}) || cajas[0]; pre = c0.nombre; }
   _pliqCtx = {i:i, liq:liq, mon:mon, monto:monto, cajas:cajas, lineas:[]};
-  _pliqCtx.lineas.push({caja:pre, monto:+_pliqConv(monto, mon, _pliqMonCaja(pre), liq).toFixed(_pliqDec(_pliqMonCaja(pre)))});
+  // Caja inicial: mejor una de la moneda de la liquidación CON saldo
+  var conSaldo = cajas.find(function(c){ return (c.moneda||'')===mon && _pliqSaldo(c.nombre) > 0; });
+  if(conSaldo && !(liq.cuenta && _pliqSaldo(pre) > 0)) pre = conSaldo.nombre;
+  _pliqCtx.lineas.push({caja:pre, monto:0});
 
   var old = document.getElementById('pliq-overlay'); if(old) old.remove();
   var overlay = document.createElement('div'); overlay.id='pliq-overlay';
@@ -6963,7 +6966,7 @@ function pagarLiq(i) {
     +'<button class="btn btn-p" type="button" id="pliq-ok" onclick="confirmarPagarLiq('+i+',this)">Confirmar pago</button>'
     +'</div></div>';
   document.body.appendChild(overlay);
-  _pliqRender();
+  _pliqResto(0); // carga lo máximo que puede pagar esa caja (y pinta)
 }
 
 function _pliqOpts(sel){
@@ -6996,7 +6999,7 @@ function _pliqRender(){
       +'<div style="display:flex;gap:6px;align-items:center;min-width:0"><input type="number" step="any" inputmode="decimal" value="'+(l.monto!=null?l.monto:'')+'" style="'+inp+';width:100%;min-width:0" oninput="_pliqSetMonto('+k+',this.value)">'
       +'<span style="font-size:12px;font-weight:700;white-space:nowrap">'+mc+'</span></div>'
       +'<div style="display:flex;gap:4px;align-items:center">'
-      +'<button class="btn-sm" type="button" title="Poner lo que falta por pagar" onclick="_pliqResto('+k+')">Resto</button>'
+      +'<button class="btn-sm" type="button" title="Cargar lo que falta por pagar, hasta donde llegue el saldo de esta caja" onclick="_pliqResto('+k+')">Lo que falta</button>'
       +(ctx.lineas.length>1?'<button class="btn-sm" type="button" style="color:var(--color-text-danger)" title="Quitar esta caja" onclick="_pliqDelLinea('+k+')">✕</button>':'')
       +'</div>'
       +'<div id="pliq-eq-'+k+'" style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);min-height:1em">'+_pliqEqTxt(k)+'</div>'
@@ -7022,13 +7025,13 @@ function _pliqResumen(){
   var ok=cuadra&&!excede;
   el.innerHTML='<div style="display:flex;justify-content:space-between"><span>Suma de las cajas</span><b>'+fN(pag,d)+' '+ctx.mon+'</b></div>'
     +'<div style="display:flex;justify-content:space-between;margin-top:4px;color:'+(cuadra?'var(--color-text-success)':'var(--color-text-danger)')+'"><span>'+(cuadra?'Cuadra con el total':(dif>0?'Falta':'Sobra'))+'</span><b>'+(cuadra?'✓':fN(Math.abs(dif),d)+' '+ctx.mon)+'</b></div>'
-    +(excede?'<div style="margin-top:4px;color:var(--color-text-danger);font-weight:700">⛔ Alguna caja no tiene saldo suficiente: reparte el pago entre otras cajas</div>':'');
+    +(excede?'<div style="margin-top:4px;color:var(--color-text-danger);font-weight:700">⛔ Alguna caja no tiene saldo suficiente: reparte el pago entre otras cajas</div>':'')
+    +(!excede&&!cuadra&&dif>0?'<div style="margin-top:4px;color:var(--color-text-tertiary)">Pulsa «+ Añadir otra caja» para cubrir lo que falta</div>':'');
   var b=document.getElementById('pliq-ok'); if(b){ b.disabled=!ok; b.style.opacity=ok?'1':'.5'; }
 }
 function _pliqSetCaja(k,v){
-  var ctx=_pliqCtx, l=ctx.lineas[k]; var de=_pliqMonCaja(l.caja); l.caja=v; var a=_pliqMonCaja(v);
-  if(de!==a) l.monto=+_pliqConv(parseFloat(l.monto)||0,de,a,ctx.liq).toFixed(_pliqDec(a));
-  _pliqRender();
+  _pliqCtx.lineas[k].caja=v;
+  _pliqResto(k); // con la caja nueva, cargar lo que falta sin pasarse de su saldo
 }
 function _pliqSetMonto(k,v){
   _pliqCtx.lineas[k].monto=parseFloat(v)||0;
@@ -7036,17 +7039,26 @@ function _pliqSetMonto(k,v){
   var sl=document.getElementById('pliq-sal-'+k); if(sl) sl.innerHTML=_pliqSaldoTxt(k);
   _pliqResumen();
 }
+// Lo que falta por pagar, en la moneda de la caja, sin pasarse de su saldo
 function _pliqResto(k){
   var ctx=_pliqCtx, l=ctx.lineas[k], mc=_pliqMonCaja(l.caja);
   var otros=ctx.lineas.reduce(function(a,x,j){ return j===k?a:a+_pliqConv(parseFloat(x.monto)||0,_pliqMonCaja(x.caja),ctx.mon,ctx.liq); },0);
-  l.monto=+Math.max(0,_pliqConv(ctx.monto-otros,ctx.mon,mc,ctx.liq)).toFixed(_pliqDec(mc));
+  var falta=Math.max(0,_pliqConv(ctx.monto-otros,ctx.mon,mc,ctx.liq));
+  var sal=Math.max(0,_pliqSaldo(l.caja));
+  var d=_pliqDec(mc);
+  // truncar (no redondear) para no pasarse ni del saldo ni del total por céntimos
+  var f=Math.pow(10,d);
+  l.monto=Math.floor(Math.min(falta,sal)*f+1e-9)/f;
   _pliqRender();
 }
 function _pliqAddLinea(){
   var ctx=_pliqCtx; var usadas=ctx.lineas.map(function(l){return l.caja;});
-  var c=ctx.cajas.find(function(x){return usadas.indexOf(x.nombre)<0;})||ctx.cajas[0];
+  var libre=function(x){ return usadas.indexOf(x.nombre)<0; };
+  var c=ctx.cajas.find(function(x){ return libre(x) && (x.moneda||'')===ctx.mon && _pliqSaldo(x.nombre)>0; })
+       ||ctx.cajas.find(function(x){ return libre(x) && _pliqSaldo(x.nombre)>0; })
+       ||ctx.cajas.find(libre)||ctx.cajas[0];
   ctx.lineas.push({caja:c.nombre, monto:0});
-  _pliqResto(ctx.lineas.length-1);
+  _pliqResto(ctx.lineas.length-1); // carga lo que falta, hasta donde llegue el saldo
 }
 function _pliqDelLinea(k){ _pliqCtx.lineas.splice(k,1); _pliqRender(); }
 

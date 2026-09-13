@@ -55,15 +55,40 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     expect(hayPendiente, 'hace falta una liquidación pendiente para probar').not.toBeNull();
 
     await page.waitForSelector('#pliq-overlay', { timeout: 5000 });
-    // No se puede pagar más de lo que hay en caja: con el total en una caja sin saldo, Confirmar queda bloqueado
+    // Al abrir, la primera caja carga sola lo máximo que puede pagar (nunca más que su saldo)
+    const inicial = await page.evaluate(function () {
+      var l = _pliqCtx.lineas[0]; return { caja: l.caja, monto: l.monto, saldo: _pliqSaldo(l.caja), total: _pliqCtx.monto, mon: _pliqMonCaja(l.caja) };
+    });
+    console.log('Inicial: ' + JSON.stringify(inicial));
+    expect(inicial.monto).toBeLessThanOrEqual(inicial.saldo + 0.01);
+    expect(inicial.monto).toBeGreaterThan(0);
+
+    // Con una caja sin saldo, "Lo que falta" carga 0; si se teclea el total a mano, Confirmar queda bloqueado
     const bloqueo = await page.evaluate(function () {
       var vacia = _pliqCtx.cajas.find(function (x) { return _pliqSaldo(x.nombre) < 1; });
       if (!vacia) return null;
-      _pliqSetCaja(0, vacia.nombre); _pliqResto(0);
-      return { caja: vacia.nombre, monto: _pliqCtx.lineas[0].monto, ok: !document.getElementById('pliq-ok').disabled, resumen: document.getElementById('pliq-resumen').textContent, saldoTxt: document.getElementById('pliq-sal-0').textContent };
+      _pliqSetCaja(0, vacia.nombre);
+      var auto = _pliqCtx.lineas[0].monto;
+      _pliqSetMonto(0, String(_pliqConv(_pliqCtx.monto, _pliqCtx.mon, _pliqMonCaja(vacia.nombre), _pliqCtx.liq)));
+      return { caja: vacia.nombre, auto: auto, monto: _pliqCtx.lineas[0].monto, ok: !document.getElementById('pliq-ok').disabled, saldoTxt: document.getElementById('pliq-sal-0').textContent };
     });
     console.log('Sin saldo: ' + JSON.stringify(bloqueo));
-    if (bloqueo) { expect(bloqueo.ok, 'no debe dejar confirmar sin saldo').toBe(false); expect(bloqueo.saldoTxt).toContain('solo hay'); }
+    if (bloqueo) { expect(bloqueo.auto).toBe(0); expect(bloqueo.ok, 'no debe dejar confirmar sin saldo').toBe(false); expect(bloqueo.saldoTxt).toContain('solo hay'); }
+
+    // Añadir otra caja carga lo que falta hasta donde llegue su saldo
+    const auto2 = await page.evaluate(function () {
+      var ctx = _pliqCtx;
+      var c1 = ctx.cajas.find(function (x) { return (x.moneda || 'USD') === ctx.mon && _pliqSaldo(x.nombre) >= 100; });
+      if (!c1) return null;
+      _pliqSetCaja(0, c1.nombre); _pliqSetMonto(0, '100');
+      _pliqAddLinea();
+      var l = ctx.lineas[1]; var mc = _pliqMonCaja(l.caja);
+      var falta = _pliqConv(ctx.monto - 100, ctx.mon, mc, ctx.liq);
+      return { caja: l.caja, mon: mc, monto: l.monto, saldo: _pliqSaldo(l.caja), falta: falta };
+    });
+    console.log('Añadir otra caja: ' + JSON.stringify(auto2));
+    if (auto2) { expect(auto2.monto).toBeLessThanOrEqual(auto2.saldo + 0.01); expect(auto2.monto).toBeLessThanOrEqual(auto2.falta + 1); expect(auto2.monto).toBeGreaterThan(0); }
+    await page.evaluate(function () { while (_pliqCtx.lineas.length > 1) _pliqDelLinea(1); });
 
     // Reparto válido: línea 1 = 100 en una caja de la moneda de la liquidación con saldo; línea 2 = otra moneda con saldo para el resto
     const cajaOtra = await page.evaluate(function () {
