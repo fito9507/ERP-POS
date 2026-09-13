@@ -6846,8 +6846,9 @@ async function syncLoadLiquidaciones(){
     window._liqTasaOK = await _probar('tasa');
     window._liqAjusteOK = await _probar('ajuste');
     window._liqLoteOK = await _probar('lote');
+    window._liqPagosOK = await _probar('pagos');
     liquidaciones=rows.map(function(x){
-      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null), lote:x.lote||'',
+      return { id:x.id, vend:x.vend||'', desde:x.desde||'', hasta:x.hasta||'', semana:x.semana||'', tasa:(x.tasa!=null?parseFloat(x.tasa):null), ajuste:(x.ajuste!=null?parseFloat(x.ajuste):null), lote:x.lote||'', pagos:Array.isArray(x.pagos)?x.pagos:[],
         alm:x.almacen||'Todos', vUSD:parseFloat(x.v_usd)||0, comUSD:parseFloat(x.com_usd)||0,
         totalCUP:parseFloat(x.com_cup)||0, mon:x.mon||'', cuenta:x.cuenta||'',
         comDetalle:x.com_detalle||{}, estado:x.estado||'Pendiente', fecha:x.fecha||'',
@@ -6907,107 +6908,207 @@ function refreshLiqHist(){
   if(thAcc) thAcc.style.display = _isV ? 'none' : '';
 }
 
-function pagarLiq(i) {
-  var liq = liquidaciones[i];
-  if(liq.estado === 'Pagado') return;
-  var mon = liq.mon || 'CUP';
-  var monto = liq.totalCUP || liq.comCUP || 0;
-  var cajas = typeof _cajasData!=='undefined'?_cajasData:[];
-  var cajasF = cajas.filter(function(c){ return c.nombre&&c.nombre.toUpperCase().indexOf(mon)>=0; });
-  if(!cajasF.length) cajasF = cajas;
-  // Pre-select cuenta if saved on liq
-  var preSel = liq.cuenta || '';
-  var cajaOpts = cajasF.map(function(c){
-    return '<option'+(c.nombre===preSel?' selected':'')+' value="'+c.nombre+'">'+c.nombre+'</option>';
-  }).join('');
-  // Show modal
-  var overlay = document.createElement('div');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML='<div style="background:var(--color-background-primary);border-radius:12px;padding:24px;min-width:320px;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.4)">'
-    +'<div style="font-size:15px;font-weight:700;margin-bottom:16px">Pagar liquidación</div>'
-    +'<div style="margin-bottom:12px"><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:4px">Vendedor / Semana</div>'
-    +'<div style="font-weight:500">'+liq.vend+' · '+liq.semana+'</div></div>'
-    +'<div style="margin-bottom:16px"><div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:4px">Total a pagar</div>'
-    +'<div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(monto,mon==='CUP'||mon==='CUPT'?0:2)+' '+mon+'</div></div>'
-    +'<div style="margin-bottom:20px"><label style="font-size:12px;color:var(--color-text-secondary);display:block;margin-bottom:6px">Cuenta de pago</label>'
-    +'<select id="pliq-caja" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px">'+cajaOpts+'</select></div>'
-    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
-    +'<button class="btn-sm" onclick="this.closest(\"[style*=fixed]\").remove()">Cancelar</button>'
-    +'<button class="btn btn-p" onclick="confirmarPagarLiq('+i+',this)">Confirmar pago</button>'
-    +'</div></div>';
-  document.body.appendChild(overlay);
+// ── PAGO DE LIQUIDACIÓN: una o varias cajas, en distintas monedas ────────────
+// Tasa (unidades de la moneda por 1 USD) con la que se reparte el pago:
+// CUP con la tasa propia de la liquidación; el resto con las tasas del ERP
+// (las mismas que usa el cambio de divisa entre cajas).
+function _pliqRate(mon, liq){
+  if(mon==='USD') return 1;
+  if(mon==='CUP') return (liq&&liq.tasa>0)?liq.tasa:(RATES.CUP||1);
+  if(mon==='CUPT') return RATES.CUPT||RATES.CUP||1;
+  if(mon==='EUR') return RATES.EUR||1;
+  return RATES[mon]||1;
+}
+function _pliqConv(monto, de, a, liq){ return de===a ? monto : monto/_pliqRate(de,liq)*_pliqRate(a,liq); }
+function _pliqDec(mon){ return (mon==='CUP'||mon==='CUPT')?0:2; }
+// Tolerancia para dar el reparto por cuadrado: redondeos de conversión
+function _pliqTol(){ var c=_pliqCtx; return Math.max((c.mon==='CUP'||c.mon==='CUPT')?1:0.01, Math.abs(c.monto)*0.005); }
+var _pliqCtx=null; // {i, liq, mon, monto, cajas, lineas:[{caja,monto}]}
+
+function _pliqMonCaja(nombre){
+  var c=(_pliqCtx&&_pliqCtx.cajas||[]).find(function(x){return x.nombre===nombre;});
+  if(c) return c.moneda||'USD';
+  return typeof _getMonedaFromCaja==='function'?_getMonedaFromCaja(nombre):((nombre||'').split(' ')[0]||'USD');
 }
 
-function confirmarPagarLiq(i, btn) {
+function pagarLiq(i) {
   var liq = liquidaciones[i];
-  var cta = document.getElementById('pliq-caja')?.value;
-  if(!cta){showToast('Selecciona una cuenta','error');return;}
-  btn.closest('[style*="fixed"]').remove();
+  if(!liq || liq.estado === 'Pagado') return;
   var mon = liq.mon || 'CUP';
   var monto = liq.totalCUP || liq.comCUP || 0;
+  var cajas = (typeof _cajasData!=='undefined'?_cajasData:[]).filter(function(c){ return c.nombre && c.activa!==false; });
+  if(!cajas.length){ showToast('No hay cajas cargadas','error'); return; }
+  // Caja inicial: la guardada en la liquidación o la primera de su moneda
+  var pre = (liq.cuenta && cajas.some(function(c){return c.nombre===liq.cuenta;})) ? liq.cuenta : '';
+  if(!pre){ var c0 = cajas.find(function(c){return (c.moneda||'')===mon;}) || cajas[0]; pre = c0.nombre; }
+  _pliqCtx = {i:i, liq:liq, mon:mon, monto:monto, cajas:cajas, lineas:[]};
+  _pliqCtx.lineas.push({caja:pre, monto:+_pliqConv(monto, mon, _pliqMonCaja(pre), liq).toFixed(_pliqDec(_pliqMonCaja(pre)))});
+
+  var old = document.getElementById('pliq-overlay'); if(old) old.remove();
+  var overlay = document.createElement('div'); overlay.id='pliq-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
+  overlay.innerHTML='<div style="background:var(--color-background-primary);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.4);box-sizing:border-box">'
+    +'<div style="font-size:15px;font-weight:700;margin-bottom:12px">Pagar liquidación</div>'
+    +'<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
+    +  '<div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor / Semana</div><div style="font-weight:500">'+liq.vend+' · '+liq.semana+'</div></div>'
+    +  '<div style="text-align:right"><div style="font-size:11px;color:var(--color-text-secondary)">Total a pagar</div><div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(monto,_pliqDec(mon))+' '+mon+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">Cajas de pago <span style="opacity:.7">· se puede repartir entre varias cajas y monedas</span></div>'
+    +'<div id="pliq-lineas"></div>'
+    +'<button class="btn-sm" type="button" onclick="_pliqAddLinea()" style="margin:2px 0 12px">+ Añadir otra caja</button>'
+    +'<div id="pliq-resumen" style="border-top:1px solid var(--color-border-tertiary);padding-top:10px;margin-bottom:14px;font-size:12px"></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn-sm" type="button" onclick="document.getElementById(\'pliq-overlay\').remove();_pliqCtx=null">Cancelar</button>'
+    +'<button class="btn btn-p" type="button" id="pliq-ok" onclick="confirmarPagarLiq('+i+',this)">Confirmar pago</button>'
+    +'</div></div>';
+  document.body.appendChild(overlay);
+  _pliqRender();
+}
+
+function _pliqOpts(sel){
+  var orden=['USD','EUR','CUP','CUPT'], por={};
+  _pliqCtx.cajas.forEach(function(c){ var m=c.moneda||'USD'; (por[m]=por[m]||[]).push(c); });
+  var mons=orden.filter(function(m){return por[m];}).concat(Object.keys(por).filter(function(m){return orden.indexOf(m)<0;}).sort());
+  return mons.map(function(m){
+    return '<optgroup label="'+m+'">'+por[m].map(function(c){
+      var sld=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre):0;
+      return '<option value="'+c.nombre.replace(/"/g,'&quot;')+'"'+(c.nombre===sel?' selected':'')+'>'+c.nombre+' · '+fN(sld,_pliqDec(m))+'</option>';
+    }).join('')+'</optgroup>';
+  }).join('');
+}
+function _pliqEqTxt(k){
+  var ctx=_pliqCtx, l=ctx.lineas[k], mc=_pliqMonCaja(l.caja);
+  if(mc===ctx.mon) return '';
+  var eq=_pliqConv(parseFloat(l.monto)||0, mc, ctx.mon, ctx.liq);
+  var ra=_pliqRate(mc,ctx.liq), rb=_pliqRate(ctx.mon,ctx.liq);
+  var tasa = ra>=rb ? fN(ra/rb,2)+' '+mc+'/'+ctx.mon : fN(rb/ra,2)+' '+ctx.mon+'/'+mc;
+  return '≈ '+fN(eq,_pliqDec(ctx.mon))+' '+ctx.mon+' · tasa '+tasa;
+}
+function _pliqRender(){
+  var ctx=_pliqCtx; if(!ctx) return;
+  var el=document.getElementById('pliq-lineas'); if(!el) return;
+  var inp='padding:8px 10px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;box-sizing:border-box';
+  el.innerHTML=ctx.lineas.map(function(l,k){
+    var mc=_pliqMonCaja(l.caja);
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px;padding:8px;border:1px solid var(--color-border-tertiary);border-radius:8px">'
+      +'<select style="'+inp+';width:100%;grid-column:1/-1" onchange="_pliqSetCaja('+k+',this.value)">'+_pliqOpts(l.caja)+'</select>'
+      +'<div style="display:flex;gap:6px;align-items:center;min-width:0"><input type="number" step="any" inputmode="decimal" value="'+(l.monto!=null?l.monto:'')+'" style="'+inp+';width:100%;min-width:0" oninput="_pliqSetMonto('+k+',this.value)">'
+      +'<span style="font-size:12px;font-weight:700;white-space:nowrap">'+mc+'</span></div>'
+      +'<div style="display:flex;gap:4px;align-items:center">'
+      +'<button class="btn-sm" type="button" title="Poner lo que falta por pagar" onclick="_pliqResto('+k+')">Resto</button>'
+      +(ctx.lineas.length>1?'<button class="btn-sm" type="button" style="color:var(--color-text-danger)" title="Quitar esta caja" onclick="_pliqDelLinea('+k+')">✕</button>':'')
+      +'</div>'
+      +'<div id="pliq-eq-'+k+'" style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);min-height:1em">'+_pliqEqTxt(k)+'</div>'
+      +'</div>';
+  }).join('');
+  _pliqResumen();
+}
+function _pliqTotalPagado(){
+  var ctx=_pliqCtx;
+  return ctx.lineas.reduce(function(a,l){ return a+_pliqConv(parseFloat(l.monto)||0,_pliqMonCaja(l.caja),ctx.mon,ctx.liq); },0);
+}
+function _pliqResumen(){
+  var ctx=_pliqCtx; if(!ctx) return;
+  var el=document.getElementById('pliq-resumen'); if(!el) return;
+  var pag=_pliqTotalPagado(), dif=ctx.monto-pag, d=_pliqDec(ctx.mon), ok=Math.abs(dif)<=_pliqTol();
+  el.innerHTML='<div style="display:flex;justify-content:space-between"><span>Suma de las cajas</span><b>'+fN(pag,d)+' '+ctx.mon+'</b></div>'
+    +'<div style="display:flex;justify-content:space-between;margin-top:4px;color:'+(ok?'var(--color-text-success)':'var(--color-text-danger)')+'"><span>'+(ok?'Cuadra con el total':(dif>0?'Falta':'Sobra'))+'</span><b>'+(ok?'✓':fN(Math.abs(dif),d)+' '+ctx.mon)+'</b></div>';
+  var b=document.getElementById('pliq-ok'); if(b){ b.disabled=!ok; b.style.opacity=ok?'1':'.5'; }
+}
+function _pliqSetCaja(k,v){
+  var ctx=_pliqCtx, l=ctx.lineas[k]; var de=_pliqMonCaja(l.caja); l.caja=v; var a=_pliqMonCaja(v);
+  if(de!==a) l.monto=+_pliqConv(parseFloat(l.monto)||0,de,a,ctx.liq).toFixed(_pliqDec(a));
+  _pliqRender();
+}
+function _pliqSetMonto(k,v){
+  _pliqCtx.lineas[k].monto=parseFloat(v)||0;
+  var e=document.getElementById('pliq-eq-'+k); if(e) e.textContent=_pliqEqTxt(k);
+  _pliqResumen();
+}
+function _pliqResto(k){
+  var ctx=_pliqCtx, l=ctx.lineas[k], mc=_pliqMonCaja(l.caja);
+  var otros=ctx.lineas.reduce(function(a,x,j){ return j===k?a:a+_pliqConv(parseFloat(x.monto)||0,_pliqMonCaja(x.caja),ctx.mon,ctx.liq); },0);
+  l.monto=+Math.max(0,_pliqConv(ctx.monto-otros,ctx.mon,mc,ctx.liq)).toFixed(_pliqDec(mc));
+  _pliqRender();
+}
+function _pliqAddLinea(){
+  var ctx=_pliqCtx; var usadas=ctx.lineas.map(function(l){return l.caja;});
+  var c=ctx.cajas.find(function(x){return usadas.indexOf(x.nombre)<0;})||ctx.cajas[0];
+  ctx.lineas.push({caja:c.nombre, monto:0});
+  _pliqResto(ctx.lineas.length-1);
+}
+function _pliqDelLinea(k){ _pliqCtx.lineas.splice(k,1); _pliqRender(); }
+
+function confirmarPagarLiq(i, btn) {
+  var ctx=_pliqCtx; var liq = liquidaciones[i];
+  if(!ctx||!liq||ctx.liq!==liq){ showToast('Vuelve a abrir el pago','error'); return; }
+  if(liq.estado === 'Pagado') return;
+  var mon = ctx.mon, monto = ctx.monto;
+  var lineas = ctx.lineas.map(function(l){
+    var mc=_pliqMonCaja(l.caja), m=parseFloat(l.monto)||0;
+    return { caja:l.caja, mon:mc, monto:+m.toFixed(_pliqDec(mc)),
+      tasa:+(_pliqRate(mc,liq)/_pliqRate(mon,liq)).toFixed(6),      // unidades de la caja por 1 de la liquidación
+      equiv:+_pliqConv(m,mc,mon,liq).toFixed(4),                     // en la moneda de la liquidación
+      equiv_usd:+(m/_pliqRate(mc,liq)).toFixed(4) };
+  }).filter(function(l){ return l.monto>0; });
+  if(!lineas.length){ showToast('Indica al menos una caja con importe','error'); return; }
+  var pag=lineas.reduce(function(a,l){return a+l.equiv;},0);
+  if(Math.abs(monto-pag)>_pliqTol()){ showToast('El reparto no cuadra con el total','error'); return; }
+  // Cerrojo: un solo pago por liquidación (el 25/05/26 una se registró 7 veces)
+  if(window._pliqLock) return; window._pliqLock=true; setTimeout(function(){ window._pliqLock=false; },4000);
+  var ov=document.getElementById('pliq-overlay'); if(ov) ov.remove(); _pliqCtx=null;
+
+  var cuentaTxt = lineas.map(function(l){ return l.caja+' '+fN(l.monto,_pliqDec(l.mon))+' '+l.mon; }).join(' + ');
   liq.estado = 'Pagado';
-  liq.cuenta = cta;
+  liq.cuenta = cuentaTxt;
+  liq.pagos = lineas;
   liq.fechaPago = today();
-  // Descontar de la caja
-  var cajaObj = typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cta;}):null;
-  if(cajaObj){
-    cajaObj.saldo = (cajaObj.saldo||0) - monto;
-    // Save mov_cajas
-    var movCaja = {fecha:today(),tipo:'retiro',
-      caja_origen:cta,caja_destino:null,
-      monto_origen:monto,monto_destino:monto,
-      tasa_usada:null,
-      notas:'Comisión '+liq.vend+' '+liq.semana,
-      usuario:(typeof S!=='undefined'&&S.user)||'Admin'};
+  var nota = 'Comisión '+liq.vend+' '+(liq.semana||'') + (lineas.length>1 ? ' ('+lineas.length+' cajas)' : '');
+  var usuario = (typeof S!=='undefined'&&S.user)||'Admin';
+
+  // Un retiro de caja y un gasto del libro I/G por cada caja usada
+  lineas.forEach(function(l, k){
+    var cajaObj = typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===l.caja;}):null;
+    if(cajaObj) cajaObj.saldo = (cajaObj.saldo||0) - l.monto;
+    var movCaja = {fecha:today(), tipo:'retiro',
+      caja_origen:l.caja, caja_destino:null,
+      monto_origen:l.monto, monto_destino:l.monto,
+      tasa_usada:(l.mon!==mon ? l.tasa : null),
+      notas:nota,
+      usuario:usuario};
     if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(movCaja);
     if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',movCaja);
     else if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','mov_cajas',movCaja).catch(function(e){});
-    if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
-  }
-  // I/G movement
-  if(typeof MOVS!=='undefined'){
-    MOVS.unshift({id:Date.now(),fecha:today(),tipo:'Comision vendedor',
-      desc:'Pago Liq. '+liq.vend+' '+liq.semana,
-      vend:liq.vend,alm:liq.alm,monto:monto,mon:mon,
-      equivUSD:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(2)),
-      cta:cta,sentido:'gasto',notas:'',ts:new Date().toISOString()});
-    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-    if(typeof _supaWrite==='function') {
-      _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Comision vendedor',descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
-        monto:parseFloat(parseFloat(monto).toFixed(4)),moneda:mon,
-        equiv_usd:parseFloat((mon==='CUP'?monto/(RATES.CUP||512.88):monto).toFixed(4)),
-        cuenta:cta, vendedor:liq.vend, notas:''
-      });
+    if(typeof MOVS!=='undefined'){
+      MOVS.unshift({id:Date.now()+k, fecha:today(), tipo:'Comision vendedor',
+        desc:'Pago Liq. '+liq.vend+' '+liq.semana,
+        vend:liq.vend, alm:liq.alm, monto:l.monto, mon:l.mon,
+        equivUSD:+l.equiv_usd.toFixed(2),
+        cta:l.caja, sentido:'gasto', notas:'', ts:new Date().toISOString()});
+      if(typeof _supaWrite==='function') {
+        _supaWrite('POST','movimientos_ig',{
+          fecha:today(), tipo:'Comision vendedor', descripcion:'Pago Liq. '+liq.vend+' '+liq.semana,
+          monto:l.monto, moneda:l.mon, equiv_usd:l.equiv_usd,
+          cuenta:l.caja, vendedor:liq.vend, notas:''
+        });
+      }
     }
-  }
-  // Match ventas by date range + almacén + vendedor (liqId not always set)
+  });
+  try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
+  if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
+
+  // Ventas de contado de esta liquidación (liqId no siempre está): por id guardado o por rango+almacén+vendedor
   var liqDesde=liq.desde||''; var liqHasta=liq.hasta||''; var liqAlm=liq.alm||'';
   var ventasLiq=VENTAS.filter(function(v){
-    if(v.liqId&&liq.id&&v.liqId===liq.id) return true; // exact match
-    if(liq.ventas&&(liq.ventas.indexOf(v.supaId)>=0||liq.ventas.indexOf(v.id)>=0)) return true; // ids guardados
+    if(v.liqId&&liq.id&&v.liqId===liq.id) return true;
+    if(liq.ventas&&(liq.ventas.indexOf(v.supaId)>=0||liq.ventas.indexOf(v.id)>=0)) return true;
     var dateOk = (!liqDesde||v.fecha>=liqDesde) && (!liqHasta||v.fecha<=liqHasta);
     var almOk  = !liqAlm||liqAlm==='Todos'||v.alm===liqAlm;
     var vendOk = !liq.vend||v.vend===liq.vend;
     var pdteOk = !v.estCom||v.estCom===''||v.estCom==='Pendiente'||v.estCom==='Liquidada (Pdte)';
     return dateOk&&almOk&&vendOk&&pdteOk;
   });
-
-  // Deduct from each caja based on actual payment data
-  var cajaDeductions={};
-  ventasLiq.forEach(function(v){
-    var pagos=(v.pagos&&v.pagos.length)?v.pagos:[{mon:v.mon||'CUP',caja:cta,m:(v.mon==='USD'?v.totalUSD:fromUSD(v.totalUSD,v.mon||'CUP'))}];
-    pagos.forEach(function(p){
-      var cajaNom=p.caja||cta;
-      var amt=p.monto!=null?p.monto:(p.m!=null?p.m:0);
-      var pct=v.comPct||0;
-      var comAmt=parseFloat((amt*pct/100).toFixed(2));
-      if(!cajaDeductions[cajaNom]) cajaDeductions[cajaNom]=0;
-      cajaDeductions[cajaNom]+=comAmt;
-    });
-  });
-
-  // Comisiones por cobros de folios de esta liquidacion
+  // Comisiones por cobros de folios de esta liquidación
   var comsLiq=(typeof COMS!=='undefined'?COMS:[]).filter(function(x){
     if(x.liq_id&&liq.id&&x.liq_id===liq.id) return true;
     if(liq.coms&&liq.coms.indexOf(x.id)>=0) return true;
@@ -7017,60 +7118,9 @@ function confirmarPagarLiq(i, btn) {
     return dateOk&&almOk&&pdteOk;
   });
   comsLiq.forEach(function(x){
-    var cajaNom=x.caja||cta;
-    var comAmt=parseFloat(((parseFloat(x.monto)||0)*(parseFloat(x.pct)||0)/100).toFixed(2));
-    if(!(comAmt>0)) return;
-    if(!cajaDeductions[cajaNom]) cajaDeductions[cajaNom]=0;
-    cajaDeductions[cajaNom]+=comAmt;
-  });
-
-  // Apply deductions to each caja via mov_cajas (same pattern as rest of app)
-  var _movPromises = [];
-  Object.keys(cajaDeductions).forEach(function(cajaNom){
-    var comAmt = parseFloat(cajaDeductions[cajaNom].toFixed(2));
-    if(comAmt <= 0) return;
-    var cajaObj = typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cajaNom;}):null;
-    // Update local saldo
-    if(cajaObj) cajaObj.saldo = parseFloat(((cajaObj.saldo||0) - comAmt).toFixed(2));
-    // Register mov_cajas — this is the source of truth for saldo
-    var movCaja = {
-      fecha: today(),
-      tipo: 'Pago comisión',
-      caja_origen: cajaNom,
-      caja_origen_id: cajaObj?cajaObj.id:null,
-      caja_destino: null,
-      caja_destino_id: null,
-      monto_origen: comAmt,
-      monto_destino: null,
-      tasa_usada: RATES.CUP||512.88,
-      notas: 'Comisión '+liq.vend+' '+(liq.semana||''),
-      usuario: typeof S!=='undefined'?S.user:'',
-      created_at: new Date().toISOString()
-    };
-    if(typeof supaReq!=='undefined'&&_supaOnline){
-      _movPromises.push(
-        supaReq('POST','mov_cajas',movCaja)
-          .then(function(r){ if(r.ok&&cajaObj&&cajaObj.id){
-            // Also patch caja saldo directly for immediate consistency
-            supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
-          }})
-          .catch(function(e){console.warn('mov_cajas liq:',e);})
-      );
-    }
-  });
-  Promise.all(_movPromises).then(function(){
-    if(typeof loadCajasData==='function') loadCajasData().then(function(){
-      if(typeof renderCajas==='function')try{renderCajas();}catch(e){}
-    });
-  });
-
-  // Mark cobros as Pagada
-  comsLiq.forEach(function(x){
     x.estado='Pagada'; x.liq_id=liq.id;
     if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('PATCH','comisiones?id=eq.'+encodeURIComponent(x.id),{estado:'Pagada',liq_id:liq.id}).catch(function(e){});
   });
-
-  // Mark ventas as Pagada
   ventasLiq.forEach(function(v){
     v.estCom='Pagada';
     v.liqId=liq.id;
@@ -7081,14 +7131,29 @@ function confirmarPagarLiq(i, btn) {
   if(typeof offlineSaveVentas==='function') offlineSaveVentas();
   if(typeof renderVentas==='function')try{renderVentas();}catch(e){}
 
+  // Guardar la liquidación: estado + cuenta (texto) + pagos (detalle, columna nueva)
   try{localStorage.setItem('erp_liquidaciones',JSON.stringify(liquidaciones));}catch(e){}
+  var body={estado:'Pagado',cuenta:cuentaTxt};
+  var path='liquidaciones?id=eq.'+liq.id;
+  var _cola=function(){ try{ if(typeof enqueue==='function') enqueue({method:'PATCH',path:path,body:body}); }catch(e){} };
   if(typeof supaReq!=='undefined'&&_supaOnline){
-    supaReq('PATCH','liquidaciones?id=eq.'+liq.id,{estado:'Pagado',cuenta:cta}).catch(function(e){});
-  }
+    var b1 = (window._liqPagosOK!==false) ? Object.assign({pagos:lineas},body) : body;
+    supaReq('PATCH',path,b1).then(function(r){
+      if(r&&r.ok) return;
+      if(b1.pagos){
+        // La columna pagos aún no existe: guardar sin detalle y avisar
+        window._liqPagosOK=false;
+        return supaReq('PATCH',path,body).then(function(r2){
+          if(r2&&r2.ok) showToast('⚠ Pago guardado sin el detalle por cajas: ejecuta supabase_liquidaciones_pagos.sql');
+          else _cola();
+        });
+      }
+      _cola();
+    }).catch(_cola);
+  } else _cola();
   refreshLiqHist();
   renderLiq();
-  var cajasStr=Object.keys(cajaDeductions).map(function(k){return fN(cajaDeductions[k],0)+' de '+k;}).join(', ');
-  showToast('✓ Liquidación pagada · '+ventasLiq.length+' ventas · '+cajasStr);
+  showToast('✓ Liquidación pagada · '+cuentaTxt);
 }
 
 function eliminarLiq(i) {
