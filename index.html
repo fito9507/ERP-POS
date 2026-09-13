@@ -1300,9 +1300,7 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
       <div class="ff"><label class="lbl">Tasa CUP/USD <span id="l-tasa-src" style="font-weight:400;color:var(--color-text-tertiary)"></span></label>
         <input type="number" id="l-tasa" value="512.88" step="0.0001" oninput="_liqTasaManual=true;_liqGuardar()" title="Por defecto la tasa de elToque; si la editas se respeta la tuya"></div>
       <div class="ff"><label class="lbl">Pagar en</label>
-        <select id="l-mon-pago" onchange="renderLiqCuentas();_liqGuardar()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
-      <div class="ff"><label class="lbl">Cuenta de pago</label>
-        <select id="l-caja-pago" onchange="_liqGuardar()"></select></div>
+        <select id="l-mon-pago" onchange="_liqGuardar()"><option>CUP</option><option>USD</option><option>EUR</option></select></div>
       <button class="btn btn-p" style="align-self:flex-end" onclick="renderLiq()">Generar</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiq();renderLiq()">Semana actual</button>
       <button class="btn-sm" style="align-self:flex-end" onclick="setRangeLiqMes();renderLiq()">Mes actual</button>
@@ -7173,43 +7171,46 @@ function eliminarLiq(i) {
       return dateOk&&almOk&&vendOk&&(v.estCom==='Pagada'||v.liqId===liq.id);
     });
     var amt = liq.totalCUP || liq.comCUP || 0;
-    var cajaNom = liq.cuenta;
-    if(cajaNom && amt > 0) {
-      var cajaObj=typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===cajaNom;}):null;
-      if(cajaObj) cajaObj.saldo=parseFloat(((cajaObj.saldo||0)+amt).toFixed(2));
+    // Pago fraccionado: una línea por caja (columna pagos). Pago antiguo: una sola caja (cuenta)
+    var lineasRev = (Array.isArray(liq.pagos) && liq.pagos.length)
+      ? liq.pagos.map(function(l){ return {caja:l.caja, mon:l.mon||'CUP', monto:parseFloat(l.monto)||0, equiv_usd:parseFloat(l.equiv_usd)||0}; })
+      : ((liq.cuenta && amt > 0) ? [{caja:liq.cuenta, mon:liq.mon||'CUP', monto:amt, equiv_usd:((liq.mon||'CUP')==='CUP'?amt/(RATES.CUP||512.88):amt)}] : []);
+    var _notasRev = 'Reversión liq. '+liq.vend+' '+(liq.semana||'');
+    lineasRev.forEach(function(l, k){
+      if(!(l.monto > 0)) return;
+      var cajaObj=typeof _cajasData!=='undefined'?_cajasData.find(function(c){return c.nombre===l.caja;}):null;
+      if(cajaObj) cajaObj.saldo=parseFloat(((cajaObj.saldo||0)+l.monto).toFixed(2));
       var movRev={fecha:today(),tipo:'deposito',
         caja_origen:null,
-        caja_destino:cajaNom,
-        monto_origen:amt,monto_destino:amt,
+        caja_destino:l.caja,
+        monto_origen:l.monto,monto_destino:l.monto,
         tasa_usada:null,
-        notas:'Reversión liq. '+liq.vend+' '+(liq.semana||''),
+        notas:_notasRev,
         usuario:(typeof S!=='undefined'&&S.user)||'Admin'};
       if(typeof _cajasMovs!=='undefined') _cajasMovs.unshift(movRev);
       if(typeof _supaWrite==='function') _supaWrite('POST','mov_cajas',movRev);
       else if(typeof supaReq!=='undefined'&&_supaOnline) supaReq('POST','mov_cajas',movRev).catch(function(e){});
       if(typeof supaReq!=='undefined'&&_supaOnline&&cajaObj&&cajaObj.id) supaReq('PATCH','cajas?id=eq.'+cajaObj.id,{saldo:cajaObj.saldo}).catch(function(e){});
-    }
-    
-    // Add Reversal to I/G to keep a record
-    var _notasRev = 'Reversión liq. '+liq.vend+' '+(liq.semana||'');
-    var _mon = liq.mon || 'CUP';
-    var _equivUSD = parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(2));
-    if(typeof MOVS!=='undefined'){
-      MOVS.unshift({id:Date.now(),fecha:today(),tipo:'Ingreso no-venta',
-        desc:_notasRev,
-        vend:liq.vend,alm:liq.alm,monto:amt,mon:_mon,
-        equivUSD:_equivUSD,
-        cta:cajaNom,sentido:'ingreso',notas:'',ts:new Date().toISOString()});
-      try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
-    }
-    if(typeof _supaWrite==='function'){
-      _supaWrite('POST','movimientos_ig',{
-        fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
-        monto:parseFloat(parseFloat(amt).toFixed(4)),moneda:_mon,
-        equiv_usd:parseFloat((_mon==='CUP'?amt/(RATES.CUP||512.88):amt).toFixed(4)),
-        cuenta:cajaNom, vendedor:liq.vend, notas:''
-      });
-    }
+
+      // Reversión también en el libro I/G, para que quede rastro
+      var _equivUSD = parseFloat((l.equiv_usd||0).toFixed(2));
+      if(typeof MOVS!=='undefined'){
+        MOVS.unshift({id:Date.now()+k,fecha:today(),tipo:'Ingreso no-venta',
+          desc:_notasRev,
+          vend:liq.vend,alm:liq.alm,monto:l.monto,mon:l.mon,
+          equivUSD:_equivUSD,
+          cta:l.caja,sentido:'ingreso',notas:'',ts:new Date().toISOString()});
+      }
+      if(typeof _supaWrite==='function'){
+        _supaWrite('POST','movimientos_ig',{
+          fecha:today(),tipo:'Ingreso no-venta',descripcion:_notasRev,
+          monto:parseFloat(parseFloat(l.monto).toFixed(4)),moneda:l.mon,
+          equiv_usd:parseFloat((l.equiv_usd||0).toFixed(4)),
+          cuenta:l.caja, vendedor:liq.vend, notas:''
+        });
+      }
+    });
+    try{localStorage.setItem('erp_movs',JSON.stringify(MOVS));}catch(e){}
 
     // Revert ventas to Pendiente
     ventasLiq.forEach(function(v){

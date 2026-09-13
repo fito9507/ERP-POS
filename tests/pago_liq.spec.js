@@ -98,5 +98,19 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     const estadoLocal = await page.evaluate(function () { return liquidaciones[window.__liqTest.i].estado + ' · ' + liquidaciones[window.__liqTest.i].cuenta; });
     console.log('Estado local: ' + estadoLocal);
     expect(ts.some(function (t) { return /Liquidación pagada/.test(t); }), 'toast de pago').toBe(true);
+
+    // Borrar la liquidación pagada: la reversión debe devolver cada importe a su caja
+    const antes = st.escrituras.length;
+    await page.evaluate(function () { window.confirm = function () { return true; }; eliminarLiq(window.__liqTest.i); });
+    await page.waitForTimeout(1200);
+    const nuevas = st.escrituras.slice(antes);
+    const rev = nuevas.filter(function (e) { return e.metodo === 'POST' && /^mov_cajas/.test(e.ruta); }).map(function (e) { var b = JSON.parse(e.cuerpo); return [b.tipo, b.caja_destino, b.monto_destino]; });
+    const revIg = nuevas.filter(function (e) { return e.metodo === 'POST' && /^movimientos_ig/.test(e.ruta); }).map(function (e) { var b = JSON.parse(e.cuerpo); return [b.cuenta, b.monto, b.moneda]; });
+    console.log('reversión mov_cajas: ' + JSON.stringify(rev));
+    console.log('reversión I/G: ' + JSON.stringify(revIg));
+    expect(rev.length, 'un depósito de reversión por caja').toBe(2);
+    expect(rev.map(function (r) { return r[1] + ':' + r[2]; }).sort()).toEqual(movs.map(function (m) { return m[0] + ':' + m[1]; }).sort());
+    expect(revIg.length).toBe(2);
+    expect(st.errores, 'errores JavaScript tras borrar').toEqual([]);
   });
 }
