@@ -30,17 +30,19 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     await page.evaluate(function () { navTo_ven('liquidacion', document.getElementById('btn-liq-nav')); });
     await page.waitForFunction(function () { return document.querySelectorAll('#liq-hist tr').length > 0; }, null, { timeout: 30000 });
 
-    // Si no hay ninguna pendiente, crear una con la semana actual (el guardián no la sube)
+    // Liquidación ficticia SOLO en el navegador (el guardián no deja que nada se suba):
+    // así la prueba no depende de que haya comisiones pendientes reales.
     const creada = await page.evaluate(function () {
-      var hay = Array.prototype.some.call(document.querySelectorAll('#liq-hist button'), function (x) { return /Pagar/.test(x.textContent); });
-      if (hay) return 'ya había pendiente';
-      var b = Array.prototype.find.call(document.querySelectorAll('#liq-out button'), function (x) { return /Crear Liquidaci/.test(x.textContent); });
-      if (!b) return null;
-      b.click(); return 'creada en el navegador';
+      var tasa = parseFloat(document.getElementById('l-tasa') && document.getElementById('l-tasa').value) || 650;
+      liquidaciones.unshift({ id: 'liq-robot-' + Date.now(), vend: 'Tester', semana: '01/09/26–07/09/26', desde: '2026-09-01', hasta: '2026-09-07',
+        alm: 'Todos', vUSD: 0, comUSD: 322.14, totalCUP: Math.round(322.14 * tasa), mon: 'CUP', tasa: tasa, cuenta: '', comDetalle: {},
+        estado: 'Pendiente', fecha: '2026-09-07', ventas: [], coms: [] });
+      refreshLiqHist();
+      var hw = document.getElementById('liq-hist-wrap'); if (hw) hw.style.display = 'block';
+      return 'inyectada (' + liquidaciones[0].totalCUP + ' CUP a ' + tasa + ')';
     });
     console.log('Liquidación: ' + creada);
-    await page.waitForTimeout(1200);
-    await G.cerrarModales(page);
+    await page.waitForTimeout(400);
     // Primera liquidación pendiente con botón Pagar
     const hayPendiente = await page.evaluate(function () {
       var b = Array.prototype.find.call(document.querySelectorAll('#liq-hist button'), function (x) { return /Pagar/.test(x.textContent); });
@@ -78,12 +80,13 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     // Añadir otra caja carga lo que falta hasta donde llegue su saldo
     const auto2 = await page.evaluate(function () {
       var ctx = _pliqCtx;
-      var c1 = ctx.cajas.find(function (x) { return (x.moneda || 'USD') === ctx.mon && _pliqSaldo(x.nombre) >= 100; });
+      // c1: cualquier caja con saldo para 100 unidades de su moneda que no cubra sola el total
+      var c1 = ctx.cajas.find(function (x) { var m = x.moneda || 'USD'; return _pliqSaldo(x.nombre) >= 100 && _pliqConv(100, m, ctx.mon, ctx.liq) < ctx.monto; });
       if (!c1) return null;
       _pliqSetCaja(0, c1.nombre); _pliqSetMonto(0, '100');
       _pliqAddLinea();
       var l = ctx.lineas[1]; var mc = _pliqMonCaja(l.caja);
-      var falta = _pliqConv(ctx.monto - 100, ctx.mon, mc, ctx.liq);
+      var falta = _pliqConv(ctx.monto - _pliqConv(100, c1.moneda || 'USD', ctx.mon, ctx.liq), ctx.mon, mc, ctx.liq);
       return { caja: l.caja, mon: mc, monto: l.monto, saldo: _pliqSaldo(l.caja), falta: falta };
     });
     console.log('Añadir otra caja: ' + JSON.stringify(auto2));
@@ -93,12 +96,13 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     // Reparto válido: línea 1 = 100 en una caja de la moneda de la liquidación con saldo; línea 2 = otra moneda con saldo para el resto
     const cajaOtra = await page.evaluate(function () {
       var ctx = _pliqCtx;
-      var c1 = ctx.cajas.find(function (x) { return (x.moneda || 'USD') === ctx.mon && _pliqSaldo(x.nombre) >= 100; });
+      var c1 = ctx.cajas.find(function (x) { var m = x.moneda || 'USD'; return _pliqSaldo(x.nombre) >= 100 && _pliqConv(100, m, ctx.mon, ctx.liq) < ctx.monto; });
       if (!c1) return null;
+      var m1 = c1.moneda || 'USD';
       _pliqSetCaja(0, c1.nombre); _pliqSetMonto(0, '100');
       _pliqAddLinea();
-      var resto = ctx.monto - 100;
-      var c2 = ctx.cajas.find(function (x) { var m = x.moneda || 'USD'; return m !== ctx.mon && x.nombre !== c1.nombre && _pliqSaldo(x.nombre) >= _pliqConv(resto, ctx.mon, m, ctx.liq); });
+      var resto = ctx.monto - _pliqConv(100, m1, ctx.mon, ctx.liq);
+      var c2 = ctx.cajas.find(function (x) { var m = x.moneda || 'USD'; return m !== m1 && x.nombre !== c1.nombre && _pliqSaldo(x.nombre) >= _pliqConv(resto, ctx.mon, m, ctx.liq); });
       if (!c2) return null;
       _pliqSetCaja(1, c2.nombre); _pliqResto(1);
       return { caja: c2.nombre, mon: c2.moneda, lineas: ctx.lineas, resumen: document.getElementById('pliq-resumen').textContent };
@@ -136,6 +140,18 @@ for (const vp of [{ n: 'escritorio', width: 1280, height: 900 }, { n: 'movil', w
     const estadoLocal = await page.evaluate(function () { return liquidaciones[window.__liqTest.i].estado + ' · ' + liquidaciones[window.__liqTest.i].cuenta; });
     console.log('Estado local: ' + estadoLocal);
     expect(ts.some(function (t) { return /Liquidación pagada/.test(t); }), 'toast de pago').toBe(true);
+
+    // PDF de la liquidación pagada: debe llevar la sección "Cómo se pagó" con cada caja
+    const pdf = await page.evaluate(function () {
+      var cap = '';
+      window.open = function () { return { document: { write: function (h) { cap += h; }, close: function () {} }, print: function () {} }; };
+      exportLiqPDFGuardada(window.__liqTest.i);
+      return cap;
+    });
+    const tienePago = /Cómo se pagó/.test(pdf);
+    console.log('PDF con "Cómo se pagó": ' + tienePago + ' · cajas en el PDF: ' + movs.filter(function (m) { return pdf.indexOf(m[0]) >= 0; }).length + '/' + movs.length);
+    expect(tienePago).toBe(true);
+    movs.forEach(function (m) { expect(pdf, 'la caja ' + m[0] + ' debe salir en el PDF').toContain(m[0]); });
 
     // Borrar la liquidación pagada: la reversión debe devolver cada importe a su caja
     const antes = st.escrituras.length;

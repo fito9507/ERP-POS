@@ -536,6 +536,38 @@ body {font-family:var(--font-sans);color:var(--color-text-primary);font-size:13p
 .adm-lbl-f{font-size:11px;color:var(--color-text-secondary);display:block;margin-bottom:4px}
 .adm-inp{font-size:12px;padding:7px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-secondary);color:var(--color-text-primary);outline:none;width:100%;font-family:var(--font-sans)}
 .adm-inp:focus{border-color:var(--color-text-info)}
+.pliq-card{background:var(--color-background-primary);border-radius:14px;padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.45);box-sizing:border-box;font-family:var(--font-sans)}
+.pliq-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:10px 0 6px}
+.pliq-total{font-size:22px;font-weight:800;color:var(--color-text-danger);line-height:1.1;white-space:nowrap}
+.pliq-bar{height:5px;border-radius:3px;background:var(--color-border-tertiary);overflow:hidden}
+.pliq-bar>i{display:block;height:100%;border-radius:3px;background:var(--pliq-col,#2aa198);transition:width .2s}
+.pliq-linea{position:relative;border:.5px solid var(--color-border-tertiary);border-left:3px solid var(--pliq-col,#2aa198);border-radius:10px;padding:10px 12px 10px 12px;margin-bottom:8px;background:var(--color-background-secondary)}
+.pliq-linea.mal{border-color:rgba(220,50,47,.6);border-left-color:var(--color-text-danger)}
+.pliq-sel{width:100%;font-size:13px;padding:8px 32px 8px 10px;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);color:var(--color-text-primary);outline:none;font-family:var(--font-sans);appearance:none;-webkit-appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--color-text-tertiary) 50%),linear-gradient(135deg,var(--color-text-tertiary) 50%,transparent 50%);background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;background-size:5px 5px;background-repeat:no-repeat}
+.pliq-fila{display:flex;gap:6px;align-items:stretch;margin-top:8px}
+.pliq-monto{flex:1;display:flex;align-items:center;min-width:0;border:.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);background:var(--color-background-primary);padding:0 10px}
+.pliq-monto input{flex:1;min-width:0;width:100%;border:0;background:transparent;color:var(--color-text-primary);font-size:17px;font-weight:700;padding:8px 0;outline:none;font-family:var(--font-sans)}
+.pliq-monto input::-webkit-outer-spin-button,.pliq-monto input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.pliq-monto input[type=number]{-moz-appearance:textfield}
+.pliq-monto b{font-size:11px;font-weight:800;color:#fff;background:var(--pliq-col,#2aa198);border-radius:100px;padding:2px 8px;margin-left:6px}
+.pliq-mini{font-size:11px;padding:0 10px;border-radius:var(--border-radius-md);border:.5px solid var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);cursor:pointer;white-space:nowrap;font-family:var(--font-sans);min-height:38px;touch-action:manipulation}
+.pliq-mini:hover{background:var(--color-background-primary);color:var(--color-text-primary)}
+.pliq-mini.x{padding:0 9px;color:var(--color-text-tertiary)}
+.pliq-mini.x:hover{color:var(--color-text-danger);border-color:var(--color-text-danger)}
+.pliq-info{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--color-text-tertiary);margin-top:7px;flex-wrap:wrap}
+.pliq-info .mal{color:var(--color-text-danger);font-weight:700}
+.pliq-add{width:100%;border:1px dashed var(--color-border-secondary);background:transparent;color:var(--color-text-secondary);padding:9px;border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;font-family:var(--font-sans);margin:2px 0 12px;min-height:40px}
+.pliq-add:hover{color:var(--color-text-primary);border-color:var(--color-text-secondary)}
+.pliq-resumen{border:.5px solid var(--color-border-tertiary);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px}
+.pliq-resumen .r{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.pliq-resumen .r+.r{margin-top:5px}
+.pliq-estado{display:inline-flex;align-items:center;gap:6px;font-weight:700;padding:3px 10px;border-radius:100px;font-size:11px}
+.pliq-estado.ok{color:#1a7f3c;background:rgba(133,153,0,.18)}
+.pliq-estado.mal{color:var(--color-text-danger);background:rgba(220,50,47,.14)}
+.pliq-acciones{display:flex;gap:8px;position:sticky;bottom:-20px;margin:0 -20px -20px;padding:10px 20px 20px;background:var(--color-background-primary);border-top:.5px solid var(--color-border-tertiary)}
+.pliq-acciones .adm-tab{min-height:46px;padding:0 16px}
+.pliq-acciones .btn{margin:0;flex:1;min-height:46px}
+.pliq-acciones .btn:disabled{opacity:.45;cursor:not-allowed}
 .adm-btn{font-size:12px;padding:7px 14px;border-radius:var(--border-radius-md);border:.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);cursor:pointer;font-family:var(--font-sans)}
 .adm-btn:hover{background:var(--color-background-primary)}
 .adm-btn-p{background:var(--color-text-primary);color:var(--color-background-primary);border-color:var(--color-text-primary);font-weight:600}
@@ -6925,6 +6957,8 @@ var _pliqCtx=null; // {i, liq, mon, monto, cajas, lineas:[{caja,monto}]}
 
 function _pliqSaldo(nombre){ return typeof _getSaldoCaja==='function' ? (_getSaldoCaja(nombre)||0) : 0; }
 // Una línea "se pasa" si pide más de lo que hay en esa caja (con margen de redondeo)
+// ¿La caja puede pagar al menos una unidad de su moneda (1 CUP, 0,01 USD)?
+function _pliqUtil(nombre){ var m=_pliqMonCaja(nombre); return _pliqSaldo(nombre) >= Math.pow(10,-_pliqDec(m)) - 1e-9; }
 function _pliqExcede(l){ var m=parseFloat(l.monto)||0; return m > _pliqSaldo(l.caja) + 0.005; }
 function _pliqMonCaja(nombre){
   var c=(_pliqCtx&&_pliqCtx.cajas||[]).find(function(x){return x.nombre===nombre;});
@@ -6943,31 +6977,39 @@ function pagarLiq(i) {
   var pre = (liq.cuenta && cajas.some(function(c){return c.nombre===liq.cuenta;})) ? liq.cuenta : '';
   if(!pre){ var c0 = cajas.find(function(c){return (c.moneda||'')===mon;}) || cajas[0]; pre = c0.nombre; }
   _pliqCtx = {i:i, liq:liq, mon:mon, monto:monto, cajas:cajas, lineas:[]};
-  // Caja inicial: mejor una de la moneda de la liquidación CON saldo
-  var conSaldo = cajas.find(function(c){ return (c.moneda||'')===mon && _pliqSaldo(c.nombre) > 0; });
-  if(conSaldo && !(liq.cuenta && _pliqSaldo(pre) > 0)) pre = conSaldo.nombre;
+  // Caja inicial: la que pueda pagar algo. Orden: la cuenta guardada si tiene saldo útil,
+  // una de la moneda de la liquidación con saldo útil, cualquiera con saldo útil, y si no la primera de la moneda.
+  var util = function(c){ return _pliqUtil(c.nombre); };
+  var cand = (liq.cuenta && util({nombre:liq.cuenta}) ? liq.cuenta : null)
+    || (function(c){return c?c.nombre:null;})(cajas.find(function(c){ return (c.moneda||'')===mon && util(c); }))
+    || (function(c){return c?c.nombre:null;})(cajas.find(util));
+  if(cand) pre = cand;
   _pliqCtx.lineas.push({caja:pre, monto:0});
 
   var old = document.getElementById('pliq-overlay'); if(old) old.remove();
   var overlay = document.createElement('div'); overlay.id='pliq-overlay';
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
-  overlay.innerHTML='<div style="background:var(--color-background-primary);border-radius:12px;padding:20px;width:100%;max-width:460px;max-height:92vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.4);box-sizing:border-box">'
-    +'<div style="font-size:15px;font-weight:700;margin-bottom:12px">Pagar liquidación</div>'
-    +'<div style="display:flex;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">'
-    +  '<div><div style="font-size:11px;color:var(--color-text-secondary)">Vendedor / Semana</div><div style="font-weight:500">'+liq.vend+' · '+liq.semana+'</div></div>'
-    +  '<div style="text-align:right"><div style="font-size:11px;color:var(--color-text-secondary)">Total a pagar</div><div style="font-size:20px;font-weight:700;color:var(--color-text-danger)">'+fN(monto,_pliqDec(mon))+' '+mon+'</div></div>'
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
+  overlay.innerHTML='<div class="pliq-card">'
+    +'<div style="font-size:15px;font-weight:700">Pagar liquidación</div>'
+    +'<div class="pliq-head">'
+    +  '<div><div style="font-size:11px;color:var(--color-text-tertiary)">Vendedor · Semana</div><div style="font-weight:600;font-size:13px">'+liq.vend+' · '+liq.semana+'</div></div>'
+    +  '<div style="text-align:right"><div style="font-size:11px;color:var(--color-text-tertiary)">Total a pagar</div><div class="pliq-total">'+fN(monto,_pliqDec(mon))+' '+mon+'</div></div>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">Cajas de pago <span style="opacity:.7">· se puede repartir entre varias cajas y monedas</span></div>'
+    +'<div class="pliq-bar" style="--pliq-col:'+_pliqCol(mon)+';margin-bottom:14px"><i id="pliq-bar-total" style="width:0"></i></div>'
+    +'<div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:6px">Cajas de pago <span style="color:var(--color-text-tertiary)">· puedes repartirlo entre varias cajas y monedas</span></div>'
     +'<div id="pliq-lineas"></div>'
-    +'<button class="btn-sm" type="button" onclick="_pliqAddLinea()" style="margin:2px 0 12px">+ Añadir otra caja</button>'
-    +'<div id="pliq-resumen" style="border-top:1px solid var(--color-border-tertiary);padding-top:10px;margin-bottom:14px;font-size:12px"></div>'
-    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
-    +'<button class="btn-sm" type="button" onclick="document.getElementById(\'pliq-overlay\').remove();_pliqCtx=null">Cancelar</button>'
+    +'<button class="pliq-add" type="button" onclick="_pliqAddLinea()">+ Añadir otra caja</button>'
+    +'<div id="pliq-resumen" class="pliq-resumen"></div>'
+    +'<div class="pliq-acciones">'
+    +'<button class="adm-tab" type="button" onclick="document.getElementById(\'pliq-overlay\').remove();_pliqCtx=null">Cancelar</button>'
     +'<button class="btn btn-p" type="button" id="pliq-ok" onclick="confirmarPagarLiq('+i+',this)">Confirmar pago</button>'
     +'</div></div>';
   document.body.appendChild(overlay);
   _pliqResto(0); // carga lo máximo que puede pagar esa caja (y pinta)
 }
+
+// Color por moneda (el mismo que usan las tarjetas de cajas)
+function _pliqCol(mon){ return ({USD:'#2aa198', EUR:'#268bd2', CUP:'#b58900', CUPT:'#6c71c4'})[mon] || '#93a1a1'; }
 
 function _pliqOpts(sel){
   var orden=['USD','EUR','CUP','CUPT'], por={};
@@ -6975,8 +7017,8 @@ function _pliqOpts(sel){
   var mons=orden.filter(function(m){return por[m];}).concat(Object.keys(por).filter(function(m){return orden.indexOf(m)<0;}).sort());
   return mons.map(function(m){
     return '<optgroup label="'+m+'">'+por[m].map(function(c){
-      var sld=typeof _getSaldoCaja==='function'?_getSaldoCaja(c.nombre):0;
-      return '<option value="'+c.nombre.replace(/"/g,'&quot;')+'"'+(c.nombre===sel?' selected':'')+'>'+c.nombre+' · '+fN(sld,_pliqDec(m))+'</option>';
+      var sld=_pliqSaldo(c.nombre);
+      return '<option value="'+c.nombre.replace(/"/g,'&quot;')+'"'+(c.nombre===sel?' selected':'')+'>'+c.nombre+' · saldo '+fN(sld,_pliqDec(m))+'</option>';
     }).join('')+'</optgroup>';
   }).join('');
 }
@@ -6991,27 +7033,31 @@ function _pliqEqTxt(k){
 function _pliqRender(){
   var ctx=_pliqCtx; if(!ctx) return;
   var el=document.getElementById('pliq-lineas'); if(!el) return;
-  var inp='padding:8px 10px;border-radius:8px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-primary);font-size:13px;box-sizing:border-box';
   el.innerHTML=ctx.lineas.map(function(l,k){
-    var mc=_pliqMonCaja(l.caja);
-    return '<div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px;padding:8px;border:1px solid var(--color-border-tertiary);border-radius:8px">'
-      +'<select style="'+inp+';width:100%;grid-column:1/-1" onchange="_pliqSetCaja('+k+',this.value)">'+_pliqOpts(l.caja)+'</select>'
-      +'<div style="display:flex;gap:6px;align-items:center;min-width:0"><input type="number" step="any" inputmode="decimal" value="'+(l.monto!=null?l.monto:'')+'" style="'+inp+';width:100%;min-width:0" oninput="_pliqSetMonto('+k+',this.value)">'
-      +'<span style="font-size:12px;font-weight:700;white-space:nowrap">'+mc+'</span></div>'
-      +'<div style="display:flex;gap:4px;align-items:center">'
-      +'<button class="btn-sm" type="button" title="Cargar lo que falta por pagar, hasta donde llegue el saldo de esta caja" onclick="_pliqResto('+k+')">Lo que falta</button>'
-      +(ctx.lineas.length>1?'<button class="btn-sm" type="button" style="color:var(--color-text-danger)" title="Quitar esta caja" onclick="_pliqDelLinea('+k+')">✕</button>':'')
+    var mc=_pliqMonCaja(l.caja), mal=_pliqExcede(l);
+    return '<div class="pliq-linea'+(mal?' mal':'')+'" id="pliq-lin-'+k+'" style="--pliq-col:'+_pliqCol(mc)+'">'
+      +'<select class="pliq-sel" onchange="_pliqSetCaja('+k+',this.value)">'+_pliqOpts(l.caja)+'</select>'
+      +'<div class="pliq-fila">'
+      +  '<label class="pliq-monto"><input type="number" step="any" inputmode="decimal" value="'+(l.monto!=null?l.monto:'')+'" oninput="_pliqSetMonto('+k+',this.value)"><b>'+mc+'</b></label>'
+      +  '<button class="pliq-mini" type="button" title="Cargar lo que falta por pagar, hasta donde llegue el saldo de esta caja" onclick="_pliqResto('+k+')">↺ Lo que falta</button>'
+      +  (ctx.lineas.length>1?'<button class="pliq-mini x" type="button" title="Quitar esta caja" onclick="_pliqDelLinea('+k+')">✕</button>':'')
       +'</div>'
-      +'<div id="pliq-eq-'+k+'" style="grid-column:1/-1;font-size:11px;color:var(--color-text-tertiary);min-height:1em">'+_pliqEqTxt(k)+'</div>'
-      +'<div id="pliq-sal-'+k+'" style="grid-column:1/-1;font-size:11px">'+_pliqSaldoTxt(k)+'</div>'
+      +'<div class="pliq-info"><span id="pliq-sal-'+k+'">'+_pliqSaldoTxt(k)+'</span><span id="pliq-eq-'+k+'">'+_pliqEqTxt(k)+'</span></div>'
+      +'<div class="pliq-bar" style="margin-top:6px"><i id="pliq-bar-'+k+'" style="width:'+_pliqPct(k)+'%"></i></div>'
       +'</div>';
   }).join('');
   _pliqResumen();
 }
+// % del saldo de la caja que se lleva esta línea (para la barrita)
+function _pliqPct(k){
+  var l=_pliqCtx.lineas[k], sal=_pliqSaldo(l.caja), m=parseFloat(l.monto)||0;
+  if(!(sal>0)) return m>0?100:0;
+  return Math.max(0,Math.min(100,m/sal*100));
+}
 function _pliqSaldoTxt(k){
-  var l=_pliqCtx.lineas[k], mc=_pliqMonCaja(l.caja), sal=_pliqSaldo(l.caja), d=_pliqDec(mc);
-  if(_pliqExcede(l)) return '<span style="color:var(--color-text-danger);font-weight:700">⛔ En caja solo hay '+fN(sal,d)+' '+mc+' · faltan '+fN((parseFloat(l.monto)||0)-sal,d)+' '+mc+'</span>';
-  return '<span style="color:var(--color-text-tertiary)">En caja: '+fN(sal,d)+' '+mc+' · quedarían '+fN(sal-(parseFloat(l.monto)||0),d)+' '+mc+'</span>';
+  var l=_pliqCtx.lineas[k], mc=_pliqMonCaja(l.caja), sal=_pliqSaldo(l.caja), d=_pliqDec(mc), m=parseFloat(l.monto)||0;
+  if(_pliqExcede(l)) return '<span class="mal">⛔ En caja solo hay '+fN(sal,d)+' '+mc+' · faltan '+fN(m-sal,d)+' '+mc+'</span>';
+  return 'En caja '+fN(sal,d)+' · quedarían <b style="color:var(--color-text-secondary)">'+fN(sal-m,d)+' '+mc+'</b>';
 }
 function _pliqTotalPagado(){
   var ctx=_pliqCtx;
@@ -7023,11 +7069,15 @@ function _pliqResumen(){
   var pag=_pliqTotalPagado(), dif=ctx.monto-pag, d=_pliqDec(ctx.mon), cuadra=Math.abs(dif)<=_pliqTol();
   var excede=ctx.lineas.some(_pliqExcede);
   var ok=cuadra&&!excede;
-  el.innerHTML='<div style="display:flex;justify-content:space-between"><span>Suma de las cajas</span><b>'+fN(pag,d)+' '+ctx.mon+'</b></div>'
-    +'<div style="display:flex;justify-content:space-between;margin-top:4px;color:'+(cuadra?'var(--color-text-success)':'var(--color-text-danger)')+'"><span>'+(cuadra?'Cuadra con el total':(dif>0?'Falta':'Sobra'))+'</span><b>'+(cuadra?'✓':fN(Math.abs(dif),d)+' '+ctx.mon)+'</b></div>'
-    +(excede?'<div style="margin-top:4px;color:var(--color-text-danger);font-weight:700">⛔ Alguna caja no tiene saldo suficiente: reparte el pago entre otras cajas</div>':'')
-    +(!excede&&!cuadra&&dif>0?'<div style="margin-top:4px;color:var(--color-text-tertiary)">Pulsa «+ Añadir otra caja» para cubrir lo que falta</div>':'');
-  var b=document.getElementById('pliq-ok'); if(b){ b.disabled=!ok; b.style.opacity=ok?'1':'.5'; }
+  var estado = excede ? '<span class="pliq-estado mal">⛔ Sin saldo suficiente</span>'
+             : cuadra ? '<span class="pliq-estado ok">✓ Cuadra con el total</span>'
+             : '<span class="pliq-estado mal">'+(dif>0?'Faltan ':'Sobran ')+fN(Math.abs(dif),d)+' '+ctx.mon+'</span>';
+  el.innerHTML='<div class="r"><span style="color:var(--color-text-secondary)">Suma de las cajas</span><b style="font-size:14px">'+fN(pag,d)+' '+ctx.mon+'</b></div>'
+    +'<div class="r"><span style="color:var(--color-text-secondary)">'+ctx.lineas.length+' caja'+(ctx.lineas.length!==1?'s':'')+'</span>'+estado+'</div>'
+    +(excede?'<div style="margin-top:6px;font-size:11px;color:var(--color-text-danger)">Baja el importe de la caja marcada o reparte el pago entre otras cajas.</div>':'')
+    +(!excede&&!cuadra&&dif>0?'<div style="margin-top:6px;font-size:11px;color:var(--color-text-tertiary)">Pulsa «+ Añadir otra caja» para cubrir lo que falta.</div>':'');
+  var bar=document.getElementById('pliq-bar-total'); if(bar){ bar.style.width=Math.max(0,Math.min(100,ctx.monto>0?pag/ctx.monto*100:0))+'%'; bar.style.background=excede?'var(--color-text-danger)':''; }
+  var b=document.getElementById('pliq-ok'); if(b){ b.disabled=!ok; b.textContent = ok ? 'Confirmar pago' : (excede ? 'Sin saldo suficiente' : 'El reparto no cuadra'); }
 }
 function _pliqSetCaja(k,v){
   _pliqCtx.lineas[k].caja=v;
@@ -7037,6 +7087,8 @@ function _pliqSetMonto(k,v){
   _pliqCtx.lineas[k].monto=parseFloat(v)||0;
   var e=document.getElementById('pliq-eq-'+k); if(e) e.textContent=_pliqEqTxt(k);
   var sl=document.getElementById('pliq-sal-'+k); if(sl) sl.innerHTML=_pliqSaldoTxt(k);
+  var br=document.getElementById('pliq-bar-'+k); if(br) br.style.width=_pliqPct(k)+'%';
+  var ln=document.getElementById('pliq-lin-'+k); if(ln) ln.classList.toggle('mal', _pliqExcede(_pliqCtx.lineas[k]));
   _pliqResumen();
 }
 // Lo que falta por pagar, en la moneda de la caja, sin pasarse de su saldo
@@ -7054,8 +7106,8 @@ function _pliqResto(k){
 function _pliqAddLinea(){
   var ctx=_pliqCtx; var usadas=ctx.lineas.map(function(l){return l.caja;});
   var libre=function(x){ return usadas.indexOf(x.nombre)<0; };
-  var c=ctx.cajas.find(function(x){ return libre(x) && (x.moneda||'')===ctx.mon && _pliqSaldo(x.nombre)>0; })
-       ||ctx.cajas.find(function(x){ return libre(x) && _pliqSaldo(x.nombre)>0; })
+  var c=ctx.cajas.find(function(x){ return libre(x) && (x.moneda||'')===ctx.mon && _pliqUtil(x.nombre); })
+       ||ctx.cajas.find(function(x){ return libre(x) && _pliqUtil(x.nombre); })
        ||ctx.cajas.find(libre)||ctx.cajas[0];
   ctx.lineas.push({caja:c.nombre, monto:0});
   _pliqResto(ctx.lineas.length-1); // carga lo que falta, hasta donde llegue el saldo
@@ -7321,7 +7373,7 @@ function _liqPDF(o){
     +'.firmas{display:flex;gap:40px;margin-top:40px}.firmas div{flex:1;border-top:1px solid #333;padding-top:4px;text-align:center;color:#555}@media print{button{display:none}}</style></head><body>';
   h+='<h1>'+esc(o.titulo)+'</h1>'
     +'<div class="meta"><b>Filtros aplicados:</b> Periodo <b>'+esc(fD(o.desde))+' – '+esc(fD(o.hasta))+'</b> · Almacén <b>'+esc(o.alm||'Todos')+'</b> · Contenedor/Lote <b>'+esc(o.lote||'Todos')+'</b></div>'
-    +'<div class="meta">Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+(o.cuenta?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
+    +'<div class="meta">Tasa CUP/USD <b>'+esc(fN(o.tasa||0,2))+'</b> · Pago en <b>'+esc(o.mon)+'</b>'+((o.cuenta&&!(Array.isArray(o.pagos)&&o.pagos.length))?' · Cuenta <b>'+esc(o.cuenta)+'</b>':'')+(o.estado?' · Estado <b>'+esc(o.estado)+'</b>':'')+' · Generado '+esc(new Date().toLocaleString('es-ES'))+'</div>';
   // resumen por vendedor
   h+='<h2>Resumen por vendedor</h2><table><thead><tr><th>Vendedor</th><th class="r">Ventas contado</th><th class="r">Com. contado</th><th class="r">Cobros folios</th><th class="r">Com. folios</th><th class="r">A pagar USD</th></tr></thead><tbody>';
   Object.keys(porV).forEach(function(n){var a=porV[n];h+='<tr><td><b>'+esc(n)+'</b></td><td class="r">'+fN(a.baseV)+' ('+a.nV+')</td><td class="r">'+fN(a.comV)+'</td><td class="r">'+fN(a.baseF)+' ('+a.nF+')</td><td class="r">'+fN(a.comF)+'</td><td class="r"><b>'+fN(a.comV+a.comF)+'</b></td></tr>';});
@@ -7352,6 +7404,26 @@ function _liqPDF(o){
           +'<div style="padding-left:14px"><b>= '+fN(cu.total,(o.mon==='CUP'||o.mon==='CUPT')?0:2)+' '+esc(o.mon)+'</b></div></td></tr>'; })()
     +(o.ajuste?'<tr><td>Ajuste / redondeo</td><td class="r">'+fN(o.ajuste,dec(o.mon))+' '+esc(o.mon)+'</td></tr>':'')
     +'<tr class="tot"><td class="big">TOTAL A PAGAR</td><td class="r big">'+fN((o.totalPago||0)+(o.ajuste||0),dec(o.mon))+' '+esc(o.mon)+'</td></tr></tbody></table>';
+  // Cómo se pagó: una fila por caja (pago fraccionado) o la cuenta única de los pagos antiguos
+  if(o.estado==='Pagado'){
+    var pagos=Array.isArray(o.pagos)?o.pagos.filter(function(l){return l&&l.caja;}):[];
+    h+='<h2>Cómo se pagó</h2>';
+    if(pagos.length){
+      var sumEq=0;
+      h+='<table><thead><tr><th>Caja</th><th>Moneda</th><th class="r">Importe</th><th class="r">Tasa</th><th class="r">Equivale en '+esc(o.mon)+'</th></tr></thead><tbody>';
+      pagos.forEach(function(l){
+        var lm=l.mon||'', eq=parseFloat(l.equiv)||0; sumEq+=eq;
+        h+='<tr><td>'+esc(l.caja)+'</td><td>'+esc(lm)+'</td><td class="r">'+fN(parseFloat(l.monto)||0,dec(lm))+' '+esc(lm)+'</td>'
+          +'<td class="r">'+(lm!==o.mon&&l.tasa?esc(fN(parseFloat(l.tasa)>=1?parseFloat(l.tasa):1/parseFloat(l.tasa),2))+' '+esc(parseFloat(l.tasa)>=1?lm+'/'+o.mon:o.mon+'/'+lm):'—')+'</td>'
+          +'<td class="r">'+fN(eq,dec(o.mon))+' '+esc(o.mon)+'</td></tr>';
+      });
+      h+='<tr class="tot"><td colspan="4">Total pagado'+(pagos.length>1?' ('+pagos.length+' cajas)':'')+'</td><td class="r">'+fN(sumEq,dec(o.mon))+' '+esc(o.mon)+'</td></tr></tbody></table>';
+    } else if(o.cuenta){
+      h+='<div class="meta">Pagado íntegro desde la caja <b>'+esc(o.cuenta)+'</b>.</div>';
+    } else {
+      h+='<div class="meta">Sin detalle de la caja de pago.</div>';
+    }
+  }
   h+='<div class="firmas"><div>Entregado por (admin)</div><div>Recibido por (vendedor)</div></div>';
   h+='<div style="margin-top:16px"><button onclick="window.print()">Imprimir / Guardar PDF</button></div></body></html>';
   var w=window.open('','_blank'); if(!w){ showToast('\u26a0 El navegador bloque\u00f3 la ventana del PDF'); return; }
@@ -7382,7 +7454,7 @@ function exportLiqPDFGuardada(i){
     tasaLiq=Math.round((totalGuardado-(ajusteLiq||0)-nominal)/(parseFloat(det.USD)||1)*100)/100;
     if(ajusteLiq==null) ajusteLiq=0;
   } else { if(typeof RATES!=='undefined') tasaLiq=parseFloat(RATES.CUP)||null; if(ajusteLiq==null) ajusteLiq=0; }
-  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', lote:l.lote||'', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado,
+  _liqPDF({ titulo:'Liquidación '+(l.estado==='Pagado'?'pagada':'pendiente'), desde:l.desde||'', hasta:l.hasta||'', alm:l.alm||'Todos', lote:l.lote||'', tasa:tasaLiq, mon:mon, cuenta:l.cuenta||'', estado:l.estado, pagos:l.pagos||[],
     ventas:vs, coms:cs, totalPago:totalGuardado-(ajusteLiq||0), ajuste:ajusteLiq||0, det:det });
 }
 function exportLiqCSV(){
